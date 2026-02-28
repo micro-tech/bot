@@ -1,0 +1,18 @@
+[package]
+name = "bot"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+dashmap = "6.1.0"
+gemini_crate = "0.1.0"
+grok_api = "0.1.2"
+# sqlite-vss = { version = "0.1.2", features = ["download-libs"] } # Temporarily commented out due to unsupported platform error on Windows x86_64
+hartbeat = "0.1.0"
+ollama-rs = "0.3.4"
+tokio = { version = "1.35.1", features = ["full"] }
+serde = { version = "1.0.195", features = ["derive"] }
+serde_json = "1.0.149"
+log = "0.4.20"
+env_logger = "0.11.1"
+backon = "1.6.0"
