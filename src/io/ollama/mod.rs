@@ -2,7 +2,9 @@
 // This module handles communication with the Ollama API.
 
 use crate::bus::{Bus, Message};
+use crate::utils::log_to_file;
 use std::error::Error;
+use log::error;
 
 /// Handles a message destined for Ollama, returning a response if applicable.
 pub fn handle_ollama_message(message: Message, _bus: &mut Bus) -> Option<String> {
@@ -58,6 +60,11 @@ mod tests {
         let result = call_ollama(data);
         
         // Verify that the call returns a successful result
+        if result.is_err() {
+            let error_msg = format!("call_ollama failed: {}", result.unwrap_err());
+            log_to_file(&error_msg);
+            error!("{}", error_msg);
+        }
         assert!(result.is_ok(), "call_ollama should return Ok result");
         let response = result.unwrap();
         assert!(response.contains("Ollama response"), "Response should contain expected text");

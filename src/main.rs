@@ -11,6 +11,9 @@ use std::error::Error;
 mod io;
 // Include the bus module to make it accessible in the crate hierarchy
 mod bus;
+// Include the utils module for utility functions
+mod utils;
+use utils::log_to_file;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Heartbeat {
@@ -23,6 +26,7 @@ fn get_current_timestamp() -> u64 {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
         Ok(duration) => duration.as_secs(),
         Err(e) => {
+            log_to_file(&format!("Failed to get system time: {}", e));
             error!("Failed to get system time: {}", e);
             0
         }
@@ -34,7 +38,9 @@ async fn send_heartbeat_to_ollama(ollama: &Ollama, heartbeat: &Heartbeat) -> Res
     let heartbeat_json = match serde_json::to_string(heartbeat) {
         Ok(json) => json,
         Err(e) => {
-            error!("Failed to serialize heartbeat to JSON: {}", e);
+            let error_msg = format!("Failed to serialize heartbeat to JSON: {}", e);
+            log_to_file(&error_msg);
+            error!("{}", error_msg);
             return Err(Box::new(e));
         }
     };
@@ -58,7 +64,9 @@ async fn send_heartbeat_to_ollama(ollama: &Ollama, heartbeat: &Heartbeat) -> Res
                 Ok(response.response)
             },
             Err(e) => {
-                error!("Failed to send heartbeat to Ollama: {}", e);
+                let error_msg = format!("Failed to send heartbeat to Ollama: {}", e);
+                log_to_file(&error_msg);
+                error!("{}", error_msg);
                 Err(e)
             }
         }
@@ -70,11 +78,15 @@ async fn send_heartbeat_to_ollama(ollama: &Ollama, heartbeat: &Heartbeat) -> Res
             Ok(response)
         },
         Ok(Err(e)) => {
-            error!("Failed to send heartbeat to Ollama after retries: {}", e);
+            let error_msg = format!("Failed to send heartbeat to Ollama after retries: {}", e);
+            log_to_file(&error_msg);
+            error!("{}", error_msg);
             Err(Box::new(e))
         },
         Err(timeout_err) => {
-            error!("Timeout while sending heartbeat to Ollama: {}", timeout_err);
+            let error_msg = format!("Timeout while sending heartbeat to Ollama: {}", timeout_err);
+            log_to_file(&error_msg);
+            error!("{}", error_msg);
             Err(Box::new(timeout_err))
         }
     }
@@ -97,7 +109,9 @@ async fn send_heartbeat() -> Result<(), Box<dyn Error + Send + Sync>> {
             Ok(())
         },
         Err(e) => {
-            error!("Failed to process heartbeat with Ollama: {}", e);
+            let error_msg = format!("Failed to process heartbeat with Ollama: {}", e);
+            log_to_file(&error_msg);
+            error!("{}", error_msg);
             Err(e)
         }
     }
@@ -120,7 +134,9 @@ async fn main() {
                 consecutive_failures = 0; // Reset on success
             },
             Err(e) => {
-                error!("Failed to send heartbeat: {}", e);
+                let error_msg = format!("Failed to send heartbeat: {}", e);
+                log_to_file(&error_msg);
+                error!("{}", error_msg);
                 consecutive_failures += 1;
                 warn!("Consecutive failures: {}/{}", consecutive_failures, max_consecutive_failures);
                 if consecutive_failures >= max_consecutive_failures {
