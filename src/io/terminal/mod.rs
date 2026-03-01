@@ -2,6 +2,8 @@
 // This module handles interactions with the command-line interface.
 
 use crate::bus::{Bus, Message};
+use crate::utils::log_to_file;
+use log::error;
 
 /// Handles a message destined for the Terminal.
 pub fn handle_terminal_message(message: Message, _bus: &mut Bus) {
