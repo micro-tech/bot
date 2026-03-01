@@ -1,0 +1,20 @@
+[package]
+name = "agentos_io_ollama"
+version = "0.1.0"
+edition = "2021"
+Authors = ["AgentOS Team"]
+description = "Ollama Handler for Agent OS IO - Handles communication with Ollama API"
+
+[lib]
+name = "agentos_io_ollama"
+path = "ollama_handler.rs"
+
+[dependencies]
+# Placeholder for future dependencies
+# reqwest = { version = "0.11", features = ["json"] }  # For HTTP requests to Ollama API
+# serde = { version = "1.0", features = ["derive"] }  # For JSON serialization/deserialization
+# tokio = { version = "1.0", features = ["full"] }  # For async operations
+
+[dev-dependencies]
+# Dependencies for testing
+# tokio-test = "0.4"  # For async testing

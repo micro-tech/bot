@@ -1,0 +1,22 @@
+[package]
+name = "agentos_io_web_server"
+version = "0.1.0"
+edition = "2021"
+Authors = ["AgentOS Team"]
+description = "Web Server Handler for Agent OS IO - Handles HTTPS web interface"
+
+[lib]
+name = "agentos_io_web_server"
+path = "web_server.rs"
+
+[dependencies]
+# Placeholder for future dependencies
+# actix-web = "4.0"  # For creating HTTPS web server
+# actix-web-actors = "4.0"  # For WebSocket support
+# rustls = "0.20"  # For TLS/HTTPS configuration
+# serde = { version = "1.0", features = ["derive"] }  # For JSON handling
+# tokio = { version = "1.0", features = ["full"] }  # For async operations
+
+[dev-dependencies]
+# Dependencies for testing
+# tokio-test = "0.4"  # For async testing
