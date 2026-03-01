@@ -7,6 +7,11 @@ use ollama_rs::{Ollama, generation::completion::request::GenerationRequest};
 use backon::{Retryable, ExponentialBuilder};
 use std::error::Error;
 
+// Include the io module to ensure its tests are run
+mod io;
+// Include the bus module to make it accessible in the crate hierarchy
+mod bus;
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Heartbeat {
     timestamp: u64,

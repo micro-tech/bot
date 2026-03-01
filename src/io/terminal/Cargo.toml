@@ -1,0 +1,20 @@
+[package]
+name = "agentos_io_terminal"
+version = "0.1.0"
+edition = "2021"
+Authors = ["AgentOS Team"]
+description = "Terminal Handler for Agent OS IO - Handles command-line interface"
+
+[lib]
+name = "agentos_io_terminal"
+path = "cli.rs"
+
+[dependencies]
+# Placeholder for future dependencies
+# rustyline = "9.0"  # For advanced terminal input handling with history and completion
+# tokio = { version = "1.0", features = ["full"] }  # For async operations if needed
+# serde = { version = "1.0", features = ["derive"] }  # For potential data serialization
+
+[dev-dependencies]
+# Dependencies for testing
+# tokio-test = "0.4"  # For async testing if needed
