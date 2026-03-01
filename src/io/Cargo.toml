@@ -1,0 +1,28 @@
+[package]
+name = "agentos_io"
+version = "0.1.0"
+edition = "2021"
+Authors = ["AgentOS Team"]
+description = "IO Module for Agent OS - Handles external communications"
+
+[lib]
+name = "agentos_io"
+path = "io.rs"
+
+[dependencies]
+# Placeholder for future dependencies
+# tokio = { version = "1.0", features = ["full"] }  # For async operations
+# serde = { version = "1.0", features = ["derive"] }  # For serialization/deserialization
+# reqwest = { version = "0.11", features = ["json"] }  # For HTTP requests
+
+[dev-dependencies]
+# Dependencies for testing
+# tokio-test = "0.4"  # For async testing
+
+[workspace]
+members = [
+    "ollama",
+    "web_server",
+    "terminal",
+    "llm_gemini",
+]
