@@ -3,6 +3,8 @@
 // It handles internal collaboration between multiple agents or LLMs via the bus system.
 
 use crate::bus::bus::Message;
+use crate::utils::log_to_file;
+use log::error;
 use std::time::SystemTime;
 
 /// Handles messages destined for A2A communication, facilitating collaboration between agents.

@@ -1,7 +1,7 @@
 [package]
 name = "agentos_io_ollama"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 Authors = ["AgentOS Team"]
 description = "Ollama Handler for Agent OS IO - Handles communication with Ollama API"
 

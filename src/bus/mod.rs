@@ -3,6 +3,8 @@
 // Components publish messages to the bus and subscribe to receive relevant messages.
 
 use std::sync::mpsc::{channel, Sender, Receiver};
+use crate::utils::log_to_file;
+use log::error;
 // Commented out unused imports to suppress warnings
 // use std::thread;
 // use std::time::SystemTime;
@@ -49,7 +51,9 @@ impl Bus {
         self.log_transaction(&message);
         // Send the message to the bus
         if let Err(e) = self.sender.send(message.clone()) {
-            eprintln!("Failed to publish message to bus: {}", e);
+            let error_msg = format!("Failed to publish message to bus: {}", e);
+            log_to_file(&error_msg);
+            error!("{}", error_msg);
         }
     }
 
@@ -70,7 +74,9 @@ impl Bus {
                 for (component, sender) in &subscribers {
                     if component == &message.to {
                         if let Err(e) = sender.send(message.clone()) {
-                            eprintln!("Failed to route message to {}: {}", component, e);
+                            let error_msg = format!("Failed to route message to {}: {}", component, e);
+                            log_to_file(&error_msg);
+                            error!("{}", error_msg);
                         }
                     }
                 }

@@ -2,6 +2,8 @@
 // This module handles updates to the web interface.
 
 use crate::bus::{Bus, Message};
+use crate::utils::log_to_file;
+use log::error;
 
 /// Handles a message destined for the Web Interface.
 pub fn handle_web_message(message: Message, _bus: &mut Bus) {
