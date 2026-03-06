@@ -17,3 +17,8 @@ log = "0.4.29"
 env_logger = "0.11.9"
 backon = "1.6.0"
 chrono = "0.4.44"
+reqwest = { version = "0.11.24", features = ["blocking"] }
+
+[[bin]]
+name = "test_ollama"
+path = "src/bin/test_ollama.rs"
