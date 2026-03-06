@@ -4,13 +4,21 @@
 use crate::bus::{Bus, Message};
 use crate::utils::log_to_file;
 use std::error::Error;
-use log::error;
 
 /// Handles a message destined for Ollama, returning a response if applicable.
 pub fn handle_ollama_message(message: Message, _bus: &mut Bus) -> Option<String> {
-    // Placeholder implementation
-    println!("Handling Ollama message: {}", message.data);
-    Some(format!("Ollama response to {}: {}", message.from, message.data))
+    log_to_file(&format!("[{}] Incoming Ollama message from {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), message.from, message.data));
+    let resp = call_ollama(&message.data);
+    match resp {
+        Ok(r) => {
+            log_to_file(&format!("[{}] Ollama OK to {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), message.to, r));
+            Some(r)
+        },
+        Err(e) => {
+            log_to_file(&format!("[{}] Ollama ERR from {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), message.from, e));
+            None
+        }
+    }
 }
 
 /// Calls the Ollama API with the provided data, returning the response.

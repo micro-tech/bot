@@ -9,3 +9,6 @@ This file logs errors encountered during the operation of the bot.
 - Message: Detailed error message
 
 ## Log Entries
+[2026-03-01 14:28:46] Timeout while sending heartbeat to Ollama: deadline has elapsed
+[2026-03-01 14:28:46] Failed to process heartbeat with Ollama: deadline has elapsed
+[2026-03-01 14:28:46] Failed to send heartbeat: deadline has elapsed
