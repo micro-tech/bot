@@ -14,6 +14,7 @@ mod bus;
 // Include the utils module for utility functions
 mod utils;
 use utils::log_to_file;
+use crate::bus::{Bus, Message};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Heartbeat {
@@ -54,7 +55,7 @@ async fn send_heartbeat_to_ollama(ollama: &Ollama, heartbeat: &Heartbeat) -> Res
     let retry_policy = ExponentialBuilder::default()
         .with_max_times(3)
         .with_min_delay(Duration::from_millis(500))
-        .with_max_delay(Duration::from_secs(5));
+        .with_max_delay(Duration::from_secs(10));
 
     let send_request = || async {
         info!("Attempting to send request to Ollama");
@@ -72,7 +73,7 @@ async fn send_heartbeat_to_ollama(ollama: &Ollama, heartbeat: &Heartbeat) -> Res
         }
     };
 
-    match tokio::time::timeout(Duration::from_secs(10), send_request.retry(&retry_policy)).await {
+    match tokio::time::timeout(Duration::from_secs(30), send_request.retry(&retry_policy)).await {
         Ok(Ok(response)) => {
             info!("Heartbeat successfully sent to Ollama after retries if any");
             Ok(response)
@@ -100,21 +101,28 @@ async fn send_heartbeat() -> Result<(), Box<dyn Error + Send + Sync>> {
     };
     
     info!("Sending heartbeat: {:?}", heartbeat);
-    let ollama = Ollama::default(); // Uses default host and port (localhost:11434)
-    info!("Initialized Ollama client with default settings");
-
-    match send_heartbeat_to_ollama(&ollama, &heartbeat).await {
-        Ok(response) => {
-            info!("Heartbeat processed by Ollama with response: {}", response);
-            Ok(())
-        },
+    
+    let heartbeat_json = match serde_json::to_string(&heartbeat) {
+        Ok(json) => json,
         Err(e) => {
-            let error_msg = format!("Failed to process heartbeat with Ollama: {}", e);
+            let error_msg = format!("Failed to serialize heartbeat to JSON: {}", e);
             log_to_file(&error_msg);
             error!("{}", error_msg);
-            Err(e)
+            return Err(Box::new(e));
         }
-    }
+    };
+    
+    let bus = Bus::new();
+    let message = Message {
+        to: "ollama".to_string(),
+        from: "hartbeat".to_string(),
+        data: heartbeat_json,
+        timestamp: get_current_timestamp(),
+    };
+    bus.publish(message);
+    info!("Heartbeat published to bus");
+    
+    Ok(())
 }
 
 #[tokio::main]
