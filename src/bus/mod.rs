@@ -5,6 +5,9 @@
 use std::sync::mpsc::{channel, Sender, Receiver};
 use crate::utils::log_to_file;
 use log::error;
+use std::fs::OpenOptions;
+use std::io::Write;
+use chrono::Local;
 // Commented out unused imports to suppress warnings
 // use std::thread;
 // use std::time::SystemTime;
@@ -88,15 +91,19 @@ impl Bus {
 
     /// Logs bus transactions to bus_log.md with timestamp, to, from, and data summary.
     fn log_transaction(&self, message: &Message) {
-        // Placeholder for logging logic
-        let timestamp = message.timestamp;
-        let log_entry = format!(
-            "[TIMESTAMP: {}] FROM: {} TO: {} DATA: {}...\n",
-            timestamp, message.from, message.to, &message.data[..std::cmp::min(message.data.len(), 50)]
-        );
-        // Append to bus_log.md (simplified; actual implementation would handle file I/O)
-        println!("Logging bus transaction: {}", log_entry);
-        // In a real implementation, append to file specified in config.toml
+        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+        let summary = if message.data.len() > 200 {
+            format!("{}...", &message.data[..200])
+        } else {
+            message.data.clone()
+        };
+        let log_entry = format!("[{}] {} -> {}: {}\n", timestamp, message.from, message.to, summary);
+        let mut file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open("logs/chat_log.md")
+            .expect("Failed to open logs/chat_log.md");
+        writeln!(file, "{}", log_entry).expect("Failed to write to chat_log.md");
     }
 }
 

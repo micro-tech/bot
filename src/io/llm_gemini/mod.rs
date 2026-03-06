@@ -4,7 +4,6 @@
 use crate::bus::{Bus, Message};
 use crate::utils::log_to_file;
 use std::error::Error;
-use log::error;
 
 /// Handles a message destined for Gemini, returning a response if applicable.
 pub fn handle_gemini_message(message: Message, _bus: &mut Bus) -> Option<String> {
