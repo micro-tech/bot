@@ -20,7 +20,7 @@ pub struct IOManager {
 
 impl IOManager {
     /// Creates a new IO Manager instance, subscribing to relevant bus destinations.
-    pub fn new(mut bus: Bus) -> Self {
+    pub fn new(bus: Bus) -> Self {
         let ollama_rx = bus.subscribe("ollama");
         let web_rx = bus.subscribe("web_interface");
         let terminal_rx = bus.subscribe("terminal");
@@ -38,7 +38,7 @@ impl IOManager {
     /// Starts the IO Manager, spawning threads to handle messages for each destination.
     pub fn start(&mut self) {
         // Start the bus routing in the background
-        self.bus.start();
+        // self.bus.start(); // No longer needed - router auto-starts on Bus::new()
 
         // TODO: Fix the below code as Receiver cannot be cloned.
         // Currently commented out to allow compilation.
