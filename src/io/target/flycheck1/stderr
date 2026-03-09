@@ -1,0 +1,23 @@
+warning: H:\GitHub\bot\bot\src\io\terminal\Cargo.toml: unused manifest key: package.Authors
+warning: H:\GitHub\bot\bot\src\io\Cargo.toml: unused manifest key: package.Authors
+warning: H:\GitHub\bot\bot\src\io\web_server\Cargo.toml: unused manifest key: package.Authors
+warning: H:\GitHub\bot\bot\src\io\ollama\Cargo.toml: unused manifest key: package.Authors
+warning: H:\GitHub\bot\bot\src\io\llm_gemini\Cargo.toml: unused manifest key: package.Authors
+    Blocking waiting for file lock on package cache
+error: can't find lib `agentos_io_llm_gemini` at path `H:\GitHub\bot\bot\src\io\llm_gemini\gemini_handler.rs`
+ --> H:\GitHub\bot\bot\src\io\llm_gemini\Cargo.toml
+error: can't find lib `agentos_io_llm_gemini` at path `H:\GitHub\bot\bot\src\io\llm_gemini\gemini_handler.rs`
+ --> H:\GitHub\bot\bot\src\io\llm_gemini\Cargo.toml
+error: can't find lib `agentos_io_ollama` at path `H:\GitHub\bot\bot\src\io\ollama\ollama_handler.rs`
+ --> H:\GitHub\bot\bot\src\io\ollama\Cargo.toml
+error: can't find lib `agentos_io_ollama` at path `H:\GitHub\bot\bot\src\io\ollama\ollama_handler.rs`
+ --> H:\GitHub\bot\bot\src\io\ollama\Cargo.toml
+error: can't find lib `agentos_io_terminal` at path `H:\GitHub\bot\bot\src\io\terminal\cli.rs`
+ --> H:\GitHub\bot\bot\src\io\terminal\Cargo.toml
+error: can't find lib `agentos_io_terminal` at path `H:\GitHub\bot\bot\src\io\terminal\cli.rs`
+ --> H:\GitHub\bot\bot\src\io\terminal\Cargo.toml
+error: can't find lib `agentos_io_web_server` at path `H:\GitHub\bot\bot\src\io\web_server\web_server.rs`
+ --> H:\GitHub\bot\bot\src\io\web_server\Cargo.toml
+error: can't find lib `agentos_io_web_server` at path `H:\GitHub\bot\bot\src\io\web_server\web_server.rs`
+ --> H:\GitHub\bot\bot\src\io\web_server\Cargo.toml
+error: could not compile due to 8 previous target resolution errors

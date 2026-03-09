@@ -10,14 +10,19 @@ grok_api = "0.1.2"
 # sqlite-vss = { version = "0.1.2", features = ["download-libs"] } # Temporarily commented out due to unsupported platform error on Windows x86_64
 hartbeat = "0.1.0"
 ollama-rs = "0.3.4"
-tokio = { version = "1.35.1", features = ["full"] }
-serde = { version = "1.0.195", features = ["derive"] }
+tokio = { version = "1.50.0", features = ["full"] }
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 log = "0.4.29"
 env_logger = "0.11.9"
 backon = "1.6.0"
 chrono = "0.4.44"
-reqwest = { version = "0.11.24", features = ["blocking"] }
+reqwest = { version = "0.13.2", features = ["blocking"] }
+axum = { version = "0.8.8", features = ["ws"] }
+tower-http = { version = "0.5.2", features = ["cors", "trace"] }
+axum-server = { version = "0.8.0", features = ["tls-rustls"] }
+rcgen = "0.14.7"
+futures-util = "0.3.32"
 
 [[bin]]
 name = "test_ollama"

@@ -5,6 +5,7 @@ use crate::bus::{Bus, Message};
 use crate::utils::log_to_file;
 use std::error::Error;
 
+
 /// Handles a message destined for Ollama, returning a response if applicable.
 pub fn handle_ollama_message(message: Message, _bus: &mut Bus) -> Option<String> {
     log_to_file(&format!("[{}] Incoming Ollama message from {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), message.from, message.data));
@@ -69,7 +70,7 @@ mod tests {
         
         // Verify that the call returns a successful result
         if result.is_err() {
-            let error_msg = format!("call_ollama failed: {}", result.unwrap_err());
+            let error_msg = format!("call_ollama failed: {}", result.as_ref().unwrap_err());
             log_to_file(&error_msg);
             error!("{}", error_msg);
         }
