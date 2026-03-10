@@ -40,8 +40,8 @@ pub async fn start_web_server(bus: Arc<Bus>) -> Result<(), Box<dyn std::error::E
         info!("Generating self-signed certificates...");
         let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
         let cert = generate_simple_self_signed(subject_alt_names)?;
-        fs::write(cert_path, cert.cert.serialize_pem_with_params(rcgen::SerializeParams::default())?)?;
-        fs::write(key_path, cert.signing_key.serialize_private_key_pem()?)?;
+        fs::write(cert_path, cert.cert.pem())?;
+        fs::write(key_path, cert.signing_key.serialize_pem())?;
         info!("Certificates generated at certs/cert.pem and certs/key.pem");
     }
 
