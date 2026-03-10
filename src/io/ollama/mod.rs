@@ -23,9 +23,13 @@ pub fn handle_ollama_message(message: Message, _bus: &mut Bus) -> Option<String>
 }
 
 /// Calls the Ollama API with the provided data, returning the response.
-pub fn call_ollama(data: &str) -> Result<String, Box<dyn Error>> {
-    // Placeholder implementation
-    Ok(format!("Ollama response: {}", data))
+pub fn call_ollama(data: &str) -> Result<String, Box<dyn std::error::Error>> {
+    use ollama_rs::generation::{Request, Model};
+    use ollama_rs::Ollama;
+    let client = Ollama::new("http://192.168.1.149:11434".parse().unwrap());
+    let req = Request::new(Model::LLama3, data.to_string());
+    let resp = futures::executor::block_on(client.generate(req)).unwrap();
+    Ok(resp.response)
 }
 
 #[cfg(test)]
