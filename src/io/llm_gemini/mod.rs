@@ -14,9 +14,19 @@ pub fn handle_gemini_message(message: Message, _bus: &mut Bus) -> Option<String>
 }
 
 /// Calls the Gemini API with the provided data, returning the response.
-pub fn call_gemini(data: &str) -> Result<String, Box<dyn Error>> {
-    // Placeholder implementation
-    Ok(format!("Gemini response: {}", data))
+pub fn call_gemini(data: &str) -> Result<String, Box<dyn std::error::Error>> {
+    // Real Gemini API using reqwest
+    use reqwest::Client;
+    let client = Client::new();
+    let resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=YOUR_KEY")
+        .json(&serde_json::json!({ "contents": [{ "parts": [{ "text": data }] }] }))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    Ok(resp)
 }
 
 #[cfg(test)]
