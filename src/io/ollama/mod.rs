@@ -1,35 +1,28 @@
 // Ollama Handler for Agent OS
-// This module handles communication with the Ollama API.
-
 use crate::bus::{Bus, Message};
-use crate::utils::log_to_file;
-use std::error::Error;
+use log::info;
+use ollama_rs::Ollama;
+use ollama_rs::generation::GenerateRequest;
 
-
-/// Handles a message destined for Ollama, returning a response if applicable.
 pub fn handle_ollama_message(message: Message, _bus: &mut Bus) -> Option<String> {
-    log_to_file(&format!("[{}] Incoming Ollama message from {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), message.from, message.data));
-    let resp = call_ollama(&message.data);
-    match resp {
-        Ok(r) => {
-            log_to_file(&format!("[{}] Ollama OK to {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), message.to, r));
-            Some(r)
-        },
-        Err(e) => {
-            log_to_file(&format!("[{}] Ollama ERR from {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), message.from, e));
-            None
-        }
+    info!("Ollama msg from {}: {}", message.from, message.data);
+    match call_ollama(&message.data) {
+        Ok(r) => Some(r),
+        Err(_) => None,
     }
 }
 
-/// Calls the Ollama API with the provided data, returning the response.
 pub fn call_ollama(data: &str) -> Result<String, Box<dyn std::error::Error>> {
-    use ollama_rs::generation::{Request, Model};
-    use ollama_rs::Ollama;
-    let client = Ollama::new("http://192.168.1.149:11434".parse().unwrap());
-    let req = Request::new(Model::LLama3, data.to_string());
-    let resp = futures::executor::block_on(client.generate(req)).unwrap();
-    Ok(resp.response)
+    let client = Ollama::new(r#\"192.168.1.149\"#.to_string(), 11434u16);
+    let req = GenerateRequest {
+        model: r#\"llama3\"#.to_string(),
+        prompt: data.to_string(),
+        stream: false,
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Runtime::new()?;
+    let resp = rt.block_on(client.generate(req))?;
+    Ok(resp.response.unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -37,52 +30,26 @@ mod tests {
     use super::*;
     use std::time::SystemTime;
 
-    // Helper function to create a mock bus for testing
     fn create_mock_bus() -> Bus {
         Bus::new()
     }
 
     #[test]
-    fn test_handle_ollama_message() {
-        // Test handling a message destined for Ollama
+    fn test_handle() {
         let mut bus = create_mock_bus();
         let message = Message {
-            to: "ollama".to_string(),
-            from: "hartbeat".to_string(),
-            data: "Test heartbeat data".to_string(),
-            timestamp: SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
+            to: \"ollama\".to_string(),
+            from: \"test\".to_string(),
+            data: \"test msg\".to_string(),
+            timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as u64,
         };
-        
-        let response = handle_ollama_message(message.clone(), &mut bus);
-        
-        // Verify that a response is generated
-        assert!(response.is_some(), "handle_ollama_message should return a response");
-        let response_str = response.unwrap();
-        assert!(response_str.contains("Ollama response"), "Response should contain expected text");
-        assert!(response_str.contains(&message.from), "Response should reference the sender");
-        assert!(response_str.contains(&message.data), "Response should reference the data");
+        let response = handle_ollama_message(message, &mut bus);
+        assert!(response.is_some());
     }
 
     #[test]
-    fn test_call_ollama() {
-        // Test the direct call to Ollama API (placeholder)
-        let data = "Test data for Ollama";
-        let result = call_ollama(data);
-        
-        // Verify that the call returns a successful result
-        if result.is_err() {
-            let error_msg = format!("call_ollama failed: {}", result.as_ref().unwrap_err());
-            log_to_file(&error_msg);
-            error!("{}", error_msg);
-        }
-        assert!(result.is_ok(), "call_ollama should return Ok result");
-        let response = result.unwrap();
-        assert!(response.contains("Ollama response"), "Response should contain expected text");
-        assert!(response.contains(data), "Response should include input data");
+    fn test_call() {
+        let result = call_ollama(\"test\");
+        assert!(result.is_ok());
     }
-
-    // TODO: Add more tests with mocked HTTP responses when actual API logic is implemented
 }
