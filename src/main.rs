@@ -14,6 +14,7 @@ mod io;
 mod bus;
 // Include the utils module for utility functions
 mod utils;
+mod bayesian;
 use crate::bus::{Bus, Message};
 use utils::log_to_file;
 
@@ -137,7 +138,7 @@ async fn send_heartbeat() -> Result<(), String> {
         match ollama_rx.recv_timeout(StdDuration::from_millis(500)) {
             Ok(msg) => {
                 info!("Ollama received via bus: {:?}", msg);
-                if let Some(resp) = crate::io::ollama::handle_ollama_message(msg.clone(), &mut bus)
+                if let Some(resp) = crate::io::ollama::handle_ollama_message(msg.clone(), &mut bus).await
                 {
                     info!("Ollama response: {}", resp);
 
