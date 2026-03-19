@@ -216,12 +216,18 @@ const MAIN_HTML: &str = r#"
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+                    let inner_data;
+                    try {
+                        inner_data = JSON.parse(data.data);
+                    } catch (e) {
+                        inner_data = data.data;
+                    }
                     if (data.type === 'user_msg') {
-                        appendChat(data.from || 'You', data.data);
+                        appendChat(data.from || 'You', inner_data);
+                    } else if (inner_data && inner_data.type === 'log') {
+                        appendLog(inner_data.level || 'info', inner_data.msg || inner_data.data);
                     } else if (data.to === 'web_interface') {
-                        appendChat(data.from || 'Bot', data.data);
-                    } else if (data.type === 'log') {
-                        appendLog(data.level || 'info', data.msg || data.data);
+                        appendChat(data.from || 'Bot', inner_data);
                     }
                 } catch (e) {
                     console.error('Parse error:', e, event.data);
