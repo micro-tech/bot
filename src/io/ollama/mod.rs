@@ -3,6 +3,7 @@ use crate::bus::{Bus, Message};
 use log::info;
 use reqwest::Client;
 use serde_json::{json, Value};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub async fn handle_ollama_message(message: Message, _bus: &mut Bus) -> Option<String> {
     info!("Ollama msg: {}", message.data);
@@ -43,7 +44,7 @@ async fn call_ollama_tools(prompt: &str, tools: Value) -> Result<String, Box<dyn
     let client = Client::new();
     let mut messages = vec![json!({"role": "user", "content": prompt})];
     loop {
-        let resp = client.post("http://192.168.1.149:11434/api/chat")
+        let resp = client.post("http://127.0.0.1:11434/api/chat")
             .json(&json!({
                 "model": "llama3",
                 "messages": messages,
