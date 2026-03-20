@@ -1,9 +1,10 @@
-use log::{error, info, warn};
+use log::{error, info, warn, set_boxed_logger, set_max_level, LevelFilter};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::mpsc;
 use tokio::time::{Duration as TokioDuration, interval};
 
 // Include modules
@@ -21,6 +22,34 @@ struct Heartbeat {
     timestamp: u64,
     system_status: String,
     recent_events: Vec<String>,
+}
+
+#[derive(Clone)]
+struct LogMsg {
+    level: String,
+    msg: String,
+}
+
+struct WebLogger {
+    tx: mpsc::UnboundedSender<LogMsg>,
+}
+
+impl log::Log for WebLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Info
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            let msg = LogMsg {
+                level: record.level().to_string().to_lowercase(),
+                msg: format!("{}", record.args()),
+            };
+            let _ = self.tx.send(msg);
+        }
+    }
+
+    fn flush(&self) {}
 }
 
 fn get_current_timestamp() -> u64 {
@@ -63,7 +92,11 @@ async fn send_heartbeat(bus: Arc<Bus>) -> Result<(), String> {
     info!("Heartbeat published to bus");
 
     // Publish live log update to web
-    let log_data = format!(r#"{{"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}}"#);
+    let log_data = serde_json::json!({
+        "type": "log",
+        "level": "info",
+        "msg": "Heartbeat sent to Ollama"
+    }).to_string();
     let log_msg = Message {
         to: "web_interface".to_string(),
         from: "logger".to_string(),
@@ -77,11 +110,35 @@ async fn send_heartbeat(bus: Arc<Bus>) -> Result<(), String> {
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
     fs::create_dir_all("logs").expect("Failed to create logs dir");
-    info!("Starting bot with HTTPS web interface and Ollama chat");
 
     let bus = Arc::new(Bus::new());
+
+    // Set up custom logger
+    let (log_tx, mut log_rx) = mpsc::unbounded_channel();
+    let logger = WebLogger { tx: log_tx };
+    set_boxed_logger(Box::new(logger)).unwrap();
+    set_max_level(LevelFilter::Info);
+
+    // Spawn log forwarder
+    let bus_clone = bus.clone();
+    tokio::spawn(async move {
+        while let Some(log_msg) = log_rx.recv().await {
+            let msg = Message {
+                to: "web_interface".to_string(),
+                from: "logger".to_string(),
+                data: serde_json::json!({
+                    "type": "log",
+                    "level": log_msg.level,
+                    "msg": log_msg.msg
+                }).to_string(),
+                timestamp: get_current_timestamp(),
+            };
+            bus_clone.publish(msg);
+        }
+    });
+
+    info!("Starting bot with HTTPS web interface and Ollama chat");
 
     // Spawn HTTPS Web Server
     let web_bus = bus.clone();
