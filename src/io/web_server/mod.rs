@@ -14,12 +14,10 @@ use log::info;
 use rcgen::generate_simple_self_signed;
 use serde_json::{Value, json};
 use std::fs;
-
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 
@@ -268,8 +266,8 @@ const MAIN_HTML: &str = r#"
         }
 
         function escapeHtml(text) {
-            const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', \"'\": '&#039;'};
-            return text.replace(/[&<>\\"']/g, m => map[m]);
+            const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
 
         connectWS();
