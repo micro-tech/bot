@@ -1,6 +1,7 @@
 use log::{error, info, warn, set_boxed_logger, set_max_level, LevelFilter};
 use serde::{Deserialize, Serialize};
 use serde_json;
+use toml;
 use std::fs;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -22,6 +23,35 @@ struct Heartbeat {
     timestamp: u64,
     system_status: String,
     recent_events: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct Config {
+    bot: BotConfig,
+    ollama: OllamaConfig,
+    web: WebConfig,
+    heartbeat: HeartbeatConfig,
+}
+
+#[derive(Deserialize)]
+struct BotConfig {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct OllamaConfig {
+    url: String,
+    model: String,
+}
+
+#[derive(Deserialize)]
+struct WebConfig {
+    port: u16,
+}
+
+#[derive(Deserialize)]
+struct HeartbeatConfig {
+    interval_seconds: u64,
 }
 
 #[derive(Clone)]
@@ -112,6 +142,10 @@ async fn send_heartbeat(bus: Arc<Bus>) -> Result<(), String> {
 async fn main() {
     fs::create_dir_all("logs").expect("Failed to create logs dir");
 
+    // Load config
+    let config_str = fs::read_to_string("config.toml").expect("Failed to read config.toml");
+    let config: Config = toml::from_str(&config_str).expect("Failed to parse config.toml");
+
     let bus = Arc::new(Bus::new());
 
     // Set up custom logger
@@ -142,12 +176,13 @@ async fn main() {
 
     // Spawn HTTPS Web Server
     let web_bus = bus.clone();
+    let config_str_clone = config_str.clone();
     tokio::spawn(async move {
-        if let Err(e) = start_web_server(web_bus).await {
+        if let Err(e) = start_web_server(web_bus, config.web.port, config_str_clone).await {
             error!("Web server failed: {}", e);
         }
     });
-    info!("HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)");
+    info!("HTTPS Web Server spawned - visit https://localhost:{} (accept self-signed cert warning)", config.web.port);
 
     // Spawn Ollama Handler (SIMPLIFIED SYNC VERSION)
     let ollama_bus = bus.clone();
@@ -173,7 +208,7 @@ async fn main() {
     info!("Ollama handler spawned");
 
     // Heartbeat loop
-    let mut interval = interval(TokioDuration::from_secs(60));
+    let mut interval = interval(TokioDuration::from_secs(config.heartbeat.interval_seconds));
     let mut consecutive_failures = 0;
     let max_consecutive_failures = 5;
 
