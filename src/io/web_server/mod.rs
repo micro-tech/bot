@@ -13,6 +13,8 @@ use futures_util::{SinkExt, StreamExt};
 use log::info;
 use rcgen::generate_simple_self_signed;
 use serde_json::{Value, json};
+use toml;
+use serde::Deserialize;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
@@ -25,10 +27,40 @@ use tower_http::cors::CorsLayer;
 struct AppState {
     bus: Arc<Bus>,
     msg_tx: broadcast::Sender<String>,
+    config_str: String,
 }
 
-pub async fn start_web_server(bus: Arc<Bus>) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Starting HTTPS Web Server on 0.0.0.0:8443");
+#[derive(Deserialize)]
+struct Config {
+    bot: BotConfig,
+    ollama: OllamaConfig,
+    web: WebConfig,
+    heartbeat: HeartbeatConfig,
+}
+
+#[derive(Deserialize)]
+struct BotConfig {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct OllamaConfig {
+    url: String,
+    model: String,
+}
+
+#[derive(Deserialize)]
+struct WebConfig {
+    port: u16,
+}
+
+#[derive(Deserialize)]
+struct HeartbeatConfig {
+    interval_seconds: u64,
+}
+
+pub async fn start_web_server(bus: Arc<Bus>, port: u16, config_str: String) -> Result<(), Box<dyn std::error::Error>> {
+    info!("Starting HTTPS Web Server on 0.0.0.0:{}", port);
 
     // Generate self-signed certs if not exist
     fs::create_dir_all("certs")?;
@@ -48,6 +80,7 @@ pub async fn start_web_server(bus: Arc<Bus>) -> Result<(), Box<dyn std::error::E
     let state = AppState {
         bus,
         msg_tx: msg_tx.clone(),
+        config_str,
     };
 
     // Spawn bus message forwarder
@@ -74,7 +107,7 @@ pub async fn start_web_server(bus: Arc<Bus>) -> Result<(), Box<dyn std::error::E
 
     info!("Web server listening on https://localhost:8443 (accept self-signed cert warning)");
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8443));
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     axum_server::bind_rustls(addr, rustls_config)
         .serve(app.into_make_service())
         .await?;
@@ -100,6 +133,10 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     let mut recv = state.msg_tx.subscribe();
 
     let (mut ws_sender, mut ws_receiver) = socket.split();
+
+    // Send current config on connect
+    let config_msg = json!({"type": "config", "data": state.config_str.clone()}).to_string();
+    let _ = ws_sender.send(WsMessage::Text(config_msg.into())).await;
 
     let recv_task = tokio::spawn(async move {
         loop {
@@ -139,6 +176,23 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         })
                         .to_string();
                         let _ = state.msg_tx.send(echo_msg);
+                    } else if msg_type == "config_save" {
+                        let new_config_str = json_val["data"].as_str().unwrap_or("");
+                        if let Ok(_parsed) = toml::from_str::<Config>(new_config_str) {
+                            if fs::write("config.toml", new_config_str).is_ok() {
+                                let success_msg = json!({"type": "config_status", "status": "success", "msg": "Config saved successfully. Restart the bot to apply changes."}).to_string();
+                                let bus_msg = Message { to: "web_interface".to_string(), from: "config".to_string(), data: success_msg, timestamp: get_timestamp() };
+                                state.bus.publish(bus_msg);
+                            } else {
+                                let error_msg = json!({"type": "config_status", "status": "error", "msg": "Failed to write config file."}).to_string();
+                                let bus_msg = Message { to: "web_interface".to_string(), from: "config".to_string(), data: error_msg, timestamp: get_timestamp() };
+                                state.bus.publish(bus_msg);
+                            }
+                        } else {
+                            let error_msg = json!({"type": "config_status", "status": "error", "msg": "Invalid TOML syntax."}).to_string();
+                            let bus_msg = Message { to: "web_interface".to_string(), from: "config".to_string(), data: error_msg, timestamp: get_timestamp() };
+                            state.bus.publish(bus_msg);
+                        }
                     }
                 }
             }
@@ -190,8 +244,10 @@ const MAIN_HTML: &str = r#"
     </div>
 
     <div id="config-tab" class="tab-content">
-        <h2>Configurations</h2>
-        <p>Config tab coming soon. For now, edit config files manually.</p>
+        <h2>Configuration</h2>
+        <textarea id="config-textarea" rows="20" cols="80"></textarea><br>
+        <button onclick="saveConfig()">Save Config</button>
+        <div id="config-status"></div>
     </div>
 
     <div id="logs-tab" class="tab-content">
@@ -220,11 +276,26 @@ const MAIN_HTML: &str = r#"
                     } catch (e) {
                         inner_data = data.data;
                     }
+                    let handled = false;
                     if (data.type === 'user_msg') {
                         appendChat(data.from || 'You', inner_data);
-                    } else if (inner_data && inner_data.type === 'log') {
+                        handled = true;
+                    }
+                    if (!handled && inner_data && inner_data.type === 'log') {
                         appendLog(inner_data.level || 'info', inner_data.msg || inner_data.data);
-                    } else if (data.to === 'web_interface') {
+                        handled = true;
+                    }
+                    if (!handled && data.type === 'config') {
+                        document.getElementById('config-textarea').value = data.data;
+                        handled = true;
+                    }
+                    if (!handled && data.type === 'config_status') {
+                        const statusDiv = document.getElementById('config-status');
+                        statusDiv.textContent = data.msg;
+                        statusDiv.style.color = data.status === 'success' ? 'green' : 'red';
+                        handled = true;
+                    }
+                    if (!handled && data.to === 'web_interface') {
                         appendChat(data.from || 'Bot', inner_data);
                     }
                 } catch (e) {
@@ -258,11 +329,11 @@ const MAIN_HTML: &str = r#"
             div.scrollIntoView();
         }
 
-        function showTab(event, tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(tabName + '-tab').classList.add('active');
-            event.target.classList.add('active');
+        function saveConfig() {
+            const toml = document.getElementById('config-textarea').value;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({type: 'config_save', data: toml}));
+            }
         }
 
         function escapeHtml(text) {

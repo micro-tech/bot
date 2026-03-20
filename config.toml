@@ -1,59 +1,12 @@
-# Agent OS Configuration File
+[bot]
+name = "Bot"
 
 [ollama]
-# Ollama connection settings
-host = "192.168.1.149"
-port = 11434  # Default Ollama API port
-model = "llama3"  # Default model to call for LLM tasks
-timeout = 30  # Timeout in seconds for network requests
-retry_count = 3  # Number of retries for failed network calls
-retry_backoff = 2  # Exponential backoff factor for retries
+url = "http://localhost:11434"
+model = "llama3.2"
+
+[web]
+port = 8443
 
 [heartbeat]
-# Heartbeat module settings
-interval = 60  # Interval in seconds for generating heartbeat signals
-log_file = "logs/hartbeat_log.md"  # Location of the heartbeat-specific log file
-
-[logging]
-# General logging settings
-error_log = "logs/error_log.md"  # Location of error log file
-chat_log = "logs/chat_log.md"  # Location of chat interaction log file
-bus_log = "logs/bus_log.md"  # Location of bus transaction log file
-log_level = "info"  # Logging level: debug, info, warn, error
-
-[web_interface]
-# Web interface settings
-https_port = 8443  # Port for HTTPS web server
-cert_path = "certs/server.crt"  # Path to SSL certificate
-key_path = "certs/server.key"  # Path to SSL private key
-
-[terminal_interface]
-# Terminal interface settings
-prompt = "AgentOS> "  # Custom prompt for CLI interaction
-
-[memory]
-# Memory management settings
-short_term_path = "src/memory/short_term/session_data.json"  # Short-term memory file location
-long_term_path = "src/memory/long_term/memory_store.json"  # Long-term memory file location
-max_short_term_entries = 100  # Maximum entries to store in short-term memory
-
-[network]
-# General network resilience settings
-timeout = 15  # Default timeout in seconds for other network operations
-retry_count = 5  # Default retry count for network failures
-
-[bus]
-# Bus system settings for inter-component communication
-max_queue_size = 1000  # Maximum number of messages in the bus queue before dropping
-log_transactions = true  # Whether to log all bus transactions to bus_log.md
-message_timeout = 10  # Timeout in seconds for a message to be processed before logging a warning
-
-[gemini]
-# Gemini LLM integration settings (placeholder for future implementation)
-host = "api.gemini.example.com"  # Placeholder host for Gemini API
-port = 443  # Default HTTPS port for Gemini API
-model = "gemini-model"  # Placeholder model name for Gemini
-timeout = 30  # Timeout in seconds for Gemini API requests
-retry_count = 3  # Number of retries for failed Gemini API calls
-retry_backoff = 2  # Exponential backoff factor for Gemini retries
-api_key_path = ".env"  # Path to secure storage for API key (not committed to git)
+interval_seconds = 60
