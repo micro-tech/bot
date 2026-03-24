@@ -4676,3 +4676,3506 @@ When the bot runs and heartbeat publishes, you'll see entries like:
 [2026-03-20 09:00:18.855] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 09:00:18.855] ollama -> web_interface: "Processed: {\"timestamp\":1774011618845,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
 
 [2026-03-20 09:00:18.857] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:19:48.698] logger -> web_interface: {"type":"log","level":"info","msg":"Starting bot with HTTPS web interface and Ollama chat"}
+[2026-03-20 19:19:48.701] logger -> web_interface: {"type":"log","level":"info","msg":"HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-20 19:19:48.704] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama handler spawned"}
+[2026-03-20 19:19:48.707] logger -> web_interface: {"type":"log","level":"info","msg":"Starting HTTPS Web Server on 0.0.0.0:8443"}
+[2026-03-20 19:19:48.710] logger -> web_interface: {"type":"log","level":"info","msg":"Web server listening on https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-20 19:19:48.711] heartbeat -> ollama: {"timestamp":1774048788711,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:19:48.712] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774048788711, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:19:48.715] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 19:19:48.716] ollama -> web_interface: "Processed: {\"timestamp\":1774048788711,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:19:48.717] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+
+[2026-03-20 19:19:48.721] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:20:48.699] heartbeat -> ollama: {"timestamp":1774048848699,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:20:48.699] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774048848699, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:20:48.707] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 19:20:48.707] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:20:48.708] ollama -> web_interface: "Processed: {\"timestamp\":1774048848699,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:20:48.709] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:21:48.710] heartbeat -> ollama: {"timestamp":1774048908710,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:21:48.710] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774048908710, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:21:48.719] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:21:48.719] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:21:48.720] ollama -> web_interface: "Processed: {\"timestamp\":1774048908710,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:21:48.721] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:22:48.707] heartbeat -> ollama: {"timestamp":1774048968707,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:22:48.707] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774048968707, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:22:48.717] ollama -> web_interface: "Processed: {\"timestamp\":1774048968707,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:22:48.717] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 19:22:48.717] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:22:48.718] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:23:05.501] web_user -> ollama: hi
+[2026-03-20 19:23:05.511] ollama -> web_interface: "Processed: hi"
+[2026-03-20 19:23:48.711] heartbeat -> ollama: {"timestamp":1774049028711,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:23:48.711] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049028711, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:23:48.714] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:23:48.714] ollama -> web_interface: "Processed: {\"timestamp\":1774049028711,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:23:48.715] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:23:48.717] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:25:40.869] logger -> web_interface: {"type":"log","level":"info","msg":"Starting bot with HTTPS web interface and Ollama chat"}
+[2026-03-20 19:25:40.870] heartbeat -> ollama: {"timestamp":1774049140870,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:25:40.873] logger -> web_interface: {"type":"log","level":"info","msg":"HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-20 19:25:40.875] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 19:25:40.875] ollama -> web_interface: "Processed: {\"timestamp\":1774049140870,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-20 19:25:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama handler spawned"}
+[2026-03-20 19:25:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Starting HTTPS Web Server on 0.0.0.0:8443"}
+[2026-03-20 19:25:40.887] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049140870, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:25:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Web server listening on https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-20 19:25:40.893] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:25:40.895] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:26:36.030] web_user -> ollama: hi
+[2026-03-20 19:26:36.038] ollama -> web_interface: "Processed: hi"
+[2026-03-20 19:26:40.880] heartbeat -> ollama: {"timestamp":1774049200880,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:26:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049200880, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:26:40.887] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:26:40.887] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:26:40.888] ollama -> web_interface: "Processed: {\"timestamp\":1774049200880,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:26:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:27:40.878] heartbeat -> ollama: {"timestamp":1774049260878,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 19:27:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049260878, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 19:27:40.886] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 19:27:40.886] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:27:40.886] ollama -> web_interface: "Processed: {\"timestamp\":1774049260878,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:27:40.887] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:28:40.884] heartbeat -> ollama: {"timestamp":1774049320884,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:28:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049320884, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:28:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:28:40.892] ollama -> web_interface: "Processed: {\"timestamp\":1774049320884,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:28:40.892] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:28:40.894] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:29:40.882] heartbeat -> ollama: {"timestamp":1774049380882,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:29:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049380882, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:29:40.889] ollama -> web_interface: "Processed: {\"timestamp\":1774049380882,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:29:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 19:29:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:29:40.892] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:30:40.884] heartbeat -> ollama: {"timestamp":1774049440884,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:30:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049440884, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:30:40.894] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:30:40.894] ollama -> web_interface: "Processed: {\"timestamp\":1774049440884,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:30:40.895] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:30:40.897] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:31:40.872] heartbeat -> ollama: {"timestamp":1774049500872,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:31:40.872] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049500872, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:31:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:31:40.881] ollama -> web_interface: "Processed: {\"timestamp\":1774049500872,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:31:40.881] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:31:40.883] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:32:40.878] heartbeat -> ollama: {"timestamp":1774049560878,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:32:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049560878, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:32:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:32:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:32:40.889] ollama -> web_interface: "Processed: {\"timestamp\":1774049560878,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:32:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:33:40.873] heartbeat -> ollama: {"timestamp":1774049620873,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:33:40.873] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049620873, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:33:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:33:40.880] ollama -> web_interface: "Processed: {\"timestamp\":1774049620873,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:33:40.881] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:33:40.883] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:34:40.877] heartbeat -> ollama: {"timestamp":1774049680876,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:34:40.877] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049680876, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:34:40.884] ollama -> web_interface: "Processed: {\"timestamp\":1774049680876,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:34:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 19:34:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:34:40.887] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:35:40.885] heartbeat -> ollama: {"timestamp":1774049740885,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:35:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049740885, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:35:40.894] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:35:40.894] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:35:40.894] ollama -> web_interface: "Processed: {\"timestamp\":1774049740885,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:35:40.896] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:36:40.885] heartbeat -> ollama: {"timestamp":1774049800885,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:36:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049800885, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:36:40.893] ollama -> web_interface: "Processed: {\"timestamp\":1774049800885,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:36:40.893] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 19:36:40.893] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:36:40.895] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:37:40.883] heartbeat -> ollama: {"timestamp":1774049860883,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:37:40.883] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049860883, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:37:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 19:37:40.892] ollama -> web_interface: "Processed: {\"timestamp\":1774049860883,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:37:40.892] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+
+[2026-03-20 19:37:40.894] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:38:40.881] heartbeat -> ollama: {"timestamp":1774049920881,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:38:40.881] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049920881, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:38:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:38:40.889] ollama -> web_interface: "Processed: {\"timestamp\":1774049920881,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:38:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:38:40.892] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:39:40.878] heartbeat -> ollama: {"timestamp":1774049980878,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 19:39:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774049980878, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 19:39:40.886] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:39:40.886] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:39:40.886] ollama -> web_interface: "Processed: {\"timestamp\":1774049980878,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:39:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:40:40.884] heartbeat -> ollama: {"timestamp":1774050040884,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:40:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050040884, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:40:40.896] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 19:40:40.896] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:40:40.896] ollama -> web_interface: "Processed: {\"timestamp\":1774050040884,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-20 19:40:40.898] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:41:40.882] heartbeat -> ollama: {"timestamp":1774050100882,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:41:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050100882, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:41:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:41:40.889] ollama -> web_interface: "Processed: {\"timestamp\":1774050100882,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:41:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:41:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:42:40.871] heartbeat -> ollama: {"timestamp":1774050160871,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:42:40.871] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050160871, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:42:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:42:40.882] ollama -> web_interface: "Processed: {\"timestamp\":1774050160871,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:42:40.883] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:42:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:43:40.881] heartbeat -> ollama: {"timestamp":1774050220881,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:43:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050220881, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:43:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:43:40.889] ollama -> web_interface: "Processed: {\"timestamp\":1774050220881,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:43:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:43:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:44:40.885] heartbeat -> ollama: {"timestamp":1774050280885,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:44:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050280885, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:44:40.896] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:44:40.896] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:44:40.897] ollama -> web_interface: "Processed: {\"timestamp\":1774050280885,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:44:40.898] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:45:40.873] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050340873, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 19:45:40.873] heartbeat -> ollama: {"timestamp":1774050340873,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 19:45:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:45:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:45:40.881] ollama -> web_interface: "Processed: {\"timestamp\":1774050340873,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:45:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:46:40.873] heartbeat -> ollama: {"timestamp":1774050400873,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 19:46:40.873] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050400873, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 19:46:40.881] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 19:46:40.881] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:46:40.882] ollama -> web_interface: "Processed: {\"timestamp\":1774050400873,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:46:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:47:40.877] heartbeat -> ollama: {"timestamp":1774050460877,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 19:47:40.877] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050460877, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 19:47:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 19:47:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 19:47:40.886] ollama -> web_interface: "Processed: {\"timestamp\":1774050460877,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:47:40.887] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:48:40.875] heartbeat -> ollama: {"timestamp":1774050520875,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:48:40.875] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050520875, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:48:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:48:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:48:40.883] ollama -> web_interface: "Processed: {\"timestamp\":1774050520875,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:48:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:49:40.885] heartbeat -> ollama: {"timestamp":1774050580885,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:49:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050580885, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:49:40.897] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:49:40.897] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 19:49:40.897] ollama -> web_interface: "Processed: {\"timestamp\":1774050580885,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-20 19:49:40.899] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:50:40.877] heartbeat -> ollama: {"timestamp":1774050640877,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:50:40.877] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050640877, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:50:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 19:50:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:50:40.888] ollama -> web_interface: "Processed: {\"timestamp\":1774050640877,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:50:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:51:40.877] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050700877, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 19:51:40.877] heartbeat -> ollama: {"timestamp":1774050700877,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 19:51:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 19:51:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 19:51:40.891] ollama -> web_interface: "Processed: {\"timestamp\":1774050700877,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:51:40.893] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:52:40.874] heartbeat -> ollama: {"timestamp":1774050760874,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 19:52:40.874] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050760874, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 19:52:40.883] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:52:40.883] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:52:40.884] ollama -> web_interface: "Processed: {\"timestamp\":1774050760874,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:52:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:53:40.877] heartbeat -> ollama: {"timestamp":1774050820877,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:53:40.877] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050820877, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:53:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 19:53:40.889] ollama -> web_interface: "Processed: {\"timestamp\":1774050820877,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-20 19:53:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:53:40.892] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:54:40.882] heartbeat -> ollama: {"timestamp":1774050880882,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 19:54:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050880882, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 19:54:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 19:54:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 19:54:40.890] ollama -> web_interface: "Processed: {\"timestamp\":1774050880882,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:54:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:55:40.883] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774050940883, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 19:55:40.883] heartbeat -> ollama: {"timestamp":1774050940883,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 19:55:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 19:55:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:55:40.891] ollama -> web_interface: "Processed: {\"timestamp\":1774050940883,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:55:40.892] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:56:40.872] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051000872, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 19:56:40.872] heartbeat -> ollama: {"timestamp":1774051000872,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 19:56:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:56:40.880] ollama -> web_interface: "Processed: {\"timestamp\":1774051000872,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 19:56:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:56:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:57:40.881] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051060881, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 19:57:40.881] heartbeat -> ollama: {"timestamp":1774051060881,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 19:57:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 19:57:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 19:57:40.889] ollama -> web_interface: "Processed: {\"timestamp\":1774051060881,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:57:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:58:40.884] heartbeat -> ollama: {"timestamp":1774051120884,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:58:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051120884, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:58:40.892] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 19:58:40.892] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 19:58:40.892] ollama -> web_interface: "Processed: {\"timestamp\":1774051120884,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:58:40.894] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 19:59:40.870] heartbeat -> ollama: {"timestamp":1774051180870,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 19:59:40.870] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051180870, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 19:59:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 19:59:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 19:59:40.882] ollama -> web_interface: "Processed: {\"timestamp\":1774051180870,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 19:59:40.883] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:00:40.870] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051240870, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 20:00:40.870] heartbeat -> ollama: {"timestamp":1774051240870,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 20:00:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:00:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 20:00:40.878] ollama -> web_interface: "Processed: {\"timestamp\":1774051240870,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:00:40.879] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:00:41.714] web_user -> ollama: whats up!
+[2026-03-20 20:00:41.724] ollama -> web_interface: "Processed: whats up!"
+[2026-03-20 20:01:40.875] heartbeat -> ollama: {"timestamp":1774051300875,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:01:40.875] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051300875, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:01:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 20:01:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 20:01:40.885] ollama -> web_interface: "Processed: {\"timestamp\":1774051300875,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:01:40.887] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:02:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051360880, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 20:02:40.880] heartbeat -> ollama: {"timestamp":1774051360880,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 20:02:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:02:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 20:02:40.889] ollama -> web_interface: "Processed: {\"timestamp\":1774051360880,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:02:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:03:40.871] heartbeat -> ollama: {"timestamp":1774051420871,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:03:40.871] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051420871, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:03:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:03:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 20:03:40.879] ollama -> web_interface: "Processed: {\"timestamp\":1774051420871,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:03:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:04:40.876] heartbeat -> ollama: {"timestamp":1774051480875,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 20:04:40.876] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051480875, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 20:04:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:04:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 20:04:40.884] ollama -> web_interface: "Processed: {\"timestamp\":1774051480875,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:04:40.886] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:05:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051540880, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 20:05:40.880] heartbeat -> ollama: {"timestamp":1774051540880,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 20:05:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 20:05:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 20:05:40.888] ollama -> web_interface: "Processed: {\"timestamp\":1774051540880,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:05:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:06:40.884] heartbeat -> ollama: {"timestamp":1774051600884,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:06:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051600884, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:06:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 20:06:40.892] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 20:06:40.892] ollama -> web_interface: "Processed: {\"timestamp\":1774051600884,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-20 20:06:40.893] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:07:40.874] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051660874, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 20:07:40.874] heartbeat -> ollama: {"timestamp":1774051660874,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 20:07:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 20:07:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 20:07:40.884] ollama -> web_interface: "Processed: {\"timestamp\":1774051660874,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:07:40.885] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:08:40.874] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051720874, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 20:08:40.874] heartbeat -> ollama: {"timestamp":1774051720874,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 20:08:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:08:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 20:08:40.884] ollama -> web_interface: "Processed: {\"timestamp\":1774051720874,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:08:40.886] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:09:40.881] heartbeat -> ollama: {"timestamp":1774051780881,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 20:09:40.881] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051780881, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 20:09:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 20:09:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 20:09:40.890] ollama -> web_interface: "Processed: {\"timestamp\":1774051780881,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:09:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:10:40.873] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051840873, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 20:10:40.873] heartbeat -> ollama: {"timestamp":1774051840873,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 20:10:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:10:40.888] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 20:10:40.888] ollama -> web_interface: "Processed: {\"timestamp\":1774051840873,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:10:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:11:40.878] heartbeat -> ollama: {"timestamp":1774051900878,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 20:11:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051900878, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 20:11:40.887] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 20:11:40.887] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:11:40.887] ollama -> web_interface: "Processed: {\"timestamp\":1774051900878,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+
+[2026-03-20 20:11:40.889] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:12:40.879] heartbeat -> ollama: {"timestamp":1774051960879,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:12:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774051960879, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:12:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:12:40.890] ollama -> web_interface: "Processed: {\"timestamp\":1774051960879,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-20 20:12:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 20:12:40.893] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:13:40.877] heartbeat -> ollama: {"timestamp":1774052020877,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:13:40.877] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774052020877, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:13:40.883] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 20:13:40.884] ollama -> web_interface: "Processed: {\"timestamp\":1774052020877,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 20:13:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 20:13:40.886] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:14:40.872] heartbeat -> ollama: {"timestamp":1774052080872,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:14:40.872] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774052080872, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:14:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 20:14:40.880] ollama -> web_interface: "Processed: {\"timestamp\":1774052080872,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:14:40.881] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 20:14:40.882] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:15:40.876] heartbeat -> ollama: {"timestamp":1774052140876,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 20:15:40.877] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774052140876, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 20:15:40.886] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:15:40.886] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 20:15:40.886] ollama -> web_interface: "Processed: {\"timestamp\":1774052140876,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:15:40.887] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:16:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774052200880, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:16:40.880] heartbeat -> ollama: {"timestamp":1774052200880,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:16:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 20:16:40.890] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 20:16:40.890] ollama -> web_interface: "Processed: {\"timestamp\":1774052200880,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:16:40.891] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:17:40.870] heartbeat -> ollama: {"timestamp":1774052260870,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:17:40.870] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774052260870, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:17:40.877] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 20:17:40.877] ollama -> web_interface: "Processed: {\"timestamp\":1774052260870,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 20:17:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 20:17:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:18:40.872] heartbeat -> ollama: {"timestamp":1774052320872,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:18:40.872] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774052320872, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:18:40.879] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:18:40.879] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 20:18:40.880] ollama -> web_interface: "Processed: {\"timestamp\":1774052320872,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:18:40.881] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:19:40.873] heartbeat -> ollama: {"timestamp":1774052380873,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:19:40.873] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774052380873, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:19:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 20:19:40.884] ollama -> web_interface: "Processed: {\"timestamp\":1774052380873,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 20:19:40.884] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+
+[2026-03-20 20:19:40.886] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 20:20:40.872] heartbeat -> ollama: {"timestamp":1774052440872,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 20:20:40.872] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774052440872, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 20:20:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 20:20:40.878] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 20:20:40.879] ollama -> web_interface: "Processed: {\"timestamp\":1774052440872,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 20:20:40.880] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 21:33:25.734] logger -> web_interface: {"type":"log","level":"info","msg":"Starting bot with HTTPS web interface and Ollama chat"}
+[2026-03-20 21:33:25.736] logger -> web_interface: {"type":"log","level":"info","msg":"HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-20 21:33:25.737] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama handler spawned"}
+[2026-03-20 21:33:25.738] logger -> web_interface: {"type":"log","level":"info","msg":"Starting HTTPS Web Server on 0.0.0.0:8443"}
+[2026-03-20 21:33:25.738] logger -> web_interface: {"type":"log","level":"info","msg":"Web server listening on https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-20 21:33:25.744] heartbeat -> ollama: {"timestamp":1774056805744,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 21:33:25.744] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774056805744, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 21:33:25.745] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 21:33:25.745] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 21:33:25.745] ollama -> web_interface: "Processed: {\"timestamp\":1774056805744,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 21:33:25.746] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 21:34:25.739] heartbeat -> ollama: {"timestamp":1774056865739,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 21:34:25.739] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774056865739, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 21:34:25.750] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 21:34:25.750] ollama -> web_interface: "Processed: {\"timestamp\":1774056865739,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 21:34:25.751] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 21:34:25.753] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 21:35:25.738] heartbeat -> ollama: {"timestamp":1774056925738,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 21:35:25.738] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774056925738, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 21:35:25.746] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 21:35:25.746] ollama -> web_interface: "Processed: {\"timestamp\":1774056925738,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 21:35:25.747] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+
+[2026-03-20 21:35:25.749] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 21:36:25.743] heartbeat -> ollama: {"timestamp":1774056985743,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 21:36:25.743] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774056985743, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 21:36:25.756] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 21:36:25.757] ollama -> web_interface: "Processed: {\"timestamp\":1774056985743,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 21:36:25.757] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 21:36:25.759] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 21:37:25.748] heartbeat -> ollama: {"timestamp":1774057045748,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 21:37:25.748] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774057045748, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 21:37:25.755] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 21:37:25.755] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 21:37:25.755] ollama -> web_interface: "Processed: {\"timestamp\":1774057045748,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 21:37:25.757] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 21:37:48.342] web_user -> ollama: hi
+[2026-03-20 21:37:48.345] ollama -> web_interface: "Processed: hi"
+[2026-03-20 21:38:25.738] heartbeat -> ollama: {"timestamp":1774057105738,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 21:38:25.738] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774057105738, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 21:38:25.745] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 21:38:25.746] ollama -> web_interface: "Processed: {\"timestamp\":1774057105738,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 21:38:25.746] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+
+[2026-03-20 21:38:25.748] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 21:39:25.736] heartbeat -> ollama: {"timestamp":1774057165736,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 21:39:25.736] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774057165736, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 21:39:25.746] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 21:39:25.746] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 21:39:25.746] ollama -> web_interface: "Processed: {\"timestamp\":1774057165736,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 21:39:25.748] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:40:27.313] logger -> web_interface: {"type":"log","level":"info","msg":"Starting bot with HTTPS web interface and Ollama chat"}
+[2026-03-20 23:40:27.314] logger -> web_interface: {"type":"log","level":"info","msg":"HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-20 23:40:27.315] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama handler spawned"}
+[2026-03-20 23:40:27.315] logger -> web_interface: {"type":"log","level":"info","msg":"Starting HTTPS Web Server on 0.0.0.0:8443"}
+[2026-03-20 23:40:27.316] logger -> web_interface: {"type":"log","level":"info","msg":"Web server listening on https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-20 23:40:27.322] heartbeat -> ollama: {"timestamp":1774064427322,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 23:40:27.322] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774064427322, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 23:40:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 23:40:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 23:40:27.323] ollama -> web_interface: "Processed: {\"timestamp\":1774064427322,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-20 23:40:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:41:27.324] heartbeat -> ollama: {"timestamp":1774064487324,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 23:41:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774064487324, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 23:41:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 23:41:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 23:41:27.334] ollama -> web_interface: "Processed: {\"timestamp\":1774064487324,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-20 23:41:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:42:27.316] heartbeat -> ollama: {"timestamp":1774064547316,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 23:42:27.317] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774064547316, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 23:42:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 23:42:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 23:42:27.324] ollama -> web_interface: "Processed: {\"timestamp\":1774064547316,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:42:27.326] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:43:27.321] heartbeat -> ollama: {"timestamp":1774064607321,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 23:43:27.322] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774064607321, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 23:43:27.331] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 23:43:27.331] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 23:43:27.331] ollama -> web_interface: "Processed: {\"timestamp\":1774064607321,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-20 23:43:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:44:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774064667328, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 23:44:27.328] heartbeat -> ollama: {"timestamp":1774064667328,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 23:44:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 23:44:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 23:44:27.335] ollama -> web_interface: "Processed: {\"timestamp\":1774064667328,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:44:27.336] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:45:27.329] heartbeat -> ollama: {"timestamp":1774064727329,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 23:45:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774064727329, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 23:45:27.336] ollama -> web_interface: "Processed: {\"timestamp\":1774064727329,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 23:45:27.336] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 23:45:27.336] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 23:45:27.338] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:46:27.328] heartbeat -> ollama: {"timestamp":1774064787328,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 23:46:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774064787328, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 23:46:27.338] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 23:46:27.339] ollama -> web_interface: "Processed: {\"timestamp\":1774064787328,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 23:46:27.339] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 23:46:27.341] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:47:27.327] heartbeat -> ollama: {"timestamp":1774064847327,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 23:47:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774064847327, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 23:47:27.335] ollama -> web_interface: "Processed: {\"timestamp\":1774064847327,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 23:47:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-20 23:47:27.336] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 23:47:27.337] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:48:27.329] heartbeat -> ollama: {"timestamp":1774064907329,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 23:48:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774064907329, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 23:48:27.337] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 23:48:27.337] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 23:48:27.337] ollama -> web_interface: "Processed: {\"timestamp\":1774064907329,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+
+[2026-03-20 23:48:27.338] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:49:27.314] heartbeat -> ollama: {"timestamp":1774064967314,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 23:49:27.314] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774064967314, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 23:49:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-20 23:49:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 23:49:27.325] ollama -> web_interface: "Processed: {\"timestamp\":1774064967314,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-20 23:49:27.326] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:50:27.329] heartbeat -> ollama: {"timestamp":1774065027329,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 23:50:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065027329, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 23:50:27.338] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 23:50:27.338] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 23:50:27.339] ollama -> web_interface: "Processed: {\"timestamp\":1774065027329,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:50:27.339] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:51:27.328] heartbeat -> ollama: {"timestamp":1774065087328,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 23:51:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065087328, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 23:51:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 23:51:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 23:51:27.336] ollama -> web_interface: "Processed: {\"timestamp\":1774065087328,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:51:27.336] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:52:27.323] heartbeat -> ollama: {"timestamp":1774065147323,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 23:52:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065147323, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 23:52:27.340] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 23:52:27.340] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 23:52:27.340] ollama -> web_interface: "Processed: {\"timestamp\":1774065147323,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:52:27.341] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:53:27.316] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065207316, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 23:53:27.316] heartbeat -> ollama: {"timestamp":1774065207316,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 23:53:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 23:53:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 23:53:27.323] ollama -> web_interface: "Processed: {\"timestamp\":1774065207316,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:53:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:54:27.326] heartbeat -> ollama: {"timestamp":1774065267326,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-20 23:54:27.326] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065267326, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-20 23:54:27.333] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 23:54:27.333] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 23:54:27.333] ollama -> web_interface: "Processed: {\"timestamp\":1774065267326,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:54:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:55:27.318] heartbeat -> ollama: {"timestamp":1774065327317,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 23:55:27.318] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065327317, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 23:55:27.326] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 23:55:27.326] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 23:55:27.326] ollama -> web_interface: "Processed: {\"timestamp\":1774065327317,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:55:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:56:27.317] heartbeat -> ollama: {"timestamp":1774065387317,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 23:56:27.317] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065387317, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 23:56:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-20 23:56:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 23:56:27.329] ollama -> web_interface: "Processed: {\"timestamp\":1774065387317,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:56:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:57:27.325] heartbeat -> ollama: {"timestamp":1774065447325,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 23:57:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065447325, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 23:57:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 23:57:27.332] ollama -> web_interface: "Processed: {\"timestamp\":1774065447325,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:57:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 23:57:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:58:27.325] heartbeat -> ollama: {"timestamp":1774065507325,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-20 23:58:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065507325, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-20 23:58:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 23:58:27.332] ollama -> web_interface: "Processed: {\"timestamp\":1774065507325,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-20 23:58:27.333] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-20 23:58:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-20 23:59:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065567325, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-20 23:59:27.325] heartbeat -> ollama: {"timestamp":1774065567325,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-20 23:59:27.333] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-20 23:59:27.333] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-20 23:59:27.333] ollama -> web_interface: "Processed: {\"timestamp\":1774065567325,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-20 23:59:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:00:27.321] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065627321, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 00:00:27.321] heartbeat -> ollama: {"timestamp":1774065627321,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 00:00:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:00:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 00:00:27.329] ollama -> web_interface: "Processed: {\"timestamp\":1774065627321,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:00:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:01:27.322] heartbeat -> ollama: {"timestamp":1774065687322,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:01:27.322] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065687322, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:01:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 00:01:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 00:01:27.330] ollama -> web_interface: "Processed: {\"timestamp\":1774065687322,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:01:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:02:27.325] heartbeat -> ollama: {"timestamp":1774065747325,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:02:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065747325, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:02:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:02:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:02:27.334] ollama -> web_interface: "Processed: {\"timestamp\":1774065747325,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:02:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:03:27.315] heartbeat -> ollama: {"timestamp":1774065807315,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:03:27.315] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065807315, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:03:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:03:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:03:27.324] ollama -> web_interface: "Processed: {\"timestamp\":1774065807315,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:03:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:04:27.325] heartbeat -> ollama: {"timestamp":1774065867325,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:04:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065867325, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:04:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 00:04:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 00:04:27.333] ollama -> web_interface: "Processed: {\"timestamp\":1774065867325,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:04:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:05:27.329] heartbeat -> ollama: {"timestamp":1774065927329,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:05:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065927329, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:05:27.339] ollama -> web_interface: "Processed: {\"timestamp\":1774065927329,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 00:05:27.338] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:05:27.339] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+
+[2026-03-21 00:05:27.340] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:06:27.317] heartbeat -> ollama: {"timestamp":1774065987317,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:06:27.317] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774065987317, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:06:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 00:06:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 00:06:27.324] ollama -> web_interface: "Processed: {\"timestamp\":1774065987317,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:06:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:07:27.327] heartbeat -> ollama: {"timestamp":1774066047327,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:07:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066047327, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:07:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:07:27.335] ollama -> web_interface: "Processed: {\"timestamp\":1774066047327,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 00:07:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:07:27.337] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:08:27.319] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066107319, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 00:08:27.319] heartbeat -> ollama: {"timestamp":1774066107319,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 00:08:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:08:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 00:08:27.327] ollama -> web_interface: "Processed: {\"timestamp\":1774066107319,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:08:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:09:27.323] heartbeat -> ollama: {"timestamp":1774066167323,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:09:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066167323, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:09:27.331] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:09:27.331] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 00:09:27.331] ollama -> web_interface: "Processed: {\"timestamp\":1774066167323,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:09:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:10:27.319] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066227319, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 00:10:27.319] heartbeat -> ollama: {"timestamp":1774066227319,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 00:10:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:10:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:10:27.328] ollama -> web_interface: "Processed: {\"timestamp\":1774066227319,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:10:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:11:27.326] heartbeat -> ollama: {"timestamp":1774066287326,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:11:27.326] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066287326, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:11:27.336] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:11:27.336] ollama -> web_interface: "Processed: {\"timestamp\":1774066287326,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 00:11:27.336] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+
+[2026-03-21 00:11:27.338] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:12:27.314] heartbeat -> ollama: {"timestamp":1774066347314,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:12:27.314] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066347314, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:12:27.322] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:12:27.323] ollama -> web_interface: "Processed: {\"timestamp\":1774066347314,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 00:12:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+
+[2026-03-21 00:12:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:13:27.320] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066407320, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 00:13:27.320] heartbeat -> ollama: {"timestamp":1774066407320,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 00:13:27.331] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:13:27.331] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:13:27.332] ollama -> web_interface: "Processed: {\"timestamp\":1774066407320,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:13:27.333] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:14:27.324] heartbeat -> ollama: {"timestamp":1774066467324,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:14:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066467324, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:14:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:14:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:14:27.334] ollama -> web_interface: "Processed: {\"timestamp\":1774066467324,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:14:27.336] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:15:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066527325, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 00:15:27.325] heartbeat -> ollama: {"timestamp":1774066527325,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 00:15:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:15:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 00:15:27.332] ollama -> web_interface: "Processed: {\"timestamp\":1774066527325,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 00:15:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:16:27.322] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066587321, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 00:16:27.321] heartbeat -> ollama: {"timestamp":1774066587321,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 00:16:27.331] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:16:27.331] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:16:27.331] ollama -> web_interface: "Processed: {\"timestamp\":1774066587321,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:16:27.333] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:17:27.329] heartbeat -> ollama: {"timestamp":1774066647329,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:17:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066647329, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:17:27.337] ollama -> web_interface: "Processed: {\"timestamp\":1774066647329,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 00:17:27.337] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 00:17:27.337] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:17:27.339] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:18:27.314] heartbeat -> ollama: {"timestamp":1774066707314,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:18:27.314] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066707314, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:18:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:18:27.330] ollama -> web_interface: "Processed: {\"timestamp\":1774066707314,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 00:18:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 00:18:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:19:27.320] heartbeat -> ollama: {"timestamp":1774066767320,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:19:27.321] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066767320, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:19:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:19:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 00:19:27.329] ollama -> web_interface: "Processed: {\"timestamp\":1774066767320,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:19:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:20:27.314] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066827314, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 00:20:27.314] heartbeat -> ollama: {"timestamp":1774066827314,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 00:20:27.321] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:20:27.321] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 00:20:27.321] ollama -> web_interface: "Processed: {\"timestamp\":1774066827314,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:20:27.322] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:21:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066887329, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:21:27.329] heartbeat -> ollama: {"timestamp":1774066887329,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:21:27.339] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:21:27.339] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:21:27.339] ollama -> web_interface: "Processed: {\"timestamp\":1774066887329,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:21:27.340] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:22:27.316] heartbeat -> ollama: {"timestamp":1774066947316,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:22:27.316] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774066947316, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:22:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:22:27.325] ollama -> web_interface: "Processed: {\"timestamp\":1774066947316,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 00:22:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 00:22:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:23:27.319] heartbeat -> ollama: {"timestamp":1774067007319,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:23:27.319] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067007319, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:23:27.321] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:23:27.321] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:23:27.322] ollama -> web_interface: "Processed: {\"timestamp\":1774067007319,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:23:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:24:27.320] heartbeat -> ollama: {"timestamp":1774067067320,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:24:27.320] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067067320, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:24:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:24:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:24:27.329] ollama -> web_interface: "Processed: {\"timestamp\":1774067067320,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:24:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:25:27.316] heartbeat -> ollama: {"timestamp":1774067127316,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:25:27.316] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067127316, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:25:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:25:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:25:27.325] ollama -> web_interface: "Processed: {\"timestamp\":1774067127316,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:25:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:26:27.319] heartbeat -> ollama: {"timestamp":1774067187319,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:26:27.319] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067187319, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:26:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:26:27.328] ollama -> web_interface: "Processed: {\"timestamp\":1774067187319,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:26:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:26:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:27:27.321] heartbeat -> ollama: {"timestamp":1774067247321,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:27:27.321] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067247321, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:27:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:27:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:27:27.330] ollama -> web_interface: "Processed: {\"timestamp\":1774067247321,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 00:27:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:28:27.327] heartbeat -> ollama: {"timestamp":1774067307327,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:28:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067307327, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:28:27.334] ollama -> web_interface: "Processed: {\"timestamp\":1774067307327,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 00:28:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 00:28:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:28:27.336] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:29:27.323] heartbeat -> ollama: {"timestamp":1774067367323,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:29:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067367323, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:29:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:29:27.331] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 00:29:27.331] ollama -> web_interface: "Processed: {\"timestamp\":1774067367323,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 00:29:27.332] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:30:27.314] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067427314, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:30:27.314] heartbeat -> ollama: {"timestamp":1774067427314,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:30:27.322] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 00:30:27.322] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 00:30:27.322] ollama -> web_interface: "Processed: {\"timestamp\":1774067427314,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:30:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:31:27.318] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067487318, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 00:31:27.318] heartbeat -> ollama: {"timestamp":1774067487318,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 00:31:27.326] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:31:27.326] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:31:27.327] ollama -> web_interface: "Processed: {\"timestamp\":1774067487318,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:31:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:31:39.573] web_user -> ollama: hi
+[2026-03-21 00:31:39.580] ollama -> web_interface: "Processed: hi"
+[2026-03-21 00:32:27.316] heartbeat -> ollama: {"timestamp":1774067547316,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:32:27.316] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067547316, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:32:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:32:27.327] ollama -> web_interface: "Processed: {\"timestamp\":1774067547316,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 00:32:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 00:32:27.329] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:33:27.318] heartbeat -> ollama: {"timestamp":1774067607318,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:33:27.318] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067607318, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:33:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 00:33:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 00:33:27.327] ollama -> web_interface: "Processed: {\"timestamp\":1774067607318,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:33:27.328] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:34:27.327] heartbeat -> ollama: {"timestamp":1774067667327,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:34:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067667327, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:34:27.339] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 00:34:27.339] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 00:34:27.339] ollama -> web_interface: "Processed: {\"timestamp\":1774067667327,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:34:27.341] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:35:27.316] heartbeat -> ollama: {"timestamp":1774067727316,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:35:27.316] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067727316, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:35:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:35:27.323] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:35:27.324] ollama -> web_interface: "Processed: {\"timestamp\":1774067727316,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:35:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:36:27.326] heartbeat -> ollama: {"timestamp":1774067787326,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:36:27.326] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067787326, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:36:27.336] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:36:27.336] ollama -> web_interface: "Processed: {\"timestamp\":1774067787326,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 00:36:27.337] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:36:27.339] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:37:27.324] heartbeat -> ollama: {"timestamp":1774067847324,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 00:37:27.324] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067847324, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 00:37:27.334] ollama -> web_interface: "Processed: {\"timestamp\":1774067847324,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 00:37:27.333] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:37:27.334] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+
+[2026-03-21 00:37:27.335] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:38:27.315] heartbeat -> ollama: {"timestamp":1774067907315,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:38:27.315] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067907315, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:38:27.325] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 00:38:27.325] ollama -> web_interface: "Processed: {\"timestamp\":1774067907315,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 00:38:27.326] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 00:38:27.327] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 00:39:27.330] heartbeat -> ollama: {"timestamp":1774067967330,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 00:39:27.330] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774067967330, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 00:39:27.339] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 00:39:27.339] ollama -> web_interface: "Processed: {\"timestamp\":1774067967330,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 00:39:27.340] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 00:39:27.341] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:49:12.339] logger -> web_interface: {"type":"log","level":"info","msg":"Starting bot with HTTPS web interface and Ollama chat"}
+[2026-03-21 02:49:12.342] heartbeat -> ollama: {"timestamp":1774075752342,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 02:49:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-21 02:49:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 02:49:12.355] ollama -> web_interface: "Processed: {\"timestamp\":1774075752342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 02:49:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama handler spawned"}
+[2026-03-21 02:49:12.379] logger -> web_interface: {"type":"log","level":"info","msg":"Starting HTTPS Web Server on 0.0.0.0:8443"}
+[2026-03-21 02:49:12.382] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774075752342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 02:49:12.385] logger -> web_interface: {"type":"log","level":"info","msg":"Web server listening on https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-21 02:49:12.387] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 02:49:12.390] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:50:12.354] heartbeat -> ollama: {"timestamp":1774075812354,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 02:50:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774075812354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 02:50:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 02:50:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774075812354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 02:50:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 02:50:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:51:12.353] heartbeat -> ollama: {"timestamp":1774075872353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 02:51:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774075872353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 02:51:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 02:51:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 02:51:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774075872353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 02:51:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:52:12.346] heartbeat -> ollama: {"timestamp":1774075932346,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 02:52:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774075932346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 02:52:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 02:52:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 02:52:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774075932346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 02:52:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:53:12.352] heartbeat -> ollama: {"timestamp":1774075992352,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 02:53:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774075992352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 02:53:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 02:53:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 02:53:12.359] ollama -> web_interface: "Processed: {\"timestamp\":1774075992352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 02:53:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:54:12.349] heartbeat -> ollama: {"timestamp":1774076052349,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 02:54:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076052349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 02:54:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 02:54:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 02:54:12.360] ollama -> web_interface: "Processed: {\"timestamp\":1774076052349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 02:54:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:55:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076112353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 02:55:12.353] heartbeat -> ollama: {"timestamp":1774076112353,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 02:55:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 02:55:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 02:55:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774076112353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 02:55:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:56:12.349] heartbeat -> ollama: {"timestamp":1774076172349,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 02:56:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076172349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 02:56:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 02:56:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 02:56:12.363] ollama -> web_interface: "Processed: {\"timestamp\":1774076172349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 02:56:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:57:12.351] heartbeat -> ollama: {"timestamp":1774076232351,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 02:57:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076232351, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 02:57:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 02:57:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 02:57:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774076232351,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 02:57:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:58:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076292346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 02:58:12.346] heartbeat -> ollama: {"timestamp":1774076292346,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 02:58:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 02:58:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 02:58:12.359] ollama -> web_interface: "Processed: {\"timestamp\":1774076292346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 02:58:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 02:59:12.347] heartbeat -> ollama: {"timestamp":1774076352347,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 02:59:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076352347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 02:59:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 02:59:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 02:59:12.354] ollama -> web_interface: "Processed: {\"timestamp\":1774076352347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 02:59:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:00:12.350] heartbeat -> ollama: {"timestamp":1774076412350,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:00:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076412350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:00:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:00:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:00:12.359] ollama -> web_interface: "Processed: {\"timestamp\":1774076412350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:00:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:01:12.348] heartbeat -> ollama: {"timestamp":1774076472348,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:01:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076472348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:01:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:01:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:01:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774076472348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:01:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:02:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076532348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 03:02:12.348] heartbeat -> ollama: {"timestamp":1774076532348,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 03:02:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:02:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:02:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774076532348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:02:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:03:12.354] heartbeat -> ollama: {"timestamp":1774076592354,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:03:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076592354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:03:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:03:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:03:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774076592354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:03:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:04:12.355] heartbeat -> ollama: {"timestamp":1774076652355,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:04:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076652355, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:04:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:04:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:04:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774076652355,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 03:04:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:05:12.347] heartbeat -> ollama: {"timestamp":1774076712347,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:05:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076712347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:05:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:05:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:05:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774076712347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:05:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:06:12.348] heartbeat -> ollama: {"timestamp":1774076772348,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:06:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076772348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:06:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:06:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:06:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774076772348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:06:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:07:12.347] heartbeat -> ollama: {"timestamp":1774076832347,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:07:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076832347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:07:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:07:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:07:12.357] ollama -> web_interface: "Processed: {\"timestamp\":1774076832347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:07:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:08:12.347] heartbeat -> ollama: {"timestamp":1774076892346,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:08:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076892346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:08:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:08:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:08:12.355] ollama -> web_interface: "Processed: {\"timestamp\":1774076892346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:08:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:09:12.347] heartbeat -> ollama: {"timestamp":1774076952347,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:09:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774076952347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:09:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:09:12.359] ollama -> web_interface: "Processed: {\"timestamp\":1774076952347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:09:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:09:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:10:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077012353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 03:10:12.353] heartbeat -> ollama: {"timestamp":1774077012353,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 03:10:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:10:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:10:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774077012353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 03:10:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:11:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077072347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:11:12.347] heartbeat -> ollama: {"timestamp":1774077072347,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:11:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:11:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:11:12.355] ollama -> web_interface: "Processed: {\"timestamp\":1774077072347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 03:11:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:12:12.340] heartbeat -> ollama: {"timestamp":1774077132340,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:12:12.340] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077132340, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:12:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:12:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:12:12.347] ollama -> web_interface: "Processed: {\"timestamp\":1774077132340,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:12:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:13:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077192350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 03:13:12.350] heartbeat -> ollama: {"timestamp":1774077192350,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 03:13:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:13:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:13:12.359] ollama -> web_interface: "Processed: {\"timestamp\":1774077192350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:13:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:14:12.340] heartbeat -> ollama: {"timestamp":1774077252340,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:14:12.340] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077252340, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:14:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:14:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:14:12.351] ollama -> web_interface: "Processed: {\"timestamp\":1774077252340,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:14:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:15:12.342] heartbeat -> ollama: {"timestamp":1774077312342,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:15:12.342] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077312342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:15:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:15:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:15:12.351] ollama -> web_interface: "Processed: {\"timestamp\":1774077312342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:15:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:16:12.348] heartbeat -> ollama: {"timestamp":1774077372348,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:16:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077372348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:16:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:16:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774077372348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:16:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:16:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:17:12.341] heartbeat -> ollama: {"timestamp":1774077432341,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:17:12.341] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077432341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:17:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:17:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:17:12.349] ollama -> web_interface: "Processed: {\"timestamp\":1774077432341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:17:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:18:12.350] heartbeat -> ollama: {"timestamp":1774077492350,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:18:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077492350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:18:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:18:12.360] ollama -> web_interface: "Processed: {\"timestamp\":1774077492350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:18:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:18:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:19:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077552345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 03:19:12.345] heartbeat -> ollama: {"timestamp":1774077552345,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 03:19:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:19:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:19:12.355] ollama -> web_interface: "Processed: {\"timestamp\":1774077552345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 03:19:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:20:12.350] heartbeat -> ollama: {"timestamp":1774077612350,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:20:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077612350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:20:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:20:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774077612350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 03:20:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:20:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:21:12.352] heartbeat -> ollama: {"timestamp":1774077672352,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:21:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077672352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:21:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:21:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:21:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774077672352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:21:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:22:12.354] heartbeat -> ollama: {"timestamp":1774077732354,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:22:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077732354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:22:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:22:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:22:12.364] ollama -> web_interface: "Processed: {\"timestamp\":1774077732354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:22:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:23:12.354] heartbeat -> ollama: {"timestamp":1774077792354,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:23:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077792354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:23:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:23:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774077792354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 03:23:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:23:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:24:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077852352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 03:24:12.352] heartbeat -> ollama: {"timestamp":1774077852352,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 03:24:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:24:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:24:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774077852352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:24:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:25:12.351] heartbeat -> ollama: {"timestamp":1774077912351,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:25:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077912351, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:25:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:25:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:25:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774077912351,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:25:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:26:12.354] heartbeat -> ollama: {"timestamp":1774077972354,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:26:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774077972354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:26:12.366] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:26:12.366] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:26:12.367] ollama -> web_interface: "Processed: {\"timestamp\":1774077972354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:26:12.367] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:27:12.354] heartbeat -> ollama: {"timestamp":1774078032354,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:27:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078032354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:27:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:27:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:27:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774078032354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:27:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:28:12.353] heartbeat -> ollama: {"timestamp":1774078092353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:28:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078092353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:28:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:28:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774078092353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:28:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:28:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:29:12.350] heartbeat -> ollama: {"timestamp":1774078152350,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:29:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078152350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:29:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:29:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:29:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774078152350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:29:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:30:12.346] heartbeat -> ollama: {"timestamp":1774078212346,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:30:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078212346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:30:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:30:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:30:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774078212346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:30:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:31:12.341] heartbeat -> ollama: {"timestamp":1774078272341,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:31:12.341] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078272341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:31:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:31:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:31:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:31:12.351] ollama -> web_interface: "Processed: {\"timestamp\":1774078272341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:32:12.353] heartbeat -> ollama: {"timestamp":1774078332353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:32:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078332353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:32:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:32:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774078332353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:32:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:32:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:33:12.342] heartbeat -> ollama: {"timestamp":1774078392342,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:33:12.342] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078392342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:33:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:33:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:33:12.350] ollama -> web_interface: "Processed: {\"timestamp\":1774078392342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:33:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:34:12.348] heartbeat -> ollama: {"timestamp":1774078452347,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:34:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078452347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:34:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:34:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:34:12.355] ollama -> web_interface: "Processed: {\"timestamp\":1774078452347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 03:34:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:35:12.352] heartbeat -> ollama: {"timestamp":1774078512352,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:35:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078512352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:35:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:35:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:35:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774078512352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:35:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:36:12.347] heartbeat -> ollama: {"timestamp":1774078572347,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:36:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078572347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:36:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:36:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774078572347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:36:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:36:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:37:12.341] heartbeat -> ollama: {"timestamp":1774078632341,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:37:12.341] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078632341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:37:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:37:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:37:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774078632341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:37:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:38:12.354] heartbeat -> ollama: {"timestamp":1774078692354,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:38:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078692354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:38:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:38:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:38:12.363] ollama -> web_interface: "Processed: {\"timestamp\":1774078692354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:38:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:39:12.355] heartbeat -> ollama: {"timestamp":1774078752355,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:39:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078752355, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:39:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:39:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:39:12.364] ollama -> web_interface: "Processed: {\"timestamp\":1774078752355,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:39:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:40:12.347] heartbeat -> ollama: {"timestamp":1774078812347,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:40:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078812347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:40:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:40:12.354] ollama -> web_interface: "Processed: {\"timestamp\":1774078812347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:40:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:40:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:41:12.349] heartbeat -> ollama: {"timestamp":1774078872349,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:41:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078872349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:41:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:41:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:41:12.366] ollama -> web_interface: "Processed: {\"timestamp\":1774078872349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:41:12.367] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:42:12.344] heartbeat -> ollama: {"timestamp":1774078932344,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:42:12.344] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078932344, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:42:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:42:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:42:12.352] ollama -> web_interface: "Processed: {\"timestamp\":1774078932344,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:42:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:43:12.340] heartbeat -> ollama: {"timestamp":1774078992340,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:43:12.340] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774078992340, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:43:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:43:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:43:12.348] ollama -> web_interface: "Processed: {\"timestamp\":1774078992340,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:43:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:44:12.353] heartbeat -> ollama: {"timestamp":1774079052353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:44:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079052353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:44:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:44:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:44:12.366] ollama -> web_interface: "Processed: {\"timestamp\":1774079052353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:44:12.366] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:45:12.353] heartbeat -> ollama: {"timestamp":1774079112352,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:45:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079112352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:45:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:45:12.365] ollama -> web_interface: "Processed: {\"timestamp\":1774079112352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 03:45:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:45:12.367] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:46:12.353] heartbeat -> ollama: {"timestamp":1774079172353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:46:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079172353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:46:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:46:12.364] ollama -> web_interface: "Processed: {\"timestamp\":1774079172353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:46:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:46:12.366] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:47:12.349] heartbeat -> ollama: {"timestamp":1774079232349,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:47:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079232349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:47:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:47:12.360] ollama -> web_interface: "Processed: {\"timestamp\":1774079232349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 03:47:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:47:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:48:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079292353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:48:12.353] heartbeat -> ollama: {"timestamp":1774079292353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:48:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 03:48:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 03:48:12.360] ollama -> web_interface: "Processed: {\"timestamp\":1774079292353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:48:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:49:12.348] heartbeat -> ollama: {"timestamp":1774079352348,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:49:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079352348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:49:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:49:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:49:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774079352348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:49:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:50:12.354] heartbeat -> ollama: {"timestamp":1774079412354,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:50:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079412354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:50:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:50:12.363] ollama -> web_interface: "Processed: {\"timestamp\":1774079412354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:50:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:50:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:51:12.351] heartbeat -> ollama: {"timestamp":1774079472351,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:51:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079472351, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:51:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:51:12.359] ollama -> web_interface: "Processed: {\"timestamp\":1774079472351,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:51:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:51:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:52:12.353] heartbeat -> ollama: {"timestamp":1774079532353,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:52:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079532353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:52:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:52:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:52:12.363] ollama -> web_interface: "Processed: {\"timestamp\":1774079532353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:52:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:53:12.341] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079592341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 03:53:12.341] heartbeat -> ollama: {"timestamp":1774079592341,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 03:53:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:53:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:53:12.348] ollama -> web_interface: "Processed: {\"timestamp\":1774079592341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:53:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:54:12.343] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079652343, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 03:54:12.343] heartbeat -> ollama: {"timestamp":1774079652343,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 03:54:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:54:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:54:12.351] ollama -> web_interface: "Processed: {\"timestamp\":1774079652343,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:54:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:55:12.343] heartbeat -> ollama: {"timestamp":1774079712343,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:55:12.343] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079712343, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:55:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:55:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:55:12.352] ollama -> web_interface: "Processed: {\"timestamp\":1774079712343,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:55:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:56:12.346] heartbeat -> ollama: {"timestamp":1774079772346,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:56:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079772346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:56:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 03:56:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:56:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774079772346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:56:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:57:12.348] heartbeat -> ollama: {"timestamp":1774079832348,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:57:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079832348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:57:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:57:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:57:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774079832348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:57:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:58:12.350] heartbeat -> ollama: {"timestamp":1774079892350,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 03:58:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079892350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 03:58:12.366] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 03:58:12.366] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:58:12.367] ollama -> web_interface: "Processed: {\"timestamp\":1774079892350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 03:58:12.368] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 03:59:12.345] heartbeat -> ollama: {"timestamp":1774079952345,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 03:59:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774079952345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 03:59:12.354] ollama -> web_interface: "Processed: {\"timestamp\":1774079952345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 03:59:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 03:59:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 03:59:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:00:12.354] heartbeat -> ollama: {"timestamp":1774080012354,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:00:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080012354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:00:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:00:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:00:12.365] ollama -> web_interface: "Processed: {\"timestamp\":1774080012354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:00:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:01:12.353] heartbeat -> ollama: {"timestamp":1774080072353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:01:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080072353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:01:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:01:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774080072353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:01:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:01:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:02:12.354] heartbeat -> ollama: {"timestamp":1774080132354,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:02:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080132354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:02:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:02:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:02:12.364] ollama -> web_interface: "Processed: {\"timestamp\":1774080132354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:02:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:03:12.351] heartbeat -> ollama: {"timestamp":1774080192351,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:03:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080192351, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:03:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:03:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:03:12.360] ollama -> web_interface: "Processed: {\"timestamp\":1774080192351,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:03:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:04:12.346] heartbeat -> ollama: {"timestamp":1774080252346,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:04:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080252346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:04:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:04:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:04:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774080252346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:04:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:05:12.353] heartbeat -> ollama: {"timestamp":1774080312353,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:05:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080312353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:05:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:05:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:05:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774080312353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:05:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:06:12.344] heartbeat -> ollama: {"timestamp":1774080372344,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:06:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080372344, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:06:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:06:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:06:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774080372344,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:06:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:07:12.349] heartbeat -> ollama: {"timestamp":1774080432349,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:07:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080432349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:07:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:07:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:07:12.355] ollama -> web_interface: "Processed: {\"timestamp\":1774080432349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:07:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:08:12.347] heartbeat -> ollama: {"timestamp":1774080492347,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:08:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080492347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:08:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:08:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774080492347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:08:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:08:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:09:12.341] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080552341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:09:12.341] heartbeat -> ollama: {"timestamp":1774080552341,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:09:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:09:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:09:12.348] ollama -> web_interface: "Processed: {\"timestamp\":1774080552341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:09:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:10:12.355] heartbeat -> ollama: {"timestamp":1774080612355,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:10:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080612355, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:10:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:10:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774080612355,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:10:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:10:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:11:12.340] heartbeat -> ollama: {"timestamp":1774080672340,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:11:12.340] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080672340, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:11:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:11:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:11:12.347] ollama -> web_interface: "Processed: {\"timestamp\":1774080672340,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:11:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:12:12.353] heartbeat -> ollama: {"timestamp":1774080732353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:12:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080732353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:12:12.367] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:12:12.367] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:12:12.368] ollama -> web_interface: "Processed: {\"timestamp\":1774080732353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:12:12.368] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:13:12.351] heartbeat -> ollama: {"timestamp":1774080792351,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:13:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080792351, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:13:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 04:13:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 04:13:12.364] ollama -> web_interface: "Processed: {\"timestamp\":1774080792351,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:13:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:14:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080852348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:14:12.348] heartbeat -> ollama: {"timestamp":1774080852348,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:14:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:14:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:14:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774080852348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:14:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:15:12.348] heartbeat -> ollama: {"timestamp":1774080912348,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:15:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080912348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:15:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:15:12.357] ollama -> web_interface: "Processed: {\"timestamp\":1774080912348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 04:15:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 04:15:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:16:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774080972345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:16:12.345] heartbeat -> ollama: {"timestamp":1774080972345,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:16:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:16:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:16:12.354] ollama -> web_interface: "Processed: {\"timestamp\":1774080972345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:16:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:17:12.341] heartbeat -> ollama: {"timestamp":1774081032341,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:17:12.341] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081032341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:17:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:17:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:17:12.349] ollama -> web_interface: "Processed: {\"timestamp\":1774081032341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:17:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:18:12.343] heartbeat -> ollama: {"timestamp":1774081092343,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:18:12.343] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081092343, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:18:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:18:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:18:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774081092343,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:18:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:19:12.354] heartbeat -> ollama: {"timestamp":1774081152354,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:19:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081152354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:19:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:19:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:19:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774081152354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:19:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:20:12.342] heartbeat -> ollama: {"timestamp":1774081212342,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:20:12.342] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081212342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:20:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:20:12.351] ollama -> web_interface: "Processed: {\"timestamp\":1774081212342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:20:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:20:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:21:12.344] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081272344, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:21:12.344] heartbeat -> ollama: {"timestamp":1774081272344,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:21:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:21:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:21:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774081272344,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:21:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:22:12.355] heartbeat -> ollama: {"timestamp":1774081332355,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:22:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081332355, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:22:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 04:22:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 04:22:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774081332355,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:22:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:23:12.342] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081392341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:23:12.342] heartbeat -> ollama: {"timestamp":1774081392341,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:23:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:23:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:23:12.349] ollama -> web_interface: "Processed: {\"timestamp\":1774081392341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:23:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:24:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081452354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:24:12.354] heartbeat -> ollama: {"timestamp":1774081452354,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:24:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:24:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:24:12.365] ollama -> web_interface: "Processed: {\"timestamp\":1774081452354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:24:12.366] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:25:12.353] heartbeat -> ollama: {"timestamp":1774081512353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:25:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081512353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:25:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 04:25:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774081512353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 04:25:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:25:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:26:12.345] heartbeat -> ollama: {"timestamp":1774081572345,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:26:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081572345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:26:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:26:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:26:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774081572345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:26:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:27:12.348] heartbeat -> ollama: {"timestamp":1774081632348,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:27:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081632348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:27:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:27:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:27:12.357] ollama -> web_interface: "Processed: {\"timestamp\":1774081632348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:27:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:28:12.342] heartbeat -> ollama: {"timestamp":1774081692342,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:28:12.342] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081692342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:28:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:28:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:28:12.350] ollama -> web_interface: "Processed: {\"timestamp\":1774081692342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:28:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:29:12.345] heartbeat -> ollama: {"timestamp":1774081752345,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:29:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081752345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:29:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:29:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:29:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774081752345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:29:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:30:12.343] heartbeat -> ollama: {"timestamp":1774081812343,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:30:12.343] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081812343, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:30:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 04:30:12.352] ollama -> web_interface: "Processed: {\"timestamp\":1774081812343,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 04:30:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:30:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:31:12.352] heartbeat -> ollama: {"timestamp":1774081872352,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:31:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081872352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:31:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:31:12.364] ollama -> web_interface: "Processed: {\"timestamp\":1774081872352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:31:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:31:12.366] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:32:12.345] heartbeat -> ollama: {"timestamp":1774081932345,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:32:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081932345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:32:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:32:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:32:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774081932345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:32:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:33:12.342] heartbeat -> ollama: {"timestamp":1774081992342,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:33:12.343] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774081992342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:33:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:33:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:33:12.346] ollama -> web_interface: "Processed: {\"timestamp\":1774081992342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:33:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:34:12.350] heartbeat -> ollama: {"timestamp":1774082052350,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:34:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082052350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:34:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:34:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:34:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774082052350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:34:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:35:12.352] heartbeat -> ollama: {"timestamp":1774082112352,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:35:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082112352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:35:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:35:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:35:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774082112352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:35:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:36:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082172349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:36:12.349] heartbeat -> ollama: {"timestamp":1774082172349,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:36:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:36:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:36:12.357] ollama -> web_interface: "Processed: {\"timestamp\":1774082172349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:36:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:37:12.349] heartbeat -> ollama: {"timestamp":1774082232349,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:37:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082232349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:37:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:37:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:37:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774082232349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:37:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:38:12.355] heartbeat -> ollama: {"timestamp":1774082292355,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:38:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082292355, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:38:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 04:38:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 04:38:12.364] ollama -> web_interface: "Processed: {\"timestamp\":1774082292355,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:38:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:39:12.343] heartbeat -> ollama: {"timestamp":1774082352342,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:39:12.343] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082352342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:39:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:39:12.352] ollama -> web_interface: "Processed: {\"timestamp\":1774082352342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:39:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:39:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:40:12.341] heartbeat -> ollama: {"timestamp":1774082412341,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:40:12.341] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082412341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:40:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:40:12.349] ollama -> web_interface: "Processed: {\"timestamp\":1774082412341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:40:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:40:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:41:12.342] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082472341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:41:12.341] heartbeat -> ollama: {"timestamp":1774082472341,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:41:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:41:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:41:12.349] ollama -> web_interface: "Processed: {\"timestamp\":1774082472341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:41:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:42:12.344] heartbeat -> ollama: {"timestamp":1774082532344,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:42:12.344] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082532344, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:42:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:42:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:42:12.351] ollama -> web_interface: "Processed: {\"timestamp\":1774082532344,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:42:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:43:12.344] heartbeat -> ollama: {"timestamp":1774082592344,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:43:12.344] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082592344, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:43:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:43:12.350] ollama -> web_interface: "Processed: {\"timestamp\":1774082592344,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:43:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:43:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:44:12.353] heartbeat -> ollama: {"timestamp":1774082652353,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:44:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082652353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:44:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:44:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:44:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774082652353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:44:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:45:12.347] heartbeat -> ollama: {"timestamp":1774082712346,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:45:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082712346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:45:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 04:45:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 04:45:12.354] ollama -> web_interface: "Processed: {\"timestamp\":1774082712346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:45:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:46:12.344] heartbeat -> ollama: {"timestamp":1774082772344,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:46:12.344] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082772344, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:46:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:46:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:46:12.357] ollama -> web_interface: "Processed: {\"timestamp\":1774082772344,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:46:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:47:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082832354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:47:12.354] heartbeat -> ollama: {"timestamp":1774082832354,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:47:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:47:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:47:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774082832354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:47:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:48:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082892349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:48:12.349] heartbeat -> ollama: {"timestamp":1774082892349,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:48:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:48:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:48:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774082892349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:48:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:49:12.350] heartbeat -> ollama: {"timestamp":1774082952350,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:49:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774082952350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:49:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:49:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:49:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774082952350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:49:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:50:12.341] heartbeat -> ollama: {"timestamp":1774083012341,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:50:12.341] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083012341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:50:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:50:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:50:12.359] ollama -> web_interface: "Processed: {\"timestamp\":1774083012341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:50:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:51:12.352] heartbeat -> ollama: {"timestamp":1774083072352,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:51:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083072352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:51:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:51:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:51:12.359] ollama -> web_interface: "Processed: {\"timestamp\":1774083072352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:51:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:52:12.345] heartbeat -> ollama: {"timestamp":1774083132345,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:52:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083132345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:52:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:52:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:52:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774083132345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:52:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:53:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083192349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:53:12.349] heartbeat -> ollama: {"timestamp":1774083192349,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:53:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 04:53:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 04:53:12.359] ollama -> web_interface: "Processed: {\"timestamp\":1774083192349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:53:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:54:12.349] heartbeat -> ollama: {"timestamp":1774083252349,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:54:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083252349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:54:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:54:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:54:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774083252349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:54:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:55:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083312353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:55:12.353] heartbeat -> ollama: {"timestamp":1774083312353,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:55:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 04:55:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 04:55:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774083312353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:55:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:56:12.350] heartbeat -> ollama: {"timestamp":1774083372350,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:56:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083372350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:56:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 04:56:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 04:56:12.363] ollama -> web_interface: "Processed: {\"timestamp\":1774083372350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:56:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:57:12.351] heartbeat -> ollama: {"timestamp":1774083432350,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 04:57:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083432350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 04:57:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:57:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:57:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774083432350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:57:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:58:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083492352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 04:58:12.352] heartbeat -> ollama: {"timestamp":1774083492352,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 04:58:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 04:58:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 04:58:12.363] ollama -> web_interface: "Processed: {\"timestamp\":1774083492352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:58:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 04:59:12.345] heartbeat -> ollama: {"timestamp":1774083552345,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 04:59:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083552345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 04:59:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 04:59:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 04:59:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774083552345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 04:59:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:00:12.340] heartbeat -> ollama: {"timestamp":1774083612340,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:00:12.340] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083612340, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:00:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:00:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:00:12.350] ollama -> web_interface: "Processed: {\"timestamp\":1774083612340,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:00:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:01:12.343] heartbeat -> ollama: {"timestamp":1774083672343,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:01:12.343] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083672343, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:01:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:01:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:01:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774083672343,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:01:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:02:12.343] heartbeat -> ollama: {"timestamp":1774083732343,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:02:12.343] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083732343, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:02:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:02:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:02:12.350] ollama -> web_interface: "Processed: {\"timestamp\":1774083732343,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:02:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:03:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083792355, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:03:12.355] heartbeat -> ollama: {"timestamp":1774083792355,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:03:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:03:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:03:12.364] ollama -> web_interface: "Processed: {\"timestamp\":1774083792355,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:03:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:04:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083852353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:04:12.354] heartbeat -> ollama: {"timestamp":1774083852353,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:04:12.369] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:04:12.369] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:04:12.369] ollama -> web_interface: "Processed: {\"timestamp\":1774083852353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:04:12.370] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:05:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083912345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:05:12.345] heartbeat -> ollama: {"timestamp":1774083912345,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:05:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:05:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:05:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774083912345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:05:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:06:12.345] heartbeat -> ollama: {"timestamp":1774083972345,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:06:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774083972345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:06:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:06:12.351] ollama -> web_interface: "Processed: {\"timestamp\":1774083972345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 05:06:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:06:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:07:12.348] heartbeat -> ollama: {"timestamp":1774084032348,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:07:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084032348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:07:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:07:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774084032348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 05:07:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:07:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:08:12.346] heartbeat -> ollama: {"timestamp":1774084092346,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:08:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084092346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:08:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:08:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:08:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774084092346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:08:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:09:12.352] heartbeat -> ollama: {"timestamp":1774084152352,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:09:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084152352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:09:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:09:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:09:12.363] ollama -> web_interface: "Processed: {\"timestamp\":1774084152352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:09:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:10:12.353] heartbeat -> ollama: {"timestamp":1774084212353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:10:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084212353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:10:12.368] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:10:12.368] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:10:12.368] ollama -> web_interface: "Processed: {\"timestamp\":1774084212353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:10:12.369] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:11:12.350] heartbeat -> ollama: {"timestamp":1774084272350,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:11:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084272350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:11:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:11:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:11:12.360] ollama -> web_interface: "Processed: {\"timestamp\":1774084272350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:11:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:12:12.355] heartbeat -> ollama: {"timestamp":1774084332355,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:12:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084332355, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:12:12.366] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:12:12.366] ollama -> web_interface: "Processed: {\"timestamp\":1774084332355,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:12:12.366] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:12:12.368] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:13:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084392345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:13:12.345] heartbeat -> ollama: {"timestamp":1774084392345,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:13:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:13:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:13:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774084392345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:13:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:14:12.344] heartbeat -> ollama: {"timestamp":1774084452344,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:14:12.344] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084452344, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:14:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:14:12.352] ollama -> web_interface: "Processed: {\"timestamp\":1774084452344,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 05:14:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:14:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:15:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084512348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:15:12.348] heartbeat -> ollama: {"timestamp":1774084512348,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:15:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:15:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:15:12.355] ollama -> web_interface: "Processed: {\"timestamp\":1774084512348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:15:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:16:12.354] heartbeat -> ollama: {"timestamp":1774084572354,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:16:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084572354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:16:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:16:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774084572354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:16:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:16:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:17:12.351] heartbeat -> ollama: {"timestamp":1774084632351,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:17:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084632351, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:17:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:17:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:17:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774084632351,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:17:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:18:12.350] heartbeat -> ollama: {"timestamp":1774084692350,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:18:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084692350, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:18:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:18:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:18:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774084692350,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:18:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:19:12.348] heartbeat -> ollama: {"timestamp":1774084752348,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:19:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084752348, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:19:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:19:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:19:12.357] ollama -> web_interface: "Processed: {\"timestamp\":1774084752348,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 05:19:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:20:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084812345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:20:12.345] heartbeat -> ollama: {"timestamp":1774084812345,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:20:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:20:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:20:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774084812345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:20:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:21:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084872353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:21:12.353] heartbeat -> ollama: {"timestamp":1774084872353,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:21:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:21:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:21:12.363] ollama -> web_interface: "Processed: {\"timestamp\":1774084872353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:21:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:22:12.347] heartbeat -> ollama: {"timestamp":1774084932347,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:22:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084932347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:22:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:22:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:22:12.355] ollama -> web_interface: "Processed: {\"timestamp\":1774084932347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:22:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:23:12.340] heartbeat -> ollama: {"timestamp":1774084992340,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:23:12.341] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774084992340, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:23:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:23:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:23:12.347] ollama -> web_interface: "Processed: {\"timestamp\":1774084992340,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:23:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:24:12.345] heartbeat -> ollama: {"timestamp":1774085052345,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:24:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085052345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:24:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:24:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:24:12.352] ollama -> web_interface: "Processed: {\"timestamp\":1774085052345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:24:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:25:12.355] heartbeat -> ollama: {"timestamp":1774085112355,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:25:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085112355, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:25:12.367] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:25:12.368] ollama -> web_interface: "Processed: {\"timestamp\":1774085112355,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:25:12.368] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:25:12.370] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:26:12.353] heartbeat -> ollama: {"timestamp":1774085172353,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:26:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085172353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:26:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:26:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774085172353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:26:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:26:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:27:12.342] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085232342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:27:12.342] heartbeat -> ollama: {"timestamp":1774085232342,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:27:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:27:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:27:12.351] ollama -> web_interface: "Processed: {\"timestamp\":1774085232342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:27:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:28:12.346] heartbeat -> ollama: {"timestamp":1774085292346,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:28:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085292346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:28:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:28:12.354] ollama -> web_interface: "Processed: {\"timestamp\":1774085292346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:28:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:28:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:29:12.342] heartbeat -> ollama: {"timestamp":1774085352342,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:29:12.342] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085352342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:29:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:29:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:29:12.350] ollama -> web_interface: "Processed: {\"timestamp\":1774085352342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:29:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:30:12.354] heartbeat -> ollama: {"timestamp":1774085412354,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:30:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085412354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:30:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:30:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:30:12.360] ollama -> web_interface: "Processed: {\"timestamp\":1774085412354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:30:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:31:12.340] heartbeat -> ollama: {"timestamp":1774085472340,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:31:12.340] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085472340, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:31:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:31:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:31:12.346] ollama -> web_interface: "Processed: {\"timestamp\":1774085472340,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:31:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:32:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085532345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:32:12.345] heartbeat -> ollama: {"timestamp":1774085532345,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:32:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:32:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:32:12.358] ollama -> web_interface: "Processed: {\"timestamp\":1774085532345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:32:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:33:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085592346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:33:12.347] heartbeat -> ollama: {"timestamp":1774085592346,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:33:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:33:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:33:12.355] ollama -> web_interface: "Processed: {\"timestamp\":1774085592346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:33:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:34:12.347] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085652347, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:34:12.347] heartbeat -> ollama: {"timestamp":1774085652347,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:34:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:34:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:34:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774085652347,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:34:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:35:12.354] heartbeat -> ollama: {"timestamp":1774085712354,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:35:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085712354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:35:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:35:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774085712354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:35:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:35:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:36:12.354] heartbeat -> ollama: {"timestamp":1774085772354,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:36:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085772354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:36:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:36:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:36:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774085772354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:36:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:37:12.346] heartbeat -> ollama: {"timestamp":1774085832346,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:37:12.346] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085832346, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:37:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:37:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:37:12.357] ollama -> web_interface: "Processed: {\"timestamp\":1774085832346,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:37:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:38:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085892353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:38:12.353] heartbeat -> ollama: {"timestamp":1774085892353,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:38:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:38:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:38:12.365] ollama -> web_interface: "Processed: {\"timestamp\":1774085892353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:38:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:39:12.351] heartbeat -> ollama: {"timestamp":1774085952351,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:39:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774085952351, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:39:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:39:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:39:12.359] ollama -> web_interface: "Processed: {\"timestamp\":1774085952351,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:39:12.360] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:40:12.352] heartbeat -> ollama: {"timestamp":1774086012352,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:40:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086012352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:40:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:40:12.364] ollama -> web_interface: "Processed: {\"timestamp\":1774086012352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:40:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:40:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:41:12.343] heartbeat -> ollama: {"timestamp":1774086072343,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:41:12.343] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086072343, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:41:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:41:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:41:12.350] ollama -> web_interface: "Processed: {\"timestamp\":1774086072343,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:41:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:42:12.354] heartbeat -> ollama: {"timestamp":1774086132354,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:42:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086132354, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:42:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:42:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:42:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774086132354,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:42:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:43:12.351] heartbeat -> ollama: {"timestamp":1774086192351,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:43:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086192351, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:43:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:43:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:43:12.361] ollama -> web_interface: "Processed: {\"timestamp\":1774086192351,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:43:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:44:12.342] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086252342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:44:12.342] heartbeat -> ollama: {"timestamp":1774086252342,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:44:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:44:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:44:12.350] ollama -> web_interface: "Processed: {\"timestamp\":1774086252342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:44:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:45:12.345] heartbeat -> ollama: {"timestamp":1774086312345,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:45:12.345] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086312345, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:45:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:45:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:45:12.356] ollama -> web_interface: "Processed: {\"timestamp\":1774086312345,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:45:12.356] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:46:12.342] heartbeat -> ollama: {"timestamp":1774086372342,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:46:12.342] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086372342, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:46:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:46:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:46:12.350] ollama -> web_interface: "Processed: {\"timestamp\":1774086372342,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:46:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:47:12.344] heartbeat -> ollama: {"timestamp":1774086432344,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:47:12.344] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086432344, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:47:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:47:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:47:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774086432344,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:47:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:48:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086492353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:48:12.353] heartbeat -> ollama: {"timestamp":1774086492353,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:48:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:48:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:48:12.365] ollama -> web_interface: "Processed: {\"timestamp\":1774086492353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:48:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:49:12.340] heartbeat -> ollama: {"timestamp":1774086552340,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:49:12.340] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086552340, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:49:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:49:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:49:12.349] ollama -> web_interface: "Processed: {\"timestamp\":1774086552340,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:49:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:50:12.343] heartbeat -> ollama: {"timestamp":1774086612343,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:50:12.343] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086612343, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:50:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:50:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:50:12.351] ollama -> web_interface: "Processed: {\"timestamp\":1774086612343,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:50:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:51:12.354] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086672353, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:51:12.354] heartbeat -> ollama: {"timestamp":1774086672353,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:51:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:51:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:51:12.365] ollama -> web_interface: "Processed: {\"timestamp\":1774086672353,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:51:12.365] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:52:12.351] heartbeat -> ollama: {"timestamp":1774086732351,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:52:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086732351, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:52:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 05:52:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 05:52:12.363] ollama -> web_interface: "Processed: {\"timestamp\":1774086732351,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:52:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:53:12.340] heartbeat -> ollama: {"timestamp":1774086792340,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:53:12.340] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086792340, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:53:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:53:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:53:12.349] ollama -> web_interface: "Processed: {\"timestamp\":1774086792340,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:53:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:54:12.355] heartbeat -> ollama: {"timestamp":1774086852355,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:54:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086852355, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:54:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:54:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:54:12.363] ollama -> web_interface: "Processed: {\"timestamp\":1774086852355,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:54:12.364] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:55:12.349] heartbeat -> ollama: {"timestamp":1774086912349,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 05:55:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086912349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 05:55:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:55:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:55:12.357] ollama -> web_interface: "Processed: {\"timestamp\":1774086912349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:55:12.358] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:56:12.352] heartbeat -> ollama: {"timestamp":1774086972352,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:56:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774086972352, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:56:12.361] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:56:12.362] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:56:12.362] ollama -> web_interface: "Processed: {\"timestamp\":1774086972352,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:56:12.363] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:57:12.344] heartbeat -> ollama: {"timestamp":1774087032344,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:57:12.344] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087032344, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:57:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:57:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:57:12.354] ollama -> web_interface: "Processed: {\"timestamp\":1774087032344,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:57:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:58:12.341] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087092341, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 05:58:12.341] heartbeat -> ollama: {"timestamp":1774087092341,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 05:58:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 05:58:12.350] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 05:58:12.351] ollama -> web_interface: "Processed: {\"timestamp\":1774087092341,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:58:12.351] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 05:59:12.339] heartbeat -> ollama: {"timestamp":1774087152339,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 05:59:12.340] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087152339, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 05:59:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 05:59:12.348] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 05:59:12.348] ollama -> web_interface: "Processed: {\"timestamp\":1774087152339,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 05:59:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:00:12.349] heartbeat -> ollama: {"timestamp":1774087212349,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:00:12.349] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087212349, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:00:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:00:12.357] ollama -> web_interface: "Processed: {\"timestamp\":1774087212349,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:00:12.357] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:00:12.359] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:01:12.344] heartbeat -> ollama: {"timestamp":1774087272344,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:01:12.344] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087272344, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:01:12.352] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:01:12.353] ollama -> web_interface: "Processed: {\"timestamp\":1774087272344,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 06:01:12.353] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:01:12.355] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:02:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087330999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:02:10.999] heartbeat -> ollama: {"timestamp":1774087330999,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:02:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:02:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:02:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774087330999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:02:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:03:11.009] heartbeat -> ollama: {"timestamp":1774087391009,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:03:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087391009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:03:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:03:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:03:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774087391009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 06:03:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:04:11.011] heartbeat -> ollama: {"timestamp":1774087451011,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:04:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087451011, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:04:11.025] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:04:11.026] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:04:11.026] ollama -> web_interface: "Processed: {\"timestamp\":1774087451011,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 06:04:11.027] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:05:11.001] heartbeat -> ollama: {"timestamp":1774087511001,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:05:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087511001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:05:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:05:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:05:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774087511001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:05:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:06:11.008] heartbeat -> ollama: {"timestamp":1774087571007,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:06:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087571007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:06:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:06:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:06:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774087571007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:06:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:07:10.997] heartbeat -> ollama: {"timestamp":1774087630997,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:07:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087630997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:07:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:07:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:07:11.003] ollama -> web_interface: "Processed: {\"timestamp\":1774087630997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:07:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:08:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087691003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:08:11.003] heartbeat -> ollama: {"timestamp":1774087691003,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:08:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:08:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:08:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774087691003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:08:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:09:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087751002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:09:11.002] heartbeat -> ollama: {"timestamp":1774087751002,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:09:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:09:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:09:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774087751002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:09:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:10:11.009] heartbeat -> ollama: {"timestamp":1774087811009,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:10:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087811009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:10:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:10:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:10:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774087811009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:10:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:11:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087870999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:11:10.999] heartbeat -> ollama: {"timestamp":1774087870999,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:11:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:11:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:11:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774087870999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:11:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:12:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087931004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:12:11.004] heartbeat -> ollama: {"timestamp":1774087931004,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:12:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:12:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:12:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774087931004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:12:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:13:10.996] heartbeat -> ollama: {"timestamp":1774087990996,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:13:10.996] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774087990996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:13:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:13:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:13:10.999] ollama -> web_interface: "Processed: {\"timestamp\":1774087990996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:13:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:14:11.002] heartbeat -> ollama: {"timestamp":1774088051001,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:14:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088051001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:14:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:14:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:14:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774088051001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:14:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:15:11.003] heartbeat -> ollama: {"timestamp":1774088111003,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:15:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088111003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:15:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:15:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:15:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774088111003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:15:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:16:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088171004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:16:11.004] heartbeat -> ollama: {"timestamp":1774088171004,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:16:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:16:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:16:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774088171004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:16:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:17:11.010] heartbeat -> ollama: {"timestamp":1774088231010,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:17:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088231010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:17:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:17:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:17:11.021] ollama -> web_interface: "Processed: {\"timestamp\":1774088231010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:17:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:18:11.010] heartbeat -> ollama: {"timestamp":1774088291010,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:18:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088291010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:18:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:18:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774088291010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 06:18:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:18:11.022] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:19:11.006] heartbeat -> ollama: {"timestamp":1774088351006,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:19:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088351006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:19:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:19:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:19:11.016] ollama -> web_interface: "Processed: {\"timestamp\":1774088351006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:19:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:20:11.008] heartbeat -> ollama: {"timestamp":1774088411008,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:20:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088411008, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:20:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:20:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:20:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774088411008,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:20:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:21:10.999] heartbeat -> ollama: {"timestamp":1774088470999,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:21:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088470999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:21:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:21:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:21:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774088470999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:21:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:22:11.008] heartbeat -> ollama: {"timestamp":1774088531008,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:22:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088531008, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:22:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:22:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774088531008,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:22:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:22:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:23:11.002] heartbeat -> ollama: {"timestamp":1774088591002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:23:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088591002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:23:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:23:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:23:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774088591002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:23:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:24:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088651005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:24:11.005] heartbeat -> ollama: {"timestamp":1774088651005,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:24:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:24:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:24:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774088651005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:24:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:25:11.009] heartbeat -> ollama: {"timestamp":1774088711009,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:25:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088711009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:25:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:25:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:25:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774088711009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:25:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:26:11.009] heartbeat -> ollama: {"timestamp":1774088771009,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:26:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088771009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:26:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:26:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:26:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774088771009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:26:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:27:11.010] heartbeat -> ollama: {"timestamp":1774088831010,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:27:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088831010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:27:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:27:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:27:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774088831010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:27:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:28:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088891007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:28:11.007] heartbeat -> ollama: {"timestamp":1774088891007,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:28:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:28:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:28:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774088891007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:28:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:29:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774088951002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:29:11.002] heartbeat -> ollama: {"timestamp":1774088951002,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:29:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:29:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:29:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774088951002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:29:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:30:11.005] heartbeat -> ollama: {"timestamp":1774089011004,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:30:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089011004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:30:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:30:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:30:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774089011004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:30:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:31:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089071005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:31:11.006] heartbeat -> ollama: {"timestamp":1774089071005,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:31:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:31:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:31:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774089071005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:31:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:32:11.006] heartbeat -> ollama: {"timestamp":1774089131006,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:32:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089131006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:32:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:32:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774089131006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:32:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:32:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:33:11.000] heartbeat -> ollama: {"timestamp":1774089191000,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:33:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089191000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:33:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:33:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:33:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774089191000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:33:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:34:11.000] heartbeat -> ollama: {"timestamp":1774089251000,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:34:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089251000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:34:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:34:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774089251000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:34:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:34:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:35:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089310998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:35:10.998] heartbeat -> ollama: {"timestamp":1774089310998,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:35:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:35:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:35:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774089310998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:35:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:36:10.999] heartbeat -> ollama: {"timestamp":1774089370999,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:36:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089370999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:36:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:36:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:36:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774089370999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:36:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:37:11.009] heartbeat -> ollama: {"timestamp":1774089431009,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:37:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089431009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:37:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:37:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:37:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774089431009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:37:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:38:11.004] heartbeat -> ollama: {"timestamp":1774089491004,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:38:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089491004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:38:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:38:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:38:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774089491004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:38:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:39:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089551003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:39:11.003] heartbeat -> ollama: {"timestamp":1774089551003,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:39:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:39:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:39:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774089551003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:39:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:40:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089610999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:40:10.999] heartbeat -> ollama: {"timestamp":1774089610999,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:40:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:40:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:40:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774089610999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:40:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:41:11.003] heartbeat -> ollama: {"timestamp":1774089671003,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:41:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089671003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:41:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:41:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:41:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774089671003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:41:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:42:11.003] heartbeat -> ollama: {"timestamp":1774089731003,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:42:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089731003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:42:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:42:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:42:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774089731003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:42:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:43:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089791005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:43:11.005] heartbeat -> ollama: {"timestamp":1774089791005,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:43:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:43:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:43:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774089791005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:43:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:44:11.007] heartbeat -> ollama: {"timestamp":1774089851007,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:44:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089851007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:44:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:44:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:44:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774089851007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:44:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:45:10.996] heartbeat -> ollama: {"timestamp":1774089910996,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:45:10.996] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089910996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:45:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:45:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:45:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774089910996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:45:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:46:11.010] heartbeat -> ollama: {"timestamp":1774089971010,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:46:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774089971010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:46:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:46:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:46:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774089971010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:46:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:47:11.010] heartbeat -> ollama: {"timestamp":1774090031009,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:47:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090031009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:47:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:47:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:47:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774090031009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:47:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:48:11.003] heartbeat -> ollama: {"timestamp":1774090091003,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:48:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090091003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:48:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:48:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:48:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774090091003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:48:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:49:11.004] heartbeat -> ollama: {"timestamp":1774090151004,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:49:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090151004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:49:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:49:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:49:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774090151004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:49:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:50:11.000] heartbeat -> ollama: {"timestamp":1774090211000,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:50:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090211000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:50:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:50:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:50:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774090211000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:50:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:51:11.004] heartbeat -> ollama: {"timestamp":1774090271004,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:51:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090271004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:51:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:51:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:51:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774090271004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:51:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:52:11.005] heartbeat -> ollama: {"timestamp":1774090331005,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:52:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090331005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:52:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:52:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:52:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774090331005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:52:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:53:11.009] heartbeat -> ollama: {"timestamp":1774090391009,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:53:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090391009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:53:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:53:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:53:11.016] ollama -> web_interface: "Processed: {\"timestamp\":1774090391009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:53:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:54:11.005] heartbeat -> ollama: {"timestamp":1774090451005,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:54:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090451005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:54:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:54:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:54:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774090451005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:54:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:55:10.997] heartbeat -> ollama: {"timestamp":1774090510997,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:55:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090510997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:55:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:55:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:55:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774090510997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:55:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:56:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090571009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:56:11.009] heartbeat -> ollama: {"timestamp":1774090571009,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:56:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 06:56:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 06:56:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774090571009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:56:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:57:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090631000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 06:57:11.000] heartbeat -> ollama: {"timestamp":1774090631000,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 06:57:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 06:57:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 06:57:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774090631000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:57:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:58:10.997] heartbeat -> ollama: {"timestamp":1774090690997,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 06:58:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090690997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 06:58:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:58:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:58:11.005] ollama -> web_interface: "Processed: {\"timestamp\":1774090690997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:58:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 06:59:11.009] heartbeat -> ollama: {"timestamp":1774090751009,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 06:59:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090751009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 06:59:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 06:59:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 06:59:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774090751009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 06:59:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:00:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090811000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:00:11.000] heartbeat -> ollama: {"timestamp":1774090811000,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:00:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:00:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:00:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774090811000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:00:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:01:10.996] heartbeat -> ollama: {"timestamp":1774090870996,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:01:10.996] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090870996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:01:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:01:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 07:01:11.003] ollama -> web_interface: "Processed: {\"timestamp\":1774090870996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:01:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:02:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090931001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:02:11.001] heartbeat -> ollama: {"timestamp":1774090931001,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:02:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:02:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 07:02:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774090931001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:02:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:03:10.999] heartbeat -> ollama: {"timestamp":1774090990999,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:03:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774090990999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:03:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:03:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:03:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774090990999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:03:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:04:10.997] heartbeat -> ollama: {"timestamp":1774091050997,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:04:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091050997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:04:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:04:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:04:11.005] ollama -> web_interface: "Processed: {\"timestamp\":1774091050997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 07:04:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:05:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091110999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:05:10.999] heartbeat -> ollama: {"timestamp":1774091110999,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:05:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:05:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:05:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774091110999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:05:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:06:10.999] heartbeat -> ollama: {"timestamp":1774091170999,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:06:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091170999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:06:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:06:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:06:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774091170999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:06:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:07:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091231001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:07:11.001] heartbeat -> ollama: {"timestamp":1774091231001,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:07:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:07:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:07:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774091231001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:07:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:08:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091291007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:08:11.007] heartbeat -> ollama: {"timestamp":1774091291007,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:08:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:08:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:08:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774091291007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:08:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:09:11.001] heartbeat -> ollama: {"timestamp":1774091351001,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:09:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091351001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:09:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:09:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:09:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774091351001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:09:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:10:11.003] heartbeat -> ollama: {"timestamp":1774091411003,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:10:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091411003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:10:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:10:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:10:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774091411003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:10:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:11:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091470998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:11:10.999] heartbeat -> ollama: {"timestamp":1774091470998,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:11:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:11:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:11:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774091470998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:11:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:12:11.006] heartbeat -> ollama: {"timestamp":1774091531006,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:12:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091531006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:12:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:12:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:12:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774091531006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:12:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:13:11.001] heartbeat -> ollama: {"timestamp":1774091591001,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:13:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091591001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:13:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:13:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774091591001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:13:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:13:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:14:10.997] heartbeat -> ollama: {"timestamp":1774091650997,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:14:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091650997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:14:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:14:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774091650997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:14:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:14:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:15:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091711000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:15:11.000] heartbeat -> ollama: {"timestamp":1774091711000,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:15:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:15:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:15:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774091711000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:15:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:16:11.004] heartbeat -> ollama: {"timestamp":1774091771004,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:16:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091771004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:16:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:16:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:16:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774091771004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:16:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:17:10.997] heartbeat -> ollama: {"timestamp":1774091830997,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:17:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091830997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:17:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:17:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:17:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774091830997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:17:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:18:10.997] heartbeat -> ollama: {"timestamp":1774091890997,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:18:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091890997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:18:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:18:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:18:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774091890997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 07:18:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:19:11.010] heartbeat -> ollama: {"timestamp":1774091951010,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:19:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774091951010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:19:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:19:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:19:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774091951010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:19:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:20:11.005] heartbeat -> ollama: {"timestamp":1774092011005,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:20:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092011005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:20:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:20:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 07:20:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774092011005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:20:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:21:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092071001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:21:11.001] heartbeat -> ollama: {"timestamp":1774092071001,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:21:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:21:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:21:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774092071001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:21:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:22:10.997] heartbeat -> ollama: {"timestamp":1774092130997,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:22:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092130997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:22:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:22:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 07:22:11.005] ollama -> web_interface: "Processed: {\"timestamp\":1774092130997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:22:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:23:11.010] heartbeat -> ollama: {"timestamp":1774092191010,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:23:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092191010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:23:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:23:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:23:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774092191010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 07:23:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:24:11.009] heartbeat -> ollama: {"timestamp":1774092251009,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:24:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092251009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:24:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:24:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 07:24:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774092251009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:24:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:25:11.011] heartbeat -> ollama: {"timestamp":1774092311011,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:25:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092311011, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:25:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:25:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 07:25:11.021] ollama -> web_interface: "Processed: {\"timestamp\":1774092311011,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:25:11.022] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:26:11.002] heartbeat -> ollama: {"timestamp":1774092371002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:26:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092371002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:26:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:26:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:26:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774092371002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:26:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:27:11.002] heartbeat -> ollama: {"timestamp":1774092431002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:27:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092431002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:27:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:27:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:27:11.016] ollama -> web_interface: "Processed: {\"timestamp\":1774092431002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:27:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:28:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092490996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:28:10.996] heartbeat -> ollama: {"timestamp":1774092490996,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:28:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:28:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 07:28:11.005] ollama -> web_interface: "Processed: {\"timestamp\":1774092490996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:28:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:29:11.002] heartbeat -> ollama: {"timestamp":1774092551002,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:29:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092551002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:29:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:29:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:29:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774092551002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:29:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:30:10.999] heartbeat -> ollama: {"timestamp":1774092610999,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:30:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092610999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:30:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:30:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774092610999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:30:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:30:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:31:11.005] heartbeat -> ollama: {"timestamp":1774092671005,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:31:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092671005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:31:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:31:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:31:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774092671005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:31:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:32:11.005] heartbeat -> ollama: {"timestamp":1774092731005,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:32:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092731005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:32:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:32:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:32:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774092731005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:32:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:33:10.997] heartbeat -> ollama: {"timestamp":1774092790997,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:33:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092790997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:33:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:33:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:33:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774092790997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:33:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:34:11.007] heartbeat -> ollama: {"timestamp":1774092851007,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:34:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092851007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:34:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:34:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:34:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774092851007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:34:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:35:11.007] heartbeat -> ollama: {"timestamp":1774092911006,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:35:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092911006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:35:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:35:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:35:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774092911006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:35:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:36:11.002] heartbeat -> ollama: {"timestamp":1774092971002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:36:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774092971002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:36:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:36:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:36:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774092971002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:36:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:37:10.997] heartbeat -> ollama: {"timestamp":1774093030997,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:37:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093030997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:37:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:37:11.005] ollama -> web_interface: "Processed: {\"timestamp\":1774093030997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:37:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:37:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:38:11.002] heartbeat -> ollama: {"timestamp":1774093091002,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:38:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093091002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:38:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:38:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:38:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774093091002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 07:38:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:39:11.005] heartbeat -> ollama: {"timestamp":1774093151005,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:39:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093151005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:39:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:39:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:39:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774093151005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:39:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:40:11.003] heartbeat -> ollama: {"timestamp":1774093211003,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:40:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093211003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:40:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:40:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:40:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774093211003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 07:40:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:41:11.002] heartbeat -> ollama: {"timestamp":1774093271002,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:41:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093271002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:41:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:41:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:41:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774093271002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:41:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:42:11.006] heartbeat -> ollama: {"timestamp":1774093331006,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:42:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093331006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:42:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:42:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 07:42:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774093331006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:42:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:43:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093390998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:43:10.998] heartbeat -> ollama: {"timestamp":1774093390998,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:43:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:43:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:43:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774093390998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:43:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:44:11.006] heartbeat -> ollama: {"timestamp":1774093451005,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:44:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093451005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:44:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:44:11.016] ollama -> web_interface: "Processed: {\"timestamp\":1774093451005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 07:44:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:44:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:45:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093511001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:45:11.001] heartbeat -> ollama: {"timestamp":1774093511001,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:45:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:45:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:45:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774093511001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:45:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:46:10.997] heartbeat -> ollama: {"timestamp":1774093570997,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:46:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093570997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:46:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:46:11.004] ollama -> web_interface: "Processed: {\"timestamp\":1774093570997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:46:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:46:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:47:11.004] heartbeat -> ollama: {"timestamp":1774093631004,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:47:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093631004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:47:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:47:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:47:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774093631004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:47:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:48:11.012] heartbeat -> ollama: {"timestamp":1774093691012,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:48:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093691012, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:48:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:48:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:48:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774093691012,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:48:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:49:11.005] heartbeat -> ollama: {"timestamp":1774093751005,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:49:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093751005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:49:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:49:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:49:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774093751005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:49:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:50:11.008] heartbeat -> ollama: {"timestamp":1774093811008,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:50:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093811008, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:50:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:50:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:50:11.016] ollama -> web_interface: "Processed: {\"timestamp\":1774093811008,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:50:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:51:10.999] heartbeat -> ollama: {"timestamp":1774093870999,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:51:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093870999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:51:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:51:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:51:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774093870999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 07:51:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:52:11.003] heartbeat -> ollama: {"timestamp":1774093931003,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:52:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093931003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:52:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:52:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:52:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774093931003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:52:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:53:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774093991008, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:53:11.008] heartbeat -> ollama: {"timestamp":1774093991008,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:53:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:53:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 07:53:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774093991008,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:53:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:54:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094051007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:54:11.007] heartbeat -> ollama: {"timestamp":1774094051007,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:54:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 07:54:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 07:54:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774094051007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:54:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:55:11.004] heartbeat -> ollama: {"timestamp":1774094111004,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:55:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094111004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:55:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 07:55:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 07:55:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774094111004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:55:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:56:10.997] heartbeat -> ollama: {"timestamp":1774094170997,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:56:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094170997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:56:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:56:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:56:11.003] ollama -> web_interface: "Processed: {\"timestamp\":1774094170997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:56:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:57:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094230998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 07:57:10.998] heartbeat -> ollama: {"timestamp":1774094230998,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 07:57:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:57:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:57:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774094230998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:57:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:58:11.006] heartbeat -> ollama: {"timestamp":1774094291006,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 07:58:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094291006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 07:58:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:58:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:58:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774094291006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:58:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 07:59:11.011] heartbeat -> ollama: {"timestamp":1774094351011,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 07:59:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094351011, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 07:59:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 07:59:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 07:59:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774094351011,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 07:59:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:00:11.006] heartbeat -> ollama: {"timestamp":1774094411006,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:00:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094411006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:00:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:00:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:00:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774094411006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:00:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:01:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094470998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 08:01:10.998] heartbeat -> ollama: {"timestamp":1774094470998,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 08:01:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:01:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:01:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774094470998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:01:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:02:11.011] heartbeat -> ollama: {"timestamp":1774094531010,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:02:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094531010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:02:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:02:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774094531010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:02:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:02:11.023] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:03:10.999] heartbeat -> ollama: {"timestamp":1774094590999,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:03:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094590999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:03:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:03:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:03:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774094590999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:03:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:04:10.997] heartbeat -> ollama: {"timestamp":1774094650997,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:04:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094650997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:04:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:04:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:04:11.005] ollama -> web_interface: "Processed: {\"timestamp\":1774094650997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:04:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:05:11.001] heartbeat -> ollama: {"timestamp":1774094711001,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:05:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094711001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:05:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:05:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:05:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774094711001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:05:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:06:11.001] heartbeat -> ollama: {"timestamp":1774094771001,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:06:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094771001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:06:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:06:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:06:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774094771001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:06:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:07:11.001] heartbeat -> ollama: {"timestamp":1774094831001,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:07:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094831001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:07:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:07:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774094831001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 08:07:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:07:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:08:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094890998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 08:08:10.998] heartbeat -> ollama: {"timestamp":1774094890998,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 08:08:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:08:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:08:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774094890998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:08:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:09:11.008] heartbeat -> ollama: {"timestamp":1774094951007,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:09:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774094951007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:09:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:09:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:09:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774094951007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:09:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:10:11.005] heartbeat -> ollama: {"timestamp":1774095011005,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:10:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095011005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:10:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:10:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:10:11.016] ollama -> web_interface: "Processed: {\"timestamp\":1774095011005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:10:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:11:11.009] heartbeat -> ollama: {"timestamp":1774095071009,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:11:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095071009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:11:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:11:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:11:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774095071009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:11:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:12:10.996] heartbeat -> ollama: {"timestamp":1774095130996,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:12:10.996] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095130996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:12:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:12:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:12:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774095130996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:12:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:13:11.004] heartbeat -> ollama: {"timestamp":1774095191004,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:13:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095191004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:13:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:13:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:13:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774095191004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:13:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:14:11.004] heartbeat -> ollama: {"timestamp":1774095251004,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:14:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095251004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:14:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:14:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774095251004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 08:14:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:14:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:15:11.011] heartbeat -> ollama: {"timestamp":1774095311011,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:15:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095311011, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:15:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:15:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:15:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774095311011,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:15:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:16:11.001] heartbeat -> ollama: {"timestamp":1774095371001,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:16:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095371001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:16:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:16:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:16:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774095371001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:16:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:17:10.997] heartbeat -> ollama: {"timestamp":1774095430997,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:17:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095430997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:17:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:17:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:17:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774095430997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:17:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:18:10.999] heartbeat -> ollama: {"timestamp":1774095490999,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:18:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095490999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:18:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:18:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:18:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774095490999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:18:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:19:11.008] heartbeat -> ollama: {"timestamp":1774095551007,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:19:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095551007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:19:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:19:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:19:11.016] ollama -> web_interface: "Processed: {\"timestamp\":1774095551007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:19:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:20:11.004] heartbeat -> ollama: {"timestamp":1774095611004,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:20:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095611004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:20:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:20:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:20:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774095611004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:20:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:21:11.000] heartbeat -> ollama: {"timestamp":1774095671000,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:21:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095671000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:21:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:21:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:21:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774095671000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:21:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:22:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095730998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 08:22:10.998] heartbeat -> ollama: {"timestamp":1774095730998,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 08:22:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:22:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:22:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774095730998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:22:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:23:11.010] heartbeat -> ollama: {"timestamp":1774095791010,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:23:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095791010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:23:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:23:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:23:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774095791010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:23:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:24:11.000] heartbeat -> ollama: {"timestamp":1774095851000,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:24:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095851000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:24:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:24:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774095851000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 08:24:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:24:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:25:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095911008, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 08:25:11.008] heartbeat -> ollama: {"timestamp":1774095911008,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 08:25:11.778] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:25:11.778] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:25:11.778] ollama -> web_interface: "Processed: {\"timestamp\":1774095911008,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:25:11.779] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:26:11.000] heartbeat -> ollama: {"timestamp":1774095971000,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:26:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774095971000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:26:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:26:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:26:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774095971000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:26:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:27:11.002] heartbeat -> ollama: {"timestamp":1774096031002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:27:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096031002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:27:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:27:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:27:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774096031002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:27:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:28:11.007] heartbeat -> ollama: {"timestamp":1774096091007,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:28:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096091007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:28:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:28:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:28:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774096091007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:28:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:29:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096150997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 08:29:10.997] heartbeat -> ollama: {"timestamp":1774096150997,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 08:29:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:29:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:29:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774096150997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:29:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:30:10.999] heartbeat -> ollama: {"timestamp":1774096210999,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:30:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096210999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:30:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:30:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:30:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774096210999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:30:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:31:10.996] heartbeat -> ollama: {"timestamp":1774096270996,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:31:10.996] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096270996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:31:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:31:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:31:11.004] ollama -> web_interface: "Processed: {\"timestamp\":1774096270996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:31:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:32:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096331011, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 08:32:11.011] heartbeat -> ollama: {"timestamp":1774096331011,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 08:32:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:32:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:32:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774096331011,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:32:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:33:10.997] heartbeat -> ollama: {"timestamp":1774096390997,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:33:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096390997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:33:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:33:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:33:11.005] ollama -> web_interface: "Processed: {\"timestamp\":1774096390997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:33:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:34:11.009] heartbeat -> ollama: {"timestamp":1774096451009,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:34:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096451009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:34:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:34:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:34:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774096451009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:34:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:35:11.000] heartbeat -> ollama: {"timestamp":1774096511000,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:35:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096511000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:35:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:35:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:35:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774096511000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:35:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:36:11.002] heartbeat -> ollama: {"timestamp":1774096571002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:36:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096571002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:36:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:36:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:36:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774096571002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:36:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:37:11.011] heartbeat -> ollama: {"timestamp":1774096631011,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:37:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096631011, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:37:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:37:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:37:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774096631011,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 08:37:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:38:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096691003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 08:38:11.003] heartbeat -> ollama: {"timestamp":1774096691003,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 08:38:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:38:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:38:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774096691003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:38:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:39:11.002] heartbeat -> ollama: {"timestamp":1774096751002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:39:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096751002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:39:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:39:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:39:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774096751002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:39:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:40:11.009] heartbeat -> ollama: {"timestamp":1774096811009,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:40:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096811009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:40:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:40:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:40:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774096811009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:40:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:41:11.010] heartbeat -> ollama: {"timestamp":1774096871010,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:41:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096871010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:41:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:41:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:41:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774096871010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:41:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:42:11.003] heartbeat -> ollama: {"timestamp":1774096931003,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:42:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096931003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:42:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:42:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:42:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774096931003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:42:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:43:11.008] heartbeat -> ollama: {"timestamp":1774096991008,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:43:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774096991008, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:43:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:43:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:43:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774096991008,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:43:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:44:11.007] heartbeat -> ollama: {"timestamp":1774097051007,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:44:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097051007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:44:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:44:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:44:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774097051007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:44:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:45:10.998] heartbeat -> ollama: {"timestamp":1774097110998,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:45:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097110998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:45:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:45:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:45:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774097110998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:45:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:46:11.003] heartbeat -> ollama: {"timestamp":1774097171003,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:46:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097171003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:46:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:46:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:46:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774097171003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:46:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:47:11.003] heartbeat -> ollama: {"timestamp":1774097231003,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:47:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097231003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:47:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:47:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774097231003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 08:47:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:47:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:48:11.006] heartbeat -> ollama: {"timestamp":1774097291006,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:48:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097291006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:48:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:48:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:48:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774097291006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:48:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:49:11.002] heartbeat -> ollama: {"timestamp":1774097351002,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:49:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097351002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:49:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:49:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:49:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774097351002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:49:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:50:11.000] heartbeat -> ollama: {"timestamp":1774097411000,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:50:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097411000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:50:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:50:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:50:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774097411000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:50:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:51:11.009] heartbeat -> ollama: {"timestamp":1774097471008,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:51:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097471008, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:51:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:51:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:51:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774097471008,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:51:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:52:11.007] heartbeat -> ollama: {"timestamp":1774097531007,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:52:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097531007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:52:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:52:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:52:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774097531007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:52:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:53:10.997] heartbeat -> ollama: {"timestamp":1774097590996,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:53:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097590996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:53:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:53:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:53:11.004] ollama -> web_interface: "Processed: {\"timestamp\":1774097590996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:53:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:54:10.998] heartbeat -> ollama: {"timestamp":1774097650997,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:54:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097650997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:54:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 08:54:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 08:54:11.007] ollama -> web_interface: "Processed: {\"timestamp\":1774097650997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:54:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:55:10.996] heartbeat -> ollama: {"timestamp":1774097710996,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:55:10.996] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097710996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:55:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:55:11.005] ollama -> web_interface: "Processed: {\"timestamp\":1774097710996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:55:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:55:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:56:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097771011, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 08:56:11.011] heartbeat -> ollama: {"timestamp":1774097771011,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 08:56:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:56:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:56:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774097771011,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:56:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:57:11.011] heartbeat -> ollama: {"timestamp":1774097831011,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 08:57:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097831011, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 08:57:11.022] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:57:11.022] ollama -> web_interface: "Processed: {\"timestamp\":1774097831011,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 08:57:11.022] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:57:11.024] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:58:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097891000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 08:58:11.000] heartbeat -> ollama: {"timestamp":1774097891000,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 08:58:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 08:58:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 08:58:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774097891000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:58:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 08:59:11.003] heartbeat -> ollama: {"timestamp":1774097951003,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 08:59:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774097951003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 08:59:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 08:59:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 08:59:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774097951003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 08:59:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:00:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098010997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:00:10.997] heartbeat -> ollama: {"timestamp":1774098010997,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:00:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:00:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:00:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774098010997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:00:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:01:10.999] heartbeat -> ollama: {"timestamp":1774098070999,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:01:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098070999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:01:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:01:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:01:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774098070999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:01:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:02:11.004] heartbeat -> ollama: {"timestamp":1774098131004,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:02:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098131004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:02:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:02:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:02:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774098131004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:02:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:03:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098191003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:03:11.003] heartbeat -> ollama: {"timestamp":1774098191003,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:03:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:03:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:03:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774098191003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:03:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:04:11.005] heartbeat -> ollama: {"timestamp":1774098251005,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:04:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098251005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:04:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:04:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:04:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774098251005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:04:11.022] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:05:11.003] heartbeat -> ollama: {"timestamp":1774098311003,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:05:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098311003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:05:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:05:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774098311003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:05:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:05:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:06:10.999] heartbeat -> ollama: {"timestamp":1774098370999,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:06:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098370999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:06:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:06:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:06:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774098370999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:06:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:07:10.998] heartbeat -> ollama: {"timestamp":1774098430998,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:07:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098430998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:07:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:07:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774098430998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:07:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:07:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:08:11.011] heartbeat -> ollama: {"timestamp":1774098491011,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:08:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098491011, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:08:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:08:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:08:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774098491011,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:08:11.022] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:09:11.009] heartbeat -> ollama: {"timestamp":1774098551009,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:09:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098551009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:09:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:09:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:09:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774098551009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:09:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:10:11.000] heartbeat -> ollama: {"timestamp":1774098611000,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:10:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098611000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:10:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:10:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:10:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774098611000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:10:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:11:11.002] heartbeat -> ollama: {"timestamp":1774098671002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:11:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098671002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:11:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:11:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774098671002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 09:11:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:11:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:12:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098731010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:12:11.010] heartbeat -> ollama: {"timestamp":1774098731010,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:12:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:12:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:12:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774098731010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:12:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:13:10.998] heartbeat -> ollama: {"timestamp":1774098790998,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:13:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098790998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:13:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:13:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:13:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774098790998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:13:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:14:11.004] heartbeat -> ollama: {"timestamp":1774098851004,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:14:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098851004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:14:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:14:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:14:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774098851004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:14:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:15:10.998] heartbeat -> ollama: {"timestamp":1774098910998,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:15:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098910998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:15:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:15:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:15:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774098910998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:15:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:16:10.998] heartbeat -> ollama: {"timestamp":1774098970998,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:16:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774098970998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:16:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:16:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:16:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774098970998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:16:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:17:10.996] heartbeat -> ollama: {"timestamp":1774099030996,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:17:10.996] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099030996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:17:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:17:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774099030996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:17:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:17:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:18:11.002] heartbeat -> ollama: {"timestamp":1774099091002,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:18:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099091002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:18:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:18:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:18:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774099091002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:18:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:19:11.006] heartbeat -> ollama: {"timestamp":1774099151006,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:19:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099151006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:19:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:19:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:19:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774099151006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:19:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:20:11.005] heartbeat -> ollama: {"timestamp":1774099211005,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:20:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099211005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:20:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:20:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:20:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774099211005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:20:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:21:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099271003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:21:11.003] heartbeat -> ollama: {"timestamp":1774099271003,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:21:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:21:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:21:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774099271003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+
+[2026-03-21 09:21:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:22:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099331005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:22:11.005] heartbeat -> ollama: {"timestamp":1774099331005,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:22:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:22:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:22:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774099331005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:22:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:23:10.999] heartbeat -> ollama: {"timestamp":1774099390999,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:23:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099390999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:23:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:23:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:23:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774099390999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:23:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:24:10.996] heartbeat -> ollama: {"timestamp":1774099450996,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:24:10.996] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099450996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:24:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:24:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:24:11.004] ollama -> web_interface: "Processed: {\"timestamp\":1774099450996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:24:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:25:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099510997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:25:10.997] heartbeat -> ollama: {"timestamp":1774099510997,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:25:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:25:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:25:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774099510997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:25:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:26:11.001] heartbeat -> ollama: {"timestamp":1774099571001,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:26:11.001] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099571001, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:26:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:26:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774099571001,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:26:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:26:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:27:11.000] heartbeat -> ollama: {"timestamp":1774099631000,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:27:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099631000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:27:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:27:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:27:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774099631000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:27:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:28:11.005] heartbeat -> ollama: {"timestamp":1774099691005,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:28:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099691005, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:28:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:28:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:28:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774099691005,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:28:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:29:11.002] heartbeat -> ollama: {"timestamp":1774099751002,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:29:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099751002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:29:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:29:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:29:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774099751002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:29:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:30:10.999] heartbeat -> ollama: {"timestamp":1774099810999,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:30:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099810999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:30:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:30:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:30:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774099810999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:30:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:31:11.002] heartbeat -> ollama: {"timestamp":1774099871002,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:31:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099871002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:31:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:31:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:31:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774099871002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:31:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:32:11.008] heartbeat -> ollama: {"timestamp":1774099931008,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:32:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099931008, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:32:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:32:11.021] ollama -> web_interface: "Processed: {\"timestamp\":1774099931008,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 09:32:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:32:11.022] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:33:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774099990997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:33:10.997] heartbeat -> ollama: {"timestamp":1774099990997,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:33:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:33:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:33:11.008] ollama -> web_interface: "Processed: {\"timestamp\":1774099990997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:33:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:34:11.011] heartbeat -> ollama: {"timestamp":1774100051011,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:34:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100051011, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:34:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:34:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:34:11.020] ollama -> web_interface: "Processed: {\"timestamp\":1774100051011,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:34:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:35:11.007] heartbeat -> ollama: {"timestamp":1774100111007,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:35:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100111007, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:35:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:35:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:35:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774100111007,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:35:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:36:10.996] heartbeat -> ollama: {"timestamp":1774100170996,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:36:10.996] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100170996, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:36:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:36:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:36:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774100170996,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:36:11.007] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:37:10.997] heartbeat -> ollama: {"timestamp":1774100230997,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:37:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100230997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:37:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:37:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774100230997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:37:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:37:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:38:11.000] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100291000, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:38:11.000] heartbeat -> ollama: {"timestamp":1774100291000,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:38:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:38:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:38:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774100291000,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:38:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:39:11.009] heartbeat -> ollama: {"timestamp":1774100351009,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:39:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100351009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:39:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:39:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774100351009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"[2026-03-21 09:39:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:39:11.020] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:40:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100410999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:40:10.999] heartbeat -> ollama: {"timestamp":1774100410999,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:40:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:40:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:40:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774100410999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:40:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:41:11.010] heartbeat -> ollama: {"timestamp":1774100471010,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:41:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100471010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:41:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:41:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:41:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774100471010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:41:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:42:11.003] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100531003, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:42:11.003] heartbeat -> ollama: {"timestamp":1774100531003,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:42:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:42:11.013] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:42:11.013] ollama -> web_interface: "Processed: {\"timestamp\":1774100531003,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:42:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:43:10.998] heartbeat -> ollama: {"timestamp":1774100590998,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:43:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100590998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:43:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:43:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:43:11.012] ollama -> web_interface: "Processed: {\"timestamp\":1774100590998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:43:11.012] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:44:10.999] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100650999, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:44:10.999] heartbeat -> ollama: {"timestamp":1774100650999,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:44:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:44:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:44:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774100650999,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:44:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:45:10.998] heartbeat -> ollama: {"timestamp":1774100710998,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:45:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100710998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:45:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:45:11.006] ollama -> web_interface: "Processed: {\"timestamp\":1774100710998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:45:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:45:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:46:10.998] heartbeat -> ollama: {"timestamp":1774100770998,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:46:10.998] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100770998, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:46:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:46:11.008] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:46:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774100770998,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:46:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:47:11.002] heartbeat -> ollama: {"timestamp":1774100831002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:47:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100831002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:47:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:47:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:47:11.010] ollama -> web_interface: "Processed: {\"timestamp\":1774100831002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:47:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:48:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100891006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:48:11.006] heartbeat -> ollama: {"timestamp":1774100891006,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:48:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:48:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:48:11.015] ollama -> web_interface: "Processed: {\"timestamp\":1774100891006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:48:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:49:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774100951006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:49:11.006] heartbeat -> ollama: {"timestamp":1774100951006,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:49:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:49:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:49:11.016] ollama -> web_interface: "Processed: {\"timestamp\":1774100951006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:49:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:50:11.006] heartbeat -> ollama: {"timestamp":1774101011006,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:50:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101011006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:50:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:50:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:50:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774101011006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:50:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:51:11.002] heartbeat -> ollama: {"timestamp":1774101071002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:51:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101071002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:51:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:51:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:51:11.011] ollama -> web_interface: "Processed: {\"timestamp\":1774101071002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:51:11.011] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:52:11.010] heartbeat -> ollama: {"timestamp":1774101131010,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:52:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101131010, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:52:11.022] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:52:11.022] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:52:11.022] ollama -> web_interface: "Processed: {\"timestamp\":1774101131010,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:52:11.023] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:53:11.004] heartbeat -> ollama: {"timestamp":1774101191004,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:53:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101191004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:53:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:53:11.019] ollama -> web_interface: "Processed: {\"timestamp\":1774101191004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:53:11.019] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:53:11.021] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:54:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101251006, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:54:11.006] heartbeat -> ollama: {"timestamp":1774101251006,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:54:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:54:11.016] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:54:11.017] ollama -> web_interface: "Processed: {\"timestamp\":1774101251006,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:54:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:55:11.004] heartbeat -> ollama: {"timestamp":1774101311004,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:55:11.004] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101311004, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:55:11.014] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 09:55:11.014] ollama -> web_interface: "Processed: {\"timestamp\":1774101311004,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:55:11.015] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 09:55:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:56:11.009] heartbeat -> ollama: {"timestamp":1774101371009,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 09:56:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101371009, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 09:56:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:56:11.017] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:56:11.018] ollama -> web_interface: "Processed: {\"timestamp\":1774101371009,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:56:11.018] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:57:11.002] heartbeat -> ollama: {"timestamp":1774101431002,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 09:57:11.002] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101431002, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 09:57:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 09:57:11.009] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 09:57:11.009] ollama -> web_interface: "Processed: {\"timestamp\":1774101431002,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:57:11.010] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 09:57:19.637] web_user -> ollama: hi
+[2026-03-21 09:57:19.645] ollama -> web_interface: "Processed: hi"
+[2026-03-21 09:58:10.997] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101490997, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 09:58:10.997] heartbeat -> ollama: {"timestamp":1774101490997,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 09:58:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 09:58:11.005] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 09:58:11.005] ollama -> web_interface: "Processed: {\"timestamp\":1774101490997,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 09:58:11.006] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:01:27.823] logger -> web_interface: {"type":"log","level":"info","msg":"Starting bot with HTTPS web interface and Ollama chat"}
+[2026-03-21 10:01:27.824] logger -> web_interface: {"type":"log","level":"info","msg":"HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-21 10:01:27.825] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama handler spawned"}
+[2026-03-21 10:01:27.825] logger -> web_interface: {"type":"log","level":"info","msg":"Starting HTTPS Web Server on 0.0.0.0:8443"}
+[2026-03-21 10:01:27.834] heartbeat -> ollama: {"timestamp":1774101687834,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:01:27.834] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101687834, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:01:27.835] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:01:27.836] logger -> web_interface: {"type":"log","level":"info","msg":"Web server listening on https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-21 10:01:27.836] ollama -> web_interface: "Processed: {\"timestamp\":1774101687834,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 10:01:27.837] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:01:27.838] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:01:50.946] web_user -> ollama: hi
+[2026-03-21 10:01:50.954] ollama -> web_interface: "Processed: hi"
+[2026-03-21 10:02:27.828] heartbeat -> ollama: {"timestamp":1774101747828,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:02:27.828] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101747828, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:02:27.839] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:02:27.839] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:02:27.839] ollama -> web_interface: "Processed: {\"timestamp\":1774101747828,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 10:02:27.841] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:03:27.835] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101807835, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:03:27.835] heartbeat -> ollama: {"timestamp":1774101807835,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:03:27.842] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:03:27.842] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:03:27.842] ollama -> web_interface: "Processed: {\"timestamp\":1774101807835,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 10:03:27.844] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:04:27.828] heartbeat -> ollama: {"timestamp":1774101867828,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:04:27.828] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774101867828, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:04:27.835] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:04:27.836] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:04:27.836] ollama -> web_interface: "Processed: {\"timestamp\":1774101867828,\"system_status\":\"Operational\",\"recent_events\":[\"System check completed\"]}"
+[2026-03-21 10:04:27.837] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:06:48.467] logger -> web_interface: {"type":"log","level":"info","msg":"Starting bot with HTTPS web interface and Ollama chat"}
+[2026-03-21 10:06:48.471] logger -> web_interface: {"type":"log","level":"info","msg":"HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-21 10:06:48.473] heartbeat -> ollama: {"timestamp":1774102008473,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:06:48.473] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama handler spawned"}
+[2026-03-21 10:06:48.476] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:06:48.476] logger -> web_interface: {"type":"log","level":"info","msg":"Starting HTTPS Web Server on 0.0.0.0:8443"}
+[2026-03-21 10:06:48.481] logger -> web_interface: {"type":"log","level":"info","msg":"Web server listening on https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-21 10:06:48.484] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102008473, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:06:48.487] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:06:48.490] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:07:47.979] web_user -> ollama: hi
+[2026-03-21 10:07:47.989] ollama -> web_interface: "Processed: hi"
+[2026-03-21 10:07:48.477] heartbeat -> ollama: {"timestamp":1774102068477,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 10:07:48.477] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102068477, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 10:07:48.479] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}[2026-03-21 10:07:48.479] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+
+[2026-03-21 10:07:48.480] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:08:48.474] heartbeat -> ollama: {"timestamp":1774102128474,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:08:48.474] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102128474, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:08:48.482] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:08:48.483] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:08:48.484] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:09:48.469] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102188469, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 10:09:48.469] heartbeat -> ollama: {"timestamp":1774102188469,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 10:09:48.479] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 10:09:48.479] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 10:09:48.480] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:10:48.468] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102248468, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:10:48.468] heartbeat -> ollama: {"timestamp":1774102248468,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:10:48.481] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 10:10:48.481] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 10:10:48.482] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:11:48.480] heartbeat -> ollama: {"timestamp":1774102308480,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 10:11:48.480] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102308480, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 10:11:48.487] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 10:11:48.487] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 10:11:48.488] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:12:48.475] heartbeat -> ollama: {"timestamp":1774102368475,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 10:12:48.475] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102368475, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 10:12:48.485] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 10:12:48.485] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 10:12:48.486] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:13:48.477] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102428477, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 10:13:48.477] heartbeat -> ollama: {"timestamp":1774102428477,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 10:13:48.484] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 10:13:48.484] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 10:13:48.485] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:14:48.470] heartbeat -> ollama: {"timestamp":1774102488470,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:14:48.470] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102488470, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:14:48.478] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:14:48.479] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:14:48.480] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:15:48.471] heartbeat -> ollama: {"timestamp":1774102548471,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-21 10:15:48.471] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102548471, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-21 10:15:48.478] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 10:15:48.478] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 10:15:48.479] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:16:48.483] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102608483, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 10:16:48.483] heartbeat -> ollama: {"timestamp":1774102608483,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 10:16:48.492] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:16:48.492] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:16:48.494] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:17:48.472] heartbeat -> ollama: {"timestamp":1774102668472,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:17:48.472] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102668472, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:17:48.479] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:17:48.479] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:17:48.481] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:18:48.482] heartbeat -> ollama: {"timestamp":1774102728482,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:18:48.482] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102728482, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:18:48.499] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:18:48.500] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:18:48.501] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:19:48.484] heartbeat -> ollama: {"timestamp":1774102788484,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:19:48.484] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102788484, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:19:48.491] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:19:48.492] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:19:48.493] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:20:48.472] heartbeat -> ollama: {"timestamp":1774102848472,"system_status":"Operational","recent_events":["System check completed"]}
+[2026-03-21 10:20:48.472] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102848472, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+[2026-03-21 10:20:48.480] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-21 10:20:48.480] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-21 10:20:48.482] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-21 10:21:48.471] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774102908471, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}[2026-03-21 10:21:48.471] heartbeat -> ollama: {"timestamp":1774102908471,"system_status":"Operational","recent_events":["System check completed"]}
+
+[2026-03-21 10:21:48.478] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-21 10:21:48.478] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+
+[2026-03-21 10:21:48.479] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
