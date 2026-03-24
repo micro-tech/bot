@@ -329,6 +329,13 @@ const MAIN_HTML: &str = r#"
             div.scrollIntoView();
         }
 
+        function showTab(event, tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
         function saveConfig() {
             const toml = document.getElementById('config-textarea').value;
             if (ws && ws.readyState === WebSocket.OPEN) {
