@@ -190,18 +190,19 @@ async fn main() {
         let rx = ollama_bus.subscribe("ollama");
         tokio::task::spawn_blocking(move || {
             while let Ok(msg) = rx.recv() {
-                println!("Ollama message received: {:?}", msg);
-
-                // Simple echo response for now
-                if let Ok(resp) = serde_json::to_string(&format!("Processed: {}", msg.data)) {
-                    let reply = Message {
-                        to: "web_interface".to_string(),
-                        from: "ollama".to_string(),
-                        data: resp,
-                        timestamp: get_current_timestamp(),
-                    };
-                    ollama_bus.publish(reply);
+                // Skip heartbeat messages
+                if msg.from == "heartbeat" {
+                    continue;
                 }
+                // Simple echo response for now
+                let resp = format!("Processed: {}", msg.data);
+                let reply = Message {
+                    to: "web_interface".to_string(),
+                    from: "ollama".to_string(),
+                    data: serde_json::to_string(&resp).unwrap(),
+                    timestamp: get_current_timestamp(),
+                };
+                ollama_bus.publish(reply);
             }
         });
     });
