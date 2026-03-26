@@ -5,22 +5,22 @@ use axum::{
         State, WebSocketUpgrade,
         ws::{Message as WsMessage, WebSocket},
     },
-    response::Html,
+    response::{Html, IntoResponse},
     routing::get,
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
 use log::info;
 use rcgen::generate_simple_self_signed;
-use serde_json::{Value, json};
-use toml;
 use serde::Deserialize;
+use serde_json::{Value, json};
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
+use toml;
 use tower_http::cors::CorsLayer;
 
 #[derive(Clone)]
@@ -59,7 +59,11 @@ struct HeartbeatConfig {
     interval_seconds: u64,
 }
 
-pub async fn start_web_server(bus: Arc<Bus>, port: u16, config_str: String) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_web_server(
+    bus: Arc<Bus>,
+    port: u16,
+    config_str: String,
+) -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting HTTPS Web Server on 0.0.0.0:{}", port);
 
     // Generate self-signed certs if not exist
@@ -122,83 +126,141 @@ fn get_timestamp() -> u64 {
         .as_millis() as u64
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl axum::response::IntoResponse {
-    ws.on_upgrade(move |socket| handle_ws(socket, state))
-}
-
 async fn handle_ws(socket: WebSocket, state: AppState) {
-    let mut recv = state.msg_tx.subscribe();
-
+    // Split WebSocket into sender + receiver (Axum 0.8)
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
-    // Send current config on connect
-    let config_msg = json!({"type": "config", "data": state.config_str.clone()}).to_string();
+    // Subscribe to CPU→Web broadcast channel
+    let mut recv = state.msg_tx.subscribe();
+
+    // Send config immediately on connect
+    let config_msg = json!({
+        "type": "config",
+        "data": state.config_str.clone()
+    })
+    .to_string();
+
     let _ = ws_sender.send(WsMessage::Text(config_msg.into())).await;
 
+    // Task: forward broadcast messages to WebSocket
     let recv_task = tokio::spawn(async move {
         loop {
             let message_str = match recv.recv().await {
                 Ok(msg) => msg,
                 Err(_) => break,
             };
-            if ws_sender.send(WsMessage::Text(message_str.into())).await.is_err() {
+
+            if ws_sender
+                .send(WsMessage::Text(message_str.into()))
+                .await
+                .is_err()
+            {
                 break;
             }
         }
     });
 
+    // Main loop: WebSocket → Bus
     while let Some(msg) = ws_receiver.next().await {
         let msg = match msg {
             Ok(msg) => msg,
             Err(_) => break,
         };
-        if let WsMessage::Text(text) = msg {
+
+        if let WsMessage::Text(text_bytes) = msg {
+            let text = text_bytes.to_string();
+
             if let Ok(json_val) = serde_json::from_str::<Value>(&text) {
                 if let Some(msg_type) = json_val["type"].as_str() {
-                    if msg_type == "chat" {
-                        let chat_msg = json_val["msg"].as_str().unwrap_or("").to_string();
-                        let bus_msg = Message {
-                            to: "ollama".to_string(),
-                            from: "web_user".to_string(),
-                            data: chat_msg.clone(),
-                            timestamp: get_timestamp(),
-                        };
-                        state.bus.publish(bus_msg);
+                    match msg_type {
+                        "chat" => {
+                            let chat_msg = json_val["msg"].as_str().unwrap_or("").to_string();
 
-                        // Echo user message immediately
-                        let echo_msg = json!({
-                            "type": "user_msg",
-                            "from": "You",
-                            "data": chat_msg
-                        })
-                        .to_string();
-                        let _ = state.msg_tx.send(echo_msg);
-                    } else if msg_type == "config_save" {
-                        let new_config_str = json_val["data"].as_str().unwrap_or("");
-                        if let Ok(_parsed) = toml::from_str::<Config>(new_config_str) {
-                            if fs::write("config.toml", new_config_str).is_ok() {
-                                let success_msg = json!({"type": "config_status", "status": "success", "msg": "Config saved successfully. Restart the bot to apply changes."}).to_string();
-                                let bus_msg = Message { to: "web_interface".to_string(), from: "config".to_string(), data: success_msg, timestamp: get_timestamp() };
-                                state.bus.publish(bus_msg);
+                            // Send to bus → CPU or Ollama
+                            let bus_msg = Message {
+                                to: "ollama".to_string(),
+                                from: "web_user".to_string(),
+                                data: chat_msg.clone(),
+                                timestamp: get_timestamp(),
+                            };
+                            state.bus.publish(bus_msg);
+
+                            // Echo user message back to UI
+                            let echo_msg = json!({
+                                "type": "user_msg",
+                                "from": "You",
+                                "data": chat_msg
+                            })
+                            .to_string();
+
+                            let _ = state.msg_tx.send(echo_msg);
+                        }
+
+                        "config_save" => {
+                            let new_config_str = json_val["data"].as_str().unwrap_or("");
+
+                            if let Ok(_parsed) = toml::from_str::<Config>(new_config_str) {
+                                if fs::write("config.toml", new_config_str).is_ok() {
+                                    let success_msg = json!({
+                                        "type": "config_status",
+                                        "status": "success",
+                                        "msg": "Config saved successfully. Restart the bot to apply changes."
+                                    })
+                                    .to_string();
+
+                                    let bus_msg = Message {
+                                        to: "web_interface".to_string(),
+                                        from: "config".to_string(),
+                                        data: success_msg,
+                                        timestamp: get_timestamp(),
+                                    };
+                                    state.bus.publish(bus_msg);
+                                } else {
+                                    let error_msg = json!({
+                                        "type": "config_status",
+                                        "status": "error",
+                                        "msg": "Failed to write config file."
+                                    })
+                                    .to_string();
+
+                                    let bus_msg = Message {
+                                        to: "web_interface".to_string(),
+                                        from: "config".to_string(),
+                                        data: error_msg,
+                                        timestamp: get_timestamp(),
+                                    };
+                                    state.bus.publish(bus_msg);
+                                }
                             } else {
-                                let error_msg = json!({"type": "config_status", "status": "error", "msg": "Failed to write config file."}).to_string();
-                                let bus_msg = Message { to: "web_interface".to_string(), from: "config".to_string(), data: error_msg, timestamp: get_timestamp() };
+                                let error_msg = json!({
+                                    "type": "config_status",
+                                    "status": "error",
+                                    "msg": "Invalid TOML syntax."
+                                })
+                                .to_string();
+
+                                let bus_msg = Message {
+                                    to: "web_interface".to_string(),
+                                    from: "config".to_string(),
+                                    data: error_msg,
+                                    timestamp: get_timestamp(),
+                                };
                                 state.bus.publish(bus_msg);
                             }
-                        } else {
-                            let error_msg = json!({"type": "config_status", "status": "error", "msg": "Invalid TOML syntax."}).to_string();
-                            let bus_msg = Message { to: "web_interface".to_string(), from: "config".to_string(), data: error_msg, timestamp: get_timestamp() };
-                            state.bus.publish(bus_msg);
                         }
+
+                        _ => {}
                     }
                 }
             }
         }
     }
+
     recv_task.abort();
+}
+
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_ws(socket, state))
 }
 
 async fn serve_index() -> Html<String> {
@@ -363,8 +425,9 @@ mod tests {
     async fn test_server_start() {
         let bus = Arc::new(Bus::new());
         // Full start expects certs/port, but verifies no panic
-        tokio::spawn(async move { let _ = start_web_server(bus).await; });
+        tokio::spawn(async move {
+            let _ = start_web_server(bus).await;
+        });
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
     }
 }
