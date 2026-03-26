@@ -1,111 +1,534 @@
-// Ollama Handler with Tool Calling
-use crate::bus::{Bus, Message};
-use log::info;
-use reqwest::Client;
-use serde_json::{json, Value};
+//! Ollama Handler — bus-integrated, with health check, timeout, and retry.
+//!
+//! # Responsibilities
+//! - Verify Ollama is reachable before sending a request  (`check_ollama_health`)
+//! - Call `/api/chat` with a configured timeout and automatic retry
+//! - Publish the LLM response **back onto the Bus** so other components can act on it
+//! - Publish structured error messages to `"web_interface"` when things go wrong
+//!
+//! # Starlink note
+//! The connection can drop at any moment.  Every outbound HTTP request goes
+//! through a retry loop with exponential-ish back-off, and every `reqwest`
+//! client is built with explicit connect + total-request timeouts so nothing
+//! ever hangs silently.
 
-pub async fn handle_ollama_message(message: Message, _bus: &mut Bus) -> Option<String> {
-    info!("Ollama msg: {}", message.data);
-    let tools = vec![
-        json!({
-            "type": "function",
-            "function": {
-                "name": "read_log",
-                "description": "Read project logs",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "log_file": {"type": "string"}
-                    }
-                }
-            }
-        } ) ,
-        json!({
-            "type": "function",
-            "function": {
-                "name": "send_email",
-                "description": "Send alert email",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "to": {"type": "string"},
-                        "subject": {"type": "string"},
-                        "body": {"type": "string"}
-                    }
-                }
-            }
-        } )
-    ];
-    call_ollama_tools(&message.data, json!(tools)).await.ok()
+use std::sync::Arc;
+use std::time::Duration;
+
+use crate::bus::{Bus, Message};
+use log::{error, info, warn};
+use reqwest::Client;
+use serde_json::{Value, json};
+
+// ── tunables ──────────────────────────────────────────────────────────────────
+
+/// Seconds to wait for the TCP connection to be established.
+const CONNECT_TIMEOUT_SECS: u64 = 5;
+
+/// Maximum seconds to wait for the full HTTP response once connected.
+const REQUEST_TIMEOUT_SECS: u64 = 90;
+
+/// How many times to attempt a request before giving up.
+const MAX_RETRIES: u32 = 3;
+
+/// Milliseconds to wait between retry attempts.
+const RETRY_DELAY_MS: u64 = 2_500;
+
+// ── client factory ────────────────────────────────────────────────────────────
+
+/// Build a `reqwest::Client` with connection and request timeouts pre-set.
+/// Called for every handler invocation so timeouts are always in effect.
+fn build_client() -> Client {
+    Client::builder()
+        .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
+        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+        .build()
+        .expect("Failed to build reqwest HTTP client")
 }
 
-async fn call_ollama_tools(prompt: &str, tools: Value) -> Result<String, Box<dyn std::error::Error>> {
-    let client = Client::new();
-    let mut messages = vec![json!({"role": "user", "content": prompt})];
-    loop {
-        let resp = client.post("http://127.0.0.1:11434/api/chat")
-            .json(&json!({
-                "model": "llama3",
-                "messages": messages,
-                "tools": tools
-            }))
-            .send()
-            .await?
-            .json::<Value>()
-            .await?;
+// ── health check ──────────────────────────────────────────────────────────────
 
-        let msg = &resp["message"];
-        messages.push(msg.clone());
+/// Ping `{base_url}/api/tags` to verify that Ollama is alive and responding.
+///
+/// Returns `true` when the endpoint replies with a 2xx status code.
+/// This is a cheap, fast check — use it before every real request.
+///
+/// # Example
+/// ```no_run
+/// if check_ollama_health("http://localhost:11434").await {
+///     println!("Ollama is up!");
+/// }
+/// ```
+pub async fn check_ollama_health(base_url: &str) -> bool {
+    let client = build_client();
+    let url = format!("{}/api/tags", base_url);
 
-        if let Some(tool_calls) = msg["tool_calls"].as_array() {
-            for tool in tool_calls {
-                let name = tool["function"]["name"].as_str().unwrap_or("");
-                let args = tool["function"]["arguments"].clone();
-                let tool_resp = execute_tool(name, args);
-                messages.push(json!({"role": "tool", "tool_call_id": tool["id"], "content": tool_resp}));
-            }
-        } else {
-            return Ok(msg["content"].as_str().unwrap_or("").to_string());
+    match client.get(&url).send().await {
+        Ok(resp) if resp.status().is_success() => {
+            info!(
+                "Ollama health-check ✅  ({}/api/tags → {})",
+                base_url,
+                resp.status()
+            );
+            true
+        }
+        Ok(resp) => {
+            warn!(
+                "Ollama health-check ⚠️  unexpected HTTP status: {}",
+                resp.status()
+            );
+            false
+        }
+        Err(e) if e.is_timeout() => {
+            error!("Ollama health-check ❌  timed out: {}", e);
+            false
+        }
+        Err(e) if e.is_connect() => {
+            error!("Ollama health-check ❌  connection refused/failed: {}", e);
+            false
+        }
+        Err(e) => {
+            error!("Ollama health-check ❌  {}", e);
+            false
         }
     }
 }
 
+// ── public entry-point ────────────────────────────────────────────────────────
+
+/// Receive a bus `Message`, call Ollama, and publish the response back on the bus.
+///
+/// Flow:
+/// 1. Health-check Ollama — if unreachable, publish an error and return early.
+/// 2. Call `/api/chat` with up to `MAX_RETRIES` attempts and a delay between each.
+/// 3. On success:
+///    - Publish the LLM text to `message.from`  (reply to original sender).
+///    - Publish a structured `ollama_response` JSON to `"web_interface"`.
+/// 4. On total failure: publish a structured `error` JSON to `"web_interface"`.
+///
+/// # Parameters
+/// * `message`   — The incoming bus message to process.
+/// * `bus`       — Shared bus handle used to publish replies.
+/// * `base_url`  — Ollama base URL, e.g. `"http://localhost:11434"`.
+/// * `model`     — Model name, e.g. `"llama3.2"`.
+pub async fn handle_ollama_message(
+    message: Message,
+    bus: &Arc<Bus>,
+    base_url: &str,
+    model: &str,
+) -> Option<String> {
+    info!(
+        "Ollama ← from='{}' data='{}'",
+        message.from,
+        truncate(&message.data, 120)
+    );
+
+    let client = build_client();
+
+    // ── 1. health check ───────────────────────────────────────────────────────
+    if !check_ollama_health(base_url).await {
+        let err = format!(
+            "Ollama is not reachable at '{}' — request dropped",
+            base_url
+        );
+        error!("{}", err);
+        publish_error(bus, &err);
+        return None;
+    }
+
+    // ── 2. retry loop ─────────────────────────────────────────────────────────
+    let mut last_err = String::new();
+
+    for attempt in 1..=MAX_RETRIES {
+        match call_ollama(&client, base_url, model, &message.data).await {
+            Ok(response) => {
+                info!(
+                    "Ollama ✅  replied on attempt {}/{} — {} chars",
+                    attempt,
+                    MAX_RETRIES,
+                    response.len()
+                );
+
+                // ── 3a. reply to the original sender ──────────────────────────
+                bus.publish(Message {
+                    to: message.from.clone(),
+                    from: "ollama".to_string(),
+                    data: response.clone(),
+                    timestamp: now_ms(),
+                });
+
+                // ── 3b. forward to the web UI ─────────────────────────────────
+                bus.publish(Message {
+                    to: "web_interface".to_string(),
+                    from: "ollama".to_string(),
+                    data: json!({
+                        "type": "ollama_response",
+                        "reply_to": message.from,
+                        "msg": response
+                    })
+                    .to_string(),
+                    timestamp: now_ms(),
+                });
+
+                return Some(response);
+            }
+
+            Err(e) => {
+                last_err = e.to_string();
+                warn!(
+                    "Ollama attempt {}/{} failed: {}",
+                    attempt, MAX_RETRIES, last_err
+                );
+
+                if attempt < MAX_RETRIES {
+                    // Publish a transient warning so the UI knows we are retrying
+                    bus.publish(Message {
+                        to: "web_interface".to_string(),
+                        from: "ollama".to_string(),
+                        data: json!({
+                            "type": "warning",
+                            "msg": format!(
+                                "Ollama request failed (attempt {}/{}), retrying… ({})",
+                                attempt, MAX_RETRIES, last_err
+                            )
+                        })
+                        .to_string(),
+                        timestamp: now_ms(),
+                    });
+
+                    tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
+                }
+            }
+        }
+    }
+
+    // ── 4. all retries exhausted ──────────────────────────────────────────────
+    let err = format!(
+        "Ollama failed after {} attempt(s): {}",
+        MAX_RETRIES, last_err
+    );
+    error!("{}", err);
+    publish_error(bus, &err);
+    None
+}
+
+// ── internal HTTP helpers ─────────────────────────────────────────────────────
+
+/// Wrapper that assembles the default tool-list and delegates to the loop.
+async fn call_ollama(
+    client: &Client,
+    base_url: &str,
+    model: &str,
+    prompt: &str,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let tools = default_tools();
+    call_ollama_tools(client, base_url, model, prompt, tools).await
+}
+
+/// Agentic tool-calling loop:
+/// - Send the prompt.
+/// - If the model returns `tool_calls`, execute them locally and send results back.
+/// - Repeat until the model returns plain text content.
+async fn call_ollama_tools(
+    client: &Client,
+    base_url: &str,
+    model: &str,
+    prompt: &str,
+    tools: Value,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let mut messages = vec![json!({"role": "user", "content": prompt})];
+
+    // Guard against infinite tool-call loops (e.g. a badly behaved model)
+    let max_tool_rounds = 10usize;
+    let mut tool_rounds = 0usize;
+
+    loop {
+        let resp = client
+            .post(format!("{}/api/chat", base_url))
+            .json(&json!({
+                "model":    model,
+                "messages": messages,
+                "tools":    tools,
+                "stream":   false   // MUST be false — streaming returns NDJSON,
+                                    // not a single JSON object, and breaks parsing.
+            }))
+            .send()
+            .await
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+                if e.is_timeout() {
+                    format!("request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, e).into()
+                } else if e.is_connect() {
+                    format!("connection error: {}", e).into()
+                } else {
+                    format!("HTTP error: {}", e).into()
+                }
+            })?;
+
+        // Surface non-2xx as an error so the retry loop can handle them.
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Ollama returned HTTP {}: {}", status, body).into());
+        }
+
+        let parsed: Value = resp.json().await.map_err(|e| {
+            let e: Box<dyn std::error::Error + Send + Sync> =
+                format!("failed to parse Ollama JSON response: {}", e).into();
+            e
+        })?;
+
+        let msg = &parsed["message"];
+        messages.push(msg.clone());
+
+        if let Some(tool_calls) = msg["tool_calls"].as_array() {
+            tool_rounds += 1;
+            if tool_rounds > max_tool_rounds {
+                return Err("Ollama tool-call loop exceeded safety limit".into());
+            }
+
+            for tool in tool_calls {
+                let name = tool["function"]["name"].as_str().unwrap_or("");
+                let args = tool["function"]["arguments"].clone();
+                let tool_result = execute_tool(name, args);
+                info!("Tool called: '{}' → {} chars", name, tool_result.len());
+
+                messages.push(json!({
+                    "role":         "tool",
+                    "tool_call_id": tool["id"],
+                    "content":      tool_result
+                }));
+            }
+            // Loop — send tool results back to the model.
+        } else {
+            // No tool calls → model produced its final answer.
+            let content = msg["content"].as_str().unwrap_or("").to_string();
+            if content.is_empty() {
+                return Err("Ollama returned an empty content field".into());
+            }
+            return Ok(content);
+        }
+    }
+}
+
+// ── tool registry ─────────────────────────────────────────────────────────────
+
+/// Returns the JSON array of tools exposed to the model.
+fn default_tools() -> Value {
+    json!([
+        {
+            "type": "function",
+            "function": {
+                "name": "read_log",
+                "description": "Read the contents of a project log file.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "log_file": {
+                            "type": "string",
+                            "description": "Relative path to the log file, e.g. logs/error_log.md"
+                        }
+                    },
+                    "required": ["log_file"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "send_email",
+                "description": "Queue an alert email to be sent.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "to":      { "type": "string", "description": "Recipient address" },
+                        "subject": { "type": "string", "description": "Email subject line" },
+                        "body":    { "type": "string", "description": "Plain-text body" }
+                    },
+                    "required": ["to", "subject", "body"]
+                }
+            }
+        }
+    ])
+}
+
+/// Dispatch a tool call by name, returning the result as a plain string.
 fn execute_tool(name: &str, args: Value) -> String {
     match name {
         "read_log" => {
             let file = args["log_file"].as_str().unwrap_or("logs/bus_log.md");
-            std::fs::read_to_string(file).unwrap_or("Log not found".to_string())
-        },
+            match std::fs::read_to_string(file) {
+                Ok(contents) => contents,
+                Err(e) => format!("Error reading '{}': {}", file, e),
+            }
+        }
         "send_email" => {
-            // Placeholder
-            "Email sent".to_string()
-        },
-        _ => "Unknown tool".to_string()
+            // TODO: wire up a real mailer (lettre, sendgrid, etc.)
+            let to = args["to"].as_str().unwrap_or("(none)");
+            info!(
+                "send_email tool called → to='{}'  (placeholder, not sent)",
+                to
+            );
+            "Email queued (placeholder — not yet implemented)".to_string()
+        }
+        other => {
+            warn!("Unknown tool requested: '{}'", other);
+            format!("Unknown tool: '{}' — no handler registered", other)
+        }
     }
 }
 
+// ── tiny helpers ──────────────────────────────────────────────────────────────
+
+/// Publish a structured error JSON to `"web_interface"`.
+fn publish_error(bus: &Arc<Bus>, msg: &str) {
+    bus.publish(Message {
+        to: "web_interface".to_string(),
+        from: "ollama".to_string(),
+        data: json!({ "type": "error", "msg": msg }).to_string(),
+        timestamp: now_ms(),
+    });
+}
+
+/// Current Unix time in milliseconds.
+fn now_ms() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+/// Return at most `max` bytes of `s` (no panic on non-ASCII boundaries thanks
+/// to `char_indices`).
+fn truncate(s: &str, max: usize) -> &str {
+    if s.len() <= max {
+        return s;
+    }
+    // Walk back from `max` to a valid char boundary.
+    let mut boundary = max;
+    while !s.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    &s[..boundary]
+}
+
+// ── tests ─────────────────────────────────────────────────────────────────────
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::bus::Bus;
 
+    // ── health check ──────────────────────────────────────────────────────────
+
     #[tokio::test]
-    async fn test_handle() {
-        let mut bus = Bus::new();
-        let message = Message {
-            to: "ollama".to_string(),
-            from: "test".to_string(),
-            data: "Read the bus log".to_string(),
-            timestamp: 0,
-        };
-        let response = handle_ollama_message(message, &mut bus).await;
-        assert!(response.is_some());
+    async fn test_health_check_unreachable_port() {
+        // Port 19999 should never be open in a normal test environment.
+        let result = check_ollama_health("http://127.0.0.1:19999").await;
+        assert!(!result, "Port 19999 should be unreachable");
+    }
+
+    #[tokio::test]
+    async fn test_health_check_invalid_host() {
+        let result = check_ollama_health("http://this.host.does.not.exist:11434").await;
+        assert!(!result, "Non-existent host should fail health check");
+    }
+
+    // ── tool execution ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_execute_tool_read_log_missing() {
+        let args = json!({"log_file": "logs/file_that_does_not_exist_xyz.md"});
+        let result = execute_tool("read_log", args);
+        assert!(
+            result.starts_with("Error reading"),
+            "Expected an error message, got: {}",
+            result
+        );
     }
 
     #[test]
-    fn test_tool_exec() {
-        let args = json!({"log_file": "logs/bus_log.md"});
-        let result = execute_tool("read_log", args);
-        assert!(!result.is_empty());
+    fn test_execute_tool_send_email_placeholder() {
+        let args = json!({
+            "to": "test@example.com",
+            "subject": "Test",
+            "body": "Hello"
+        });
+        let result = execute_tool("send_email", args);
+        assert!(
+            result.contains("placeholder") || result.contains("queued"),
+            "Expected placeholder response, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_execute_tool_unknown() {
+        let result = execute_tool("totally_unknown_tool", json!({}));
+        assert!(
+            result.contains("Unknown tool"),
+            "Expected 'Unknown tool' in response, got: {}",
+            result
+        );
+    }
+
+    // ── truncate helper ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_truncate_short_string() {
+        assert_eq!(truncate("hello", 100), "hello");
+    }
+
+    #[test]
+    fn test_truncate_long_string() {
+        let s = "a".repeat(200);
+        let result = truncate(&s, 120);
+        assert_eq!(result.len(), 120);
+    }
+
+    #[test]
+    fn test_truncate_unicode_boundary() {
+        // "日本語" is 9 bytes (3 bytes per char).  Truncating at 5 bytes must
+        // not panic and must stay at a valid char boundary.
+        let s = "日本語test";
+        let result = truncate(s, 5);
+        assert!(s.is_char_boundary(result.len()));
+    }
+
+    // ── bus plumbing ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_publish_error_does_not_panic() {
+        let bus = Arc::new(Bus::new());
+        // Subscribe so the router has somewhere to send the message.
+        let _rx = bus.subscribe("web_interface");
+        publish_error(&bus, "test error — should not panic");
+    }
+
+    // ── integration smoke-test (skipped in CI unless Ollama is running) ───────
+    //
+    // Run with:
+    //   cargo test -- --ignored test_handle_ollama_live
+    //
+    #[tokio::test]
+    #[ignore]
+    async fn test_handle_ollama_live() {
+        let bus = Arc::new(Bus::new());
+        let _rx = bus.subscribe("test_sender");
+        let _web_rx = bus.subscribe("web_interface");
+
+        let message = Message {
+            to: "ollama".to_string(),
+            from: "test_sender".to_string(),
+            data: "Say hello in exactly three words.".to_string(),
+            timestamp: now_ms(),
+        };
+
+        let result =
+            handle_ollama_message(message, &bus, "http://localhost:11434", "llama3.2").await;
+
+        assert!(result.is_some(), "Expected a response from live Ollama");
+        let text = result.unwrap();
+        assert!(!text.is_empty(), "Response should not be empty");
+        println!("Live Ollama response: {}", text);
     }
 }
