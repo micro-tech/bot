@@ -47,5 +47,6 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
-.certs/*
-./certs
+.certs\*
+.\certs
+H:\GitHub\bot\certs
