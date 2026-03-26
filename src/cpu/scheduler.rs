@@ -3,6 +3,7 @@
 use crate::cpu::instructions::{Instruction, CpuEvent};
 use crate::cpu::state::{AgentState, AgentMode};
 use log::debug;
+use crate::utils::log_to_file;
 
 pub struct Scheduler;
 
@@ -12,6 +13,7 @@ impl Scheduler {
         event: Option<CpuEvent>,
     ) -> Vec<Instruction> {
         debug!("Scheduling for mode {:?}, event {:?}", state.mode, event.as_ref().map(|e| &e.kind));
+        log_to_file(&format!("Scheduling for mode {:?}, event {:?}", state.mode, event.as_ref().map(|e| &e.kind)));
         let mut out = Vec::new();
 
         match (&state.mode, event) {
@@ -46,6 +48,7 @@ impl Scheduler {
         }
 
         debug!("Scheduled instructions: {:?}", out);
+        log_to_file(&format!("Scheduled instructions: {:?}", out));
         out
     }
 }

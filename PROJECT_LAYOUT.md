@@ -17,6 +17,13 @@ This document outlines the structure and code flow of the bot project, conceptua
 │   └── bus_log.md              # Log file for bus system transactions
 ├── src/
 │   ├── main.rs                 # Entry point of the application (Agent OS Kernel)
+│   ├── cpu/                    # Central Processing Unit for agent state management and instruction execution
+│   │   ├── mod.rs              # CPU module definition and main Cpu struct
+│   │   ├── state.rs            # Agent state management (mode, step counter, etc.)
+│   │   ├── scheduler.rs        # Instruction scheduling based on state and events
+│   │   ├── executor.rs         # Execution of scheduled instructions
+│   │   ├── interrupts.rs       # Event polling and interrupt handling from bus
+│   │   └── instructions.rs     # Definitions of CPU instructions and events
 │   ├── bus/                    # Central communication bus for inter-component messaging
 │   │   ├── bus.rs              # Core bus implementation for message routing
 │   │   └── message.rs          # Message structure and handling logic
@@ -73,21 +80,33 @@ The bot project is designed as an **Agent OS**, a specialized operating system t
 - **Dependencies**: Reads from `Cargo.toml` for library dependencies and project metadata.
 - **Flow**: `main.rs` → Reads `config.toml` → Initializes Agent OS → Boots subsystems (`hartbeat`, `io`, `bus`, etc.)
 
-### 2. Bus System (src/bus/) - Central Communication Framework
+### 2. CPU Execution Loop (src/cpu/) - Agent State Management and Instruction Processing
+- **Purpose**: The CPU module manages the agent's state, polls for events, schedules instructions, and executes them in a continuous loop.
+- **Components**:
+  - **`state.rs`**: Tracks agent mode (Idle, Conversational, etc.), step counter, and other state variables.
+  - **`interrupts.rs`**: Polls the bus for incoming events and converts them to CPU events.
+  - **`scheduler.rs`**: Decides which instructions to execute based on current state and events.
+  - **`executor.rs`**: Executes instructions, interacting with memory, skills, hooks, and the bus.
+  - **`instructions.rs`**: Defines the types of instructions (e.g., RunSkill, WriteMemory) and events.
+  - **`mod.rs`**: Orchestrates the CPU loop, calling interrupts, scheduler, and executor.
+- **Logging**: All CPU activities (polling, scheduling, execution) are logged to `logs/error_log.md` with timestamps.
+- **Flow**: CPU Loop → Polls for events via `interrupts.rs` → `scheduler.rs` schedules instructions → `executor.rs` executes them → Updates state in `state.rs` → Loop repeats
+
+### 3. Bus System (src/bus/) - Central Communication Framework
 - **Purpose**: A central messaging bus for inter-component communication, allowing subsystems to publish and subscribe to messages in a decoupled manner.
 - **Message Format**: Messages include `to` (destination component), `from` (source component), and `data` (payload), defined in `message.rs`.
 - **Routing**: The bus (`bus.rs`) routes messages to appropriate subscribers based on the `to` field.
 - **Logging**: All bus transactions are logged with timestamps to `logs/bus_log.md` as specified in `config.toml`.
 - **Flow**: Component → Publishes message to bus (`to: destination, from: source, data: payload`) → Bus logs transaction → Routes to subscriber → Subscriber processes data
 
-### 3. Core Heartbeat Logic (src/hartbeat/)
+### 4. Core Heartbeat Logic (src/hartbeat/)
 - **Heartbeat Generation**: A periodic signal or data structure is created in `src/hartbeat/hartbeat.rs` to represent system status or logs, with the interval defined in `config.toml`.
 - **Bus Interaction**: Reads data from `hartbeat_log.md`, marks it for Ollama, and publishes a message to the bus with `to: ollama`, `from: hartbeat`, and `data: heartbeat payload`.
 - **Error Handling**: Network calls for heartbeat transmission include robust error checking and retry mechanisms, with retry settings from `config.toml`.
 - **Logging**: Heartbeat-specific logs are written to the location specified in `config.toml` (`logs/hartbeat_log.md`).
 - **Flow**: `hartbeat.rs` → Generates heartbeat data → Logs to `hartbeat_log.md` → Publishes to bus (`to: ollama`) → Bus logs transaction
 
-### 4. Ollama Integration (src/io/ollama/)
+### 5. Ollama Integration (src/io/ollama/)
 - **Connection**: Establishes a connection to Ollama instance using host and port settings from `config.toml` (e.g., `192.168.1.149:11434`).
 - **Model Selection**: Uses the specified model (e.g., `llama3`) from `config.toml` for LLM tasks.
 - **Bus Subscription**: Subscribes to bus messages with `to: ollama` via `ollama_handler.rs`, processes incoming data (e.g., from `hartbeat`), and sends it to Ollama API.
@@ -95,21 +114,21 @@ The bot project is designed as an **Agent OS**, a specialized operating system t
 - **Security**: API keys and settings are securely stored in `.env` or `config.toml` (not committed to git).
 - **Flow**: `ollama_handler.rs` → Subscribes to bus (`to: ollama`) → Receives data → Sends to Ollama → Receives response → Publishes response to bus if needed
 
-### 5. Agent-to-Agent Communication (src/a2a/) - TBD
+### 6. Agent-to-Agent Communication (src/a2a/) - TBD
 - **Purpose**: Facilitates communication between multiple agents or LLMs for collaborative tasks.
 - **Status**: To be developed. This module will handle protocols for agent interaction.
 - **Bus Integration**: Will publish/subscribe to bus messages for A2A communication.
 - **Configuration**: Future settings for A2A communication protocols will be added to `config.toml`.
 - **Flow**: Agent OS → `a2a` → Publishes/subscribes to bus → Communicates with other agents → Returns data or commands
 
-### 6. Scheduled Tasks (src/cron/) - TBD
+### 7. Scheduled Tasks (src/cron/) - TBD
 - **Purpose**: Manages scheduled tasks and automation, allowing the Agent OS to perform routine operations.
 - **Status**: To be developed. This will include cron-like job scheduling for the agent.
 - **Bus Integration**: Will publish task results or triggers to the bus for other components.
 - **Configuration**: Future cron job schedules and settings will be defined in `config.toml`.
 - **Flow**: Agent OS → `cron` → Executes scheduled tasks → Publishes results to bus → Logs results or triggers hooks
 
-### 7. Input/Output Interfaces (src/io/)
+### 8. Input/Output Interfaces (src/io/)
 - **Web Interface (src/io/https_web/)**:
   - **Server**: A Rust-based HTTPS server serves a frontend for chat and log display, using the port and certificate paths specified in `config.toml`.
   - **Interaction**: Users interact via a chat interface, sending messages to Ollama through the backend by publishing to the bus (`to: ollama`).
@@ -123,31 +142,31 @@ The bot project is designed as an **Agent OS**, a specialized operating system t
   - **Status**: Partially implemented; full error handling TBD.
   - **Flow**: User → Terminal Input → Publishes to bus (`to: ollama`) → Ollama processes → Publishes to bus (`to: terminal`) → Terminal Output to user
 
-### 8. Master Control Program (src/mcp/) - TBD
+### 9. Master Control Program (src/mcp/) - TBD
 - **Purpose**: Oversees all agent operations, acting as a central decision-making module for the Agent OS.
 - **Status**: To be developed. This will manage resource allocation and task prioritization.
 - **Bus Integration**: Will monitor bus traffic and issue commands via the bus to other components.
 - **Configuration**: Future MCP settings will be added to `config.toml`.
 - **Flow**: Agent OS → `mcp` → Monitors bus → Publishes commands to bus → Coordinates subsystems
 
-### 9. Logging System (logs/)
+### 10. Logging System (logs/)
 - **Capture**: Events, errors, and interactions are logged throughout the application in locations specified in `config.toml` (`logs/error_log.md`, `logs/chat_log.md`, `logs/hartbeat_log.md`).
 - **Bus Logging**: Bus transactions are logged to `logs/bus_log.md` with timestamps, including `to`, `from`, and a summary of `data`.
 - **Persistence**: Logs are stored persistently for analysis by Ollama.
 - **Flow**: Application Events → Logging System → Persistent Storage → Accessible by Ollama or Interfaces; Bus Transaction → Logged to `bus_log.md`
 
-### 10. Tooling Integration (src/tooling/)
+### 11. Tooling Integration (src/tooling/)
 - **Invocation**: Ollama or the Agent OS can invoke tools from the `tooling/` directory for specific tasks (e.g., log reading) by publishing requests to the bus.
 - **Execution**: Tools subscribe to relevant bus messages, perform actions, and publish results back to the bus.
 - **Status**: Initial tools like `read_log.rs` implemented; more complex tools TBD.
 - **Flow**: Ollama/Agent OS → Publishes tool request to bus (`to: tooling`) → Tool subscribes and executes → Publishes result to bus
 
-### 11. Hooks Implementation (src/hooks/)
+### 12. Hooks Implementation (src/hooks/)
 - **Triggering**: Ollama triggers hooks in `hooks/` based on events or analysis (e.g., error alerts) by publishing to the bus.
 - **Action**: Hooks subscribe to relevant messages and execute predefined actions like notifications or service restarts.
 - **Flow**: Event/Analysis → Ollama → Publishes to bus (`to: hooks`) → Hook subscribes and executes action
 
-### 12. Memory Management (src/memory/)
+### 13. Memory Management (src/memory/)
 - **Storage**: Conversational and operational data from Ollama is stored in `memory/`, with file paths specified in `config.toml`.
 - **Types**: 
   - **Short-term (src/memory/short_term/)**: For current session context, stored in `session_data.json`. Status: TBD.
@@ -155,11 +174,11 @@ The bot project is designed as an **Agent OS**, a specialized operating system t
 - **Bus Integration**: Memory updates or retrievals can be requested via bus messages.
 - **Flow**: Ollama Interaction → Publishes memory update to bus → Memory module updates storage → Retrieved for context in future interactions via bus
 
-### 13. Error Handling and Network Resilience
+### 14. Error Handling and Network Resilience
 - **Across System**: All network calls have timeouts, retries with exponential backoff, and error logging, with settings defined in `config.toml`.
 - **Critical**: Essential due to Starlink satellite connection variability.
 - **Bus Error Handling**: Errors in bus communication are logged to `bus_log.md` and `error_log.md`.
 - **Flow**: Network Call → Error Detection → Retry Mechanism → Log Error if Unresolved → Publish error report to bus if critical
 
 ## Summary
-The bot project, conceptualized as an **Agent OS**, starts from the main application (`main.rs`), acting as the kernel to coordinate subsystems like `hartbeat`, `io`, `tooling`, and future components such as `a2a`, `cron`, and `mcp`. A central **Bus System** (`src/bus/`) facilitates decoupled communication by allowing components to publish and subscribe to messages (e.g., `hartbeat` sends data to `ollama` via the bus, handled by `io/ollama`). The bus logs all transactions to `bus_log.md` for monitoring. Configuration settings for Ollama, log locations, ports, bus parameters, and other settings are centralized in `config.toml` to ensure flexibility and avoid hardcoding. Logging captures all significant events, and robust error handling ensures resilience against network issues. Many components are marked as 'To Be Developed' (TBD), indicating areas for future expansion. This layout ensures modularity and clear data paths for future development or debugging by other AI or developers.
+The bot project, conceptualized as an **Agent OS**, starts from the main application (`main.rs`), acting as the kernel to coordinate subsystems like `cpu`, `hartbeat`, `io`, `tooling`, and future components such as `a2a`, `cron`, and `mcp`. The **CPU** (`src/cpu/`) manages agent state and executes instructions in a loop, polling for events via the **Bus System** (`src/bus/`), which facilitates decoupled communication by allowing components to publish and subscribe to messages (e.g., `hartbeat` sends data to `ollama` via the bus, handled by `io/ollama`). The bus logs all transactions to `bus_log.md` for monitoring. Configuration settings for Ollama, log locations, ports, bus parameters, and other settings are centralized in `config.toml` to ensure flexibility and avoid hardcoding. Logging captures all significant events, and robust error handling ensures resilience against network issues. Many components are marked as 'To Be Developed' (TBD), indicating areas for future expansion. This layout ensures modularity and clear data paths for future development or debugging by other AI or developers.

@@ -14896,3 +14896,15 @@ When the bot runs and heartbeat publishes, you'll see entries like:
 [2026-03-24 21:43:14.840] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
 [2026-03-24 21:43:14.840] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
 [2026-03-24 21:43:14.841] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-26 15:02:15.813] logger -> web_interface: {"type":"log","level":"info","msg":"Starting bot with HTTPS web interface and Ollama chat"}
+[2026-03-26 15:02:15.815] logger -> web_interface: {"type":"log","level":"info","msg":"HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-26 15:02:15.816] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama handler spawned"}
+[2026-03-26 15:02:15.817] logger -> web_interface: {"type":"log","level":"info","msg":"Starting HTTPS Web Server on 0.0.0.0:8443"}
+[2026-03-26 15:02:15.818] logger -> web_interface: {"type":"log","level":"info","msg":"Web server listening on https://localhost:8443 (accept self-signed cert warning)"}
+[2026-03-26 15:02:15.826] heartbeat -> ollama: {"timestamp":1774551735826,"system_status":"Operational","recent_events":["System check completed"]}[2026-03-26 15:02:15.826] logger -> web_interface: {"type":"log","level":"info","msg":"Sending heartbeat: Heartbeat { timestamp: 1774551735826, system_status: \"Operational\", recent_events: [\"System check completed\"] }"}
+
+[2026-03-26 15:02:15.827] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}
+[2026-03-26 15:02:15.827] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
+[2026-03-26 15:02:15.828] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-26 15:15:21.304] web_user -> ollama: hi
+[2026-03-26 15:15:21.312] ollama -> web_interface: "Processed: hi"

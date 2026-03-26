@@ -4,6 +4,7 @@ use crate::cpu::instructions::Instruction;
 use crate::cpu::state::AgentState;
 use log::debug;
 use std::sync::Arc;
+use crate::utils::log_to_file;
 
 pub struct CpuExecutor {
     // Inject handles to subsystems
@@ -30,6 +31,7 @@ impl CpuExecutor {
 
     pub async fn execute(&self, state: &mut AgentState, instr: Instruction) -> anyhow::Result<()> {
         debug!("Executing instruction: {:?}", instr);
+        log_to_file(&format!("Executing instruction: {:?}", instr));
         match instr {
             Instruction::ReadMemory { key } => {
                 let value = self.memory.read(&key).await?;
