@@ -1,5 +1,7 @@
 // cpu/instructions.rs
 
+// No executable code here, just type definitions. No logging added.
+
 #[derive(Debug, Clone)]
 pub enum CpuEventSource {
     IoTerminal,

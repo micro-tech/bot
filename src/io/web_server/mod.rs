@@ -426,7 +426,7 @@ mod tests {
         let bus = Arc::new(Bus::new());
         // Full start expects certs/port, but verifies no panic
         tokio::spawn(async move {
-            let _ = start_web_server(bus).await;
+            let _ = start_web_server(bus, 8443, "".to_string()).await;
         });
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
