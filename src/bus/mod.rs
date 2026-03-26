@@ -27,6 +27,8 @@ pub struct Bus {
     subscribers: Arc<Mutex<Vec<(String, Sender<Message>)>>>, // List of subscribers (component name, channel sender)
 }
 
+pub type BusHandle = std::sync::mpsc::Receiver<Message>;
+
 impl Bus {
     /// Creates a new bus instance with router thread.
     pub fn new() -> Self {

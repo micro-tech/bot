@@ -3,7 +3,6 @@ use crate::bus::{Bus, Message};
 use log::info;
 use reqwest::Client;
 use serde_json::{json, Value};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub async fn handle_ollama_message(message: Message, _bus: &mut Bus) -> Option<String> {
     info!("Ollama msg: {}", message.data);
