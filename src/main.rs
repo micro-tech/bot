@@ -1,20 +1,21 @@
-use log::{error, info, warn, set_boxed_logger, set_max_level, LevelFilter};
+use log::{LevelFilter, error, info, set_boxed_logger, set_max_level, warn};
 use serde::{Deserialize, Serialize};
 use serde_json;
-use toml;
 use std::fs;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::time::{Duration as TokioDuration, interval};
+use toml;
 
 // Include modules
-mod io;
-mod bus;
-mod utils;
 mod bayesian;
+mod bus;
+mod io;
+mod utils;
 
 use crate::bus::{Bus, Message};
+use crate::io::ollama::{check_ollama_health, handle_ollama_message};
 use crate::io::web_server::start_web_server;
 use utils::log_to_file;
 
@@ -126,7 +127,8 @@ async fn send_heartbeat(bus: Arc<Bus>) -> Result<(), String> {
         "type": "log",
         "level": "info",
         "msg": "Heartbeat sent to Ollama"
-    }).to_string();
+    })
+    .to_string();
     let log_msg = Message {
         to: "web_interface".to_string(),
         from: "logger".to_string(),
@@ -165,7 +167,8 @@ async fn main() {
                     "type": "log",
                     "level": log_msg.level,
                     "msg": log_msg.msg
-                }).to_string(),
+                })
+                .to_string(),
                 timestamp: get_current_timestamp(),
             };
             bus_clone.publish(msg);
@@ -173,6 +176,10 @@ async fn main() {
     });
 
     info!("Starting bot with HTTPS web interface and Ollama chat");
+
+    // Extract Ollama config values before any closures can partially capture `config`.
+    let ollama_url = config.ollama.url.clone();
+    let ollama_model = config.ollama.model.clone();
 
     // Spawn HTTPS Web Server
     let web_bus = bus.clone();
@@ -182,31 +189,68 @@ async fn main() {
             error!("Web server failed: {}", e);
         }
     });
-    info!("HTTPS Web Server spawned - visit https://localhost:{} (accept self-signed cert warning)", config.web.port);
+    info!(
+        "HTTPS Web Server spawned - visit https://localhost:{} (accept self-signed cert warning)",
+        config.web.port
+    );
 
-    // Spawn Ollama Handler (SIMPLIFIED SYNC VERSION)
+    // Spawn Ollama Handler — real async handler with health-check, timeout & retry.
+    //
+    // The bus uses a sync `std::sync::mpsc` channel internally.  We bridge it
+    // to an async `tokio::sync::mpsc` channel so individual LLM requests can
+    // be processed concurrently without blocking the Tokio runtime.
     let ollama_bus = bus.clone();
+    let ollama_url_clone = ollama_url.clone();
+    let ollama_model_clone = ollama_model.clone();
     tokio::spawn(async move {
-        let rx = ollama_bus.subscribe("ollama");
+        // Advisory startup health-check — we warn but do not abort here;
+        // the per-request health-check inside `handle_ollama_message` will
+        // surface the error if Ollama is still down when a real request arrives.
+        if check_ollama_health(&ollama_url_clone).await {
+            info!("Ollama reachable at {} ✅", ollama_url_clone);
+        } else {
+            warn!(
+                "Ollama NOT reachable at {} on startup ⚠️  — will retry per request",
+                ollama_url_clone
+            );
+        }
+
+        // Bridge: sync mpsc bus receiver  →  async tokio mpsc sender.
+        let (tx_bridge, mut rx_bridge) = tokio::sync::mpsc::unbounded_channel::<Message>();
+        let rx_sync = ollama_bus.subscribe("ollama");
+
         tokio::task::spawn_blocking(move || {
-            while let Ok(msg) = rx.recv() {
-                // Skip heartbeat messages
-                if msg.from == "heartbeat" {
-                    continue;
+            // Blocking thread reads from the sync bus channel and forwards every
+            // message to the async side.  Exits cleanly if the receiver drops.
+            while let Ok(msg) = rx_sync.recv() {
+                if tx_bridge.send(msg).is_err() {
+                    break;
                 }
-                // Simple echo response for now
-                let resp = format!("Processed: {}", msg.data);
-                let reply = Message {
-                    to: "web_interface".to_string(),
-                    from: "ollama".to_string(),
-                    data: serde_json::to_string(&resp).unwrap(),
-                    timestamp: get_current_timestamp(),
-                };
-                ollama_bus.publish(reply);
             }
         });
+
+        // Async dispatch loop — each message gets its own spawned task so that
+        // one slow Ollama request never blocks subsequent ones.
+        while let Some(msg) = rx_bridge.recv().await {
+            // Heartbeat payloads are bookkeeping data — skip them to avoid
+            // hammering Ollama with JSON it doesn't need to process.
+            if msg.from == "heartbeat" {
+                continue;
+            }
+
+            let bus_ref = ollama_bus.clone();
+            let url = ollama_url_clone.clone();
+            let model = ollama_model_clone.clone();
+
+            tokio::spawn(async move {
+                handle_ollama_message(msg, &bus_ref, &url, &model).await;
+            });
+        }
     });
-    info!("Ollama handler spawned");
+    info!(
+        "Ollama handler spawned — model='{}' url='{}'",
+        ollama_model, ollama_url
+    );
 
     // Heartbeat loop
     let mut interval = interval(TokioDuration::from_secs(config.heartbeat.interval_seconds));
@@ -230,7 +274,9 @@ async fn main() {
                     consecutive_failures, max_consecutive_failures
                 );
                 if consecutive_failures >= max_consecutive_failures {
-                    warn!("Maximum consecutive failures reached. Consider taking corrective action.");
+                    warn!(
+                        "Maximum consecutive failures reached. Consider taking corrective action."
+                    );
                 }
             }
         }
@@ -244,7 +290,10 @@ mod tests {
     #[test]
     fn test_get_current_timestamp() {
         let timestamp = get_current_timestamp();
-        assert_ne!(timestamp, 0, "Timestamp should not be zero unless there's an error");
+        assert_ne!(
+            timestamp, 0,
+            "Timestamp should not be zero unless there's an error"
+        );
     }
 
     #[test]
@@ -267,10 +316,22 @@ mod tests {
             recent_events: vec!["Test event".to_string()],
         };
         let json_result = serde_json::to_string(&heartbeat);
-        assert!(json_result.is_ok(), "Heartbeat should serialize to JSON without error");
+        assert!(
+            json_result.is_ok(),
+            "Heartbeat should serialize to JSON without error"
+        );
         let json = json_result.unwrap();
-        assert!(json.contains("1234567890"), "JSON should contain the timestamp");
-        assert!(json.contains("Operational"), "JSON should contain the system status");
-        assert!(json.contains("Test event"), "JSON should contain the recent events");
+        assert!(
+            json.contains("1234567890"),
+            "JSON should contain the timestamp"
+        );
+        assert!(
+            json.contains("Operational"),
+            "JSON should contain the system status"
+        );
+        assert!(
+            json.contains("Test event"),
+            "JSON should contain the recent events"
+        );
     }
 }
