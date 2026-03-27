@@ -332,36 +332,77 @@ const MAIN_HTML: &str = r#"
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+
+                    // Parse data.data if it is a JSON string (bus Message payloads
+                    // are always a serialised Message struct whose .data field may
+                    // itself be a JSON string).
                     let inner_data;
                     try {
-                        inner_data = JSON.parse(data.data);
+                        inner_data = (typeof data.data === 'string')
+                            ? JSON.parse(data.data)
+                            : data.data;
                     } catch (e) {
-                        inner_data = data.data;
+                        inner_data = data.data;   // not JSON — treat as plain string
                     }
-                    let handled = false;
+
+                    // ── 1. Direct-type messages (echoed by the server, not wrapped
+                    //       in a bus Message struct, so they have data.type set). ──
                     if (data.type === 'user_msg') {
-                        appendChat(data.from || 'You', inner_data);
-                        handled = true;
+                        // inner_data may be the raw string the user typed
+                        appendChat(data.from || 'You', toStr(inner_data));
+                        return;
                     }
-                    if (!handled && inner_data && inner_data.type === 'log') {
-                        appendLog(inner_data.level || 'info', inner_data.msg || inner_data.data);
-                        handled = true;
+                    if (data.type === 'config') {
+                        document.getElementById('config-textarea').value = data.data || '';
+                        return;
                     }
-                    if (!handled && data.type === 'config') {
-                        document.getElementById('config-textarea').value = data.data;
-                        handled = true;
+
+                    // ── 2. Bus Message struct messages (have .to / .from / .data).
+                    //       inner_data.type tells us what kind of payload it is. ──
+                    if (data.to === 'web_interface') {
+                        const itype = (inner_data && typeof inner_data === 'object')
+                            ? inner_data.type
+                            : null;
+
+                        switch (itype) {
+                            case 'log':
+                                appendLog(inner_data.level || 'info',
+                                          inner_data.msg || toStr(inner_data));
+                                return;
+
+                            case 'ollama_response':
+                                appendChat(data.from || 'Bot',
+                                           inner_data.msg || toStr(inner_data));
+                                return;
+
+                            case 'error':
+                                appendChat('⚠ Error', inner_data.msg || toStr(inner_data));
+                                return;
+
+                            case 'warning':
+                                appendChat('⚠ Warning', inner_data.msg || toStr(inner_data));
+                                return;
+
+                            case 'config_status': {
+                                const statusDiv = document.getElementById('config-status');
+                                statusDiv.textContent = inner_data.msg || '';
+                                statusDiv.style.color =
+                                    inner_data.status === 'success' ? 'green' : 'red';
+                                return;
+                            }
+
+                            default:
+                                // Unknown / plain-string payload — show it as a chat
+                                // message so nothing is silently dropped.
+                                appendChat(data.from || 'Bot', toStr(inner_data));
+                                return;
+                        }
                     }
-                    if (!handled && data.type === 'config_status') {
-                        const statusDiv = document.getElementById('config-status');
-                        statusDiv.textContent = data.msg;
-                        statusDiv.style.color = data.status === 'success' ? 'green' : 'red';
-                        handled = true;
-                    }
-                    if (!handled && data.to === 'web_interface') {
-                        appendChat(data.from || 'Bot', inner_data);
-                    }
+
+                    // ── 3. Fallback: anything not matched above ──
+                    console.debug('Unhandled WS message:', data);
                 } catch (e) {
-                    console.error('Parse error:', e, event.data);
+                    console.error('WS parse error:', e, event.data);
                 }
             };
         }
@@ -375,10 +416,18 @@ const MAIN_HTML: &str = r#"
             }
         }
 
+        // Convert any value to a printable string safely.
+        function toStr(v) {
+            if (v === null || v === undefined) return '';
+            if (typeof v === 'string') return v;
+            return JSON.stringify(v);
+        }
+
         function appendChat(from, msg) {
             const div = document.createElement('div');
             div.className = 'message';
-            div.innerHTML = `<strong>${from}:</strong> ${escapeHtml(msg)}`;
+            // Always stringify before escaping so objects never break escapeHtml.
+            div.innerHTML = `<strong>${escapeHtml(toStr(from))}:</strong> ${escapeHtml(toStr(msg))}`;
             document.getElementById('chat-messages').appendChild(div);
             div.scrollIntoView();
         }

@@ -2,8 +2,8 @@
 name = "Bot"
 
 [ollama]
-url = "http://localhost:11434"
-model = "llama3.2"
+url = "http://192.168.1.149:11434"
+model = "qwen3.5:4b"
 
 [web]
 port = 8443
