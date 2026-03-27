@@ -94,17 +94,77 @@ pub async fn check_ollama_health(base_url: &str) -> bool {
     }
 }
 
+// ── model discovery ───────────────────────────────────────────────────────────
+
+/// Query `/api/tags` and return the list of locally-pulled model names.
+///
+/// Useful for startup diagnostics and for generating a helpful error message
+/// when the configured model is not found.
+pub async fn fetch_available_models(base_url: &str) -> Result<Vec<String>, String> {
+    let client = build_client();
+    let url = format!("{}/api/tags", base_url);
+
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to reach Ollama /api/tags: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Ollama /api/tags returned HTTP {}", resp.status()));
+    }
+
+    let json: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse /api/tags JSON: {}", e))?;
+
+    let names = json["models"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m["name"].as_str().map(String::from))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    Ok(names)
+}
+
+/// Return `true` if `model` is present in Ollama's local model list.
+///
+/// Matching rules (in order):
+/// 1. Exact name match:  `"qwen3.5:4b"` == `"qwen3.5:4b"`
+/// 2. Base-name match:   `"llama3.2"` matches `"llama3.2:latest"`
+///
+/// Returns `Err` only if the `/api/tags` request itself fails.
+pub async fn check_model_exists(base_url: &str, model: &str) -> Result<bool, String> {
+    let available = fetch_available_models(base_url).await?;
+    let model_base = model.split(':').next().unwrap_or(model);
+
+    let found = available
+        .iter()
+        .any(|a| a == model || a.split(':').next().unwrap_or(a) == model_base);
+
+    Ok(found)
+}
+
 // ── public entry-point ────────────────────────────────────────────────────────
 
 /// Receive a bus `Message`, call Ollama, and publish the response back on the bus.
 ///
 /// Flow:
 /// 1. Health-check Ollama — if unreachable, publish an error and return early.
-/// 2. Call `/api/chat` with up to `MAX_RETRIES` attempts and a delay between each.
-/// 3. On success:
+/// 2. Model validation — query `/api/tags`; if the configured model is not
+///    installed, publish a clear error listing what IS available and return.
+///    This prevents burning the full retry budget on a 404 that will never
+///    succeed, and gives the user an actionable fix immediately.
+/// 3. Call `/api/chat` with up to `MAX_RETRIES` attempts and a delay between each.
+///    A 404 "model not found" mid-flight also aborts the retry loop early.
+/// 4. On success:
 ///    - Publish the LLM text to `message.from`  (reply to original sender).
 ///    - Publish a structured `ollama_response` JSON to `"web_interface"`.
-/// 4. On total failure: publish a structured `error` JSON to `"web_interface"`.
+/// 5. On total failure: publish a structured `error` JSON to `"web_interface"`.
 ///
 /// # Parameters
 /// * `message`   — The incoming bus message to process.
@@ -136,7 +196,46 @@ pub async fn handle_ollama_message(
         return None;
     }
 
-    // ── 2. retry loop ─────────────────────────────────────────────────────────
+    // ── 2. model validation ───────────────────────────────────────────────────
+    // Do this BEFORE the retry loop — a missing model always returns 404 and
+    // retrying it is pointless.  We give the user a precise, actionable error.
+    match check_model_exists(base_url, model).await {
+        Ok(true) => {
+            info!("Model '{}' is available in Ollama ✅", model);
+        }
+        Ok(false) => {
+            // Fetch the list again to include it in the error message.
+            let available = fetch_available_models(base_url).await.unwrap_or_default();
+            let list = if available.is_empty() {
+                "  (no models found — run `ollama pull <model>` first)".to_string()
+            } else {
+                available
+                    .iter()
+                    .map(|m| format!("  • {}", m))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
+            let err = format!(
+                "Model '{}' is NOT installed in Ollama.\n\
+                 Fix: update config.toml  →  [ollama] model = \"<name>\"\n\
+                      or run: ollama pull {}\n\
+                 Available models:\n{}",
+                model, model, list
+            );
+            error!("{}", err);
+            publish_error(bus, &err);
+            return None;
+        }
+        Err(e) => {
+            // If we can't even check, log a warning and try anyway.
+            warn!(
+                "Could not verify model availability ({}). Proceeding — may get a 404.",
+                e
+            );
+        }
+    }
+
+    // ── 3. retry loop ─────────────────────────────────────────────────────────
     let mut last_err = String::new();
 
     for attempt in 1..=MAX_RETRIES {
@@ -179,6 +278,20 @@ pub async fn handle_ollama_message(
                     "Ollama attempt {}/{} failed: {}",
                     attempt, MAX_RETRIES, last_err
                 );
+
+                // A 404 "model not found" will never succeed — abort immediately
+                // rather than exhausting all retry attempts uselessly.
+                if last_err.contains("404")
+                    || (last_err.to_lowercase().contains("model")
+                        && last_err.to_lowercase().contains("not found"))
+                {
+                    error!(
+                        "Aborting retries — model '{}' not found in Ollama. \
+                         Check config.toml [ollama] model or run `ollama pull {}`.",
+                        model, model
+                    );
+                    break;
+                }
 
                 if attempt < MAX_RETRIES {
                     // Publish a transient warning so the UI knows we are retrying
@@ -417,6 +530,22 @@ fn truncate(s: &str, max: usize) -> &str {
 mod tests {
     use super::*;
     use crate::bus::Bus;
+
+    // ── model discovery ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_fetch_available_models_unreachable() {
+        // Should return an Err, not panic, when Ollama is not running.
+        let result = fetch_available_models("http://127.0.0.1:19999").await;
+        assert!(result.is_err(), "Expected Err when Ollama is unreachable");
+    }
+
+    #[tokio::test]
+    async fn test_check_model_exists_unreachable() {
+        // Should return Err (not panic) when Ollama is not reachable.
+        let result = check_model_exists("http://127.0.0.1:19999", "llama3.2").await;
+        assert!(result.is_err(), "Expected Err when Ollama is unreachable");
+    }
 
     // ── health check ──────────────────────────────────────────────────────────
 

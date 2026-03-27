@@ -15,7 +15,7 @@ mod io;
 mod utils;
 
 use crate::bus::{Bus, Message};
-use crate::io::ollama::{check_ollama_health, handle_ollama_message};
+use crate::io::ollama::{check_ollama_health, fetch_available_models, handle_ollama_message};
 use crate::io::web_server::start_web_server;
 use utils::log_to_file;
 
@@ -203,11 +203,61 @@ async fn main() {
     let ollama_url_clone = ollama_url.clone();
     let ollama_model_clone = ollama_model.clone();
     tokio::spawn(async move {
-        // Advisory startup health-check — we warn but do not abort here;
-        // the per-request health-check inside `handle_ollama_message` will
-        // surface the error if Ollama is still down when a real request arrives.
+        // ── Startup health + model check ──────────────────────────────────────
+        // Advisory only — we warn but do not abort.  Per-request checks inside
+        // `handle_ollama_message` will surface errors when real messages arrive.
         if check_ollama_health(&ollama_url_clone).await {
             info!("Ollama reachable at {} ✅", ollama_url_clone);
+
+            // Fetch the installed model list so the operator can see at a glance
+            // what is available — and get a clear warning if the configured model
+            // is missing (avoiding three silent 404 retries later).
+            match fetch_available_models(&ollama_url_clone).await {
+                Ok(models) if models.is_empty() => {
+                    warn!(
+                        "Ollama has NO models installed. \
+                         Run `ollama pull {}` to install the configured model.",
+                        ollama_model_clone
+                    );
+                }
+                Ok(models) => {
+                    let names = models.join(", ");
+                    info!("Ollama available models: [{}]", names);
+
+                    // Check whether the configured model is in the list.
+                    // We match on exact name OR base name (ignoring the tag),
+                    // e.g. "llama3.2" matches "llama3.2:latest".
+                    let model_base = ollama_model_clone
+                        .split(':')
+                        .next()
+                        .unwrap_or(&ollama_model_clone);
+
+                    let found = models.iter().any(|a| {
+                        a == &ollama_model_clone || a.split(':').next().unwrap_or(a) == model_base
+                    });
+
+                    if found {
+                        info!("Configured model '{}' is available ✅", ollama_model_clone);
+                    } else {
+                        let bullet_list = models
+                            .iter()
+                            .map(|m| format!("  • {}", m))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        warn!(
+                            "Configured model '{}' is NOT installed in Ollama! ⚠️\n\
+                             Fix options:\n\
+                               1. Run:  ollama pull {}\n\
+                               2. Or update config.toml → [ollama] model = \"<one of the below>\"\n\
+                             Installed models:\n{}",
+                            ollama_model_clone, ollama_model_clone, bullet_list
+                        );
+                    }
+                }
+                Err(e) => {
+                    warn!("Could not fetch Ollama model list on startup: {}", e);
+                }
+            }
         } else {
             warn!(
                 "Ollama NOT reachable at {} on startup ⚠️  — will retry per request",
