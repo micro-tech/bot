@@ -11,7 +11,12 @@ use toml;
 // Include modules
 mod bayesian;
 mod bus;
+mod cpu;
+mod hooks;
+mod hy_evo;
 mod io;
+mod memory;
+mod skills;
 mod utils;
 
 use crate::bus::{Bus, Message};

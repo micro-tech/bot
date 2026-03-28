@@ -1,41 +1,64 @@
 //! Memory Module - Short Term
-pub mod short_term {
-    use serde::{Serialize, Deserialize};
-    use std::fs;
-    use std::path::Path;
+use serde_json::Value;
+use std::collections::VecDeque;
 
-    #[derive(Serialize, Deserialize)]
-    pub struct SessionData {
-        pub context: Vec<String>,
+use crate::cpu::interfaces::MemoryInterface;
+use crate::hy_evo::node::NodeResult;
+
+/// A simple in-memory short-term memory buffer.
+/// Wraps your existing SessionData model.
+pub struct MemoryHandle {
+    pub context: VecDeque<String>,
+    pub max_len: usize,
+}
+
+impl MemoryHandle {
+    pub fn new(max_len: usize) -> Self {
+        Self {
+            context: VecDeque::new(),
+            max_len,
+        }
     }
 
-    pub fn save_session(data: &SessionData, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-        let json = serde_json::to_string(data)?;
-        fs::write(path, json)?;
-        Ok(())
-    }
-
-    pub fn load_session(path: &Path) -> Result<SessionData, Box<dyn std::error::Error>> {
-        let json = fs::read_to_string(path)?;
-        let data: SessionData = serde_json::from_str(&json)?;
-        Ok(data)
+    /// Update a belief value in memory (alias for write with belief semantics).
+    pub fn update_belief(&mut self, key: &str, value: Value) -> NodeResult {
+        self.write(key, value)
     }
 }
 
-pub mod long_term {
-    // Similar for persistent JSON
-    pub fn save_fact(fact: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // Append to memory_store.json
-        Ok(())
+impl MemoryInterface for MemoryHandle {
+    fn read(&mut self, key: &str) -> NodeResult {
+        match key {
+            "context" => {
+                let joined = self
+                    .context
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                NodeResult::Value(Value::String(joined))
+            }
+            _ => NodeResult::Error(format!("Unknown memory key: {}", key)),
+        }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::short_term::*;
-    #[test]
-    fn test_session() {
-        let data = SessionData { context: vec![\"test\".to_string()] };
-        // Test save/load
+    fn write(&mut self, key: &str, value: Value) -> NodeResult {
+        match key {
+            "context" => {
+                if let Some(s) = value.as_str() {
+                    self.context.push_back(s.to_string());
+
+                    // enforce max length
+                    while self.context.len() > self.max_len {
+                        self.context.pop_front();
+                    }
+
+                    NodeResult::None
+                } else {
+                    NodeResult::Error("Expected string for context".into())
+                }
+            }
+            _ => NodeResult::Error(format!("Unknown memory key: {}", key)),
+        }
     }
 }

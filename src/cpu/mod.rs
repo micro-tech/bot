@@ -2,17 +2,18 @@
 
 pub mod executor;
 pub mod instructions;
+pub mod interfaces;
 pub mod interrupts;
 pub mod scheduler;
 pub mod state;
 
+use crate::utils::log_to_file;
 use executor::CpuExecutor;
 use interrupts::Interrupts;
+use log::debug;
 use scheduler::Scheduler;
 use state::AgentState;
 use std::sync::Arc;
-use log::debug;
-use crate::utils::log_to_file;
 
 pub struct Cpu {
     state: AgentState,
@@ -45,7 +46,10 @@ impl Cpu {
             debug!("Received event: {:?}", event_desc);
             log_to_file(&format!("Received event: {:?}", event_desc));
 
-            debug!("Scheduling instructions for mode {:?}, event {:?}", self.state.mode, event_desc);
+            debug!(
+                "Scheduling instructions for mode {:?}, event {:?}",
+                self.state.mode, event_desc
+            );
             let instructions = Scheduler::schedule(&self.state, event);
 
             debug!("Scheduled {} instructions", instructions.len());
