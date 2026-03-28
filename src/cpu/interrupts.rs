@@ -1,8 +1,8 @@
 use crate::bus::Message;
 use crate::cpu::instructions::{CpuEvent, CpuEventKind, CpuEventSource};
-use std::time::Instant;
-use log::debug;
 use crate::utils::log_to_file;
+use log::debug;
+use std::time::Instant;
 
 pub struct Interrupts;
 
@@ -11,7 +11,7 @@ impl Interrupts {
         debug!("Polling next event from bus...");
         log_to_file("Polling next event from bus...");
         // 1. Check bus first (highest priority)
-        if let Some(msg) = bus.try_recv() {
+        if let Ok(msg) = bus.try_recv() {
             debug!("Received bus message: {:?}", msg);
             log_to_file(&format!("Received bus message: {:?}", msg));
             return Some(Self::from_bus_message(msg));

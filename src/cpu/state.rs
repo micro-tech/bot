@@ -1,7 +1,7 @@
-/ cpu/state.rs
+// cpu/state.rs
+use crate::utils::log_to_file;
 use log::debug;
 use std::time::Instant;
-use crate::utils::log_to_file;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentMode {
@@ -46,6 +46,9 @@ impl AgentState {
         debug!("Bumping step to {}", self.step_counter + 1);
         self.step_counter += 1;
         self.last_tick = Instant::now();
-        log_to_file(&format!("Agent step counter bumped to {}", self.step_counter));
+        log_to_file(&format!(
+            "Agent step counter bumped to {}",
+            self.step_counter
+        ));
     }
 }

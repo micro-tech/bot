@@ -1,10 +1,13 @@
 // cpu/executor.rs
 
 use crate::cpu::instructions::Instruction;
+use crate::cpu::interfaces::MemoryInterface;
 use crate::cpu::state::AgentState;
-use log::debug;
-use std::sync::Arc;
+use crate::hy_evo::NodeResult;
 use crate::utils::log_to_file;
+use log::debug;
+use serde_json::Value;
+use std::sync::Arc;
 
 pub struct CpuExecutor {
     // Inject handles to subsystems
@@ -29,23 +32,27 @@ impl CpuExecutor {
         }
     }
 
-    pub async fn execute(&self, state: &mut AgentState, instr: Instruction) -> anyhow::Result<()> {
+    pub async fn execute(
+        &mut self,
+        state: &mut AgentState,
+        instr: Instruction,
+    ) -> anyhow::Result<()> {
         debug!("Executing instruction: {:?}", instr);
         log_to_file(&format!("Executing instruction: {:?}", instr));
         match instr {
             Instruction::ReadMemory { key } => {
-                let value = self.memory.read(&key).await?;
+                let _value = self.memory.read(&key);
                 state.working_memory_key = Some(key);
-                // you can stash value somewhere else if needed
+                // stash value into state or working memory as needed
             }
             Instruction::WriteMemory { key, value } => {
-                self.memory.write(&key, value).await?;
+                self.memory.write(&key, value);
             }
             Instruction::RunSkill { name, args } => {
-                self.skills.run(&name, args).await?;
+                self.skills.call(&name, &args);
             }
             Instruction::ExecuteHooks { phase } => {
-                self.hooks.run_phase(&phase, state).await?;
+                self.hooks.run_phase(&phase);
             }
             Instruction::EmitBusEvent { topic, payload } => {
                 let msg = crate::bus::Message {
@@ -63,7 +70,7 @@ impl CpuExecutor {
                 // call reflection / analysis skill here
             }
             Instruction::UpdateBelief { key, value } => {
-                self.memory.update_belief(&key, value).await?;
+                self.memory.update_belief(&key, value);
             }
             Instruction::WaitForEvent => {
                 // no-op here; scheduler/loop will block on event
