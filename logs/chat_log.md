@@ -15938,3 +15938,9 @@ When the bot runs and heartbeat publishes, you'll see entries like:
 [2026-03-27 22:03:28.214] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent to Ollama"}[2026-03-27 22:03:28.214] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat published to bus"}
 
 [2026-03-27 22:03:28.216] logger -> web_interface: {"type":"log","level":"info","msg":"Heartbeat sent successfully"}
+[2026-03-29 11:16:07.866] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}
+[2026-03-29 11:16:07.869] test -> ollama: Test message
+[2026-03-29 11:18:02.543] test -> ollama: Test message
+[2026-03-29 11:18:02.545] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}
+[2026-03-29 11:19:44.658] test -> ollama: Test message
+[2026-03-29 11:19:44.660] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}
