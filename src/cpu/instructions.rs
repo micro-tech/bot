@@ -1,5 +1,6 @@
 // cpu/instructions.rs
 
+use crate::Message;
 // No executable code here, just type definitions. No logging added.
 
 #[derive(Debug, Clone)]
@@ -32,6 +33,9 @@ pub enum CpuEventKind {
         capability: String,
         payload: serde_json::Value,
     },
+    BusMessage {
+        payload: serde_json::Value,
+    },
     InternalPlanReady,
     InternalReflectionNeeded,
 }
@@ -42,6 +46,19 @@ pub struct CpuEvent {
     pub source: CpuEventSource,
     pub kind: CpuEventKind,
     pub received_at: std::time::Instant,
+}
+
+impl CpuEvent {
+    pub fn from_message(msg: &Message) -> Self {
+        CpuEvent {
+            id: msg.timestamp.to_string(),
+            source: CpuEventSource::Internal,
+            kind: CpuEventKind::BusMessage {
+                payload: serde_json::Value::String(msg.data.clone()),
+            },
+            received_at: std::time::Instant::now(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

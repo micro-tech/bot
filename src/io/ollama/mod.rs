@@ -248,9 +248,9 @@ pub async fn handle_ollama_message(
                     response.len()
                 );
 
-                // ── 3a. reply to the original sender ──────────────────────────
+                // Send Ollama response to CPU instead of directly to UI or sender
                 bus.publish(Message {
-                    to: message.from.clone(),
+                    to: "cpu".to_string(),
                     from: "ollama".to_string(),
                     data: response.clone(),
                     timestamp: now_ms(),

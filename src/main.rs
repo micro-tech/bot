@@ -2,10 +2,9 @@ use log::{LevelFilter, error, info, set_boxed_logger, set_max_level, warn};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
-use tokio::time::{Duration as TokioDuration, interval};
 use toml;
 
 // Include modules
@@ -15,13 +14,23 @@ mod cpu;
 mod hooks;
 mod hy_evo;
 mod io;
+mod llm;
 mod memory;
 mod skills;
 mod utils;
 
 use crate::bus::{Bus, Message};
+use crate::cpu::Cpu;
+use crate::cpu::executor::CpuExecutor;
+use crate::cpu::time_scheduler::TimeScheduler;
+use crate::hooks::HookRegistry;
+use crate::hy_evo::HyEvoIntegration;
+use crate::hy_evo::engine::HyEvoEngine;
 use crate::io::ollama::{check_ollama_health, fetch_available_models, handle_ollama_message};
 use crate::io::web_server::start_web_server;
+use crate::llm::ollama::OllamaLlm;
+use crate::memory::MemoryHandle;
+use crate::skills::SkillRegistry;
 use utils::log_to_file;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -97,52 +106,6 @@ fn get_current_timestamp() -> u64 {
             0
         }
     }
-}
-
-async fn send_heartbeat(bus: Arc<Bus>) -> Result<(), String> {
-    let heartbeat = Heartbeat {
-        timestamp: get_current_timestamp(),
-        system_status: "Operational".to_string(),
-        recent_events: vec!["System check completed".to_string()],
-    };
-
-    info!("Sending heartbeat: {:?}", heartbeat);
-
-    let heartbeat_json = match serde_json::to_string(&heartbeat) {
-        Ok(json) => json,
-        Err(e) => {
-            let error_msg = format!("Failed to serialize heartbeat to JSON: {}", e);
-            log_to_file(&error_msg);
-            error!("{}", error_msg);
-            return Err(error_msg);
-        }
-    };
-
-    let message = Message {
-        to: "ollama".to_string(),
-        from: "heartbeat".to_string(),
-        data: heartbeat_json,
-        timestamp: get_current_timestamp(),
-    };
-    bus.publish(message);
-    info!("Heartbeat published to bus");
-
-    // Publish live log update to web
-    let log_data = serde_json::json!({
-        "type": "log",
-        "level": "info",
-        "msg": "Heartbeat sent to Ollama"
-    })
-    .to_string();
-    let log_msg = Message {
-        to: "web_interface".to_string(),
-        from: "logger".to_string(),
-        data: log_data,
-        timestamp: get_current_timestamp(),
-    };
-    bus.publish(log_msg);
-
-    Ok(())
 }
 
 #[tokio::main]
@@ -307,35 +270,47 @@ async fn main() {
         ollama_model, ollama_url
     );
 
-    // Heartbeat loop
-    let mut interval = interval(TokioDuration::from_secs(config.heartbeat.interval_seconds));
-    let mut consecutive_failures = 0;
-    let max_consecutive_failures = 5;
+    // ─────────────────────────────────────────────────────────────
+    // Build CPU + start heartbeat scheduler
+    // ─────────────────────────────────────────────────────────────
 
-    loop {
-        interval.tick().await;
-        match send_heartbeat(bus.clone()).await {
-            Ok(()) => {
-                info!("Heartbeat sent successfully");
-                consecutive_failures = 0;
-            }
-            Err(e) => {
-                let error_msg = format!("Failed to send heartbeat: {}", e);
-                log_to_file(&error_msg);
-                error!("{}", error_msg);
-                consecutive_failures += 1;
-                warn!(
-                    "Consecutive failures: {}/{}",
-                    consecutive_failures, max_consecutive_failures
-                );
-                if consecutive_failures >= max_consecutive_failures {
-                    warn!(
-                        "Maximum consecutive failures reached. Consider taking corrective action."
-                    );
-                }
-            }
+    // Build subsystems
+    let memory = MemoryHandle::new(50);
+    let skills = SkillRegistry::new();
+    let hooks = HookRegistry::new();
+    let llm = OllamaLlm::new(&ollama_url, &ollama_model);
+
+    // Build HyEvo integration
+    let engine = HyEvoEngine::new(llm.clone());
+    let hyevo = HyEvoIntegration::new(engine);
+
+    // Build CPU
+    let executor = CpuExecutor::new(memory, skills, hooks, bus.clone());
+    let cpu = Arc::new(Mutex::new(Cpu::new(executor, bus.clone(), llm, hyevo)));
+    let cpu_bus = bus.clone();
+    let mut cpu_instance = cpu.clone();
+
+    tokio::spawn(async move {
+        let rx = cpu_bus.subscribe("cpu");
+
+        while let Ok(msg) = rx.recv() {
+            cpu_instance.lock().unwrap().handle_bus_message(msg);
         }
-    }
+    });
+
+    // Start time-based heartbeat scheduler (blocks until shutdown)
+    TimeScheduler::start(cpu.clone(), 1000).await;
+
+    let cpu_bus = bus.clone();
+    let cpu_instance = cpu.clone();
+
+    tokio::spawn(async move {
+        let rx = cpu_bus.subscribe("cpu");
+
+        while let Ok(msg) = rx.recv() {
+            cpu_instance.lock().unwrap().handle_bus_message(msg);
+        }
+    });
 }
 
 #[cfg(test)]
