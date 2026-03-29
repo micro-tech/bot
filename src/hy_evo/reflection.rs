@@ -19,11 +19,15 @@ pub struct ReflectionRecord {
 /// Your Ollama/Groq/GPT wrapper will implement this.
 #[async_trait::async_trait]
 pub trait ReflectionLlm {
+    /// Reflect on a completed workflow execution and return a summary string.
     async fn reflect(
         &self,
         workflow: &WorkflowGenome,
         metrics: &ExecutionMetrics,
     ) -> anyhow::Result<String>;
+
+    /// Suggest improvements to a workflow genome given LLM feedback.
+    async fn evolve_code(&self, feedback: &str, code: &str) -> anyhow::Result<String>;
 }
 
 /// Main reflection engine
