@@ -1,8 +1,9 @@
 // cpu/instructions.rs
 
 use crate::Message;
-// No executable code here, just type definitions. No logging added.
 
+/// Enum representing the source of a CPU event.
+/// Suggestions for usage: Log events based on source when processing to track origins.
 #[derive(Debug, Clone)]
 pub enum CpuEventSource {
     IoTerminal,
@@ -13,6 +14,8 @@ pub enum CpuEventSource {
     Internal,
 }
 
+/// Enum representing the kind of CPU event.
+/// Suggestions for usage: Add logging when matching on variants to record event details and handle potential errors in associated data.
 #[derive(Debug, Clone)]
 pub enum CpuEventKind {
     UserMessage {
@@ -40,6 +43,8 @@ pub enum CpuEventKind {
     InternalReflectionNeeded,
 }
 
+/// Struct representing a CPU event.
+/// Suggestions for usage: Log creation and processing of events, and add error checking when deserializing or handling payloads.
 #[derive(Debug, Clone)]
 pub struct CpuEvent {
     pub id: String,
@@ -49,7 +54,10 @@ pub struct CpuEvent {
 }
 
 impl CpuEvent {
+    /// Creates a CpuEvent from a Message.
+    /// Suggestions: Implement logging for incoming messages and handle potential errors, such as invalid data in Message.
     pub fn from_message(msg: &Message) -> Self {
+        log::debug!("Creating CpuEvent from message: {:?}", msg);  // Added logging
         CpuEvent {
             id: msg.timestamp.to_string(),
             source: CpuEventSource::Internal,
@@ -61,6 +69,8 @@ impl CpuEvent {
     }
 }
 
+/// Enum representing instructions for the CPU.
+/// Suggestions for usage: Log instructions when executed and add error checking for invalid states or data in variants.
 #[derive(Debug, Clone)]
 pub enum Instruction {
     ReadMemory {
