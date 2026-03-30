@@ -1,78 +1,100 @@
 # Project Layout
 
-This document outlines the directory structure and key modules of the bot project. The project is a modular Rust-based AI system for executing workflows, managing memory, skills, and evolutionary adaptations. It uses async runtime (Tokio) for concurrency and Serde for JSON handling.
+This document outlines the directory structure and key modules of the bot project. The project is a modular Rust-based AI system for executing workflows, managing memory, skills, evolutionary adaptations, and now includes web interface, LLM integration, heartbeat scheduling, and more. It uses async runtime (Tokio) for concurrency and Serde for JSON handling.
 
 ## Root Files
-- `Cargo.toml`: Dependencies and build configuration (e.g., tokio, serde, async-trait).
-- `main.rs`: Entry point; initializes Executor, Memory, Skills, Hooks, and HyEvo integration.
+- `Cargo.toml`: Dependencies and build configuration (e.g., tokio, serde, async-trait, toml, log).
+- `config.toml`: Configuration file for bot name, Ollama settings, web port, heartbeat interval.
+- `.env`: Environment variables (if any).
+- `readme.md`: Project overview and setup instructions.
 - `PROJECT_LAYOUT.md`: This file.
 - `flow_map.md`: High-level data and control flow diagrams.
-- `README.md`: Project overview and setup instructions.
+- `Grok.md`, `hartbeat.md`: Additional documentation.
+- `Doc's/`: Documentation directory.
+- `logs/`: Directory for log files.
+- `certs/`: Certificates for HTTPS.
+- `tooling/`: Tools and scripts.
 
 ## `src/` (Source Code)
-The core Rust modules. All crates are under `bot` crate.
+The core Rust modules. The crate is a binary with main.rs.
+
+- `main.rs`: Entry point; initializes bus, subsystems (memory, skills, hooks, hy_evo), spawns web server, Ollama handler, CPU, and heartbeat scheduler.
+- `utils.rs`: Utility functions, e.g., log_to_file.
+- `bayesian.rs`: Bayesian reasoning module (likely for probabilistic inference).
+
+### `a2a/` (Agent-to-Agent Communication)
+- `a2a_handler.rs`: Handler for agent-to-agent interactions.
+
+### `bin/` (Binary Utilities)
+- (Empty or placeholder)
+
+### `bus/` (Message Bus)
+- `mod.rs`: Defines `Bus` for pub-sub messaging with `mpsc` channels.
 
 ### `cpu/` (Central Processing Unit - Execution Layer)
 Handles instruction execution, scheduling, interrupts, and integration with other components.
-- `mod.rs`: Exports public items (e.g., `Executor`, `Scheduler`).
-- `executor.rs`: Main execution engine. Manages memory reads/writes, skill execution, hook phases, and belief updates. Integrates with HyEvo for dynamic workflows.
-- `scheduler.rs`: Schedules CPU events (e.g., `CpuEvent`) and serializes them for memory/queueing.
-- `interrupts.rs`: Polls interrupt bus for events (e.g., using `mpsc` channels).
-- `instructions.rs`: Defines `CpuEvent` struct/enum (with Serde derives for JSON serialization).
-- `interfaces.rs`: Traits like `MemoryInterface` (for read/write/update_belief), `SkillInterface`, `HookInterface`.
+- `mod.rs`: Exports public items (e.g., `Cpu`, `CpuExecutor`, `TimeScheduler`).
+- `cpu.rs`: Main `Cpu` struct, handles bus messages, user input, LLM requests.
+- `executor.rs`: Main execution engine. Manages memory reads/writes, skill execution, hook phases, belief updates. Integrates with HyEvo.
+- `scheduler.rs`: Schedules CPU events.
+- `time_scheduler.rs`: Time-based scheduler for heartbeat.
+- `interrupts.rs`: Polls interrupt bus for events.
+- `instructions.rs`: Defines `Instruction` struct/enum.
+- `interfaces.rs`: Traits like `MemoryInterface`, `SkillInterface`, `HookInterface`.
+- `state.rs`: `AgentState` for CPU state.
 
-### `memory/` (Belief and Context Management)
-Persistent and transient storage for beliefs, context, and state.
-- `mod.rs`: Defines `MemoryHandle` (implements `MemoryInterface`). Includes `VecDeque<String>` for context joining and belief updates.
-- Integrates with executor for async read/write operations.
+### `cron/` (Cron Jobs)
+- `cron_handler.rs`: Handler for scheduled tasks.
 
-### `skills/` (Modular Action Plugins)
-Registry for executable skills (e.g., API calls, computations).
-- `mod.rs`: Defines `SkillRegistry` and `SkillInterface` trait (with `run` method for async execution of skills with `HashMap<String, Value>` args).
-- Skills are stored as boxed async functions; executed via executor.
+### `hartbeat/` (Heartbeat)
+- (Empty or placeholder for heartbeat functionality)
 
 ### `hooks/` (Lifecycle Event Handlers)
 Registry for phases (e.g., init, post-execution) with mutable state updates.
-- `mod.rs`: Defines `HookRegistry` and `HookInterface` trait (with `run_phase` method for async execution on phases with `&mut ExecutionState`).
-- Hooks run sequentially in executor phases.
+- `mod.rs`: Defines `HookRegistry` and `HookInterface`.
 
-### `hy_evo/` (Evolutionary Workflow Engine - NEW MODULE)
-Adaptive system for evolving workflows (genomes) using LLMs for reflection and optimization. Integrates with executor to dynamically generate/execute skills, LLM calls, and code nodes. Requires `ReflectionLlm` trait for LLM providers (e.g., OpenAI-compatible).
+### `hy_evo/` (Evolutionary Workflow Engine)
+Adaptive system for evolving workflows using LLMs for reflection. Integrates with CPU.
+- `mod.rs`: Exports `HyEvoEngine`, `HyEvoIntegration`, `Workflow`.
+- `engine.rs`: Core engine for seeding, evolving, best workflow.
+- `integration.rs`: Wrapper for async evolution.
+- `workflow.rs`: `Node` enum (Skill, Llm, Code), execution methods.
+- `reflection.rs`: `ReflectionLlm` trait.
 
-**Purpose**: Enables self-improving behaviors by evolving workflows based on metrics (e.g., performance feedback). Seed initial genomes, evolve iteratively, and retrieve best workflows for executor.
+### `io/` (Input/Output Interfaces)
+Handles external I/O like web server, LLM services, terminal.
+- `mod.rs`: Declares submodules.
+- `io.rs`: General IO utilities.
+- `ollama/`: Submodule for Ollama integration.
+- `web_server/`: HTTPS web server for interface.
+- `terminal/`: Terminal I/O.
+- `llm_gemini/`: Gemini LLM integration.
 
-**Key Files**:
-- `mod.rs`: Exports public items (e.g., `HyEvoEngine`, `HyEvoIntegration`, `Workflow`).
-- `engine.rs`: Core `HyEvoEngine<L: ReflectionLlm + Send + Sync>` struct. Methods: `seed(genome)`, `evolve_once(metrics)`, `best_workflow()`. Manages population of workflows and fitness evaluation.
-- `integration.rs`: `HyEvoIntegration<L>` wrapper with `Arc<Mutex<HyEvoEngine<L>>>`. Methods: `new()`, `get_best_workflow()`, `seed()`, `evolve()`. Used in executor for locking and async evolution.
-- `workflow.rs`: Defines `Node` enum (e.g., `Skill { name, params: HashMap<String, Value> }`, `Llm { model, prompt_template, params }`, `Code { function, params }`). `WorkflowContext` for execution. Methods: `execute_skill`, `execute_llm`, `execute_code` (convert `HashMap` params to `serde_json::Value`). `execute_workflow` matches on nodes and awaits results.
-- `reflection.rs`: Defines `ReflectionLlm` trait (e.g., methods for prompting LLMs to reflect on/evolve code).
+### `llm/` (Large Language Model Interfaces)
+- `mod.rs`: Declares ollama submodule.
+- `ollama.rs`: `OllamaLlm` struct for LLM interactions.
 
-**Integration Notes**:
-- Instantiate `HyEvoIntegration` in `main.rs` or executor init with an LLM (e.g., `L = OpenAILlm`).
-- In `executor.rs`, call `integration.evolve(metrics).await` after executions to adapt workflows.
-- Workflows output `Node`s that map to skills/hooks/LLM calls in executor.
-- Dependencies: Add `rand` for genetic algorithms, `serde_json` for params serialization.
+### `mcp/` (Model Control Protocol?)
+- `mcp_handler.rs`: Handler for MCP.
 
-### Other Modules
-- `bus/`: Message passing (e.g., `mpsc` channels for interrupts/events).
-- `lib.rs`: Crate root; re-exports modules for `pub use`.
+### `memory/` (Belief and Context Management)
+- `mod.rs`: Defines `MemoryHandle` (size-limited deque for context).
+
+### `skills/` (Modular Action Plugins)
+- `mod.rs`: Defines `SkillRegistry` and `SkillInterface`.
+
+### `tools/` (Tools)
+- (Empty or placeholder)
 
 ## `tests/` (Unit and Integration Tests)
-- `executor.rs`: Tests for memory ops, skill runs, hook phases.
-- `hy_evo.rs`: NEW - Tests for workflow evolution, node execution, integration with executor.
-- `integration.rs`: End-to-end tests (e.g., seed -> evolve -> execute workflow).
-
-## `examples/`
-- `simple_bot.rs`: Basic executor with memory and skills.
-- `evolving_workflow.rs`: NEW - Example using HyEvo to evolve a chat response workflow.
+- Various test files for modules.
 
 ## Build and Run
 - `cargo build`: Compile.
 - `cargo test`: Run tests.
-- `cargo run --example evolving_workflow`: Demo HyEvo.
+- `cargo run`: Run the bot (uses config.toml).
 
 ## Future Plans
-- Add more LLM providers for `ReflectionLlm`.
-- Integrate HyEvo metrics with external feedback (e.g., user ratings).
-- Visualize workflows with Graphviz in flow_map.md.
+- Implement missing modules like hartbeat, tools.
+- Expand LLM providers.
+- Add more I/O interfaces.

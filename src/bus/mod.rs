@@ -62,13 +62,17 @@ impl Bus {
     }
 
     /// Publishes a message to the bus, logging the transaction.
-    pub fn publish(&self, message: Message) {
+    pub fn publish(&self, message: Message) -> Result<(), String> {
         self.log_transaction(&message);
+
         if let Err(e) = self.sender.send(message.clone()) {
             let error_msg = format!("Failed to publish message to bus: {}", e);
             log_to_file(&error_msg);
             error!("{}", error_msg);
+            return Err(error_msg);
         }
+
+        Ok(())
     }
 
     /// Logs bus transactions to logs/chat_log.md with timestamp, to, from, and data summary.

@@ -6,6 +6,48 @@ use crate::cpu::state::AgentState;
 
 use crate::hy_evo::integration::HyEvoIntegration;
 use crate::hy_evo::scoring::ExecutionMetrics;
+use crate::llm::LlmTarget;
+use crate::bus::Message;
+use crate::utils::now_ms;
+
+impl<L> Cpu<L>
+where
+    L: ReflectionLlm + Send + Sync + 'static,
+{
+    fn route_llm_request(&self, target: LlmTarget, prompt: String, correlation_id: u64) {
+        let to = match target {
+            LlmTarget::OllamaLan   => "ollama_lan",
+            LlmTarget::OllamaLocal => "ollama_local",
+            LlmTarget::Gemini      => "gemini",
+            LlmTarget::Grok        => "grok",
+        };
+
+        let msg = Message {
+            to: to.to_string(),
+            from: "cpu".into(),
+            data: serde_json::json!({
+                "type": "llm_request",
+                "correlation_id": correlation_id,
+                "prompt": prompt,
+            })
+            .to_string(),
+            timestamp: now_ms(),
+        };
+
+        if let Err(e) = self.bus.sender.send(msg.clone()) {
+            let error_msg = format!("CPU failed to route LLM request to {}: {}", to, e);
+            log_to_file(&error_msg);
+            error!("{}", error_msg);
+        } else {
+            debug!("CPU routed LLM request to {}", to);
+            log_to_file(&format!("CPU routed LLM request to {}", to));
+        }
+    }
+
+}
+
+
+
 
 pub struct Cpu<'a> {
     pub state: AgentState,
@@ -46,6 +88,14 @@ where
             Instruction::WaitForEvent => {
                 // idle
             }
+            Instruction::CallLlm {
+                            target,
+                            prompt,
+                            correlation_id,
+                        } => {
+                            self.route_llm_request(target, prompt, correlation_id);
+                        }
+
         }
     }
 }
@@ -117,21 +167,45 @@ impl<L> Cpu<L>
 where
     L: ReflectionLlm + Send + Sync + 'static,
 {
-    pub fn handle_bus_message(&mut self, msg: Message) {
-        // 1. Log it
-        println!("CPU received message: {:?}", msg);
+    fn handle_llm_response(&mut self, msg: Message) -> Result<(), String> {
+        let payload: serde_json::Value =
+            serde_json::from_str(&msg.data).unwrap_or_else(|e| {
+                let err = format!("Failed to parse LLM response payload: {}", e);
+                log_to_file(&err);
+                error!("{}", err);
+                serde_json::json!({})
+            });
 
-        // 2. Convert bus message → CPU event
-        let event = CpuEvent::from_message(&msg);
+        let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+        let text = payload["msg"].as_str().unwrap_or("").to_string();
 
-        // 3. Run scheduler to get instructions
-        let instructions = Scheduler::schedule(&self.state, Some(event));
+        // Build UI message
+        let ui_msg = Message {
+            to: "web_interface".to_string(),
+            from: "cpu".to_string(),
+            data: serde_json::json!({
+                "type": "llm_output",
+                "correlation_id": correlation_id,
+                "msg": text,
+            })
+            .to_string(),
+            timestamp: now_ms(),
+        };
 
-        // 4. Execute instructions
-        for instr in instructions {
-            self.execute_instruction(instr);
+        // Publish with error checking
+        if let Err(e) = self.bus.publish(ui_msg.clone()) {
+            let err = format!("CPU failed to publish LLM output to UI: {}", e);
+            log_to_file(&err);
+            error!("{}", err);
+            return Err(err);
         }
+
+        debug!("CPU forwarded LLM response to UI");
+        log_to_file("CPU forwarded LLM response to UI");
+
+        Ok(())
     }
+
 }
 
 #[cfg(test)]

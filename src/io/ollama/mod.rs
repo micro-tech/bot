@@ -12,13 +12,19 @@
 //! client is built with explicit connect + total-request timeouts so nothing
 //! ever hangs silently.
 
+use log::{debug, error};
+use log::{info, warn};
+use reqwest::Client;
+use serde_json::Value;
+
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::bus::{Bus, Message};
-use log::{error, info, warn};
-use reqwest::Client;
-use serde_json::{Value, json};
+use crate::bus::Bus;
+use crate::bus::Message;
+use crate::serde_json::json;
+use crate::utils::log_to_file;
+use crate::utils::now_ms;
 
 // ── tunables ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +39,14 @@ const MAX_RETRIES: u32 = 3;
 
 /// Milliseconds to wait between retry attempts.
 const RETRY_DELAY_MS: u64 = 2_500;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LlmTarget {
+    OllamaLan,   // your server Ollama
+    OllamaLocal, // your 3090 box
+    Gemini,
+    Grok,
+}
 
 // ── client factory ────────────────────────────────────────────────────────────
 
@@ -249,15 +263,48 @@ pub async fn handle_ollama_message(
                 );
 
                 // Send Ollama response to CPU instead of directly to UI or sender
-                bus.publish(Message {
+                let _ = bus.publish(Message {
                     to: "cpu".to_string(),
                     from: "ollama".to_string(),
                     data: response.clone(),
                     timestamp: now_ms(),
                 });
+                // Parse payload safely
+                let payload: serde_json::Value = serde_json::from_str(&message.data)
+                    .unwrap_or_else(|e| {
+                        let err = format!("Failed to parse LLM request payload: {}", e);
+                        log_to_file(&err);
+                        error!("{}", err);
+                        serde_json::json!({})
+                    });
 
+                // Extract correlation_id safely
+                let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+
+                // Build response message
+                let response_msg = Message {
+                    to: "cpu".to_string(),
+                    from: "ollama_lan".to_string(),
+                    data: serde_json::json!({
+                        "type": "llm_response",
+                        "correlation_id": correlation_id,
+                        "msg": response,
+                    })
+                    .to_string(),
+                    timestamp: now_ms(),
+                };
+
+                // Publish with full error checking + logging
+                if let Err(e) = bus.publish(response_msg.clone()) {
+                    let error_msg = format!("Ollama LAN failed to publish LLM response: {}", e);
+                    log_to_file(&error_msg);
+                    error!("{}", error_msg);
+                } else {
+                    debug!("Ollama LAN published LLM response to CPU");
+                    log_to_file("Ollama LAN published LLM response to CPU");
+                }
                 // ── 3b. forward to the web UI ─────────────────────────────────
-                bus.publish(Message {
+                let _ = bus.publish(Message {
                     to: "web_interface".to_string(),
                     from: "ollama".to_string(),
                     data: json!({
@@ -295,7 +342,7 @@ pub async fn handle_ollama_message(
 
                 if attempt < MAX_RETRIES {
                     // Publish a transient warning so the UI knows we are retrying
-                    bus.publish(Message {
+                    let _ = bus.publish(Message {
                         to: "web_interface".to_string(),
                         from: "ollama".to_string(),
                         data: json!({
@@ -494,21 +541,12 @@ fn execute_tool(name: &str, args: Value) -> String {
 
 /// Publish a structured error JSON to `"web_interface"`.
 fn publish_error(bus: &Arc<Bus>, msg: &str) {
-    bus.publish(Message {
+    let _ = bus.publish(Message {
         to: "web_interface".to_string(),
         from: "ollama".to_string(),
         data: json!({ "type": "error", "msg": msg }).to_string(),
         timestamp: now_ms(),
     });
-}
-
-/// Current Unix time in milliseconds.
-fn now_ms() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 /// Return at most `max` bytes of `s` (no panic on non-ASCII boundaries thanks

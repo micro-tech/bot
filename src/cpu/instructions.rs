@@ -1,6 +1,7 @@
 // cpu/instructions.rs
 
 use crate::Message;
+use crate::io::ollama::LlmTarget;
 
 /// Enum representing the source of a CPU event.
 /// Suggestions for usage: Log events based on source when processing to track origins.
@@ -57,7 +58,7 @@ impl CpuEvent {
     /// Creates a CpuEvent from a Message.
     /// Suggestions: Implement logging for incoming messages and handle potential errors, such as invalid data in Message.
     pub fn from_message(msg: &Message) -> Self {
-        log::debug!("Creating CpuEvent from message: {:?}", msg);  // Added logging
+        log::debug!("Creating CpuEvent from message: {:?}", msg); // Added logging
         CpuEvent {
             id: msg.timestamp.to_string(),
             source: CpuEventSource::Internal,
@@ -73,6 +74,7 @@ impl CpuEvent {
 /// Suggestions for usage: Log instructions when executed and add error checking for invalid states or data in variants.
 #[derive(Debug, Clone)]
 pub enum Instruction {
+    // Memory operations
     ReadMemory {
         key: String,
     },
@@ -80,22 +82,39 @@ pub enum Instruction {
         key: String,
         value: serde_json::Value,
     },
-    RunSkill {
-        name: String,
-        args: serde_json::Value,
-    },
-    ExecuteHooks {
-        phase: String,
-    },
+
+    // Bus operations
     EmitBusEvent {
         topic: String,
         payload: serde_json::Value,
     },
-    PlanNextSteps,
-    ReflectOnLastStep,
+
+    // Belief graph updates
     UpdateBelief {
         key: String,
         value: serde_json::Value,
     },
+
+    // Skill system
+    RunSkill {
+        name: String,
+        args: serde_json::Value,
+    },
+
+    // Hook system
+    ExecuteHooks {
+        phase: String,
+    },
+
+    // Planning / workflow
+    PlanNextSteps,
+    ReflectOnLastStep,
     WaitForEvent,
+
+    // LLM routing
+    CallLlm {
+        target: LlmTarget,
+        prompt: String,
+        correlation_id: u64,
+    },
 }

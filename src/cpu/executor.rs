@@ -3,6 +3,7 @@
 use crate::cpu::instructions::Instruction;
 use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
 use crate::cpu::state::AgentState;
+use crate::error;
 use crate::hy_evo::NodeResult;
 use crate::utils::log_to_file;
 use async_trait::async_trait;
@@ -101,7 +102,11 @@ impl CpuExecutor {
                     data: payload.to_string(),
                     timestamp: chrono::Utc::now().timestamp_millis() as u64,
                 };
-                self.bus.publish(msg);
+                if let Err(e) = self.bus.publish(msg.clone()) {
+                    let error_msg = format!("CPU failed to publish message: {}", e);
+                    log_to_file(&error_msg);
+                    error!("{}", error_msg);
+                }
                 debug!("Successfully emitted bus event to topic: {}", topic);
                 NodeResult::None
             }
@@ -131,6 +136,14 @@ impl CpuExecutor {
             }
             Instruction::WaitForEvent => {
                 debug!("Waiting for event");
+                NodeResult::None
+            }
+            Instruction::CallLlm { .. } => {
+                debug!("Executor received CallLlm — delegating to CPU");
+                log_to_file("Executor received CallLlm — delegating to CPU");
+
+                // Executor does nothing for LLM calls.
+                // CPU handles this in Cpu::execute_instruction.
                 NodeResult::None
             }
         }
