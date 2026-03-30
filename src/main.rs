@@ -139,7 +139,7 @@ async fn main() {
                 .to_string(),
                 timestamp: get_current_timestamp(),
             };
-            bus_clone.publish(msg);
+            let _ = bus_clone.publish(msg);
         }
     });
 

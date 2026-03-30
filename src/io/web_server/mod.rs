@@ -176,15 +176,23 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         "chat" => {
                             let chat_msg = json_val["msg"].as_str().unwrap_or("").to_string();
 
-                            // Send to bus → CPU or Ollama
+                            // Build unified message envelope for CPU
                             let bus_msg = Message {
-                                to: "ollama".to_string(),
-                                from: "web_user".to_string(),
-                                data: chat_msg.clone(),
+                                to: "cpu".to_string(),
+                                from: "web_interface".to_string(),
+                                data: json!({
+                                    "type": "user_input",
+                                    "content_type": "text",
+                                    "content": chat_msg,
+                                    "correlation_id": get_timestamp(),
+                                    "metadata": {}
+                                })
+                                .to_string(),
                                 timestamp: get_timestamp(),
                             };
-                            state.bus.publish(bus_msg);
 
+                            // Send to CPU
+                            let _ = state.bus.publish(bus_msg);
                             // Echo user message back to UI
                             let echo_msg = json!({
                                 "type": "user_msg",
@@ -214,7 +222,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                                         data: success_msg,
                                         timestamp: get_timestamp(),
                                     };
-                                    state.bus.publish(bus_msg);
+                                    let _ = state.bus.publish(bus_msg);
                                 } else {
                                     let error_msg = json!({
                                         "type": "config_status",
@@ -229,7 +237,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                                         data: error_msg,
                                         timestamp: get_timestamp(),
                                     };
-                                    state.bus.publish(bus_msg);
+                                    let _ = state.bus.publish(bus_msg);
                                 }
                             } else {
                                 let error_msg = json!({
@@ -245,7 +253,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                                     data: error_msg,
                                     timestamp: get_timestamp(),
                                 };
-                                state.bus.publish(bus_msg);
+                                let _ = state.bus.publish(bus_msg);
                             }
                         }
 

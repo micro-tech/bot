@@ -1,34 +1,108 @@
 # Flow Map
 
-This document describes the key data and control flows in the bot project. It includes text descriptions and Mermaid diagrams for visualization. Flows cover execution, memory, skills/hooks, and the new HyEvo evolutionary layer.
+This document describes the key data and control flows in the bot project. It includes text descriptions and Mermaid diagrams for visualization. Flows cover execution, memory, skills/hooks, HyEvo evolutionary layer, web interface, heartbeat, LLM integration, and bus messaging.
 
 ## Overall System Flow
-1. **Initialization**: `main.rs` creates `Executor`, `MemoryHandle`, `SkillRegistry`, `HookRegistry`, and `HyEvoIntegration`.
-2. **Event Loop**: Executor polls interrupts/bus for `CpuEvent`s, runs phases (hooks), executes skills/LLMs, updates beliefs in memory.
-3. **Feedback Loop**: Metrics from executions feed into HyEvo for workflow evolution.
-4. **Output**: Processed events produce actions (e.g., API calls via skills) or evolved behaviors.
+1. **Initialization**: `main.rs` creates `Bus`, subsystems (Memory, Skills, Hooks, HyEvo), spawns web server, Ollama handler, CPU, and TimeScheduler for heartbeat.
+2. **Event Loop**: Bus handles pub-sub messaging between components (cpu, ollama, web_interface, heartbeat, logger).
+3. **CPU Processing**: CPU receives bus messages, handles user input by forwarding to Ollama, processes responses.
+4. **Heartbeat**: TimeScheduler sends periodic heartbeat messages via bus.
+5. **Web Interface**: Web server receives user input, publishes to bus as user_input messages.
+6. **Ollama Integration**: Handles LLM requests asynchronously, publishes responses back to bus.
+7. **HyEvo Feedback Loop**: Collects metrics from executions, evolves workflows for adaptation.
+8. **Output**: Responses sent to web interface or logged.
 
-## Core Execution Flow (CPU Executor)
+## Bus Messaging Flow
 Text Flow:
-- Receive `CpuEvent` via bus/interrupts.
-- Run init phase (hooks).
-- Read belief from memory (key-based).
-- Execute skill (lookup in registry, pass args as HashMap -> Value).
-- Write/update belief in memory.
-- Run post-phase (hooks).
-- Serialize event for logging/queue.
+- Components subscribe to topics (e.g., "cpu", "ollama").
+- Messages are JSON with type, data, timestamp.
+- CPU publishes LLM requests to "ollama".
+- Ollama publishes responses to "cpu".
+- Web server publishes user_input to "cpu".
+- Logger receives logs from all.
 
 Mermaid Diagram:
 ```mermaid
 graph TD
-    A[Bus/Interrupts: CpuEvent] --> B[Executor: Poll try_recv]
-    B --> C[Hooks: run_phase('init', state)]
-    C --> D[Memory: read(key)]
-    D --> E[Skills: run(name, args)]
-    E --> F[Memory: write/update_belief(key, value)]
-    F --> G[Hooks: run_phase('post', state)]
-    G --> H[Output: Action or Log]
+    A[Web Server] -->|user_input| B[Bus]
+    B --> C[CPU]
+    C -->|llm_request| B
+    B --> D[Ollama Handler]
+    D -->|llm_response| B
+    B --> C
+    E[TimeScheduler] -->|heartbeat| B
+    B --> F[Logger]
+    C -->|log| B
+    style B fill:#f9f,stroke:#333
+```
+
+## Core CPU Execution Flow
+Text Flow:
+- Receive bus message (e.g., user_input).
+- Parse JSON payload.
+- For user_input: build LLM request, publish to bus.
+- For llm_response: process and update state.
+- Bump tick in AgentState.
+
+Mermaid Diagram:
+```mermaid
+graph TD
+    A[Bus Message] --> B[CPU: handle_bus_message]
+    B --> C{Type?}
+    C -->|user_input| D[Build llm_request]
+    D --> E[Bus.publish to ollama]
+    C -->|llm_response| F[Process response]
+    F --> G[Update state]
     style A fill:#f9f,stroke:#333
+```
+
+## Web Server Flow
+Text Flow:
+- Start HTTPS server on configured port.
+- Handle incoming requests (e.g., chat input).
+- Publish user_input message to bus.
+- Receive logs from bus and forward to clients.
+
+Mermaid Diagram:
+```mermaid
+graph TD
+    A[HTTPS Request] --> B[Web Server]
+    B --> C[Publish user_input to Bus]
+    D[Bus: logs] --> B
+    B --> E[Send to Client]
+    style B fill:#ff9,stroke:#f66
+```
+
+## Ollama LLM Flow
+Text Flow:
+- Subscribe to "ollama" topic.
+- Receive llm_request messages.
+- Call Ollama API asynchronously (with health checks, retries).
+- Publish llm_response back to bus.
+
+Mermaid Diagram:
+```mermaid
+graph TD
+    A[Bus: llm_request] --> B[Ollama Handler]
+    B --> C[Health Check]
+    C --> D[API Call]
+    D --> E[Publish llm_response to Bus]
+    style B fill:#9ff,stroke:#66f
+```
+
+## Heartbeat Flow
+Text Flow:
+- TimeScheduler runs in a loop, sleeping for interval.
+- Publishes heartbeat message to bus with timestamp, status, recent events.
+- CPU or other components can react to heartbeats.
+
+Mermaid Diagram:
+```mermaid
+graph TD
+    A[TimeScheduler] --> B[Sleep interval]
+    B --> C[Create Heartbeat JSON]
+    C --> D[Bus.publish heartbeat]
+    style A fill:#f99,stroke:#933
 ```
 
 ## Memory Management Flow
@@ -38,24 +112,23 @@ graph TD
 
 ## Skills and Hooks Flow
 - **Skills**: Registry lookup by name; execute async Fn with params (HashMap serialized to Value).
-- **Hooks**: Phase-based (e.g., "init"); sequential execution on mutable state.
+- **Hooks**: Phase-based (e.g., init); sequential execution on mutable state.
 
-## HyEvo Evolutionary Flow (NEW SECTION)
-**Purpose**: Evolves workflows (sequences of Nodes: Skill/LLM/Code) using genetic algorithms and LLM reflection. Integrates with executor for dynamic adaptation.
+## HyEvo Evolutionary Flow
+**Purpose**: Evolves workflows using LLMs for reflection. Integrates with CPU for dynamic adaptation.
 
 Text Flow:
 1. **Seeding**: Initialize `HyEvoEngine` with initial genome (workflow JSON/tree).
-2. **Execution**: Executor retrieves `best_workflow()` as Nodes; executes via `execute_workflow` (converts params HashMap to Value).
-3. **Evaluation**: Collect metrics (e.g., success rate, latency) from executor runs.
-4. **Evolution**: Call `evolve_once(metrics)`; uses `ReflectionLlm` to mutate/reflect on workflows (e.g., prompt: "Improve this skill sequence for better performance").
-5. **Integration Loop**: Lock `HyEvoIntegration` mutex; update executor's workflow on each cycle.
-6. **Output**: Best evolved workflow cloned and injected into executor for next events.
+2. **Execution**: CPU retrieves `best_workflow()` as Nodes; executes via `execute_workflow`.
+3. **Evaluation**: Collect metrics (e.g., success rate, latency) from executions.
+4. **Evolution**: Call `evolve_once(metrics)`; uses `ReflectionLlm` to mutate/reflect on workflows.
+5. **Integration Loop**: Lock `HyEvoIntegration` mutex; update on each cycle.
 
 Mermaid Diagram (HyEvo Integration):
 ```mermaid
 graph LR
     A[main.rs: Init HyEvoIntegration<L: ReflectionLlm>] --> B[Seed: engine.seed(initial_genome)]
-    B --> C[Executor: Get best_workflow() via integration.lock()]
+    B --> C[CPU: Get best_workflow() via integration.lock()]
     C --> D[Execute Workflow: Match Node -> execute_skill/llm/code]
     D --> E[Skills/Hooks/Memory: Run Node Actions]
     E --> F[Collect Metrics: e.g., success, time]
@@ -63,24 +136,21 @@ graph LR
     G --> H[LLM Reflection: Prompt for mutations/improvements]
     H --> I[New Population: Mutate/Select Workflows]
     I --> C
-    style G fill:#ff9,stroke:#f66  %% Highlight evolution step
+    style G fill:#ff9,stroke:#f66
 ```
 
-**HyEvo Node Execution Sub-Flow** (Within Workflow):
+**HyEvo Node Execution Sub-Flow**:
 - Skill Node: `params: HashMap -> to_value()` -> `execute_skill(name, &Value)`.
 - LLM Node: Similar, with model/prompt.
-- Code Node: Executes custom Rust/JS-like code with params.
+- Code Node: Executes custom code with params.
 - Error Handling: `NodeResult` propagates up.
 
-## Interrupt and Event Flow
-- `try_recv()` on bus returns `Result<Message, TryRecvError>`; loop with `while let Ok(msg)`.
-- Events trigger executor methods (e.g., handle `CpuEvent::Interrupt`).
-
 ## Error Handling Flow
-- All async ops use `?` propagation via `NodeResult`.
-- Serde serialization for events/params (e.g., `json!({ "event": ev })` requires `#[derive(Serialize)]` on `CpuEvent`).
+- All async ops use `?` propagation.
+- Serde serialization for events/params.
+- Logs sent to bus for forwarding.
 
 ## Future Flows
-- **Metrics to External**: Feed HyEvo metrics to a dashboard (e.g., Prometheus).
-- **Multi-Agent**: Parallel executors sharing HyEvo engine via Arc<Mutex>.
-- **Visualization**: Generate DOT files from workflows for Graphviz rendering.
+- **Multi-Agent**: Bus for inter-agent communication.
+- **Metrics to External**: Feed to dashboard.
+- **Visualization**: Generate DOT files from workflows.

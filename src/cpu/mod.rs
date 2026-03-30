@@ -4,6 +4,9 @@ use crate::bus::Message;
 use crate::cpu::state::AgentState;
 use crate::hy_evo::integration::HyEvoIntegration;
 use crate::hy_evo::reflection::ReflectionLlm;
+use crate::serde_json::Value;
+use crate::serde_json::json;
+use crate::utils::now_ms;
 use std::sync::Arc;
 
 pub mod executor;
@@ -46,7 +49,45 @@ impl<L: ReflectionLlm + Send + Sync> Cpu<L> {
     /// Handle an incoming bus message.
     pub fn handle_bus_message(&mut self, msg: Message) {
         self.state.bump_tick();
-        // TODO: Process the message, perhaps by scheduling instructions or updating state
-        println!("Received bus message: {:?}", msg);
+
+        // Parse JSON payload
+        let payload: Value = match serde_json::from_str(&msg.data) {
+            Ok(v) => v,
+            Err(_) => {
+                // Not JSON → ignore or log
+                println!("CPU received non-JSON message: {:?}", msg.data);
+                return;
+            }
+        };
+
+        // Extract message type FIRST
+        let msg_type = payload["type"].as_str().unwrap_or("");
+
+        // ---- USER INPUT HANDLING ----
+        if msg_type == "user_input" {
+            let content_type = payload["content_type"].as_str().unwrap_or("");
+            let content = payload["content"].as_str().unwrap_or("");
+
+            if content_type == "text" {
+                // Build LLM request
+                let llm_msg = Message {
+                    to: "ollama".to_string(),
+                    from: "cpu".to_string(),
+                    data: json!({
+                        "type": "llm_request",
+                        "prompt": content,
+                        "correlation_id": payload["correlation_id"]
+                    })
+                    .to_string(),
+                    timestamp: now_ms(),
+                };
+
+                self.bus.publish(llm_msg);
+                return;
+            }
+        }
+
+        // ---- FALLBACK DEBUG ----
+        println!("CPU received bus message: {:?}", msg);
     }
 }
