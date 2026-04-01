@@ -1,26 +1,41 @@
-//! Memory Module - Short Term
+// src/memory/mod.rs
+pub mod episodic;
+pub mod manager;
+pub mod vector;
+
+pub use manager::MemoryManager; // ← EXPORT IT
+
 use serde_json::Value;
 use std::collections::VecDeque;
 
 use crate::cpu::interfaces::MemoryInterface;
 use crate::hy_evo::node::NodeResult;
+use crate::memory::episodic::EpisodicMemory;
+use crate::memory::vector::VectorMemory;
 
-/// A simple in-memory short-term memory buffer.
-/// Wraps your existing SessionData model.
+/// Short-term working memory
 pub struct MemoryHandle {
     pub context: VecDeque<String>,
     pub max_len: usize,
 }
 
 impl MemoryHandle {
-    pub fn new(max_len: usize) -> Self {
-        Self {
-            context: VecDeque::new(),
-            max_len,
+    /// Drain the oldest N messages and return them as a single string.
+    pub fn drain_oldest_chunk(&mut self, n: usize) -> Option<String> {
+        if self.context.is_empty() {
+            return None;
         }
+
+        let count = n.min(self.context.len());
+        let chunk: Vec<String> = self.context.drain(0..count).collect();
+        Some(chunk.join(" "))
     }
 
-    /// Update a belief value in memory (alias for write with belief semantics).
+    /// Insert a summary back into memory.
+    pub fn push_summary(&mut self, summary: String) {
+        self.context.push_front(format!("Summary: {}", summary));
+    }
+
     pub fn update_belief(&mut self, key: &str, value: Value) -> NodeResult {
         self.write(key, value)
     }
@@ -48,7 +63,6 @@ impl MemoryInterface for MemoryHandle {
                 if let Some(s) = value.as_str() {
                     self.context.push_back(s.to_string());
 
-                    // enforce max length
                     while self.context.len() > self.max_len {
                         self.context.pop_front();
                     }
