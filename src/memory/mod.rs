@@ -20,6 +20,14 @@ pub struct MemoryHandle {
 }
 
 impl MemoryHandle {
+    /// Create a new working-memory handle with the given capacity.
+    pub fn new(max_len: usize) -> Self {
+        Self {
+            context: VecDeque::new(),
+            max_len,
+        }
+    }
+
     /// Drain the oldest N messages and return them as a single string.
     pub fn drain_oldest_chunk(&mut self, n: usize) -> Option<String> {
         if self.context.is_empty() {
@@ -74,5 +82,84 @@ impl MemoryInterface for MemoryHandle {
             }
             _ => NodeResult::Error(format!("Unknown memory key: {}", key)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let handle = MemoryHandle::new(10);
+        assert_eq!(handle.max_len, 10);
+        assert!(handle.context.is_empty());
+    }
+
+    #[test]
+    fn test_write_and_read_context() {
+        let mut handle = MemoryHandle::new(5);
+        let result = handle.write("context", Value::String("hello".to_string()));
+        assert!(matches!(result, NodeResult::None));
+        assert_eq!(handle.context.len(), 1);
+        assert_eq!(handle.context[0], "hello");
+
+        let read_result = handle.read("context");
+        if let NodeResult::Value(Value::String(s)) = read_result {
+            assert_eq!(s, "hello");
+        } else {
+            panic!("Expected string value");
+        }
+    }
+
+    #[test]
+    fn test_write_max_len() {
+        let mut handle = MemoryHandle::new(2);
+        handle.write("context", Value::String("msg1".to_string()));
+        handle.write("context", Value::String("msg2".to_string()));
+        handle.write("context", Value::String("msg3".to_string()));
+        assert_eq!(handle.context.len(), 2);
+        assert_eq!(handle.context[0], "msg2");
+        assert_eq!(handle.context[1], "msg3");
+    }
+
+    #[test]
+    fn test_drain_oldest_chunk() {
+        let mut handle = MemoryHandle::new(5);
+        handle.write("context", Value::String("msg1".to_string()));
+        handle.write("context", Value::String("msg2".to_string()));
+        let chunk = handle.drain_oldest_chunk(1).unwrap();
+        assert_eq!(chunk, "msg1");
+        assert_eq!(handle.context.len(), 1);
+        assert_eq!(handle.context[0], "msg2");
+    }
+
+    #[test]
+    fn test_push_summary() {
+        let mut handle = MemoryHandle::new(5);
+        handle.push_summary("test summary".to_string());
+        assert_eq!(handle.context.len(), 1);
+        assert_eq!(handle.context[0], "Summary: test summary");
+    }
+
+    #[test]
+    fn test_read_unknown_key() {
+        let mut handle = MemoryHandle::new(5);
+        let result = handle.read("unknown");
+        assert!(matches!(result, NodeResult::Error(_)));
+    }
+
+    #[test]
+    fn test_write_unknown_key() {
+        let mut handle = MemoryHandle::new(5);
+        let result = handle.write("unknown", Value::String("test".to_string()));
+        assert!(matches!(result, NodeResult::Error(_)));
+    }
+
+    #[test]
+    fn test_write_non_string_context() {
+        let mut handle = MemoryHandle::new(5);
+        let result = handle.write("context", Value::Number(serde_json::Number::from(42)));
+        assert!(matches!(result, NodeResult::Error(_)));
     }
 }
