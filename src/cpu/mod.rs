@@ -7,6 +7,8 @@ use crate::hy_evo::reflection::ReflectionLlm;
 use crate::serde_json::Value;
 use crate::serde_json::json;
 use crate::utils::now_ms;
+use crate::memory::MemoryManager;
+
 use std::sync::Arc;
 
 pub mod executor;
@@ -27,6 +29,7 @@ pub struct Cpu<L: ReflectionLlm + Send + Sync> {
     pub bus: Arc<Bus>,
     pub llm: L,
     pub hyevo: Option<HyEvoIntegration<L>>,
+    pub memory: MemoryManager,
 }
 
 impl<L: ReflectionLlm + Send + Sync> Cpu<L> {
@@ -38,6 +41,7 @@ impl<L: ReflectionLlm + Send + Sync> Cpu<L> {
             bus,
             llm,
             hyevo: Some(hyevo),
+            memory: MemoryManager::new(1000, 1000),
         }
     }
 
@@ -69,20 +73,30 @@ impl<L: ReflectionLlm + Send + Sync> Cpu<L> {
             let content = payload["content"].as_str().unwrap_or("");
 
             if content_type == "text" {
+                self.memory.record_user_message(content);
+                let facts = self.memory.search_facts(&content, 5);
+
+                // inject facts into prompt later
+
                 // Build LLM request
+                let prompt = if facts.is_empty() {
+                    content.to_string()
+                } else {
+                    format!("{}\n\nRelevant facts:\n{}", content, facts.join("\n"))
+                };
                 let llm_msg = Message {
                     to: "ollama".to_string(),
                     from: "cpu".to_string(),
                     data: json!({
                         "type": "llm_request",
-                        "prompt": content,
+                        "prompt": prompt,
                         "correlation_id": payload["correlation_id"]
                     })
                     .to_string(),
                     timestamp: now_ms(),
                 };
 
-                self.bus.publish(llm_msg);
+                let _ = self.bus.publish(llm_msg);
                 return;
             }
         }
