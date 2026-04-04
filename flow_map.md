@@ -3,7 +3,7 @@
 This document describes the key data and control flows in the bot project. It includes text descriptions and Mermaid diagrams for visualization. Flows cover execution, memory, skills/hooks, HyEvo evolutionary layer, web interface, heartbeat, LLM integration, and bus messaging.
 
 ## Overall System Flow
-1. **Initialization**: `main.rs` creates `Bus`, subsystems (Memory, Skills, Hooks, HyEvo), spawns web server, Ollama handler, CPU, and TimeScheduler for heartbeat.
+1. **Initialization**: `main.rs` creates `Bus`, subsystems (MemoryManager with working/episodic/vector memories, Skills, Hooks, HyEvo), spawns web server, Ollama handler, CPU, and TimeScheduler for heartbeat.
 2. **Event Loop**: Bus handles pub-sub messaging between components (cpu, ollama, web_interface, heartbeat, logger).
 3. **CPU Processing**: CPU receives bus messages, handles user input by forwarding to Ollama, processes responses.
 4. **Heartbeat**: TimeScheduler sends periodic heartbeat messages via bus.
@@ -106,8 +106,12 @@ graph TD
 ```
 
 ## Memory Management Flow
-- Async reads/writes via `MemoryInterface`.
+Text Flow:
+- MemoryManager combines Working (short-term VecDeque), Episodic (event records), Vector (fact search).
+- Async reads/writes via `MemoryInterface` on working memory.
 - Context joining: `VecDeque<String>.iter().join(" ")` for concatenated beliefs.
+- Episodic records user messages and events.
+- Vector searches facts with similarity.
 - Beliefs updated post-execution (e.g., after skill run).
 
 ## Skills and Hooks Flow
@@ -121,8 +125,9 @@ Text Flow:
 1. **Seeding**: Initialize `HyEvoEngine` with initial genome (workflow JSON/tree).
 2. **Execution**: CPU retrieves `best_workflow()` as Nodes; executes via `execute_workflow`.
 3. **Evaluation**: Collect metrics (e.g., success rate, latency) from executions.
-4. **Evolution**: Call `evolve_once(metrics)`; uses `ReflectionLlm` to mutate/reflect on workflows.
+4. **Evolution**: Call `evolve_once(metrics)`; uses `ReflectionLlm` to generate feedback and suggestions.
 5. **Integration Loop**: Lock `HyEvoIntegration` mutex; update on each cycle.
+6. **Modules**: Includes genome representation, mutation, crossover, scoring for future enhancements.
 
 Mermaid Diagram (HyEvo Integration):
 ```mermaid
@@ -133,8 +138,8 @@ graph LR
     D --> E[Skills/Hooks/Memory: Run Node Actions]
     E --> F[Collect Metrics: e.g., success, time]
     F --> G[Evolve: engine.evolve_once(metrics).await]
-    G --> H[LLM Reflection: Prompt for mutations/improvements]
-    H --> I[New Population: Mutate/Select Workflows]
+    G --> H[LLM Reflection: Prompt for feedback/suggestions]
+    H --> I[Record Reflection: Update population]
     I --> C
     style G fill:#ff9,stroke:#f66
 ```
@@ -151,6 +156,9 @@ graph LR
 - Logs sent to bus for forwarding.
 
 ## Future Flows
-- **Multi-Agent**: Bus for inter-agent communication.
+- **Multi-Agent**: Bus for inter-agent communication via A2A.
+- **Cron Jobs**: Scheduled tasks via cron handler.
+- **MCP**: Model control protocol integration.
 - **Metrics to External**: Feed to dashboard.
 - **Visualization**: Generate DOT files from workflows.
+- **Enhanced HyEvo**: Implement mutation, crossover, scoring for full evolution.

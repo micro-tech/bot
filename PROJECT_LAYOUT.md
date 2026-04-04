@@ -1,6 +1,6 @@
 # Project Layout
 
-This document outlines the directory structure and key modules of the bot project. The project is a modular Rust-based AI system for executing workflows, managing memory, skills, evolutionary adaptations, and now includes web interface, LLM integration, heartbeat scheduling, and more. It uses async runtime (Tokio) for concurrency and Serde for JSON handling.
+This document outlines the directory structure and key modules of the bot project. The project is a modular Rust-based AI system for executing workflows, managing memory, skills, evolutionary adaptations, and now includes web interface, LLM integration, heartbeat scheduling, agent-to-agent communication, cron jobs, MCP protocol, and more. It uses async runtime (Tokio) for concurrency and Serde for JSON handling.
 
 ## Root Files
 - `Cargo.toml`: Dependencies and build configuration (e.g., tokio, serde, async-trait, toml, log).
@@ -18,7 +18,7 @@ This document outlines the directory structure and key modules of the bot projec
 ## `src/` (Source Code)
 The core Rust modules. The crate is a binary with main.rs.
 
-- `main.rs`: Entry point; initializes bus, subsystems (memory, skills, hooks, hy_evo), spawns web server, Ollama handler, CPU, and heartbeat scheduler.
+- `main.rs`: Entry point; initializes bus, subsystems (memory manager with working/episodic/vector, skills, hooks, hy_evo), spawns web server, Ollama handler, CPU, time scheduler for heartbeat, and other handlers like a2a, cron, mcp.
 - `utils.rs`: Utility functions, e.g., log_to_file.
 - `bayesian.rs`: Bayesian reasoning module (likely for probabilistic inference).
 
@@ -26,10 +26,11 @@ The core Rust modules. The crate is a binary with main.rs.
 - `a2a_handler.rs`: Handler for agent-to-agent interactions.
 
 ### `bin/` (Binary Utilities)
-- (Empty or placeholder)
+- `test_ollama.rs`: Test binary for Ollama.
 
 ### `bus/` (Message Bus)
 - `mod.rs`: Defines `Bus` for pub-sub messaging with `mpsc` channels.
+- `handler.rs`: Additional bus handling logic.
 
 ### `cpu/` (Central Processing Unit - Execution Layer)
 Handles instruction execution, scheduling, interrupts, and integration with other components.
@@ -52,14 +53,20 @@ Handles instruction execution, scheduling, interrupts, and integration with othe
 ### `hooks/` (Lifecycle Event Handlers)
 Registry for phases (e.g., init, post-execution) with mutable state updates.
 - `mod.rs`: Defines `HookRegistry` and `HookInterface`.
+- `bayesian.rs`: Bayesian hooks.
 
 ### `hy_evo/` (Evolutionary Workflow Engine)
 Adaptive system for evolving workflows using LLMs for reflection. Integrates with CPU.
-- `mod.rs`: Exports `HyEvoEngine`, `HyEvoIntegration`, `Workflow`.
+- `mod.rs`: Exports `HyEvoEngine`, `HyEvoIntegration`, `Workflow`, and submodules like crossover, mutation, scoring.
 - `engine.rs`: Core engine for seeding, evolving, best workflow.
 - `integration.rs`: Wrapper for async evolution.
 - `workflow.rs`: `Node` enum (Skill, Llm, Code), execution methods.
 - `reflection.rs`: `ReflectionLlm` trait.
+- `genome.rs`: Genome representation.
+- `node.rs`: Node definitions.
+- `mutation.rs`: Mutation engine.
+- `crossover.rs`: Crossover engine.
+- `scoring.rs`: Scoring system.
 
 ### `io/` (Input/Output Interfaces)
 Handles external I/O like web server, LLM services, terminal.
@@ -69,6 +76,8 @@ Handles external I/O like web server, LLM services, terminal.
 - `web_server/`: HTTPS web server for interface.
 - `terminal/`: Terminal I/O.
 - `llm_gemini/`: Gemini LLM integration.
+- `tests/`: IO tests.
+- `logs/`: Log handling.
 
 ### `llm/` (Large Language Model Interfaces)
 - `mod.rs`: Declares ollama submodule.
@@ -78,10 +87,14 @@ Handles external I/O like web server, LLM services, terminal.
 - `mcp_handler.rs`: Handler for MCP.
 
 ### `memory/` (Belief and Context Management)
-- `mod.rs`: Defines `MemoryHandle` (size-limited deque for context).
+- `mod.rs`: Defines `MemoryHandle` (short-term), `MemoryManager`.
+- `manager.rs`: `MemoryManager` combining working, episodic, vector memories.
+- `episodic.rs`: Episodic memory.
+- `vector.rs`: Vector memory.
 
 ### `skills/` (Modular Action Plugins)
 - `mod.rs`: Defines `SkillRegistry` and `SkillInterface`.
+- `bayesian.rs`: Bayesian skills.
 
 ### `tools/` (Tools)
 - (Empty or placeholder)
@@ -98,3 +111,4 @@ Handles external I/O like web server, LLM services, terminal.
 - Implement missing modules like hartbeat, tools.
 - Expand LLM providers.
 - Add more I/O interfaces.
+- Enhance HyEvo with more evolution strategies.
