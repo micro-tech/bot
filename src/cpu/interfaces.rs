@@ -36,6 +36,8 @@ pub trait SkillInterface: Sync + Send {
 pub trait LlmInterface: Sync + Send {
     /// Call an LLM model asynchronously. Implementations should log the model, prompt, and any errors.
     async fn call(&self, model: &str, prompt: &str, params: &Value) -> NodeResult;
+    /// Summarize text asynchronously. Implementations should log the input and any errors.
+    async fn summarize(&self, text: &str) -> NodeResult;
 }
 
 /// Bus subsystem interface

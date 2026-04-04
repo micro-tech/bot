@@ -109,4 +109,12 @@ impl LlmInterface for OllamaLlm {
             Err(e) => crate::hy_evo::node::NodeResult::Error(format!("LLM call failed: {}", e)),
         }
     }
+
+    async fn summarize(&self, text: &str) -> crate::hy_evo::node::NodeResult {
+        let prompt = format!("Summarize the following text concisely:\n\n{}", text);
+        match self.call_ollama(&prompt).await {
+            Ok(summary) => crate::hy_evo::node::NodeResult::Text(summary),
+            Err(e) => crate::hy_evo::node::NodeResult::Error(format!("Summarize failed: {}", e)),
+        }
+    }
 }

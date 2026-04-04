@@ -16,9 +16,10 @@ use crate::cpu::state::AgentState;
 
 use crate::hy_evo::integration::{CpuExecutor as HyEvoCpuExecutor, HyEvoIntegration};
 use crate::hy_evo::reflection::ReflectionLlm;
-use crate::hy_evo::workflow::{Workflow, WorkflowContext};
 use crate::hy_evo::scoring::ExecutionMetrics;
+use crate::hy_evo::workflow::{Workflow, WorkflowContext};
 
+use crate::config::manifest::SystemManifest;
 use crate::io::ollama::LlmTarget;
 use crate::memory::MemoryManager;
 use crate::utils::{log_to_file, now_ms};
@@ -37,6 +38,7 @@ where
     pub llm: L,
     pub bus: Arc<Bus>,
     pub hyevo: HyEvoIntegration<L>,
+    pub manifest: SystemManifest,
 }
 
 impl<L> Cpu<L>
@@ -49,14 +51,51 @@ where
         llm: L,
         bus: Arc<Bus>,
         hyevo: HyEvoIntegration<L>,
-    ) -> Self {
-        Self {
+        manifest_path: &str,
+    ) -> std::io::Result<Self> {
+        // Load the system manifest from disk
+        let manifest = SystemManifest::load(manifest_path)?;
+
+        Ok(Self {
             state: AgentState::new(),
             memory,
             skills,
             llm,
             bus,
             hyevo,
+            manifest,
+        })
+    }
+
+    /// Runs routines described in system_manifest.md
+    pub async fn run_manifest_routines(&mut self) {
+        let manifest = &self.manifest.raw;
+
+        // === Memory maintenance ===
+        if manifest.contains("summarize working memory") {
+            if let Some(chunk) = self.memory.working.drain_oldest_chunk(5) {
+                match self.llm.summarize(&chunk).await {
+                    crate::hy_evo::node::NodeResult::Text(summary) => {
+                        self.memory.working.push_summary(summary);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // === Error log scanning ===
+        if manifest.contains("check error logs") {
+            let _ = std::fs::read_to_string("logs/error_log.md");
+        }
+
+        // === End-of-day routines ===
+        if manifest.contains("End of Day") {
+            // You can add time-window logic later
+        }
+
+        // === HyEvo tuning ===
+        if manifest.contains("Run HyEvo cycle") {
+            // Already handled in heartbeat, but manifest can override later
         }
     }
 
@@ -172,9 +211,7 @@ where
         self.state.last_heartbeat = Instant::now();
         self.state.uptime = self.state.start_time.elapsed();
 
-        if let Err(e) = self.write_heartbeat_file() {
-            eprintln!("Failed to write heartbeat.md: {}", e);
-        }
+        self.run_manifest_routines().await;
 
         if self.state.tick_count % 10 == 0 {
             if let Err(e) = self.run_hyevo_cycle().await {
@@ -192,21 +229,6 @@ where
         };
 
         self.hyevo.run_and_evolve(&mut executor).await
-    }
-
-    fn write_heartbeat_file(&self) -> std::io::Result<()> {
-        use std::fs;
-
-        let md = format!(
-            "# Heartbeat\n\n\
-             Tick: {}\n\
-             Uptime: {:?}\n\
-             Mode: {:?}\n\
-             Errors: {}\n",
-            self.state.tick_count, self.state.uptime, self.state.mode, self.state.error_count,
-        );
-
-        fs::write("heartbeat.md", md)
     }
 }
 
