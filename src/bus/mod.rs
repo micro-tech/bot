@@ -2,10 +2,12 @@
 // This module implements a central communication bus for inter-component messaging.
 // Components publish messages to the bus and subscribe to receive relevant messages.
 
-use crate::utils::log_to_file;
+use crate::cpu::interfaces::BusInterface;
+use crate::utils::{log_to_file, now_ms};
 use chrono::Local;
 use log::error;
 use serde::Serialize;
+use serde_json::Value;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -101,6 +103,22 @@ impl Clone for Bus {
         Self {
             sender: self.sender.clone(),
             subscribers: Arc::clone(&self.subscribers),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl BusInterface for Bus {
+    async fn publish(&self, to: &str, data: Value) -> crate::hy_evo::node::NodeResult {
+        let msg = Message {
+            to: to.to_string(),
+            from: "cpu".to_string(),
+            data: data.to_string(),
+            timestamp: now_ms(),
+        };
+        match self.publish(msg) {
+            Ok(()) => crate::hy_evo::node::NodeResult::None,
+            Err(e) => crate::hy_evo::node::NodeResult::Error(e),
         }
     }
 }

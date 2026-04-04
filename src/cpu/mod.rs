@@ -1,107 +1,241 @@
-use self::executor::CpuExecutor;
-use crate::bus::Bus;
-use crate::bus::Message;
-use crate::cpu::state::AgentState;
-use crate::hy_evo::integration::HyEvoIntegration;
-use crate::hy_evo::reflection::ReflectionLlm;
-use crate::serde_json::Value;
-use crate::serde_json::json;
-use crate::utils::now_ms;
-use crate::memory::MemoryManager;
-
-use std::sync::Arc;
-
+// src/cpu/mod.rs
 pub mod executor;
 pub mod instructions;
 pub mod interfaces;
-pub mod interrupts;
-pub mod scheduler;
 pub mod state;
 pub mod time_scheduler;
 
-// Re-export commonly used types
-pub use instructions::Instruction;
+use std::sync::Arc;
+use std::time::Instant;
 
-/// The main CPU struct, generic over the LLM type used by HyEvo.
-pub struct Cpu<L: ReflectionLlm + Send + Sync> {
+use crate::bus::{Bus, Message};
+use crate::cpu::executor::CpuExecutor;
+use crate::cpu::instructions::{CpuEvent, CpuEventKind, Instruction};
+use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
+use crate::cpu::state::AgentState;
+
+use crate::hy_evo::integration::{CpuExecutor as HyEvoCpuExecutor, HyEvoIntegration};
+use crate::hy_evo::reflection::ReflectionLlm;
+use crate::hy_evo::workflow::{Workflow, WorkflowContext};
+use crate::hy_evo::scoring::ExecutionMetrics;
+
+use crate::io::ollama::LlmTarget;
+use crate::memory::MemoryManager;
+use crate::utils::{log_to_file, now_ms};
+
+use log::{debug, error};
+use serde_json::Value;
+
+/// Main CPU struct, generic over the LLM type.
+pub struct Cpu<L>
+where
+    L: ReflectionLlm + LlmInterface + Send + Sync + 'static,
+{
     pub state: AgentState,
-    pub executor: CpuExecutor,
-    pub bus: Arc<Bus>,
-    pub llm: L,
-    pub hyevo: Option<HyEvoIntegration<L>>,
     pub memory: MemoryManager,
+    pub skills: Box<dyn SkillInterface>,
+    pub llm: L,
+    pub bus: Arc<Bus>,
+    pub hyevo: HyEvoIntegration<L>,
 }
 
-impl<L: ReflectionLlm + Send + Sync> Cpu<L> {
-    /// Construct a new Cpu with an executor, bus, LLM, and HyEvo integration.
-    pub fn new(executor: CpuExecutor, bus: Arc<Bus>, llm: L, hyevo: HyEvoIntegration<L>) -> Self {
+impl<L> Cpu<L>
+where
+    L: ReflectionLlm + LlmInterface + Send + Sync + 'static,
+{
+    pub fn new(
+        memory: MemoryManager,
+        skills: Box<dyn SkillInterface>,
+        llm: L,
+        bus: Arc<Bus>,
+        hyevo: HyEvoIntegration<L>,
+    ) -> Self {
         Self {
             state: AgentState::new(),
-            executor,
-            bus,
+            memory,
+            skills,
             llm,
-            hyevo: Some(hyevo),
-            memory: MemoryManager::new(1000, 1000),
+            bus,
+            hyevo,
         }
     }
 
-    /// Access the HyEvo integration layer, if present.
-    pub fn hyevo(&self) -> Option<&HyEvoIntegration<L>> {
-        self.hyevo.as_ref()
-    }
+    // -------------------------------------------------------------------------
+    // LLM Routing
+    // -------------------------------------------------------------------------
 
-    /// Handle an incoming bus message.
-    pub fn handle_bus_message(&mut self, msg: Message) {
-        self.state.bump_tick();
-
-        // Parse JSON payload
-        let payload: Value = match serde_json::from_str(&msg.data) {
-            Ok(v) => v,
-            Err(_) => {
-                // Not JSON → ignore or log
-                println!("CPU received non-JSON message: {:?}", msg.data);
-                return;
-            }
+    fn route_llm_request(&self, target: LlmTarget, prompt: String, correlation_id: u64) {
+        let to = match target {
+            LlmTarget::OllamaLan => "ollama_lan",
+            LlmTarget::OllamaLocal => "ollama_local",
+            LlmTarget::Gemini => "gemini",
+            LlmTarget::Grok => "grok",
         };
 
-        // Extract message type FIRST
-        let msg_type = payload["type"].as_str().unwrap_or("");
+        let msg = Message {
+            to: to.to_string(),
+            from: "cpu".into(),
+            data: serde_json::json!({
+                "type": "llm_request",
+                "correlation_id": correlation_id,
+                "prompt": prompt,
+            })
+            .to_string(),
+            timestamp: now_ms(),
+        };
 
-        // ---- USER INPUT HANDLING ----
-        if msg_type == "user_input" {
-            let content_type = payload["content_type"].as_str().unwrap_or("");
-            let content = payload["content"].as_str().unwrap_or("");
+        if let Err(e) = self.bus.publish(msg.clone()) {
+            let error_msg = format!("CPU failed to route LLM request to {}: {}", to, e);
+            log_to_file(&error_msg);
+            error!("{}", error_msg);
+        } else {
+            debug!("CPU routed LLM request to {}", to);
+            log_to_file(&format!("CPU routed LLM request to {}", to));
+        }
+    }
 
-            if content_type == "text" {
-                self.memory.record_user_message(content);
-                let facts = self.memory.search_facts(&content, 5);
+    pub fn handle_bus_message(&mut self, msg: Message) {
+        log_to_file(&format!("CPU received message: {:?}", msg));
+        // TODO: handle specific messages
+    }
 
-                // inject facts into prompt later
+    // -------------------------------------------------------------------------
+    // Instruction Execution
+    // -------------------------------------------------------------------------
 
-                // Build LLM request
-                let prompt = if facts.is_empty() {
-                    content.to_string()
-                } else {
-                    format!("{}\n\nRelevant facts:\n{}", content, facts.join("\n"))
-                };
-                let llm_msg = Message {
-                    to: "ollama".to_string(),
-                    from: "cpu".to_string(),
-                    data: json!({
-                        "type": "llm_request",
-                        "prompt": prompt,
-                        "correlation_id": payload["correlation_id"]
-                    })
-                    .to_string(),
+    pub async fn execute_instruction(&mut self, instr: Instruction) {
+        println!("Executing instruction: {:?}", instr);
+
+        match instr {
+            Instruction::ReadMemory { key } => {
+                let _ = self.memory.read(&key);
+            }
+
+            Instruction::WriteMemory { key, value } => {
+                let _ = self.memory.write(&key, value);
+            }
+
+            Instruction::EmitBusEvent { topic, payload } => {
+                let msg = Message {
+                    to: topic,
+                    from: "cpu".into(),
+                    data: payload.to_string(),
                     timestamp: now_ms(),
                 };
+                let _ = self.bus.publish(msg);
+            }
 
-                let _ = self.bus.publish(llm_msg);
-                return;
+            Instruction::UpdateBelief { key, value } => {
+                let _ = self.memory.write(&key, value);
+            }
+
+            Instruction::RunSkill { name, args } => {
+                let result = self.skills.call(&name, &args).await;
+                if let crate::hy_evo::node::NodeResult::Error(e) = result {
+                    eprintln!("Error running skill: {}", e);
+                }
+            }
+
+            Instruction::ExecuteHooks { phase } => {
+                // If you have hooks, wire them here
+            }
+
+            Instruction::PlanNextSteps => {
+                // TODO
+            }
+
+            Instruction::ReflectOnLastStep => {
+                // TODO
+            }
+
+            Instruction::WaitForEvent => {
+                // idle
+            }
+
+            Instruction::CallLlm {
+                target,
+                prompt,
+                correlation_id,
+            } => {
+                self.route_llm_request(target, prompt, correlation_id);
             }
         }
+    }
 
-        // ---- FALLBACK DEBUG ----
-        println!("CPU received bus message: {:?}", msg);
+    // -------------------------------------------------------------------------
+    // Heartbeat + HyEvo
+    // -------------------------------------------------------------------------
+
+    pub async fn handle_heartbeat(&mut self) {
+        println!("Handling heartbeat: Tick {}", self.state.tick_count);
+        self.state.bump_tick();
+        self.state.last_heartbeat = Instant::now();
+        self.state.uptime = self.state.start_time.elapsed();
+
+        if let Err(e) = self.write_heartbeat_file() {
+            eprintln!("Failed to write heartbeat.md: {}", e);
+        }
+
+        if self.state.tick_count % 10 == 0 {
+            if let Err(e) = self.run_hyevo_cycle().await {
+                eprintln!("Error in HyEvo cycle: {}", e);
+            }
+        }
+    }
+
+    pub async fn run_hyevo_cycle(&mut self) -> anyhow::Result<()> {
+        let mut executor = CpuExecutorImpl {
+            memory: &mut self.memory as &mut dyn MemoryInterface,
+            skills: self.skills.as_ref(),
+            llm: &self.llm as &dyn LlmInterface,
+            bus: self.bus.as_ref() as &dyn BusInterface,
+        };
+
+        self.hyevo.run_and_evolve(&mut executor).await
+    }
+
+    fn write_heartbeat_file(&self) -> std::io::Result<()> {
+        use std::fs;
+
+        let md = format!(
+            "# Heartbeat\n\n\
+             Tick: {}\n\
+             Uptime: {:?}\n\
+             Mode: {:?}\n\
+             Errors: {}\n",
+            self.state.tick_count, self.state.uptime, self.state.mode, self.state.error_count,
+        );
+
+        fs::write("heartbeat.md", md)
+    }
+}
+
+struct CpuExecutorImpl<'a> {
+    memory: &'a mut dyn MemoryInterface,
+    skills: &'a dyn SkillInterface,
+    llm: &'a dyn LlmInterface,
+    bus: &'a dyn BusInterface,
+}
+
+#[async_trait::async_trait]
+impl<'a> HyEvoCpuExecutor for CpuExecutorImpl<'a> {
+    async fn execute_workflow(&mut self, workflow: &Workflow) -> anyhow::Result<ExecutionMetrics> {
+        let mut ctx = WorkflowContext {
+            memory: self.memory,
+            skills: self.skills,
+            llm: self.llm,
+            bus: self.bus,
+        };
+        let start = std::time::Instant::now();
+        let mut metrics = ExecutionMetrics::default();
+        for (i, _) in workflow.ordered_nodes.iter().enumerate() {
+            let result = workflow.execute_node(i, &mut ctx).await;
+            if let crate::hy_evo::node::NodeResult::Error(_) = result {
+                metrics.errors += 1;
+            }
+        }
+        metrics.latency_ms = start.elapsed().as_millis() as u64;
+        metrics.success = metrics.errors == 0;
+        Ok(metrics)
     }
 }
