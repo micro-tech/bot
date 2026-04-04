@@ -44,6 +44,15 @@ impl MemoryHandle {
         self.context.push_front(format!("Summary: {}", summary));
     }
 
+    /// Get recent entries (most recent first)
+    pub fn get_recent_entries(&self, n: usize) -> Option<Vec<String>> {
+        if self.context.is_empty() {
+            return None;
+        }
+        let recent: Vec<String> = self.context.iter().rev().take(n).cloned().collect();
+        Some(recent)
+    }
+
     pub fn update_belief(&mut self, key: &str, value: Value) -> NodeResult {
         self.write(key, value)
     }

@@ -4,11 +4,13 @@ use crate::memory::NodeResult;
 use crate::memory::episodic::EpisodicMemory;
 use crate::memory::vector::VectorMemory;
 use serde_json::Value;
+use std::collections::HashMap;
 
 pub struct MemoryManager {
     pub working: MemoryHandle,
     pub vector: VectorMemory,
     pub episodic: EpisodicMemory,
+    pub beliefs: HashMap<String, Value>,
 }
 
 impl MemoryManager {
@@ -17,6 +19,7 @@ impl MemoryManager {
             working: MemoryHandle::new(working_max),
             vector: VectorMemory::new(),
             episodic: EpisodicMemory::new(episodic_max),
+            beliefs: HashMap::new(),
         }
     }
 
@@ -30,6 +33,18 @@ impl MemoryManager {
 
     pub fn search_facts(&self, query: &str, k: usize) -> Vec<String> {
         self.vector.search(query, k)
+    }
+
+    pub fn set_belief(&mut self, key: &str, value: Value) {
+        self.beliefs.insert(key.to_string(), value);
+    }
+
+    pub fn get_belief(&self, key: &str) -> Option<&Value> {
+        self.beliefs.get(key)
+    }
+
+    pub fn get_all_beliefs(&self) -> &HashMap<String, Value> {
+        &self.beliefs
     }
 }
 

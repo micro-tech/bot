@@ -142,6 +142,14 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
 
     let _ = ws_sender.send(WsMessage::Text(config_msg.into())).await;
 
+    // Request manifest
+    let manifest_get_msg = json!({
+        "type": "manifest_get"
+    })
+    .to_string();
+
+    let _ = ws_sender.send(WsMessage::Text(manifest_get_msg.into())).await;
+
     // Task: forward broadcast messages to WebSocket
     let recv_task = tokio::spawn(async move {
         loop {
@@ -257,6 +265,52 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             }
                         }
 
+                        "manifest_get" => {
+                            let manifest = fs::read_to_string("system_manifest.md").unwrap_or_else(|_| "".to_string());
+                            let msg = json!({
+                                "type": "manifest",
+                                "data": manifest
+                            })
+                            .to_string();
+                            let _ = state.msg_tx.send(msg);
+                        }
+
+                        "manifest_save" => {
+                            let new_manifest = json_val["data"].as_str().unwrap_or("");
+
+                            if fs::write("system_manifest.md", new_manifest).is_ok() {
+                                let success_msg = json!({
+                                    "type": "manifest_status",
+                                    "status": "success",
+                                    "msg": "Manifest saved successfully."
+                                })
+                                .to_string();
+
+                                let bus_msg = Message {
+                                    to: "web_interface".to_string(),
+                                    from: "manifest".to_string(),
+                                    data: success_msg,
+                                    timestamp: get_timestamp(),
+                                };
+                                let _ = state.bus.publish(bus_msg);
+                            } else {
+                                let error_msg = json!({
+                                    "type": "manifest_status",
+                                    "status": "error",
+                                    "msg": "Failed to write manifest file."
+                                })
+                                .to_string();
+
+                                let bus_msg = Message {
+                                    to: "web_interface".to_string(),
+                                    from: "manifest".to_string(),
+                                    data: error_msg,
+                                    timestamp: get_timestamp(),
+                                };
+                                let _ = state.bus.publish(bus_msg);
+                            }
+                        }
+
                         _ => {}
                     }
                 }
@@ -304,6 +358,7 @@ const MAIN_HTML: &str = r#"
     <div id="tabs">
         <button class="tab-button active" onclick="showTab(event, 'chat')">Chat</button>
         <button class="tab-button" onclick="showTab(event, 'config')">Config</button>
+        <button class="tab-button" onclick="showTab(event, 'manifest')">Manifest</button>
         <button class="tab-button" onclick="showTab(event, 'logs')">Logs</button>
     </div>
 
@@ -318,6 +373,13 @@ const MAIN_HTML: &str = r#"
         <textarea id="config-textarea" rows="20" cols="80"></textarea><br>
         <button onclick="saveConfig()">Save Config</button>
         <div id="config-status"></div>
+    </div>
+
+    <div id="manifest-tab" class="tab-content">
+        <h2>System Manifest</h2>
+        <textarea id="manifest-textarea" rows="20" cols="80"></textarea><br>
+        <button onclick="saveManifest()">Save Manifest</button>
+        <div id="manifest-status"></div>
     </div>
 
     <div id="logs-tab" class="tab-content">
@@ -360,8 +422,8 @@ const MAIN_HTML: &str = r#"
                         appendChat(data.from || 'You', toStr(inner_data));
                         return;
                     }
-                    if (data.type === 'config') {
-                        document.getElementById('config-textarea').value = data.data || '';
+                    if (data.type === 'manifest') {
+                        document.getElementById('manifest-textarea').value = data.data || '';
                         return;
                     }
 
@@ -393,6 +455,14 @@ const MAIN_HTML: &str = r#"
 
                             case 'config_status': {
                                 const statusDiv = document.getElementById('config-status');
+                                statusDiv.textContent = inner_data.msg || '';
+                                statusDiv.style.color =
+                                    inner_data.status === 'success' ? 'green' : 'red';
+                                return;
+                            }
+
+                            case 'manifest_status': {
+                                const statusDiv = document.getElementById('manifest-status');
                                 statusDiv.textContent = inner_data.msg || '';
                                 statusDiv.style.color =
                                     inner_data.status === 'success' ? 'green' : 'red';
@@ -459,6 +529,13 @@ const MAIN_HTML: &str = r#"
             const toml = document.getElementById('config-textarea').value;
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({type: 'config_save', data: toml}));
+            }
+        }
+
+        function saveManifest() {
+            const md = document.getElementById('manifest-textarea').value;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({type: 'manifest_save', data: md}));
             }
         }
 

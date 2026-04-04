@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::node::{Node, NodeMetadata};
+use super::mutation::{mutate_add_node, mutate_remove_node, mutate_reorder_nodes, mutate_node_params};
 
 /// A WorkflowGenome represents the *evolvable* structure of a workflow.
 /// It is the core unit that HyEvo mutates, crosses, scores, and executes.
@@ -79,5 +80,18 @@ impl WorkflowGenome {
     /// Clear score before re-evaluation
     pub fn reset_score(&mut self) {
         self.score = 0.0;
+    }
+
+    /// Apply a random mutation
+    pub fn mutate(&mut self) {
+        let mutation_type = (chrono::Utc::now().timestamp_nanos() % 4) as u32; // simple random
+        match mutation_type {
+            0 => mutate_add_node(self),
+            1 => mutate_remove_node(self),
+            2 => mutate_reorder_nodes(self),
+            3 => mutate_node_params(self),
+            _ => {}
+        }
+        self.touch();
     }
 }

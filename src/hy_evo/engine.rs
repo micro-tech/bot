@@ -47,7 +47,7 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoEngine<L> {
 
         let summary = self.llm.evolve_code(&feedback, &genome_repr).await?;
 
-        let suggestions = summary
+        let suggestions: Vec<String> = summary
             .lines()
             .filter(|l| l.trim().starts_with("- "))
             .map(|l| l.trim().trim_start_matches("- ").to_string())
@@ -55,11 +55,17 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoEngine<L> {
 
         let record = ReflectionRecord {
             workflow_id: genome.id,
-            summary,
-            suggestions,
+            summary: summary.clone(),
+            suggestions: suggestions.clone(),
             metrics: metrics.clone(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
         };
+
+        // Attach reflection to workflow metadata
+        if let Some(g) = self.population.first_mut() {
+            g.metadata.insert("last_reflection".to_string(), serde_json::Value::String(summary));
+            g.metadata.insert("reflection_suggestions".to_string(), serde_json::json!(suggestions));
+        }
 
         Ok(record)
     }
