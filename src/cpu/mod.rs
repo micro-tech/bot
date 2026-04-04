@@ -112,18 +112,30 @@ where
              Suggest improvements to make the agent more effective, safe, and aligned with its goals.\n\
              Provide the improved manifest in full, starting with the title and sections.\n\
              Ensure it remains in markdown format with ## headers.\n\
-             Focus on adding useful routines, improving policies, or enhancing safety.",
+             Focus on adding useful routines, improving policies, or enhancing safety.\n\
+             Avoid removing existing content to ensure safety.",
             current_manifest
         );
 
         match self.llm.call("ollama", &prompt, &serde_json::Value::Null).await {
             crate::hy_evo::node::NodeResult::Text(new_manifest) => {
+                let proposed = SystemManifest::load_from_string(&new_manifest);
+                let diff = self.manifest.diff(&proposed);
+
+                // Check for safe updates only: no deletions
+                if diff.contains("-\n") {
+                    log_to_file(&format!("Manifest evolution rejected: contains deletions\nDiff:\n{}", diff));
+                    return;
+                }
+
                 // Validate the new manifest
                 if self.validate_manifest(&new_manifest) {
+                    // Log the diff
+                    log_to_file(&format!("Manifest diff:\n{}", diff));
                     // Backup current
                     let backup = self.manifest.raw.clone();
                     // Apply new
-                    self.manifest = SystemManifest::load_from_string(&new_manifest);
+                    self.manifest = proposed;
                     // Log success
                     log_to_file(&format!("Manifest evolved successfully"));
                 } else {
@@ -137,12 +149,20 @@ where
         }
     }
 
-    /// Validate a manifest string
-    fn validate_manifest(&self, manifest: &str) -> bool {
-        // Try to parse sections
-        let sections = SystemManifest::parse_sections(manifest);
-        // Check if essential sections exist
-        sections.contains_key("Daily Routines") && sections.contains_key("Safety Constraints")
+    pub async fn arbitrate_skill(&self, task: &str) -> String {
+        let available_skills = "noop, send_email, read_log"; // hardcoded for now
+        let prompt = format!(
+            "Available skills: {}\n\
+             Task description: {}\n\
+             Choose the most appropriate skill name from the list above.\n\
+             Respond with only the skill name.",
+            available_skills, task
+        );
+
+        match self.llm.call("ollama", &prompt, &serde_json::Value::Null).await {
+            crate::hy_evo::node::NodeResult::Text(name) => name.trim().to_string(),
+            _ => "noop".to_string(),
+        }
     }
 
     /// Enhance prompt with memory context
@@ -242,7 +262,12 @@ where
             }
 
             Instruction::RunSkill { name, args } => {
-                let result = self.skills.call(&name, &args).await;
+                let skill_name = if name == "auto" {
+                    self.arbitrate_skill(&args.to_string()).await
+                } else {
+                    name
+                };
+                let result = self.skills.call(&skill_name, &args).await;
                 if let crate::hy_evo::node::NodeResult::Error(e) = result {
                     eprintln!("Error running skill: {}", e);
                 }
