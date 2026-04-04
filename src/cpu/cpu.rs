@@ -167,20 +167,16 @@ where
 
     /// Main heartbeat handler — called every X ms by your scheduler.
     pub fn handle_heartbeat(&mut self) {
-        println!("Handling heartbeat: Tick {}", self.state.tick_count);
         self.state.bump_tick();
         self.state.last_heartbeat = Instant::now();
         self.state.uptime = self.state.start_time.elapsed().unwrap_or_default();
 
-        if let Err(e) = self.write_heartbeat_file() {
-            eprintln!("Failed to write heartbeat.md: {}", e);
-        }
+        // Manifest-driven routines
+        self.run_manifest_routines();
 
-        // Trigger HyEvo every 10 ticks
+        // HyEvo cycle
         if self.state.tick_count % 10 == 0 {
-            if let Err(e) = self.run_hyevo_cycle() {
-                eprintln!("Error in HyEvo cycle: {}", e);
-            }
+            let _ = self.run_hyevo_cycle();
         }
     }
 

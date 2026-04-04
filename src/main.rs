@@ -10,6 +10,7 @@ use toml;
 // Include modules
 mod bayesian;
 mod bus;
+mod config;
 mod cpu;
 mod hooks;
 mod hy_evo;
@@ -284,7 +285,7 @@ async fn main() {
     let hyevo = HyEvoIntegration::new(engine);
 
     // Build CPU
-    let cpu = Arc::new(Mutex::new(Cpu::new(memory, skills, llm, bus.clone(), hyevo)));
+    let cpu = Arc::new(Mutex::new(Cpu::new(memory, skills, llm, bus.clone(), hyevo, "system_manifest.md").unwrap()));
     let cpu_bus = bus.clone();
     let cpu_instance = cpu.clone();
 
