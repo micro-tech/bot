@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use pulldown_cmark::Parser;
+use similar::TextDiff;
 
 #[derive(Debug, Clone)]
 pub struct SystemManifest {
@@ -44,5 +45,14 @@ impl SystemManifest {
             sections.insert(current_section, current_content.trim().to_string());
         }
         sections
+    }
+
+    /// Compute a unified diff between this manifest and another
+    pub fn diff(&self, other: &SystemManifest) -> String {
+        let diff = TextDiff::from_lines(&self.raw, &other.raw);
+
+        diff.unified_diff()
+            .context_radius(3)
+            .to_string()
     }
 }

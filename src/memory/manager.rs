@@ -46,6 +46,16 @@ impl MemoryManager {
     pub fn get_all_beliefs(&self) -> &HashMap<String, Value> {
         &self.beliefs
     }
+
+    /// Generate a Mermaid graph visualization of beliefs
+    pub fn visualize_beliefs(&self) -> String {
+        let mut mermaid = "graph TD;\n".to_string();
+        for (key, value) in &self.beliefs {
+            let val_str = value.to_string().replace("\"", "'");
+            mermaid.push_str(&format!("    {}[\"{}: {}\"];\n", key.replace(" ", "_").replace("-", "_"), key, val_str));
+        }
+        mermaid
+    }
 }
 
 impl MemoryInterface for MemoryManager {
