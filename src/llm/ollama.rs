@@ -1,3 +1,4 @@
+use crate::cpu::interfaces::LlmInterface;
 use crate::hy_evo::genome::WorkflowGenome;
 use crate::hy_evo::reflection::ReflectionLlm;
 use crate::hy_evo::scoring::ExecutionMetrics;
@@ -97,5 +98,15 @@ impl ReflectionLlm for OllamaLlm {
         );
 
         self.call_ollama(&prompt).await
+    }
+}
+
+#[async_trait]
+impl LlmInterface for OllamaLlm {
+    async fn call(&self, model: &str, prompt: &str, params: &Value) -> crate::hy_evo::node::NodeResult {
+        match self.call_ollama(prompt).await {
+            Ok(response) => crate::hy_evo::node::NodeResult::Text(response),
+            Err(e) => crate::hy_evo::node::NodeResult::Error(format!("LLM call failed: {}", e)),
+        }
     }
 }

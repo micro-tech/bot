@@ -12,7 +12,7 @@ use super::{
 /// This keeps HyEvo decoupled from your agent OS internals.
 #[async_trait::async_trait]
 pub trait CpuExecutor {
-    async fn execute_workflow(&self, workflow: &Workflow) -> anyhow::Result<ExecutionMetrics>;
+    async fn execute_workflow(&mut self, workflow: &Workflow) -> anyhow::Result<ExecutionMetrics>;
 }
 
 /// HyEvo integration layer.
@@ -54,7 +54,7 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoIntegration<L> {
     }
 
     /// Run a workflow through the CPU and evolve based on results.
-    pub async fn run_and_evolve<E: CpuExecutor>(&self, cpu: &E) -> anyhow::Result<()> {
+    pub async fn run_and_evolve<E: CpuExecutor>(&self, cpu: &mut E) -> anyhow::Result<()> {
         // 1. Select best workflow
         let genome = {
             let engine = self.engine.lock().unwrap();

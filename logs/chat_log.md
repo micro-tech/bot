@@ -54,3 +54,7 @@
 [2026-03-29 19:12:30.049] ollama_lan -> cpu: {"type":"llm_response","correlation_id":1774825770324,"msg":"Hello! How can I help you today?"}
 [2026-03-29 19:12:30.051] ollama -> web_interface: {"type":"ollama_response","reply_to":"cpu","msg":"Hello! How can I help you today?"}
 [2026-03-29 19:12:30.052] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama ✅  replied on attempt 2/3 — 32 chars"}
+[2026-03-31 23:52:52.862] test -> ollama: Test message
+[2026-03-31 23:52:52.864] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}
+[2026-03-31 23:55:14.841] test -> ollama: Test message
+[2026-03-31 23:55:14.843] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}

@@ -275,9 +275,8 @@ async fn main() {
     // ─────────────────────────────────────────────────────────────
 
     // Build subsystems
-    let memory = MemoryHandle::new(50);
-    let skills = SkillRegistry::new();
-    let hooks = HookRegistry::new();
+    let memory = crate::memory::MemoryManager::new(50, 1000);
+    let skills = Box::new(SkillRegistry::new()) as Box<dyn crate::cpu::interfaces::SkillInterface>;
     let llm = OllamaLlm::new(&ollama_url, &ollama_model);
 
     // Build HyEvo integration
@@ -285,10 +284,9 @@ async fn main() {
     let hyevo = HyEvoIntegration::new(engine);
 
     // Build CPU
-    let executor = CpuExecutor::new(memory, skills, hooks, bus.clone());
-    let cpu = Arc::new(Mutex::new(Cpu::new(executor, bus.clone(), llm, hyevo)));
+    let cpu = Arc::new(Mutex::new(Cpu::new(memory, skills, llm, bus.clone(), hyevo)));
     let cpu_bus = bus.clone();
-    let mut cpu_instance = cpu.clone();
+    let cpu_instance = cpu.clone();
 
     tokio::spawn(async move {
         let rx = cpu_bus.subscribe("cpu");
@@ -300,17 +298,6 @@ async fn main() {
 
     // Start time-based heartbeat scheduler (blocks until shutdown)
     TimeScheduler::start(cpu.clone(), 1000).await;
-
-    let cpu_bus = bus.clone();
-    let cpu_instance = cpu.clone();
-
-    tokio::spawn(async move {
-        let rx = cpu_bus.subscribe("cpu");
-
-        while let Ok(msg) = rx.recv() {
-            cpu_instance.lock().unwrap().handle_bus_message(msg);
-        }
-    });
 }
 
 #[cfg(test)]
