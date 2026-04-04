@@ -69,10 +69,8 @@ where
 
     /// Runs routines described in system_manifest.md
     pub async fn run_manifest_routines(&mut self) {
-        let manifest = &self.manifest.raw;
-
         // === Memory maintenance ===
-        if manifest.contains("summarize working memory") {
+        if self.manifest.raw.contains("summarize working memory") {
             if let Some(chunk) = self.memory.working.drain_oldest_chunk(5) {
                 match self.llm.summarize(&chunk).await {
                     crate::hy_evo::node::NodeResult::Text(summary) => {
@@ -83,20 +81,95 @@ where
             }
         }
 
+        // === Manifest evolution ===
+        if self.manifest.raw.contains("evolve constitution") {
+            self.evolve_manifest().await;
+        }
+
         // === Error log scanning ===
-        if manifest.contains("check error logs") {
+        if self.manifest.raw.contains("check error logs") {
             let _ = std::fs::read_to_string("logs/error_log.md");
         }
 
         // === End-of-day routines ===
-        if manifest.contains("End of Day") {
+        if self.manifest.raw.contains("End of Day") {
             // You can add time-window logic later
         }
 
         // === HyEvo tuning ===
-        if manifest.contains("Run HyEvo cycle") {
+        if self.manifest.raw.contains("Run HyEvo cycle") {
             // Already handled in heartbeat, but manifest can override later
         }
+    }
+
+    /// Evolve the system manifest using LLM suggestions
+    pub async fn evolve_manifest(&mut self) {
+        let current_manifest = &self.manifest.raw;
+
+        let prompt = format!(
+            "You are an AI agent constitution optimizer.\n\
+             The current system manifest is:\n\n{}\n\n\
+             Suggest improvements to make the agent more effective, safe, and aligned with its goals.\n\
+             Provide the improved manifest in full, starting with the title and sections.\n\
+             Ensure it remains in markdown format with ## headers.\n\
+             Focus on adding useful routines, improving policies, or enhancing safety.",
+            current_manifest
+        );
+
+        match self.llm.call("ollama", &prompt, &serde_json::Value::Null).await {
+            crate::hy_evo::node::NodeResult::Text(new_manifest) => {
+                // Validate the new manifest
+                if self.validate_manifest(&new_manifest) {
+                    // Backup current
+                    let backup = self.manifest.raw.clone();
+                    // Apply new
+                    self.manifest = SystemManifest::load_from_string(&new_manifest);
+                    // Log success
+                    log_to_file(&format!("Manifest evolved successfully"));
+                } else {
+                    // Rollback or log error
+                    log_to_file(&format!("Manifest evolution failed validation"));
+                }
+            }
+            _ => {
+                log_to_file(&format!("Manifest evolution failed: no response"));
+            }
+        }
+    }
+
+    /// Validate a manifest string
+    fn validate_manifest(&self, manifest: &str) -> bool {
+        // Try to parse sections
+        let sections = SystemManifest::parse_sections(manifest);
+        // Check if essential sections exist
+        sections.contains_key("Daily Routines") && sections.contains_key("Safety Constraints")
+    }
+
+    /// Enhance prompt with memory context
+    fn enhance_prompt_with_memory(&self, prompt: &str) -> String {
+        let mut context = String::new();
+
+        // Working memory
+        if let Some(recent) = self.memory.working.get_recent_entries(3) {
+            context.push_str(&format!("Recent working memory:\n{}\n\n", recent.join("\n")));
+        }
+
+        // Beliefs
+        if !self.memory.beliefs.is_empty() {
+            let beliefs_str = self.memory.beliefs.iter()
+                .map(|(k, v)| format!("{}: {}", k, v))
+                .collect::<Vec<_>>()
+                .join("\n");
+            context.push_str(&format!("Stable beliefs:\n{}\n\n", beliefs_str));
+        }
+
+        // Vector memory (placeholder)
+        // TODO: search vector DB for relevant facts
+
+        // Episodic memory (placeholder)
+        // TODO: retrieve relevant episodes
+
+        format!("Context from memory:\n{}\n\nOriginal prompt:\n{}", context, prompt)
     }
 
     // -------------------------------------------------------------------------
@@ -196,7 +269,8 @@ where
                 prompt,
                 correlation_id,
             } => {
-                self.route_llm_request(target, prompt, correlation_id);
+                let enhanced_prompt = self.enhance_prompt_with_memory(&prompt);
+                self.route_llm_request(target, enhanced_prompt, correlation_id);
             }
         }
     }

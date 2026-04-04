@@ -162,7 +162,7 @@ impl CrossoverEngine {
 }
 
 /// Generate a random (start, end) pair where start < end
-fn random_range_pair(len: usize, rng: &mut ThreadRng) -> (usize, usize) {
+fn random_range_pair(len: usize, rng: &mut rand::rngs::ThreadRng) -> (usize, usize) {
     if len < 2 {
         return (0, len);
     }

@@ -1,4 +1,5 @@
 use rand::prelude::*;
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -42,19 +43,19 @@ impl MutationEngine {
         let mut rng = thread_rng();
 
         if rng.r#gen::<f32>() < self.config.add_node_prob {
-            self.mutate_add_node(genome);
+            mutate_add_node(genome);
         }
 
         if rng.r#gen::<f32>() < self.config.remove_node_prob {
-            self.mutate_remove_node(genome);
+            mutate_remove_node(genome);
         }
 
         if rng.r#gen::<f32>() < self.config.reorder_prob {
-            self.mutate_reorder_nodes(genome);
+            mutate_reorder_nodes(genome);
         }
 
         if rng.r#gen::<f32>() < self.config.param_mutation_prob {
-            self.mutate_node_params(genome);
+            mutate_node_params(genome);
         }
 
         if rng.r#gen::<f32>() < self.config.edge_mutation_prob {
@@ -62,90 +63,6 @@ impl MutationEngine {
         }
 
         genome.touch();
-    }
-
-    // -------------------------
-    // NODE-LEVEL MUTATIONS
-    // -------------------------
-
-    /// Add a random node to the workflow
-    fn mutate_add_node(&self, genome: &mut WorkflowGenome) {
-        let mut rng = thread_rng();
-
-        let new_node = Node::Skill {
-            name: "noop".to_string(),
-            params: Default::default(),
-        };
-
-        let metadata = NodeMetadata::new("auto-added mutation node");
-
-        let index = genome.add_node(metadata, new_node);
-
-        // Add a random edge from an existing node to the new node
-        if index > 0 {
-            let from = rng.gen_range(0..index);
-            genome.add_edge(from, index);
-        }
-    }
-
-    /// Remove a random node (if possible)
-    fn mutate_remove_node(&self, genome: &mut WorkflowGenome) {
-        if genome.nodes.len() <= 1 {
-            return;
-        }
-
-        let mut rng = thread_rng();
-        let idx = rng.gen_range(0..genome.nodes.len());
-
-        genome.nodes.remove(idx);
-
-        // Remove edges referencing this node
-        genome.edges.retain(|(from, to)| *from != idx && *to != idx);
-
-        // Reindex edges
-        for (from, to) in &mut genome.edges {
-            if *from > idx {
-                *from -= 1;
-            }
-            if *to > idx {
-                *to -= 1;
-            }
-        }
-    }
-
-    /// Randomly reorder nodes
-    fn mutate_reorder_nodes(&self, genome: &mut WorkflowGenome) {
-        let mut rng = thread_rng();
-        genome.nodes.shuffle(&mut rng);
-    }
-
-    /// Mutate parameters of a random node
-    fn mutate_node_params(&self, genome: &mut WorkflowGenome) {
-        let mut rng = thread_rng();
-
-        if genome.nodes.is_empty() {
-            return;
-        }
-
-        let idx = rng.gen_range(0..genome.nodes.len());
-        let (metadata, node) = &mut genome.nodes[idx];
-
-        metadata.last_modified = chrono::Utc::now().timestamp_millis() as u64;
-
-        match node {
-            Node::Skill { params, .. } | Node::Llm { params, .. } | Node::Code { params, .. } => {
-                params.insert(
-                    "mutated".to_string(),
-                    serde_json::json!(rng.gen_range(0..1000)),
-                );
-            }
-
-            Node::MemoryWrite { value, .. } => {
-                *value = serde_json::json!(rng.gen_range(0..1000));
-            }
-
-            _ => {}
-        }
     }
 
     // -------------------------
@@ -175,5 +92,85 @@ impl MutationEngine {
                 genome.edges.remove(idx);
             }
         }
+    }
+}
+
+/// Add a random node to the workflow
+pub fn mutate_add_node(genome: &mut WorkflowGenome) {
+    let mut rng = thread_rng();
+
+    let new_node = Node::Skill {
+        name: "noop".to_string(),
+        params: Default::default(),
+    };
+
+    let metadata = NodeMetadata::new("auto-added mutation node");
+
+    let index = genome.add_node(metadata, new_node);
+
+    // Add a random edge from an existing node to the new node
+    if index > 0 {
+        let from = rng.gen_range(0..index);
+        genome.add_edge(from, index);
+    }
+}
+
+/// Remove a random node (if possible)
+pub fn mutate_remove_node(genome: &mut WorkflowGenome) {
+    if genome.nodes.len() <= 1 {
+        return;
+    }
+
+    let mut rng = thread_rng();
+    let idx = rng.gen_range(0..genome.nodes.len());
+
+    genome.nodes.remove(idx);
+
+    // Remove edges referencing this node
+    genome.edges.retain(|(from, to)| *from != idx && *to != idx);
+
+    // Reindex edges
+    for (from, to) in &mut genome.edges {
+        if *from > idx {
+            *from -= 1;
+        }
+        if *to > idx {
+            *to -= 1;
+        }
+    }
+}
+
+/// Randomly reorder nodes
+pub fn mutate_reorder_nodes(genome: &mut WorkflowGenome) {
+    let mut rng = thread_rng();
+    genome.nodes.shuffle(&mut rng);
+}
+
+/// Mutate parameters of a random node
+pub fn mutate_node_params(genome: &mut WorkflowGenome) {
+    let mut rng = thread_rng();
+
+    if genome.nodes.is_empty() {
+        return;
+    }
+
+    let idx = rng.gen_range(0..genome.nodes.len());
+    let (metadata, node) = &mut genome.nodes[idx];
+
+    metadata.last_modified = chrono::Utc::now().timestamp_millis() as u64;
+
+    match node {
+        Node::Skill { params, .. } | Node::Llm { params, .. } | Node::Code { params, .. } => {
+            params.insert(
+                "mutated".to_string(),
+                serde_json::json!(rng.gen_range(0..1000)),
+            );
+        }
+
+        Node::MemoryWrite { value, .. } => {
+            *value = serde_json::json!(rng.gen_range(0..1000));
+        }
+
+        _ => {}
     }
 }
