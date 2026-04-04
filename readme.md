@@ -152,7 +152,7 @@ Tail: `tail -f logs/*.md`
 
 ## License
 
-MIT.
+Custom License (Non-Commercial). See [LICENSE](LICENSE) for details.
 
 ---
 
