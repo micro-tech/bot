@@ -24,8 +24,7 @@ use crate::io::ollama::LlmTarget;
 use crate::memory::MemoryManager;
 use crate::utils::{log_to_file, now_ms};
 
-use log::{debug, error};
-use serde_json::Value;
+use chrono::{Timelike, Utc};
 
 /// Main CPU struct, generic over the LLM type.
 pub struct Cpu<L>
@@ -39,6 +38,7 @@ where
     pub bus: Arc<Bus>,
     pub hyevo: HyEvoIntegration<L>,
     pub manifest: SystemManifest,
+    pub personality: String,
 }
 
 impl<L> Cpu<L>
@@ -64,6 +64,7 @@ where
             bus,
             hyevo,
             manifest,
+            personality: "neutral".to_string(),
         })
     }
 
@@ -165,7 +166,61 @@ where
         }
     }
 
-    /// Enhance prompt with memory context
+    pub async fn nightly_maintenance(&mut self) {
+        log_to_file("Starting nightly maintenance");
+
+        // Cleanup old logs
+        if let Ok(entries) = std::fs::read_dir("logs/") {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if let Ok(modified) = metadata.modified() {
+                        if modified.elapsed().unwrap_or_default() > std::time::Duration::from_secs(7 * 24 * 3600) { // 7 days
+                            let _ = std::fs::remove_file(entry.path());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Backup manifest
+        let backup_path = format!("backups/manifest_{}.md", chrono::Utc::now().timestamp());
+        let _ = std::fs::create_dir_all("backups");
+        let _ = std::fs::write(&backup_path, &self.manifest.raw);
+
+        // Force evolution if not recent
+        // Already in manifest routines
+
+        log_to_file("Nightly maintenance completed");
+    }
+
+    pub async fn self_repair(&mut self) {
+        log_to_file("Running self-repair routines");
+
+        // Repair working memory overflow
+        if self.memory.working.context.len() > self.memory.working.max_len * 2 {
+            self.memory.working.context.truncate(self.memory.working.max_len);
+            log_to_file("Repaired: truncated working memory");
+        }
+
+        // Repair episodic memory overflow
+        // Assuming episodic has max, but not implemented
+
+        // Check manifest integrity
+        if !self.validate_manifest(&self.manifest.raw) {
+            log_to_file("Manifest corrupted, reloading from disk");
+            if let Ok(manifest) = SystemManifest::load("system_manifest.md") {
+                self.manifest = manifest;
+            }
+        }
+
+        // Reset stuck state if uptime too long without tick
+        if self.state.uptime.as_secs() > 3600 && self.state.tick_count < 100 {
+            log_to_file("Detected stuck state, resetting tick");
+            self.state.tick_count = 0;
+        }
+
+        log_to_file("Self-repair completed");
+    }
     fn enhance_prompt_with_memory(&self, prompt: &str) -> String {
         let mut context = String::new();
 
@@ -189,7 +244,7 @@ where
         // Episodic memory (placeholder)
         // TODO: retrieve relevant episodes
 
-        format!("Context from memory:\n{}\n\nOriginal prompt:\n{}", context, prompt)
+        format!("Context from memory:\n{}\n\nPersonality: {}\n\nOriginal prompt:\n{}", context, self.personality, prompt)
     }
 
     // -------------------------------------------------------------------------
@@ -217,9 +272,7 @@ where
         };
 
         if let Err(e) = self.bus.publish(msg.clone()) {
-            let error_msg = format!("CPU failed to route LLM request to {}: {}", to, e);
-            log_to_file(&error_msg);
-            error!("{}", error_msg);
+            error!("Failed to route LLM request to {}: {}", to, e);
         } else {
             debug!("CPU routed LLM request to {}", to);
             log_to_file(&format!("CPU routed LLM request to {}", to));
@@ -311,6 +364,16 @@ where
         self.state.uptime = self.state.start_time.elapsed();
 
         self.run_manifest_routines().await;
+
+        // Nightly maintenance at 2 AM
+        if Utc::now().hour() == 2 && self.state.tick_count % 3600 == 0 {
+            self.nightly_maintenance().await;
+        }
+
+        // Self-repair every 100 ticks
+        if self.state.tick_count % 100 == 0 {
+            self.self_repair().await;
+        }
 
         if self.state.tick_count % 10 == 0 {
             if let Err(e) = self.run_hyevo_cycle().await {

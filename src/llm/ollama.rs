@@ -1,7 +1,9 @@
+use crate::config::{OllamaConfig, OllamaRouter};
 use crate::cpu::interfaces::LlmInterface;
 use crate::hy_evo::genome::WorkflowGenome;
 use crate::hy_evo::reflection::ReflectionLlm;
 use crate::hy_evo::scoring::ExecutionMetrics;
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::Value;
@@ -12,26 +14,32 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct OllamaLlm {
     client: Arc<Client>,
-    url: String,
-    model: String,
+    router: Arc<OllamaRouter>,
 }
 
 impl OllamaLlm {
-    pub fn new(url: &str, model: &str) -> Self {
+    pub fn new(router: Arc<OllamaRouter>) -> Self {
         Self {
             client: Arc::new(Client::new()),
-            url: url.to_string(),
-            model: model.to_string(),
+            router,
         }
     }
 
     /// Low-level call to the Ollama `/api/generate` endpoint.
     async fn call_ollama(&self, prompt: &str) -> anyhow::Result<String> {
+        let backend = self
+            .router
+            .default()
+            .expect("No Ollama backends configured");
+
+        let url = format!("{}/api/generate", backend.url);
+        let model = backend.model.clone();
+
         let response = self
             .client
-            .post(format!("{}/api/generate", self.url))
+            .post(url)
             .json(&serde_json::json!({
-                "model": self.model,
+                "model": model,
                 "prompt": prompt,
                 "stream": false
             }))
@@ -103,7 +111,12 @@ impl ReflectionLlm for OllamaLlm {
 
 #[async_trait]
 impl LlmInterface for OllamaLlm {
-    async fn call(&self, model: &str, prompt: &str, params: &Value) -> crate::hy_evo::node::NodeResult {
+    async fn call(
+        &self,
+        model: &str,
+        prompt: &str,
+        params: &Value,
+    ) -> crate::hy_evo::node::NodeResult {
         match self.call_ollama(prompt).await {
             Ok(response) => crate::hy_evo::node::NodeResult::Text(response),
             Err(e) => crate::hy_evo::node::NodeResult::Error(format!("LLM call failed: {}", e)),

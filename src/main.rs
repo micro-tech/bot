@@ -41,23 +41,20 @@ struct Heartbeat {
     recent_events: Vec<String>,
 }
 
-#[derive(Deserialize)]
-struct Config {
-    bot: BotConfig,
-    ollama: OllamaConfig,
-    web: WebConfig,
+: WebConfig,
     heartbeat: HeartbeatConfig,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct OllamaConfig {
+    name: String,
+    url: String,
+    model: String,
 }
 
 #[derive(Deserialize)]
 struct BotConfig {
     name: String,
-}
-
-#[derive(Deserialize)]
-struct OllamaConfig {
-    url: String,
-    model: String,
 }
 
 #[derive(Deserialize)]
@@ -76,6 +73,26 @@ struct LogMsg {
     msg: String,
 }
 
+#[derive(Clone)]
+struct OllamaRouter {
+    backends: Vec<OllamaConfig>,
+}
+
+impl OllamaRouter {
+    fn new(config: &Config) -> Self {
+        Self {
+            backends: config.ollama.clone(),
+        }
+    }
+
+    fn get_by_name(&self, name: &str) -> Option<&OllamaConfig> {
+        self.backends.iter().find(|b| b.name == name)
+    }
+
+    fn default(&self) -> Option<&OllamaConfig> {
+        self.backends.first()
+    }
+}
 struct WebLogger {
     tx: mpsc::UnboundedSender<LogMsg>,
 }
@@ -113,13 +130,17 @@ fn get_current_timestamp() -> u64 {
 async fn main() {
     fs::create_dir_all("logs").expect("Failed to create logs dir");
 
-    // Load config
+    // 1. Load config FIRST
     let config_str = fs::read_to_string("config.toml").expect("Failed to read config.toml");
     let config: Config = toml::from_str(&config_str).expect("Failed to parse config.toml");
 
+    // 2. Build Ollama router AFTER config is loaded
+    let router = Arc::new(OllamaRouter::new(&config));
+
+    // 3. Create bus
     let bus = Arc::new(Bus::new());
 
-    // Set up custom logger
+    // 4. Set up logger
     let (log_tx, mut log_rx) = mpsc::unbounded_channel();
     let logger = WebLogger { tx: log_tx };
     set_boxed_logger(Box::new(logger)).unwrap();
@@ -146,9 +167,10 @@ async fn main() {
 
     info!("Starting bot with HTTPS web interface and Ollama chat");
 
-    // Extract Ollama config values before any closures can partially capture `config`.
-    let ollama_url = config.ollama.url.clone();
-    let ollama_model = config.ollama.model.clone();
+    // Pick default backend for now
+    let default_backend = router.default().expect("No Ollama backends configured");
+    let ollama_url = default_backend.url.clone();
+    let ollama_model = default_backend.model.clone();
 
     // Spawn HTTPS Web Server
     let web_bus = bus.clone();
@@ -278,14 +300,24 @@ async fn main() {
     // Build subsystems
     let memory = crate::memory::MemoryManager::new(50, 1000);
     let skills = Box::new(SkillRegistry::new()) as Box<dyn crate::cpu::interfaces::SkillInterface>;
-    let llm = OllamaLlm::new(&ollama_url, &ollama_model);
+    let llm = OllamaLlm::new(router.clone());
 
     // Build HyEvo integration
     let engine = HyEvoEngine::new(llm.clone());
     let hyevo = HyEvoIntegration::new(engine);
 
     // Build CPU
-    let cpu = Arc::new(Mutex::new(Cpu::new(memory, skills, llm, bus.clone(), hyevo, "system_manifest.md").unwrap()));
+    let cpu = Arc::new(Mutex::new(
+        Cpu::new(
+            memory,
+            skills,
+            llm,
+            bus.clone(),
+            hyevo,
+            "system_manifest.md",
+        )
+        .unwrap(),
+    ));
     let cpu_bus = bus.clone();
     let cpu_instance = cpu.clone();
 
