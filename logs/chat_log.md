@@ -60,3 +60,23 @@
 [2026-03-31 23:55:14.843] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}
 [2026-04-04 13:17:25.529] test -> ollama: Test message
 [2026-04-04 13:17:25.530] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}
+[2026-04-10 17:21:27.684] logger -> web_interface: {"type":"log","level":"info","msg":"Starting bot with HTTPS web interface and Ollama chat"}
+[2026-04-10 17:21:27.692] logger -> web_interface: {"type":"log","level":"info","msg":"HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)"}
+[2026-04-10 17:21:27.693] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama handler spawned — model='qwen3.5:4b' url='http://192.168.1.149:11434'"}
+[2026-04-10 17:21:27.694] logger -> web_interface: {"type":"log","level":"info","msg":"Starting HTTPS Web Server on 0.0.0.0:8443"}
+[2026-04-10 17:21:27.695] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama health-check ✅  (http://192.168.1.149:11434/api/tags → 200 OK)"}
+[2026-04-10 17:21:27.696] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama reachable at http://192.168.1.149:11434 ✅"}
+[2026-04-10 17:21:27.696] logger -> web_interface: {"type":"log","level":"info","msg":"Web server listening on https://localhost:8443 (accept self-signed cert warning)"}
+[2026-04-10 17:21:27.703] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama available models: [qwen3.5:4b, llama3:latest]"}
+[2026-04-10 17:21:27.704] logger -> web_interface: {"type":"log","level":"info","msg":"Configured model 'qwen3.5:4b' is available ✅"}
+[2026-04-10 17:21:49.039] web_interface -> cpu: {"type":"user_input","content_type":"text","content":"hi","correlation_id":1775856109039,"metadata":{}}
+[2026-04-10 17:32:40.451] logger -> web_interface: {"type":"log","level":"info","msg":"Starting bot with HTTPS web interface and Ollama chat"}
+[2026-04-10 17:32:40.453] logger -> web_interface: {"type":"log","level":"info","msg":"HTTPS Web Server spawned - visit https://localhost:8443 (accept self-signed cert warning)"}
+[2026-04-10 17:32:40.454] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama handler spawned — model='qwen3.5:4b' url='http://192.168.1.149:11434'"}
+[2026-04-10 17:32:40.455] logger -> web_interface: {"type":"log","level":"info","msg":"Starting HTTPS Web Server on 0.0.0.0:8443"}
+[2026-04-10 17:32:40.455] logger -> web_interface: {"type":"log","level":"info","msg":"Web server listening on https://localhost:8443 (accept self-signed cert warning)"}
+[2026-04-10 17:32:40.457] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama health-check ✅  (http://192.168.1.149:11434/api/tags → 200 OK)"}
+[2026-04-10 17:32:40.458] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama reachable at http://192.168.1.149:11434 ✅"}
+[2026-04-10 17:32:40.466] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama available models: [qwen3.5:4b, llama3:latest]"}
+[2026-04-10 17:32:40.467] logger -> web_interface: {"type":"log","level":"info","msg":"Configured model 'qwen3.5:4b' is available ✅"}
+[2026-04-10 17:32:45.737] web_interface -> cpu: {"type":"user_input","content_type":"text","content":"hi","correlation_id":1775856765737,"metadata":{}}

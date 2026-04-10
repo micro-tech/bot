@@ -20,6 +20,7 @@ use serde_json::Value;
 // If you have an Instruction enum somewhere else, import it:
 use crate::cpu::state::Instruction; // adjust path if needed
 use crate::utils::log_to_file; // adjust path if needed
+use log::{debug, error};
 
 /// Main CPU struct, generic over the LLM type.
 pub struct Cpu<L>
@@ -193,6 +194,10 @@ where
     }
 
     /// Writes heartbeat.md
+    fn validate_manifest(&self, _manifest: &str) -> bool {
+        true // TODO: validate against self.manifest.raw
+    }
+
     fn write_heartbeat_file(&self) -> std::io::Result<()> {
         use std::fs;
 

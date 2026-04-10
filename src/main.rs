@@ -41,7 +41,11 @@ struct Heartbeat {
     recent_events: Vec<String>,
 }
 
-: WebConfig,
+#[derive(Deserialize)]
+struct Config {
+    bot: BotConfig,
+    ollama: Vec<OllamaConfig>,
+    web: WebConfig,
     heartbeat: HeartbeatConfig,
 }
 

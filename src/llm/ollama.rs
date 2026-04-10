@@ -1,8 +1,9 @@
-use crate::config::{OllamaConfig, OllamaRouter};
+use crate::OllamaRouter;
 use crate::cpu::interfaces::LlmInterface;
 use crate::hy_evo::genome::WorkflowGenome;
 use crate::hy_evo::reflection::ReflectionLlm;
 use crate::hy_evo::scoring::ExecutionMetrics;
+
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use reqwest::Client;
