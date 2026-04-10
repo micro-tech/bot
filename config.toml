@@ -1,9 +1,16 @@
 [bot]
 name = "Bot"
 
-[ollama]
+# --- MULTIPLE OLLAMA INSTANCES ---
+[[ollama]]
+name = "server"
 url = "http://192.168.1.149:11434"
 model = "qwen3.5:4b"
+
+[[ollama]]
+name = "local3090"
+url = "http://192.168.1.196:11434"
+model = "qwen3.5:7b"
 
 [web]
 port = 8443
