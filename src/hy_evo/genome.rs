@@ -2,8 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use super::mutation::{
+    mutate_add_node, mutate_node_params, mutate_remove_node, mutate_reorder_nodes,
+};
 use super::node::{Node, NodeMetadata};
-use super::mutation::{mutate_add_node, mutate_remove_node, mutate_reorder_nodes, mutate_node_params};
 
 /// A WorkflowGenome represents the *evolvable* structure of a workflow.
 /// It is the core unit that HyEvo mutates, crosses, scores, and executes.
