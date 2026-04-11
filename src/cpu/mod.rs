@@ -206,9 +206,6 @@ where
         let _ = std::fs::create_dir_all("backups");
         let _ = std::fs::write(&backup_path, &self.manifest.raw);
 
-        // Force evolution if not recent
-        // Already in manifest routines
-
         log_to_file("Nightly maintenance completed");
     }
 
@@ -224,9 +221,6 @@ where
             log_to_file("Repaired: truncated working memory");
         }
 
-        // Repair episodic memory overflow
-        // Assuming episodic has max, but not implemented
-
         // Check manifest integrity (placeholder)
         log_to_file("Manifest integrity OK");
 
@@ -238,6 +232,7 @@ where
 
         log_to_file("Self-repair completed");
     }
+
     fn enhance_prompt_with_memory(&self, prompt: &str) -> String {
         let mut context = String::new();
 
@@ -260,12 +255,6 @@ where
                 .join("\n");
             context.push_str(&format!("Stable beliefs:\n{}\n\n", beliefs_str));
         }
-
-        // Vector memory (placeholder)
-        // TODO: search vector DB for relevant facts
-
-        // Episodic memory (placeholder)
-        // TODO: retrieve relevant episodes
 
         format!(
             "Context from memory:\n{}\n\nPersonality: {}\n\nOriginal prompt:\n{}",
@@ -305,9 +294,67 @@ where
         }
     }
 
+    /// Handle an LLM response coming back on the bus.
+    pub fn handle_llm_response(&mut self, msg: Message) -> Result<(), String> {
+        let payload: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_else(|e| {
+            let err = format!("Failed to parse LLM response payload: {}", e);
+            log_to_file(&err);
+            error!("{}", err);
+            serde_json::json!({})
+        });
+
+        let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+        let text = payload["msg"].as_str().unwrap_or("").to_string();
+
+        // Build UI message
+        let ui_msg = Message {
+            to: "web_interface".to_string(),
+            from: "cpu".to_string(),
+            data: serde_json::json!({
+                "type": "llm_output",
+                "correlation_id": correlation_id,
+                "msg": text,
+            })
+            .to_string(),
+            timestamp: now_ms(),
+        };
+
+        if let Err(e) = self.bus.publish(ui_msg.clone()) {
+            let err = format!("CPU failed to publish LLM output to UI: {}", e);
+            log_to_file(&err);
+            error!("{}", err);
+            return Err(err);
+        }
+
+        debug!("CPU forwarded LLM response to UI");
+        log_to_file("CPU forwarded LLM response to UI");
+
+        Ok(())
+    }
+
     pub fn handle_bus_message(&mut self, msg: Message) {
         log_to_file(&format!("CPU received message: {:?}", msg));
-        // TODO: handle specific messages
+        let payload: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
+        if let Some(msg_type) = payload["type"].as_str() {
+            match msg_type {
+                "user_input" => {
+                    let prompt = payload["content"].as_str().unwrap_or("").to_string();
+                    let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+                    self.route_llm_request(
+                        crate::io::ollama::LlmTarget::OllamaLan,
+                        prompt,
+                        correlation_id,
+                    );
+                    log_to_file("CPU routed user_input to Ollama");
+                }
+                "llm_response" => {
+                    if let Err(e) = self.handle_llm_response(msg) {
+                        log_to_file(&format!("CPU LLM response error: {}", e));
+                    }
+                }
+                _ => log_to_file(&format!("CPU ignored msg type: {}", msg_type)),
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -418,7 +465,7 @@ where
 
         self.hyevo.run_and_evolve(&mut executor).await
     }
-}
+} // ← closes impl Cpu<L>
 
 struct CpuExecutorImpl<'a> {
     memory: &'a mut dyn MemoryInterface,
