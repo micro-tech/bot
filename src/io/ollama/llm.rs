@@ -1,12 +1,17 @@
+// ── OllamaLlm struct moved from src/llm/ollama.rs ───────────────────────────
+
+use log::info;
+use reqwest::Client;
+
 use crate::OllamaRouter;
 use crate::cpu::interfaces::LlmInterface;
 use crate::hy_evo::genome::WorkflowGenome;
 use crate::hy_evo::reflection::ReflectionLlm;
 use crate::hy_evo::scoring::ExecutionMetrics;
+use crate::utils::now_ms;
 
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use reqwest::Client;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -35,6 +40,13 @@ impl OllamaLlm {
 
         let url = format!("{}/api/generate", backend.url);
         let model = backend.model.clone();
+
+        info!(
+            "Ollama LLM calling {} on {}, prompt len {}",
+            backend.url,
+            model,
+            prompt.len()
+        );
 
         let response = self
             .client
