@@ -142,13 +142,19 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
 
     let _ = ws_sender.send(WsMessage::Text(config_msg.into())).await;
 
-    // Request manifest
-    let manifest_get_msg = json!({
-        "type": "manifest_get"
+    // Send manifest
+    let manifest_path = "system_manifest.md";
+    if !Path::new(manifest_path).exists() {
+        fs::write(manifest_path, "# System Manifest\n\nWelcome to the bot system.\n\nEdit this file to configure behavior.\n".to_string()).ok();
+    }
+    let manifest = fs::read_to_string(manifest_path).unwrap_or_default();
+    let manifest_msg = json!({
+        "type": "manifest",
+        "data": manifest
     })
     .to_string();
 
-    let _ = ws_sender.send(WsMessage::Text(manifest_get_msg.into())).await;
+    let _ = ws_sender.send(WsMessage::Text(manifest_msg.into())).await;
 
     // Task: forward broadcast messages to WebSocket
     let recv_task = tokio::spawn(async move {
@@ -263,16 +269,6 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                                 };
                                 let _ = state.bus.publish(bus_msg);
                             }
-                        }
-
-                        "manifest_get" => {
-                            let manifest = fs::read_to_string("system_manifest.md").unwrap_or_else(|_| "".to_string());
-                            let msg = json!({
-                                "type": "manifest",
-                                "data": manifest
-                            })
-                            .to_string();
-                            let _ = state.msg_tx.send(msg);
                         }
 
                         "manifest_save" => {

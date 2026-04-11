@@ -16,7 +16,6 @@ use log::{debug, error};
 use log::{info, warn};
 use reqwest::Client;
 use serde_json::Value;
-
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -254,6 +253,7 @@ pub async fn handle_ollama_message(
 
     for attempt in 1..=MAX_RETRIES {
         match call_ollama(&client, base_url, model, &message.data).await {
+            // SUCCESS — Ollama returned a valid response
             Ok(response) => {
                 info!(
                     "Ollama ✅  replied on attempt {}/{} — {} chars",
@@ -262,26 +262,13 @@ pub async fn handle_ollama_message(
                     response.len()
                 );
 
-                // Send Ollama response to CPU instead of directly to UI or sender
-                let _ = bus.publish(Message {
-                    to: "cpu".to_string(),
-                    from: "ollama".to_string(),
-                    data: response.clone(),
-                    timestamp: now_ms(),
-                });
-                // Parse payload safely
-                let payload: serde_json::Value = serde_json::from_str(&message.data)
-                    .unwrap_or_else(|e| {
-                        let err = format!("Failed to parse LLM request payload: {}", e);
-                        log_to_file(&err);
-                        error!("{}", err);
-                        serde_json::json!({})
-                    });
+                // Parse the ORIGINAL request to extract correlation_id
+                let request_payload: serde_json::Value =
+                    serde_json::from_str(&message.data).unwrap_or_default();
 
-                // Extract correlation_id safely
-                let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+                let correlation_id = request_payload["correlation_id"].as_u64().unwrap_or(0);
 
-                // Build response message
+                // Build the correct CPU-bound message
                 let response_msg = Message {
                     to: "cpu".to_string(),
                     from: "ollama_lan".to_string(),
@@ -294,7 +281,7 @@ pub async fn handle_ollama_message(
                     timestamp: now_ms(),
                 };
 
-                // Publish with full error checking + logging
+                // Publish to CPU
                 if let Err(e) = bus.publish(response_msg.clone()) {
                     let error_msg = format!("Ollama LAN failed to publish LLM response: {}", e);
                     log_to_file(&error_msg);
@@ -303,10 +290,11 @@ pub async fn handle_ollama_message(
                     debug!("Ollama LAN published LLM response to CPU");
                     log_to_file("Ollama LAN published LLM response to CPU");
                 }
-                // ── 3b. forward to the web UI ─────────────────────────────────
+
+                // Also forward to web UI
                 let _ = bus.publish(Message {
                     to: "web_interface".to_string(),
-                    from: "ollama".to_string(),
+                    from: "ollama_lan".to_string(),
                     data: json!({
                         "type": "ollama_response",
                         "reply_to": message.from,
@@ -381,158 +369,204 @@ async fn call_ollama(
     model: &str,
     prompt: &str,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let tools = default_tools();
-    call_ollama_tools(client, base_url, model, prompt, tools).await
+    let tools = tools::default_tools();
+    tools::call_ollama_tools(client, base_url, model, prompt, tools).await
 }
 
-/// Agentic tool-calling loop:
-/// - Send the prompt.
-/// - If the model returns `tool_calls`, execute them locally and send results back.
-/// - Repeat until the model returns plain text content.
-async fn call_ollama_tools(
-    client: &Client,
-    base_url: &str,
-    model: &str,
-    prompt: &str,
-    tools: Value,
-) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let mut messages = vec![json!({"role": "user", "content": prompt})];
+// ── Tools-related code extracted to submod ─────────────────────────────
 
-    // Guard against infinite tool-call loops (e.g. a badly behaved model)
-    let max_tool_rounds = 10usize;
-    let mut tool_rounds = 0usize;
+pub mod tools {
+    use super::*; // Import top-level dependencies
 
-    loop {
-        let resp = client
-            .post(format!("{}/api/chat", base_url))
-            .json(&json!({
-                "model":    model,
-                "messages": messages,
-                "tools":    tools,
-                "stream":   false   // MUST be false — streaming returns NDJSON,
-                                    // not a single JSON object, and breaks parsing.
-            }))
-            .send()
-            .await
-            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                if e.is_timeout() {
-                    format!("request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, e).into()
-                } else if e.is_connect() {
-                    format!("connection error: {}", e).into()
-                } else {
-                    format!("HTTP error: {}", e).into()
-                }
+    /// Agentic tool-calling loop:
+    /// - Send the prompt.
+    /// - If the model returns `tool_calls`, execute them locally and send results back.
+    /// - Repeat until the model returns plain text content.
+    pub async fn call_ollama_tools(
+        client: &Client,
+        base_url: &str,
+        model: &str,
+        prompt: &str,
+        tools: Value,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let mut messages = vec![json!({"role": "user", "content": prompt})];
+
+        // Guard against infinite tool-call loops (e.g. a badly behaved model)
+        let max_tool_rounds = 10usize;
+        let mut tool_rounds = 0usize;
+
+        loop {
+            let resp = client
+                .post(format!("{}/api/chat", base_url))
+                .json(&json!({
+                    "model":    model,
+                    "messages": messages,
+                    "tools":    tools,
+                    "stream":   false   // MUST be false — streaming returns NDJSON,
+                                        // not a single JSON object, and breaks parsing.
+                }))
+                .send()
+                .await
+                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+                    if e.is_timeout() {
+                        format!("request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, e).into()
+                    } else if e.is_connect() {
+                        format!("connection error: {}", e).into()
+                    } else {
+                        format!("HTTP error: {}", e).into()
+                    }
+                })?;
+
+            // Surface non-2xx as an error so the retry loop can handle them.
+            let status = resp.status();
+            if !status.is_success() {
+                let body = resp.text().await.unwrap_or_default();
+                return Err(format!("Ollama returned HTTP {}: {}", status, body).into());
+            }
+
+            let parsed: Value = resp.json().await.map_err(|e| {
+                let e: Box<dyn std::error::Error + Send + Sync> =
+                    format!("failed to parse Ollama JSON response: {}", e).into();
+                e
             })?;
 
-        // Surface non-2xx as an error so the retry loop can handle them.
-        let status = resp.status();
-        if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(format!("Ollama returned HTTP {}: {}", status, body).into());
-        }
+            let msg = &parsed["message"];
+            messages.push(msg.clone());
 
-        let parsed: Value = resp.json().await.map_err(|e| {
-            let e: Box<dyn std::error::Error + Send + Sync> =
-                format!("failed to parse Ollama JSON response: {}", e).into();
-            e
-        })?;
+            if let Some(tool_calls) = msg["tool_calls"].as_array() {
+                tool_rounds += 1;
+                if tool_rounds > max_tool_rounds {
+                    return Err("Ollama tool-call loop exceeded safety limit".into());
+                }
 
-        let msg = &parsed["message"];
-        messages.push(msg.clone());
+                for tool in tool_calls {
+                    let name = tool["function"]["name"].as_str().unwrap_or("");
+                    let args = tool["function"]["arguments"].clone();
+                    let tool_result = execute_tool(name, args);
+                    info!("Tool called: '{}' → {} chars", name, tool_result.len());
 
-        if let Some(tool_calls) = msg["tool_calls"].as_array() {
-            tool_rounds += 1;
-            if tool_rounds > max_tool_rounds {
-                return Err("Ollama tool-call loop exceeded safety limit".into());
+                    messages.push(json!({
+                        "role":         "tool",
+                        "tool_call_id": tool["id"],
+                        "content":      tool_result
+                    }));
+                }
+                // Loop — send tool results back to the model.
+            } else {
+                // No tool calls → model produced its final answer.
+                let content = msg["content"].as_str().unwrap_or("").to_string();
+                if content.is_empty() {
+                    return Err("Ollama returned an empty content field".into());
+                }
+                return Ok(content);
             }
-
-            for tool in tool_calls {
-                let name = tool["function"]["name"].as_str().unwrap_or("");
-                let args = tool["function"]["arguments"].clone();
-                let tool_result = execute_tool(name, args);
-                info!("Tool called: '{}' → {} chars", name, tool_result.len());
-
-                messages.push(json!({
-                    "role":         "tool",
-                    "tool_call_id": tool["id"],
-                    "content":      tool_result
-                }));
-            }
-            // Loop — send tool results back to the model.
-        } else {
-            // No tool calls → model produced its final answer.
-            let content = msg["content"].as_str().unwrap_or("").to_string();
-            if content.is_empty() {
-                return Err("Ollama returned an empty content field".into());
-            }
-            return Ok(content);
         }
     }
-}
 
-// ── tool registry ─────────────────────────────────────────────────────────────
+    // ── tool registry ─────────────────────────────────────────────────────────────
 
-/// Returns the JSON array of tools exposed to the model.
-fn default_tools() -> Value {
-    json!([
-        {
-            "type": "function",
-            "function": {
-                "name": "read_log",
-                "description": "Read the contents of a project log file.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "log_file": {
-                            "type": "string",
-                            "description": "Relative path to the log file, e.g. logs/error_log.md"
-                        }
-                    },
-                    "required": ["log_file"]
+    /// Returns the JSON array of tools exposed to the model.
+    pub fn default_tools() -> Value {
+        json!([
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_log",
+                    "description": "Read the contents of a project log file.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "log_file": {
+                                "type": "string",
+                                "description": "Relative path to the log file, e.g. logs/error_log.md"
+                            }
+                        },
+                        "required": ["log_file"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "send_email",
+                    "description": "Queue an alert email to be sent.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "to":      { "type": "string", "description": "Recipient address" },
+                            "subject": { "type": "string", "description": "Email subject line" },
+                            "body":    { "type": "string", "description": "Plain-text body" }
+                        },
+                        "required": ["to", "subject", "body"]
+                    }
                 }
             }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "send_email",
-                "description": "Queue an alert email to be sent.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "to":      { "type": "string", "description": "Recipient address" },
-                        "subject": { "type": "string", "description": "Email subject line" },
-                        "body":    { "type": "string", "description": "Plain-text body" }
-                    },
-                    "required": ["to", "subject", "body"]
+        ])
+    }
+
+    /// Dispatch a tool call by name, returning the result as a plain string.
+    pub fn execute_tool(name: &str, args: Value) -> String {
+        match name {
+            "read_log" => {
+                let file = args["log_file"].as_str().unwrap_or("logs/bus_log.md");
+                match std::fs::read_to_string(file) {
+                    Ok(contents) => contents,
+                    Err(e) => format!("Error reading '{}': {}", file, e),
                 }
             }
-        }
-    ])
-}
-
-/// Dispatch a tool call by name, returning the result as a plain string.
-fn execute_tool(name: &str, args: Value) -> String {
-    match name {
-        "read_log" => {
-            let file = args["log_file"].as_str().unwrap_or("logs/bus_log.md");
-            match std::fs::read_to_string(file) {
-                Ok(contents) => contents,
-                Err(e) => format!("Error reading '{}': {}", file, e),
+            "send_email" => {
+                // TODO: wire up a real mailer (lettre, sendgrid, etc.)
+                let to = args["to"].as_str().unwrap_or("(none)");
+                info!(
+                    "send_email tool called → to='{}'  (placeholder, not sent)",
+                    to
+                );
+                "Email queued (placeholder — not yet implemented)".to_string()
+            }
+            other => {
+                warn!("Unknown tool requested: '{}'", other);
+                format!("Unknown tool: '{}' — no handler registered", other)
             }
         }
-        "send_email" => {
-            // TODO: wire up a real mailer (lettre, sendgrid, etc.)
-            let to = args["to"].as_str().unwrap_or("(none)");
-            info!(
-                "send_email tool called → to='{}'  (placeholder, not sent)",
-                to
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn test_execute_tool_read_log_missing() {
+            let result = execute_tool("read_log", json!({"log_file": "nonexistent.md"}));
+            assert!(result.contains("Error reading"));
+        }
+
+        fn test_execute_tool_send_email_placeholder() {
+            let result = execute_tool(
+                "send_email",
+                json!({"to": "test@example.com", "subject": "Hi", "body": "Test"}),
             );
-            "Email queued (placeholder — not yet implemented)".to_string()
+            assert!(result.contains("placeholder"));
         }
-        other => {
-            warn!("Unknown tool requested: '{}'", other);
-            format!("Unknown tool: '{}' — no handler registered", other)
+
+        fn test_execute_tool_unknown() {
+            let result = execute_tool("unknown_tool", json!({}));
+            assert!(result.contains("Unknown tool"));
+        }
+
+        fn test_truncate_short_string() {
+            assert_eq!(truncate("short", 10), "short");
+        }
+
+        fn test_truncate_long_string() {
+            let input = "very long string that should be truncated";
+            let truncated = truncate(input, 10);
+            assert_eq!(truncated, "very long ");
+            assert!(truncated.len() <= 10);
+        }
+
+        fn test_truncate_unicode_boundary() {
+            let input = "a💣b"; // 5 bytes
+            let truncated = truncate(input, 4);
+            assert_eq!(truncated, "a"); // Safe boundary
         }
     }
 }
@@ -697,5 +731,148 @@ mod tests {
         let text = result.unwrap();
         assert!(!text.is_empty(), "Response should not be empty");
         println!("Live Ollama response: {}", text);
+    }
+}
+
+// ── OllamaLlm struct moved from src/llm/ollama.rs ───────────────────────────
+
+pub mod llm {
+
+    use crate::OllamaRouter;
+    use crate::cpu::interfaces::LlmInterface;
+    use crate::hy_evo::genome::WorkflowGenome;
+    use crate::hy_evo::reflection::ReflectionLlm;
+    use crate::hy_evo::scoring::ExecutionMetrics;
+    use crate::io::ollama::Client;
+    use crate::utils::now_ms;
+
+    use anyhow::{Result, anyhow};
+    use async_trait::async_trait;
+    use serde_json::Value;
+    use std::sync::Arc;
+
+    /// Ollama-backed LLM client.
+    /// Implements `ReflectionLlm` so it can drive HyEvo reflection and evolution.
+    #[derive(Clone)]
+    pub struct OllamaLlm {
+        client: Arc<Client>,
+        router: Arc<OllamaRouter>,
+    }
+
+    impl OllamaLlm {
+        pub fn new(router: Arc<OllamaRouter>) -> Self {
+            Self {
+                client: Arc::new(Client::new()),
+                router,
+            }
+        }
+
+        /// Low-level call to the Ollama `/api/generate` endpoint.
+        async fn call_ollama(&self, prompt: &str) -> anyhow::Result<String> {
+            let backend = self
+                .router
+                .default()
+                .expect("No Ollama backends configured");
+
+            let url = format!("{}/api/generate", backend.url);
+            let model = backend.model.clone();
+
+            let response = self
+                .client
+                .post(url)
+                .json(&serde_json::json!({
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": false
+                }))
+                .send()
+                .await
+                .map_err(|e| anyhow::anyhow!("Ollama request failed: {}", e))?;
+
+            let json: Value = response
+                .json()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to parse Ollama response: {}", e))?;
+
+            let result = json["response"].as_str().unwrap_or("").to_string();
+            Ok(result)
+        }
+    }
+
+    #[async_trait]
+    impl ReflectionLlm for OllamaLlm {
+        /// Reflect on a completed workflow execution.
+        /// Sends a structured prompt to Ollama describing the workflow and its metrics.
+        async fn reflect(
+            &self,
+            workflow: &WorkflowGenome,
+            metrics: &ExecutionMetrics,
+        ) -> anyhow::Result<String> {
+            let prompt = format!(
+                "You are an AI agent runtime optimizer.\n\
+             Reflect on the following workflow execution and suggest improvements.\n\n\
+             Workflow ID: {}\n\
+             Nodes: {}\n\n\
+             Execution Metrics:\n\
+             - Latency: {}ms\n\
+             - LLM calls: {}\n\
+             - Skill calls: {}\n\
+             - Memory ops: {}\n\
+             - Bus ops: {}\n\
+             - Errors: {}\n\
+             - Success: {}\n\n\
+             Provide a concise reflection and list specific improvements as bullet points starting with '- '.",
+                workflow.id,
+                workflow.nodes.len(),
+                metrics.latency_ms,
+                metrics.llm_calls,
+                metrics.skill_calls,
+                metrics.memory_ops,
+                metrics.bus_ops,
+                metrics.errors,
+                metrics.success,
+            );
+
+            self.call_ollama(&prompt).await
+        }
+
+        /// Suggest workflow evolution steps given LLM feedback and a genome description.
+        async fn evolve_code(&self, feedback: &str, code: &str) -> anyhow::Result<String> {
+            let prompt = format!(
+                "You are an AI agent workflow optimizer.\n\
+             Given the following performance feedback and current workflow description,\n\
+             suggest concrete improvements as bullet points starting with '- '.\n\n\
+             Feedback:\n{}\n\n\
+             Current Workflow:\n{}",
+                feedback, code
+            );
+
+            self.call_ollama(&prompt).await
+        }
+    }
+
+    #[async_trait]
+    impl LlmInterface for OllamaLlm {
+        async fn call(
+            &self,
+            model: &str,
+            prompt: &str,
+            params: &Value,
+        ) -> crate::hy_evo::node::NodeResult {
+            match self.call_ollama(prompt).await {
+                Ok(response) => crate::hy_evo::node::NodeResult::Text(response),
+                Err(e) => crate::hy_evo::node::NodeResult::Error(format!("LLM call failed: {}", e)),
+            }
+        }
+
+        async fn summarize(&self, text: &str) -> crate::hy_evo::node::NodeResult {
+            let prompt = format!("Summarize the following text concisely:\n\n{}", text);
+            match self.call_ollama(&prompt).await {
+                Ok(summary) => crate::hy_evo::node::NodeResult::Text(summary),
+                Err(e) => {
+                    crate::hy_evo::node::NodeResult::Error(format!("Summarize failed: {}", e))
+                }
+            }
+        }
     }
 }
