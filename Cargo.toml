@@ -11,6 +11,7 @@ unused_imports = "allow"
 
 [dependencies]
 anyhow = "1.0.102"
+dotenvy = "0.15.7"
 async-trait = "0.1.89"
 dashmap = "6.1.0"
 gemini_crate = "0.1.0"

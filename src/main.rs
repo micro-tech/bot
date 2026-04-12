@@ -1,3 +1,4 @@
+use dotenvy;
 use log::{LevelFilter, error, info, set_boxed_logger, set_max_level, warn};
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -18,6 +19,7 @@ mod io;
 
 mod memory;
 mod skills;
+mod tools;
 mod utils;
 
 use crate::bus::{Bus, Message};
@@ -27,8 +29,9 @@ use crate::cpu::time_scheduler::TimeScheduler;
 use crate::hooks::HookRegistry;
 use crate::hy_evo::HyEvoIntegration;
 use crate::hy_evo::engine::HyEvoEngine;
+use crate::io::llm_gemini::handle_gemini_bus_message;
 use crate::io::ollama::llm::OllamaLlm;
-use crate::io::ollama::{check_ollama_health, fetch_available_models, handle_ollama_message};
+use crate::io::ollama::{check_ollama_health, handle_ollama_message};
 use crate::io::web_server::start_web_server;
 use crate::memory::MemoryHandle;
 use crate::skills::SkillRegistry;
@@ -45,6 +48,7 @@ struct Heartbeat {
 struct Config {
     bot: BotConfig,
     ollama: Vec<OllamaConfig>,
+    gemini: Option<GeminiConfig>,
     web: WebConfig,
     heartbeat: HeartbeatConfig,
 }
@@ -69,6 +73,11 @@ struct WebConfig {
 #[derive(Deserialize)]
 struct HeartbeatConfig {
     interval_seconds: u64,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct GeminiConfig {
+    model: String,
 }
 
 #[derive(Clone)]
@@ -132,6 +141,11 @@ fn get_current_timestamp() -> u64 {
 
 #[tokio::main]
 async fn main() {
+    // Load .env file so GEMINI_API_KEY and other secrets are available via std::env::var.
+    // .ok() silences the error when the file is absent (e.g. in CI / production where
+    // env-vars are injected directly).
+    dotenvy::dotenv().ok();
+
     fs::create_dir_all("logs").expect("Failed to create logs dir");
 
     // 1. Load config FIRST
@@ -165,16 +179,15 @@ async fn main() {
                 .to_string(),
                 timestamp: get_current_timestamp(),
             };
+            println!(
+                "Publishing log to bus: {}",
+                &msg.data[..50.min(msg.data.len())]
+            );
             let _ = bus_clone.publish(msg);
         }
     });
 
     info!("Starting bot with HTTPS web interface and Ollama chat");
-
-    // Pick default backend for now
-    let default_backend = router.default().expect("No Ollama backends configured");
-    let ollama_url = default_backend.url.clone();
-    let ollama_model = default_backend.model.clone();
 
     // Spawn HTTPS Web Server
     let web_bus = bus.clone();
@@ -189,112 +202,95 @@ async fn main() {
         config.web.port
     );
 
-    // Spawn Ollama Handler — real async handler with health-check, timeout & retry.
-    //
-    // The bus uses a sync `std::sync::mpsc` channel internally.  We bridge it
-    // to an async `tokio::sync::mpsc` channel so individual LLM requests can
-    // be processed concurrently without blocking the Tokio runtime.
-    let ollama_bus = bus.clone();
-    let ollama_url_clone = ollama_url.clone();
-    let ollama_model_clone = ollama_model.clone();
-    tokio::spawn(async move {
-        // ── Startup health + model check ──────────────────────────────────────
-        // Advisory only — we warn but do not abort.  Per-request checks inside
-        // `handle_ollama_message` will surface errors when real messages arrive.
-        if check_ollama_health(&ollama_url_clone).await {
-            info!("Ollama reachable at {} ✅", ollama_url_clone);
+    // Spawn one Ollama handler per configured backend.
+    // Each handler subscribes to "ollama_{name}" so the web_server can route
+    // to the correct backend by channel name (e.g. "ollama_server", "ollama_local3090").
+    for backend in config.ollama.iter() {
+        let channel_name = format!("ollama_{}", backend.name);
+        let bus_clone = bus.clone();
+        let url = backend.url.clone();
+        let model = backend.model.clone();
+        let name = backend.name.clone();
 
-            // Fetch the installed model list so the operator can see at a glance
-            // what is available — and get a clear warning if the configured model
-            // is missing (avoiding three silent 404 retries later).
-            match fetch_available_models(&ollama_url_clone).await {
-                Ok(models) if models.is_empty() => {
-                    warn!(
-                        "Ollama has NO models installed. \
-                         Run `ollama pull {}` to install the configured model.",
-                        ollama_model_clone
-                    );
-                }
-                Ok(models) => {
-                    let names = models.join(", ");
-                    info!("Ollama available models: [{}]", names);
+        tokio::spawn(async move {
+            // Startup health check — advisory only, per-request retries handle
+            // transient failures when real messages arrive.
+            if check_ollama_health(&url).await {
+                info!("Ollama '{}' reachable at {} ✅", name, url);
+            } else {
+                warn!(
+                    "Ollama '{}' NOT reachable at {} on startup ⚠️ — will retry per request",
+                    name, url
+                );
+            }
 
-                    // Check whether the configured model is in the list.
-                    // We match on exact name OR base name (ignoring the tag),
-                    // e.g. "llama3.2" matches "llama3.2:latest".
-                    let model_base = ollama_model_clone
-                        .split(':')
-                        .next()
-                        .unwrap_or(&ollama_model_clone);
+            // Bridge: sync bus receiver → async tokio channel so individual LLM
+            // requests are processed concurrently without blocking the runtime.
+            let (tx_bridge, mut rx_bridge) = tokio::sync::mpsc::unbounded_channel::<Message>();
+            let rx_sync = bus_clone.subscribe(&channel_name);
 
-                    let found = models.iter().any(|a| {
-                        a == &ollama_model_clone || a.split(':').next().unwrap_or(a) == model_base
-                    });
-
-                    if found {
-                        info!("Configured model '{}' is available ✅", ollama_model_clone);
-                    } else {
-                        let bullet_list = models
-                            .iter()
-                            .map(|m| format!("  • {}", m))
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        warn!(
-                            "Configured model '{}' is NOT installed in Ollama! ⚠️\n\
-                             Fix options:\n\
-                               1. Run:  ollama pull {}\n\
-                               2. Or update config.toml → [ollama] model = \"<one of the below>\"\n\
-                             Installed models:\n{}",
-                            ollama_model_clone, ollama_model_clone, bullet_list
-                        );
+            tokio::task::spawn_blocking(move || {
+                while let Ok(msg) = rx_sync.recv() {
+                    if tx_bridge.send(msg).is_err() {
+                        break;
                     }
                 }
-                Err(e) => {
-                    warn!("Could not fetch Ollama model list on startup: {}", e);
+            });
+
+            while let Some(msg) = rx_bridge.recv().await {
+                if msg.from == "heartbeat" {
+                    continue;
                 }
+                let bus_ref = bus_clone.clone();
+                let url_c = url.clone();
+                let model_c = model.clone();
+                let name_c = name.clone();
+                tokio::spawn(async move {
+                    handle_ollama_message(msg, &bus_ref, &url_c, &model_c, &name_c).await;
+                });
             }
-        } else {
-            warn!(
-                "Ollama NOT reachable at {} on startup ⚠️  — will retry per request",
-                ollama_url_clone
-            );
-        }
+        });
+        info!(
+            "Ollama handler '{}' spawned on bus channel 'ollama_{}'",
+            backend.name, backend.name
+        );
+    }
 
-        // Bridge: sync mpsc bus receiver  →  async tokio mpsc sender.
+    // Resolve Gemini model: GEMINI_MODEL env var > config.toml [gemini] model > built-in default.
+    let gemini_model = std::env::var("GEMINI_MODEL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| config.gemini.as_ref().map(|g| g.model.clone()))
+        .unwrap_or_else(|| "gemini-2.0-flash".to_string());
+    info!("Gemini model: '{}'", gemini_model);
+
+    // Spawn Gemini handler — subscribes to the "gemini" bus channel.
+    let gemini_bus = bus.clone();
+    let gemini_model_clone = gemini_model.clone();
+    tokio::spawn(async move {
         let (tx_bridge, mut rx_bridge) = tokio::sync::mpsc::unbounded_channel::<Message>();
-        let rx_sync = ollama_bus.subscribe("ollama");
-
+        let rx_sync = gemini_bus.subscribe("gemini");
         tokio::task::spawn_blocking(move || {
-            // Blocking thread reads from the sync bus channel and forwards every
-            // message to the async side.  Exits cleanly if the receiver drops.
             while let Ok(msg) = rx_sync.recv() {
                 if tx_bridge.send(msg).is_err() {
                     break;
                 }
             }
         });
-
-        // Async dispatch loop — each message gets its own spawned task so that
-        // one slow Ollama request never blocks subsequent ones.
         while let Some(msg) = rx_bridge.recv().await {
-            // Heartbeat payloads are bookkeeping data — skip them to avoid
-            // hammering Ollama with JSON it doesn't need to process.
             if msg.from == "heartbeat" {
                 continue;
             }
-
-            let bus_ref = ollama_bus.clone();
-            let url = ollama_url_clone.clone();
-            let model = ollama_model_clone.clone();
-
+            let bus_ref = gemini_bus.clone();
+            let model_ref = gemini_model_clone.clone();
             tokio::spawn(async move {
-                handle_ollama_message(msg, &bus_ref, &url, &model).await;
+                handle_gemini_bus_message(msg, &bus_ref, &model_ref).await;
             });
         }
     });
     info!(
-        "Ollama handler spawned — model='{}' url='{}'",
-        ollama_model, ollama_url
+        "Gemini handler spawned on bus channel 'gemini' (model='{}')",
+        gemini_model
     );
 
     // ─────────────────────────────────────────────────────────────
