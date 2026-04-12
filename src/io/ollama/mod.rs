@@ -189,6 +189,7 @@ pub async fn handle_ollama_message(
     bus: &Arc<Bus>,
     base_url: &str,
     model: &str,
+    backend_name: &str,
 ) -> Option<String> {
     info!(
         "Ollama ← from='{}' data='{}'",
@@ -251,8 +252,14 @@ pub async fn handle_ollama_message(
     // ── 3. retry loop ─────────────────────────────────────────────────────────
     let mut last_err = String::new();
 
+    // Extract the actual prompt text from the JSON payload (if any).
+    let prompt: String = serde_json::from_str::<serde_json::Value>(&message.data)
+        .ok()
+        .and_then(|v| v["prompt"].as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| message.data.clone());
+
     for attempt in 1..=MAX_RETRIES {
-        match call_ollama(&client, base_url, model, &message.data).await {
+        match call_ollama(&client, base_url, model, &prompt, bus).await {
             // SUCCESS — Ollama returned a valid response
             Ok(response) => {
                 info!(
@@ -294,9 +301,10 @@ pub async fn handle_ollama_message(
                 // Also forward to web UI
                 let _ = bus.publish(Message {
                     to: "web_interface".to_string(),
-                    from: "ollama_lan".to_string(),
+                    from: format!("ollama_{}", backend_name),
                     data: json!({
                         "type": "ollama_response",
+                        "llm": backend_name,
                         "reply_to": message.from,
                         "msg": response
                     })
@@ -368,9 +376,10 @@ async fn call_ollama(
     base_url: &str,
     model: &str,
     prompt: &str,
+    bus: &Arc<Bus>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let tools = tools::default_tools();
-    tools::call_ollama_tools(client, base_url, model, prompt, tools).await
+    let tool_defs = crate::tools::tool_definitions();
+    tools::call_ollama_tools(client, base_url, model, prompt, tool_defs, bus).await
 }
 
 // ── Tools-related code extracted to submod ─────────────────────────────
@@ -388,6 +397,7 @@ pub mod tools {
         model: &str,
         prompt: &str,
         tools: Value,
+        bus: &Arc<Bus>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let mut messages = vec![json!({"role": "user", "content": prompt})];
 
@@ -442,8 +452,22 @@ pub mod tools {
                 for tool in tool_calls {
                     let name = tool["function"]["name"].as_str().unwrap_or("");
                     let args = tool["function"]["arguments"].clone();
-                    let tool_result = execute_tool(name, args);
+                    let tool_result = crate::tools::execute(name, &args);
                     info!("Tool called: '{}' → {} chars", name, tool_result.len());
+
+                    // Notify web UI that a tool was executed
+                    let _ = bus.publish(crate::bus::Message {
+                        to: "web_interface".to_string(),
+                        from: "tool_executor".to_string(),
+                        data: serde_json::json!({
+                            "type": "tool_call",
+                            "tool": name,
+                            "args": args,
+                            "result_preview": &tool_result[..tool_result.len().min(200)],
+                        })
+                        .to_string(),
+                        timestamp: now_ms(),
+                    });
 
                     messages.push(json!({
                         "role":         "tool",
@@ -467,67 +491,12 @@ pub mod tools {
 
     /// Returns the JSON array of tools exposed to the model.
     pub fn default_tools() -> Value {
-        json!([
-            {
-                "type": "function",
-                "function": {
-                    "name": "read_log",
-                    "description": "Read the contents of a project log file.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "log_file": {
-                                "type": "string",
-                                "description": "Relative path to the log file, e.g. logs/error_log.md"
-                            }
-                        },
-                        "required": ["log_file"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "send_email",
-                    "description": "Queue an alert email to be sent.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "to":      { "type": "string", "description": "Recipient address" },
-                            "subject": { "type": "string", "description": "Email subject line" },
-                            "body":    { "type": "string", "description": "Plain-text body" }
-                        },
-                        "required": ["to", "subject", "body"]
-                    }
-                }
-            }
-        ])
+        crate::tools::tool_definitions()
     }
 
     /// Dispatch a tool call by name, returning the result as a plain string.
     pub fn execute_tool(name: &str, args: Value) -> String {
-        match name {
-            "read_log" => {
-                let file = args["log_file"].as_str().unwrap_or("logs/bus_log.md");
-                match std::fs::read_to_string(file) {
-                    Ok(contents) => contents,
-                    Err(e) => format!("Error reading '{}': {}", file, e),
-                }
-            }
-            "send_email" => {
-                // TODO: wire up a real mailer (lettre, sendgrid, etc.)
-                let to = args["to"].as_str().unwrap_or("(none)");
-                info!(
-                    "send_email tool called → to='{}'  (placeholder, not sent)",
-                    to
-                );
-                "Email queued (placeholder — not yet implemented)".to_string()
-            }
-            other => {
-                warn!("Unknown tool requested: '{}'", other);
-                format!("Unknown tool: '{}' — no handler registered", other)
-            }
-        }
+        crate::tools::execute(name, &args)
     }
 
     #[cfg(test)]
@@ -639,7 +608,7 @@ mod tests {
     #[test]
     fn test_execute_tool_read_log_missing() {
         let args = json!({"log_file": "logs/file_that_does_not_exist_xyz.md"});
-        let result = execute_tool("read_log", args);
+        let result = tools::execute_tool("read_log", args);
         assert!(
             result.starts_with("Error reading"),
             "Expected an error message, got: {}",
@@ -654,7 +623,7 @@ mod tests {
             "subject": "Test",
             "body": "Hello"
         });
-        let result = execute_tool("send_email", args);
+        let result = tools::execute_tool("send_email", args);
         assert!(
             result.contains("placeholder") || result.contains("queued"),
             "Expected placeholder response, got: {}",
@@ -664,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_execute_tool_unknown() {
-        let result = execute_tool("totally_unknown_tool", json!({}));
+        let result = tools::execute_tool("totally_unknown_tool", json!({}));
         assert!(
             result.contains("Unknown tool"),
             "Expected 'Unknown tool' in response, got: {}",
@@ -725,7 +694,8 @@ mod tests {
         };
 
         let result =
-            handle_ollama_message(message, &bus, "http://localhost:11434", "llama3.2").await;
+            handle_ollama_message(message, &bus, "http://localhost:11434", "llama3.2", "test")
+                .await;
 
         assert!(result.is_some(), "Expected a response from live Ollama");
         let text = result.unwrap();

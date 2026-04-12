@@ -268,8 +268,8 @@ where
 
     fn route_llm_request(&self, target: LlmTarget, prompt: String, correlation_id: u64) {
         let to = match target {
-            LlmTarget::OllamaLan => "ollama_lan",
-            LlmTarget::OllamaLocal => "ollama_local",
+            LlmTarget::OllamaLan => "ollama_server",
+            LlmTarget::OllamaLocal => "ollama_local3090",
             LlmTarget::Gemini => "gemini",
             LlmTarget::Grok => "grok",
         };
@@ -278,7 +278,7 @@ where
             to: to.to_string(),
             from: "cpu".into(),
             data: serde_json::json!({
-                "type": "llm_request",
+                "type": "chat_request",
                 "correlation_id": correlation_id,
                 "prompt": prompt,
             })
@@ -333,13 +333,24 @@ where
     }
 
     pub fn handle_bus_message(&mut self, msg: Message) {
-        log_to_file(&format!("CPU received message: {:?}", msg));
+        log_to_file(&format!(
+            "CPU received message from='{}' type='{}'",
+            msg.from,
+            &msg.data[..msg.data.len().min(80)]
+        ));
         let payload: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
         if let Some(msg_type) = payload["type"].as_str() {
             match msg_type {
                 "user_input" => {
                     let prompt = payload["content"].as_str().unwrap_or("").to_string();
                     let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+
+                    // Store in working memory so LLM context includes recent history
+                    let _ = self.memory.working.write(
+                        "context",
+                        serde_json::Value::String(format!("user: {}", prompt)),
+                    );
+
                     self.route_llm_request(
                         crate::io::ollama::LlmTarget::OllamaLan,
                         prompt,
@@ -347,11 +358,71 @@ where
                     );
                     log_to_file("CPU routed user_input to Ollama");
                 }
+
+                "chat_request" => {
+                    // Direct chat requests from the web UI (bypassing CPU for LLM,
+                    // but we still want to record them in memory for context).
+                    let prompt = payload["prompt"].as_str().unwrap_or("").to_string();
+                    if !prompt.is_empty() {
+                        let _ = self.memory.working.write(
+                            "context",
+                            serde_json::Value::String(format!("user: {}", prompt)),
+                        );
+                        log_to_file(&format!(
+                            "CPU recorded chat_request in memory: {}",
+                            &prompt[..prompt.len().min(80)]
+                        ));
+                    }
+                }
+
+                "ollama_response" | "llm_output" => {
+                    // Record bot replies in working memory too
+                    let reply = payload["msg"].as_str().unwrap_or("").to_string();
+                    if !reply.is_empty() {
+                        let llm = payload["llm"].as_str().unwrap_or("bot");
+                        let _ = self.memory.working.write(
+                            "context",
+                            serde_json::Value::String(format!(
+                                "{}: {}",
+                                llm,
+                                &reply[..reply.len().min(500)]
+                            )),
+                        );
+                    }
+                }
+
                 "llm_response" => {
                     if let Err(e) = self.handle_llm_response(msg) {
                         log_to_file(&format!("CPU LLM response error: {}", e));
                     }
                 }
+
+                "skill_request" => {
+                    // Direct skill execution request — CPU runs the skill synchronously
+                    // and publishes the result back to web_interface.
+                    let skill = payload["skill"].as_str().unwrap_or("").to_string();
+                    let args = payload["args"].clone();
+                    let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+                    if skill.is_empty() {
+                        log_to_file("CPU got skill_request with empty skill name — ignored");
+                    } else {
+                        log_to_file(&format!("CPU executing skill '{}' directly", skill));
+                        let result = crate::tools::execute(&skill, &args);
+                        let _ = self.bus.publish(Message {
+                            to: "web_interface".to_string(),
+                            from: "cpu_skill".to_string(),
+                            data: serde_json::json!({
+                                "type": "ollama_response",
+                                "llm": "skill",
+                                "correlation_id": correlation_id,
+                                "msg": result,
+                            })
+                            .to_string(),
+                            timestamp: now_ms(),
+                        });
+                    }
+                }
+
                 _ => log_to_file(&format!("CPU ignored msg type: {}", msg_type)),
             }
         }

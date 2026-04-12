@@ -10,7 +10,16 @@ model = "qwen3.5:4b"
 [[ollama]]
 name = "local3090"
 url = "http://192.168.1.196:11434"
-model = "qwen3.5:7b"
+model = "qwen3.5:27b"
+
+[gemini]
+# Model to use for Gemini API calls.
+# Override at runtime with GEMINI_MODEL env var in .env
+# Popular options:
+#   gemini-2.0-flash          (fast, cheap, good for chat)
+#   gemini-2.0-flash-thinking (reasoning model)
+#   gemini-2.5-pro-preview-03-25  (most capable)
+model = "gemini-3.1-flash-lite-preview"
 
 [web]
 port = 8443
