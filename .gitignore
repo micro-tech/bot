@@ -48,5 +48,6 @@ Thumbs.db
 *.tmp
 *.temp
 .certs\*
+.certs\
 .\certs
 H:\GitHub\bot\certs
