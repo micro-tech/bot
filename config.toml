@@ -1,12 +1,28 @@
 [bot]
 name = "Bot"
 
-[ollama]
-url = "http://localhost:11434"
-model = "llama3.2"
+# --- MULTIPLE OLLAMA INSTANCES ---
+[[ollama]]
+name = "server"
+url = "http://192.168.1.149:11434"
+model = "qwen3.5:0.8b "
+
+[[ollama]]
+name = "local3090"
+url = "http://192.168.1.196:11434"
+model = "qwen3.5:27b"
+
+[gemini]
+# Model to use for Gemini API calls.
+# Override at runtime with GEMINI_MODEL env var in .env
+# Popular options:
+#   gemini-2.0-flash          (fast, cheap, good for chat)
+#   gemini-2.0-flash-thinking (reasoning model)
+#   gemini-2.5-pro-preview-03-25  (most capable)
+model = "gemini-3.1-flash-lite-preview"
 
 [web]
 port = 8443
 
 [heartbeat]
-interval_seconds = 3600
+interval_seconds = 300

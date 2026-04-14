@@ -5,24 +5,28 @@ Agent OS Bot
 **Agent OS** is a Rust-based modular framework designed as an "operating system" for AI agents, primarily powered by local LLMs like Ollama. It features:
 
 - **Central Bus System**: Decoupled inter-component communication using publish-subscribe messaging.
+- **CPU Execution Layer**: Handles instruction execution, scheduling, interrupts, and integration with subsystems like memory, skills, hooks, and HyEvo.
+- **Memory Manager**: Combines working (short-term context), episodic (event records), and vector (fact search) memories for belief management.
+- **Skills and Hooks**: Modular action plugins and lifecycle event handlers for extensible behavior.
+- **HyEvo Evolutionary Engine**: Adaptive system for evolving workflows using LLMs for reflection and improvement.
 - **Heartbeat Module**: Periodic system status signals sent to Ollama for analysis.
-- **Ollama Integration**: Direct API communication for LLM tasks (with Gemini/Grok placeholders).
+- **Ollama Integration**: Direct API communication for LLM tasks (with placeholders for Gemini/Grok).
 - **Interfaces**:
   - HTTPS Web Interface (chat, logs, WebSockets).
   - Terminal CLI for direct interaction.
 - **Logging**: Comprehensive Markdown logs for errors, chats, bus transactions, heartbeats.
-- **Modular Design**: Components like A2A, Cron, MCP, Memory, Tooling, Hooks (some TBD).
+- **Modular Design**: Components like A2A (agent-to-agent), Cron (scheduled tasks), MCP (model control protocol), and more.
 - **Resilient Networking**: Retries, timeouts, exponential backoff for unreliable connections (e.g., Starlink).
 - **Test Binary**: `test_ollama` to verify Ollama connectivity.
 
-The system acts as a kernel (`src/main.rs`), coordinating subsystems via the bus. All settings in `config.toml`. Full architecture: [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md).
+The system acts as a kernel (`src/main.rs`), coordinating subsystems via the bus. All settings in `config.toml`. Full architecture: [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md). Data flows: [flow_map.md](flow_map.md).
 
 ## Prerequisites
 
 - **Rust**: [Install rustup](https://rustup.rs/) (stable channel).
 - **Ollama**: Running on your network (default: `192.168.1.149:11434`), model `llama3` pulled and serving. Bind to `0.0.0.0` for remote access.
 - **SSL Certs**: Self-signed in `certs/` for HTTPS web server.
-- **Dirs**: `logs/`, `certs/`, `src/memory/` (auto-created if missing).
+- **Dirs**: `logs/`, `certs/` (auto-created if missing).
 
 ## Installation
 
@@ -61,8 +65,8 @@ The system acts as a kernel (`src/main.rs`), coordinating subsystems via the bus
 cargo run
 ```
 
-- Boots kernel: bus, heartbeat (60s interval), web server (`https://localhost:8443`), terminal.
-- Heartbeats/logs routed to Ollama via bus.
+- Boots kernel: bus, memory manager, skills, hooks, hy_evo, cpu executor, time scheduler for heartbeat, web server (`https://localhost:8443`), terminal.
+- Heartbeats/logs routed to Ollama via bus for analysis.
 
 **Daemon Mode** (future): Use systemd/supervisor.
 
@@ -70,7 +74,7 @@ cargo run
 
 ### Terminal CLI
 - Starts with `AgentOS> ` prompt.
-- Type queries → Bus → Ollama → Response displayed.
+- Type queries → Bus → CPU → Ollama → Response displayed.
 - Chats logged to `logs/chat_log.md`.
 
 **Example**:
@@ -86,7 +90,7 @@ AgentOS> What's the system status?
 - Responsive UI for monitoring.
 
 ### Programmatic (Advanced)
-- Publish to bus: e.g., `to: ollama, data: "your prompt"`.
+- Publish to bus: e.g., `to: cpu, data: "your prompt"`.
 - Subscribe for responses.
 
 ## Configuration (`config.toml`)
@@ -127,16 +131,19 @@ Tail: `tail -f logs/*.md`
 | **Build Fail** | `rustup update`; `cargo clean`; check Windows paths. |
 | **No Bus Messages** | Check `bus_log.md`; verify subscriptions. |
 | **Slow Ollama** | Use lighter model; optimize hardware. |
+| **Memory Issues** | Adjust working/episodic max sizes in `main.rs` (currently 50/1000). |
 
 ## Development & Extensibility
 
-- **Add Module**: New `src/my_module/`, subscribe/publish to bus.
-- **Hooks/Tools**: LLM-triggered scripts (`src/hooks/`, `src/tooling/`).
-- **Memory**: JSON stores (`src/memory/short_term/session_data.json`).
+- **Add Skill**: Implement `SkillInterface` in `src/skills/`, register in `main.rs`.
+- **Add Hook**: Implement `HookInterface` for phases like init/post-execution.
+- **HyEvo Workflow**: Define nodes (Skill, Llm, Code) in `src/hy_evo/workflow.rs`, evolve via reflection.
+- **Memory**: Extend episodic/vector for custom storage.
+- **New Module**: Add `src/new_module/`, subscribe/publish to bus, integrate with CPU.
 - **Tests**: `cargo test`.
-- **TBD**: A2A, Cron, MCP, Gemini full impl.
+- **TBD**: Full impl of A2A, Cron, MCP, Gemini.
 
-**Dir Structure**: See [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md).
+**Dir Structure**: See [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md). **Flows**: See [flow_map.md](flow_map.md).
 
 ## Dependencies (`Cargo.toml`)
 
@@ -145,7 +152,7 @@ Tail: `tail -f logs/*.md`
 
 ## License
 
-MIT.
+Custom License (Non-Commercial). See [LICENSE](LICENSE) for details.
 
 ---
 

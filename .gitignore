@@ -43,11 +43,13 @@ Thumbs.db
 *.logs.*
 ./logs*
 ./logs/*
+.logs/*
 
 # Temporary files
 *.tmp
 *.temp
 .certs\*
-.certs\
 .\certs
+certs/
+cert/
 H:\GitHub\bot\certs
