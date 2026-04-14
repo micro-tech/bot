@@ -625,8 +625,8 @@ mod tests {
         });
         let result = tools::execute_tool("send_email", args);
         assert!(
-            result.contains("placeholder") || result.contains("queued"),
-            "Expected placeholder response, got: {}",
+            result.contains("SMTP") || result.contains("email_outbox") || result.contains("queued"),
+            "Expected SMTP/outbox response, got: {}",
             result
         );
     }

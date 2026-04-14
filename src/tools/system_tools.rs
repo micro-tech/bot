@@ -1,39 +1,10 @@
-//! System-level tools: status, beliefs, email, introspection.
+//! System-level tools: status, beliefs, and introspection.
 
-use log::info;
 use serde_json::Value;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const BELIEFS_FILE: &str = "beliefs.json";
-
-// ── send_email ────────────────────────────────────────────────────────────────
-
-/// Placeholder email tool.  Logs the request; does not actually send.
-/// TODO: wire up `lettre` or a SendGrid / Mailgun webhook.
-pub fn send_email(args: &Value) -> String {
-    let to = args["to"].as_str().unwrap_or("(none)");
-    let subject = args["subject"].as_str().unwrap_or("(no subject)");
-    let body = args["body"].as_str().unwrap_or("");
-
-    info!(
-        "send_email tool called → to='{}' subject='{}' body_len={} (placeholder, not sent)",
-        to,
-        subject,
-        body.len()
-    );
-
-    // Append to a simple outbox file so nothing is truly lost
-    let entry = format!("---\nTo: {}\nSubject: {}\n\n{}\n", to, subject, body);
-    let _ = fs::create_dir_all("logs");
-    let _ = append_to_file("logs/email_outbox.md", &entry);
-
-    format!(
-        "📧 Email to '{}' (subject: '{}') queued in logs/email_outbox.md — \
-         SMTP not yet configured.",
-        to, subject
-    )
-}
 
 // ── system_status ─────────────────────────────────────────────────────────────
 
@@ -76,7 +47,8 @@ pub fn system_status() -> String {
          Notes saved    : {}\n\
          Beliefs stored : {}\n\n\
          Tools available: read_log, write_note, read_note, list_notes,\n\
-                          send_email, system_status, list_tools,\n\
+                          send_email, read_email, check_inbox,\n\
+                          system_status, list_tools,\n\
                           get_beliefs, set_belief",
         unix_now,
         log_info.join("\n"),
@@ -91,21 +63,23 @@ pub fn list_tools() -> String {
     "🛠️  Available tools & skills:\n\
      \n\
      File tools:\n\
-       • read_log(log_file)           Read the tail of a log file from logs/\n\
-       • write_note(title, content)   Save a markdown note to notes/\n\
-       • read_note(title)             Read a saved note\n\
-       • list_notes()                 List all saved notes\n\
+       • read_log(log_file)               Read the tail of a log file from logs/\n\
+       • write_note(title, content)       Save a markdown note to notes/\n\
+       • read_note(title)                 Read a saved note\n\
+       • list_notes()                     List all saved notes\n\
      \n\
      Communication:\n\
-       • send_email(to, subject, body)  Queue an email (logs/email_outbox.md)\n\
+       • send_email(to, subject, body)    Send email via SMTP (falls back to outbox)\n\
+       • read_email([folder, count])      Read recent emails via IMAP\n\
+       • check_inbox([folder])            Check message count in a folder\n\
      \n\
      System:\n\
-       • system_status()              Log sizes, note/belief counts\n\
-       • list_tools()                 This list\n\
+       • system_status()                  Log sizes, note/belief counts\n\
+       • list_tools()                     This list\n\
      \n\
      Memory / beliefs:\n\
-       • get_beliefs()                Read all beliefs from beliefs.json\n\
-       • set_belief(key, value)       Store a belief (persists across restarts)\n\
+       • get_beliefs()                    Read all beliefs from beliefs.json\n\
+       • set_belief(key, value)           Store a belief (persists across restarts)\n\
      \n\
      Slash commands in chat (type directly):\n\
        /status   /tools   /notes   /beliefs\n\
@@ -157,17 +131,6 @@ pub fn set_belief(args: &Value) -> String {
     }
 }
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-fn append_to_file(path: &str, content: &str) -> std::io::Result<()> {
-    use std::io::Write;
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)?;
-    file.write_all(content.as_bytes())
-}
-
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -178,7 +141,15 @@ mod tests {
     #[test]
     fn test_list_tools_contains_all_tools() {
         let result = list_tools();
-        for tool in &["read_log", "write_note", "get_beliefs", "system_status"] {
+        for tool in &[
+            "read_log",
+            "write_note",
+            "get_beliefs",
+            "system_status",
+            "send_email",
+            "read_email",
+            "check_inbox",
+        ] {
             assert!(
                 result.contains(tool),
                 "missing '{}' in list_tools output",
@@ -202,5 +173,12 @@ mod tests {
     #[test]
     fn test_system_status_does_not_panic() {
         let _ = system_status();
+    }
+
+    #[test]
+    fn test_system_status_mentions_email_tools() {
+        let result = system_status();
+        assert!(result.contains("read_email"), "got: {}", result);
+        assert!(result.contains("check_inbox"), "got: {}", result);
     }
 }

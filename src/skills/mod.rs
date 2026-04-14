@@ -41,6 +41,12 @@ impl SkillRegistry {
         registry.register("send_email", |params| {
             NodeResult::Text(crate::tools::execute("send_email", params))
         });
+        registry.register("read_email", |params| {
+            NodeResult::Text(crate::tools::execute("read_email", params))
+        });
+        registry.register("check_inbox", |params| {
+            NodeResult::Text(crate::tools::execute("check_inbox", params))
+        });
         registry.register("system_status", |params| {
             NodeResult::Text(crate::tools::execute("system_status", params))
         });
