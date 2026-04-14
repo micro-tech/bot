@@ -1,21 +1,40 @@
-use log::{error, info, warn, set_boxed_logger, set_max_level, LevelFilter};
+use dotenvy;
+use log::{LevelFilter, error, info, set_boxed_logger, set_max_level, warn};
 use serde::{Deserialize, Serialize};
 use serde_json;
-use toml;
 use std::fs;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
-use tokio::time::{Duration as TokioDuration, interval};
+use toml;
 
 // Include modules
-mod io;
-mod bus;
-mod utils;
 mod bayesian;
+mod bus;
+mod config;
+mod cpu;
+mod hooks;
+mod hy_evo;
+mod io;
+
+mod memory;
+mod skills;
+mod tools;
+mod utils;
 
 use crate::bus::{Bus, Message};
+use crate::cpu::Cpu;
+use crate::cpu::executor::CpuExecutor;
+use crate::cpu::time_scheduler::TimeScheduler;
+use crate::hooks::HookRegistry;
+use crate::hy_evo::HyEvoIntegration;
+use crate::hy_evo::engine::HyEvoEngine;
+use crate::io::llm_gemini::handle_gemini_bus_message;
+use crate::io::ollama::llm::OllamaLlm;
+use crate::io::ollama::{check_ollama_health, handle_ollama_message};
 use crate::io::web_server::start_web_server;
+use crate::memory::MemoryHandle;
+use crate::skills::SkillRegistry;
 use utils::log_to_file;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -28,20 +47,22 @@ struct Heartbeat {
 #[derive(Deserialize)]
 struct Config {
     bot: BotConfig,
-    ollama: OllamaConfig,
+    ollama: Vec<OllamaConfig>,
+    gemini: Option<GeminiConfig>,
     web: WebConfig,
     heartbeat: HeartbeatConfig,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct OllamaConfig {
+    name: String,
+    url: String,
+    model: String,
 }
 
 #[derive(Deserialize)]
 struct BotConfig {
     name: String,
-}
-
-#[derive(Deserialize)]
-struct OllamaConfig {
-    url: String,
-    model: String,
 }
 
 #[derive(Deserialize)]
@@ -54,12 +75,37 @@ struct HeartbeatConfig {
     interval_seconds: u64,
 }
 
+#[derive(Deserialize, Clone, Debug)]
+struct GeminiConfig {
+    model: String,
+}
+
 #[derive(Clone)]
 struct LogMsg {
     level: String,
     msg: String,
 }
 
+#[derive(Clone)]
+struct OllamaRouter {
+    backends: Vec<OllamaConfig>,
+}
+
+impl OllamaRouter {
+    fn new(config: &Config) -> Self {
+        Self {
+            backends: config.ollama.clone(),
+        }
+    }
+
+    fn get_by_name(&self, name: &str) -> Option<&OllamaConfig> {
+        self.backends.iter().find(|b| b.name == name)
+    }
+
+    fn default(&self) -> Option<&OllamaConfig> {
+        self.backends.first()
+    }
+}
 struct WebLogger {
     tx: mpsc::UnboundedSender<LogMsg>,
 }
@@ -93,62 +139,26 @@ fn get_current_timestamp() -> u64 {
     }
 }
 
-async fn send_heartbeat(bus: Arc<Bus>) -> Result<(), String> {
-    let heartbeat = Heartbeat {
-        timestamp: get_current_timestamp(),
-        system_status: "Operational".to_string(),
-        recent_events: vec!["System check completed".to_string()],
-    };
-
-    info!("Sending heartbeat: {:?}", heartbeat);
-
-    let heartbeat_json = match serde_json::to_string(&heartbeat) {
-        Ok(json) => json,
-        Err(e) => {
-            let error_msg = format!("Failed to serialize heartbeat to JSON: {}", e);
-            log_to_file(&error_msg);
-            error!("{}", error_msg);
-            return Err(error_msg);
-        }
-    };
-
-    let message = Message {
-        to: "ollama".to_string(),
-        from: "heartbeat".to_string(),
-        data: heartbeat_json,
-        timestamp: get_current_timestamp(),
-    };
-    bus.publish(message);
-    info!("Heartbeat published to bus");
-
-    // Publish live log update to web
-    let log_data = serde_json::json!({
-        "type": "log",
-        "level": "info",
-        "msg": "Heartbeat sent to Ollama"
-    }).to_string();
-    let log_msg = Message {
-        to: "web_interface".to_string(),
-        from: "logger".to_string(),
-        data: log_data,
-        timestamp: get_current_timestamp(),
-    };
-    bus.publish(log_msg);
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() {
+    // Load .env file so GEMINI_API_KEY and other secrets are available via std::env::var.
+    // .ok() silences the error when the file is absent (e.g. in CI / production where
+    // env-vars are injected directly).
+    dotenvy::dotenv().ok();
+
     fs::create_dir_all("logs").expect("Failed to create logs dir");
 
-    // Load config
+    // 1. Load config FIRST
     let config_str = fs::read_to_string("config.toml").expect("Failed to read config.toml");
     let config: Config = toml::from_str(&config_str).expect("Failed to parse config.toml");
 
+    // 2. Build Ollama router AFTER config is loaded
+    let router = Arc::new(OllamaRouter::new(&config));
+
+    // 3. Create bus
     let bus = Arc::new(Bus::new());
 
-    // Set up custom logger
+    // 4. Set up logger
     let (log_tx, mut log_rx) = mpsc::unbounded_channel();
     let logger = WebLogger { tx: log_tx };
     set_boxed_logger(Box::new(logger)).unwrap();
@@ -165,10 +175,15 @@ async fn main() {
                     "type": "log",
                     "level": log_msg.level,
                     "msg": log_msg.msg
-                }).to_string(),
+                })
+                .to_string(),
                 timestamp: get_current_timestamp(),
             };
-            bus_clone.publish(msg);
+            println!(
+                "Publishing log to bus: {}",
+                &msg.data[..50.min(msg.data.len())]
+            );
+            let _ = bus_clone.publish(msg);
         }
     });
 
@@ -182,59 +197,140 @@ async fn main() {
             error!("Web server failed: {}", e);
         }
     });
-    info!("HTTPS Web Server spawned - visit https://localhost:{} (accept self-signed cert warning)", config.web.port);
+    info!(
+        "HTTPS Web Server spawned - visit https://localhost:{} (accept self-signed cert warning)",
+        config.web.port
+    );
 
-    // Spawn Ollama Handler (SIMPLIFIED SYNC VERSION)
-    let ollama_bus = bus.clone();
-    tokio::spawn(async move {
-        let rx = ollama_bus.subscribe("ollama");
-        tokio::task::spawn_blocking(move || {
-            while let Ok(msg) = rx.recv() {
-                // Skip heartbeat messages
+    // Spawn one Ollama handler per configured backend.
+    // Each handler subscribes to "ollama_{name}" so the web_server can route
+    // to the correct backend by channel name (e.g. "ollama_server", "ollama_local3090").
+    for backend in config.ollama.iter() {
+        let channel_name = format!("ollama_{}", backend.name);
+        let bus_clone = bus.clone();
+        let url = backend.url.clone();
+        let model = backend.model.clone();
+        let name = backend.name.clone();
+
+        tokio::spawn(async move {
+            // Startup health check — advisory only, per-request retries handle
+            // transient failures when real messages arrive.
+            if check_ollama_health(&url).await {
+                info!("Ollama '{}' reachable at {} ✅", name, url);
+            } else {
+                warn!(
+                    "Ollama '{}' NOT reachable at {} on startup ⚠️ — will retry per request",
+                    name, url
+                );
+            }
+
+            // Bridge: sync bus receiver → async tokio channel so individual LLM
+            // requests are processed concurrently without blocking the runtime.
+            let (tx_bridge, mut rx_bridge) = tokio::sync::mpsc::unbounded_channel::<Message>();
+            let rx_sync = bus_clone.subscribe(&channel_name);
+
+            tokio::task::spawn_blocking(move || {
+                while let Ok(msg) = rx_sync.recv() {
+                    if tx_bridge.send(msg).is_err() {
+                        break;
+                    }
+                }
+            });
+
+            while let Some(msg) = rx_bridge.recv().await {
                 if msg.from == "heartbeat" {
                     continue;
                 }
-                // Simple echo response for now
-                let resp = format!("Processed: {}", msg.data);
-                let reply = Message {
-                    to: "web_interface".to_string(),
-                    from: "ollama".to_string(),
-                    data: serde_json::to_string(&resp).unwrap(),
-                    timestamp: get_current_timestamp(),
-                };
-                ollama_bus.publish(reply);
+                let bus_ref = bus_clone.clone();
+                let url_c = url.clone();
+                let model_c = model.clone();
+                let name_c = name.clone();
+                tokio::spawn(async move {
+                    handle_ollama_message(msg, &bus_ref, &url_c, &model_c, &name_c).await;
+                });
             }
         });
-    });
-    info!("Ollama handler spawned");
+        info!(
+            "Ollama handler '{}' spawned on bus channel 'ollama_{}'",
+            backend.name, backend.name
+        );
+    }
 
-    // Heartbeat loop
-    let mut interval = interval(TokioDuration::from_secs(config.heartbeat.interval_seconds));
-    let mut consecutive_failures = 0;
-    let max_consecutive_failures = 5;
+    // Resolve Gemini model: GEMINI_MODEL env var > config.toml [gemini] model > built-in default.
+    let gemini_model = std::env::var("GEMINI_MODEL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| config.gemini.as_ref().map(|g| g.model.clone()))
+        .unwrap_or_else(|| "gemini-2.0-flash".to_string());
+    info!("Gemini model: '{}'", gemini_model);
 
-    loop {
-        interval.tick().await;
-        match send_heartbeat(bus.clone()).await {
-            Ok(()) => {
-                info!("Heartbeat sent successfully");
-                consecutive_failures = 0;
-            }
-            Err(e) => {
-                let error_msg = format!("Failed to send heartbeat: {}", e);
-                log_to_file(&error_msg);
-                error!("{}", error_msg);
-                consecutive_failures += 1;
-                warn!(
-                    "Consecutive failures: {}/{}",
-                    consecutive_failures, max_consecutive_failures
-                );
-                if consecutive_failures >= max_consecutive_failures {
-                    warn!("Maximum consecutive failures reached. Consider taking corrective action.");
+    // Spawn Gemini handler — subscribes to the "gemini" bus channel.
+    let gemini_bus = bus.clone();
+    let gemini_model_clone = gemini_model.clone();
+    tokio::spawn(async move {
+        let (tx_bridge, mut rx_bridge) = tokio::sync::mpsc::unbounded_channel::<Message>();
+        let rx_sync = gemini_bus.subscribe("gemini");
+        tokio::task::spawn_blocking(move || {
+            while let Ok(msg) = rx_sync.recv() {
+                if tx_bridge.send(msg).is_err() {
+                    break;
                 }
             }
+        });
+        while let Some(msg) = rx_bridge.recv().await {
+            if msg.from == "heartbeat" {
+                continue;
+            }
+            let bus_ref = gemini_bus.clone();
+            let model_ref = gemini_model_clone.clone();
+            tokio::spawn(async move {
+                handle_gemini_bus_message(msg, &bus_ref, &model_ref).await;
+            });
         }
-    }
+    });
+    info!(
+        "Gemini handler spawned on bus channel 'gemini' (model='{}')",
+        gemini_model
+    );
+
+    // ─────────────────────────────────────────────────────────────
+    // Build CPU + start heartbeat scheduler
+    // ─────────────────────────────────────────────────────────────
+
+    // Build subsystems
+    let memory = crate::memory::MemoryManager::new(50, 1000);
+    let skills = Box::new(SkillRegistry::new()) as Box<dyn crate::cpu::interfaces::SkillInterface>;
+    let llm = OllamaLlm::new(router.clone());
+
+    // Build HyEvo integration
+    let engine = HyEvoEngine::new(llm.clone());
+    let hyevo = HyEvoIntegration::new(engine);
+
+    // Build CPU
+    let cpu = Arc::new(Mutex::new(
+        Cpu::new(
+            memory,
+            skills,
+            llm,
+            bus.clone(),
+            hyevo,
+            "system_manifest.md",
+        )
+        .unwrap(),
+    ));
+    let cpu_bus = bus.clone();
+    let cpu_instance = cpu.clone();
+
+    tokio::spawn(async move {
+        let rx = cpu_bus.subscribe("cpu");
+
+        while let Ok(msg) = rx.recv() {
+            cpu_instance.lock().unwrap().handle_bus_message(msg);
+        }
+    });
+
+    // Start time-based heartbeat scheduler (blocks until shutdown)
+    TimeScheduler::start(cpu.clone(), 1000).await;
 }
 
 #[cfg(test)]
@@ -244,7 +340,10 @@ mod tests {
     #[test]
     fn test_get_current_timestamp() {
         let timestamp = get_current_timestamp();
-        assert_ne!(timestamp, 0, "Timestamp should not be zero unless there's an error");
+        assert_ne!(
+            timestamp, 0,
+            "Timestamp should not be zero unless there's an error"
+        );
     }
 
     #[test]
@@ -267,10 +366,22 @@ mod tests {
             recent_events: vec!["Test event".to_string()],
         };
         let json_result = serde_json::to_string(&heartbeat);
-        assert!(json_result.is_ok(), "Heartbeat should serialize to JSON without error");
+        assert!(
+            json_result.is_ok(),
+            "Heartbeat should serialize to JSON without error"
+        );
         let json = json_result.unwrap();
-        assert!(json.contains("1234567890"), "JSON should contain the timestamp");
-        assert!(json.contains("Operational"), "JSON should contain the system status");
-        assert!(json.contains("Test event"), "JSON should contain the recent events");
+        assert!(
+            json.contains("1234567890"),
+            "JSON should contain the timestamp"
+        );
+        assert!(
+            json.contains("Operational"),
+            "JSON should contain the system status"
+        );
+        assert!(
+            json.contains("Test event"),
+            "JSON should contain the recent events"
+        );
     }
 }

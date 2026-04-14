@@ -23,17 +23,22 @@ use tokio::sync::broadcast;
 use toml;
 use tower_http::cors::CorsLayer;
 
+// ── AppState ──────────────────────────────────────────────────────────────────
+
 #[derive(Clone)]
 struct AppState {
     bus: Arc<Bus>,
     msg_tx: broadcast::Sender<String>,
     config_str: String,
+    backends_json: String, // JSON array of {id, label, kind}
 }
+
+// ── Config structs ────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
 struct Config {
     bot: BotConfig,
-    ollama: OllamaConfig,
+    ollama: Vec<OllamaConfig>,
     web: WebConfig,
     heartbeat: HeartbeatConfig,
 }
@@ -45,6 +50,7 @@ struct BotConfig {
 
 #[derive(Deserialize)]
 struct OllamaConfig {
+    name: String,
     url: String,
     model: String,
 }
@@ -59,6 +65,8 @@ struct HeartbeatConfig {
     interval_seconds: u64,
 }
 
+// ── Server entry-point ────────────────────────────────────────────────────────
+
 pub async fn start_web_server(
     bus: Arc<Bus>,
     port: u16,
@@ -66,7 +74,7 @@ pub async fn start_web_server(
 ) -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting HTTPS Web Server on 0.0.0.0:{}", port);
 
-    // Generate self-signed certs if not exist
+    // Generate self-signed certs if not present
     fs::create_dir_all("certs")?;
     let cert_path = "certs/cert.pem";
     let key_path = "certs/key.pem";
@@ -81,26 +89,59 @@ pub async fn start_web_server(
 
     // Create broadcast channel for web messages
     let (msg_tx, _) = broadcast::channel(100);
+
+    // Build LLM backends list for the UI selector
+    let parsed_cfg: Config = toml::from_str(&config_str).unwrap_or_else(|_| Config {
+        bot: BotConfig {
+            name: "Bot".to_string(),
+        },
+        ollama: vec![],
+        web: WebConfig { port: 8443 },
+        heartbeat: HeartbeatConfig {
+            interval_seconds: 300,
+        },
+    });
+    let mut backend_list = Vec::new();
+    for b in &parsed_cfg.ollama {
+        backend_list.push(serde_json::json!({
+            "id":    b.name,
+            "label": format!("Ollama {}", b.name),
+            "kind":  "ollama"
+        }));
+    }
+    backend_list.push(serde_json::json!({
+        "id":    "gemini",
+        "label": "Gemini",
+        "kind":  "gemini"
+    }));
+    let backends_json = serde_json::to_string(&backend_list).unwrap_or_else(|_| "[]".to_string());
+
     let state = AppState {
         bus,
         msg_tx: msg_tx.clone(),
         config_str,
+        backends_json,
     };
 
-    // Spawn bus message forwarder
+    // Spawn bus → broadcast forwarder
     let state_forwarder = state.clone();
     tokio::spawn(async move {
         let rx = state_forwarder.bus.subscribe("web_interface");
         tokio::task::spawn_blocking(move || {
             while let Ok(msg) = rx.recv() {
+                // Bug 1 fix: guard the slice so we never panic on short strings
+                println!(
+                    "Forwarding msg from bus: {}",
+                    &msg.data[..50.min(msg.data.len())]
+                );
                 let json_str = serde_json::to_string(&msg)
-                    .unwrap_or_else(|_| r#"{"error": "serialize failed"}"#.to_string());
+                    .unwrap_or_else(|_| r#"{"error":"serialize failed"}"#.to_string());
                 let _ = state_forwarder.msg_tx.send(json_str);
             }
         });
     });
 
-    // Build app with TLS layer
+    // Build Axum router
     let app = Router::new()
         .route("/", get(serve_index))
         .route("/ws", get(ws_handler))
@@ -108,8 +149,10 @@ pub async fn start_web_server(
         .layer(CorsLayer::permissive());
 
     let rustls_config = RustlsConfig::from_pem_file(cert_path, key_path).await?;
-
-    info!("Web server listening on https://localhost:8443 (accept self-signed cert warning)");
+    info!(
+        "Web server listening on https://localhost:{} (accept self-signed cert warning)",
+        port
+    );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     axum_server::bind_rustls(addr, rustls_config)
@@ -119,6 +162,8 @@ pub async fn start_web_server(
     Ok(())
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 fn get_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -126,30 +171,64 @@ fn get_timestamp() -> u64 {
         .as_millis() as u64
 }
 
+// ── WebSocket handler ─────────────────────────────────────────────────────────
+
 async fn handle_ws(socket: WebSocket, state: AppState) {
-    // Split WebSocket into sender + receiver (Axum 0.8)
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
-    // Subscribe to CPU→Web broadcast channel
+    // Subscribe to the CPU→Web broadcast channel
     let mut recv = state.msg_tx.subscribe();
 
-    // Send config immediately on connect
+    // 1. Send current config
     let config_msg = json!({
         "type": "config",
         "data": state.config_str.clone()
     })
     .to_string();
-
     let _ = ws_sender.send(WsMessage::Text(config_msg.into())).await;
 
-    // Task: forward broadcast messages to WebSocket
+    // 2. Send system manifest
+    let manifest_path = "system_manifest.md";
+    if !Path::new(manifest_path).exists() {
+        fs::write(
+            manifest_path,
+            "# System Manifest\n\nWelcome to the bot system.\n\nEdit this file to configure behaviour.\n",
+        )
+        .ok();
+    }
+    let manifest = fs::read_to_string(manifest_path).unwrap_or_default();
+    let manifest_msg = json!({
+        "type": "manifest",
+        "data": manifest
+    })
+    .to_string();
+    let _ = ws_sender.send(WsMessage::Text(manifest_msg.into())).await;
+
+    // 3. Send backends list so the UI can build LLM selector buttons
+    let backends_msg = serde_json::json!({
+        "type": "backends",
+        "backends": serde_json::from_str::<serde_json::Value>(&state.backends_json)
+            .unwrap_or(serde_json::Value::Array(vec![]))
+    })
+    .to_string();
+    let _ = ws_sender.send(WsMessage::Text(backends_msg.into())).await;
+
+    // 4. Send a test log entry to confirm the WS pipe is working
+    let test_log_msg = json!({
+        "type": "log",
+        "level": "info",
+        "msg": "WebSocket connection established"
+    })
+    .to_string();
+    let _ = state.msg_tx.send(test_log_msg);
+
+    // 5. Task: forward broadcast messages → WebSocket
     let recv_task = tokio::spawn(async move {
         loop {
             let message_str = match recv.recv().await {
                 Ok(msg) => msg,
                 Err(_) => break,
             };
-
             if ws_sender
                 .send(WsMessage::Text(message_str.into()))
                 .await
@@ -160,97 +239,194 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
         }
     });
 
-    // Main loop: WebSocket → Bus
+    // 6. Main loop: WebSocket messages → Bus
     while let Some(msg) = ws_receiver.next().await {
         let msg = match msg {
-            Ok(msg) => msg,
+            Ok(m) => m,
             Err(_) => break,
         };
 
         if let WsMessage::Text(text_bytes) = msg {
             let text = text_bytes.to_string();
 
-            if let Ok(json_val) = serde_json::from_str::<Value>(&text) {
-                if let Some(msg_type) = json_val["type"].as_str() {
-                    match msg_type {
-                        "chat" => {
-                            let chat_msg = json_val["msg"].as_str().unwrap_or("").to_string();
-
-                            // Send to bus → CPU or Ollama
-                            let bus_msg = Message {
-                                to: "ollama".to_string(),
-                                from: "web_user".to_string(),
-                                data: chat_msg.clone(),
-                                timestamp: get_timestamp(),
-                            };
-                            state.bus.publish(bus_msg);
-
-                            // Echo user message back to UI
-                            let echo_msg = json!({
-                                "type": "user_msg",
-                                "from": "You",
-                                "data": chat_msg
-                            })
-                            .to_string();
-
-                            let _ = state.msg_tx.send(echo_msg);
+            if let Ok(json_val) = serde_json::from_str::<Value>(&text)
+                && let Some(msg_type) = json_val["type"].as_str()
+            {
+                match msg_type {
+                    // ── Chat: LLM-aware routing ──────────────────────────
+                    "chat" => {
+                        let chat_msg = json_val["msg"].as_str().unwrap_or("").to_string();
+                        if chat_msg.is_empty() {
+                            continue;
                         }
 
-                        "config_save" => {
-                            let new_config_str = json_val["data"].as_str().unwrap_or("");
+                        // Which LLM did the user select?
+                        let llm = json_val["llm"].as_str().unwrap_or("").to_string();
+                        let bus_dest = if llm == "gemini" {
+                            "gemini".to_string()
+                        } else if llm.is_empty() {
+                            // No explicit selection — use the first ollama backend
+                            let backends: serde_json::Value =
+                                serde_json::from_str(&state.backends_json)
+                                    .unwrap_or(serde_json::Value::Array(vec![]));
+                            let first_id = backends[0]["id"].as_str().unwrap_or("server");
+                            format!("ollama_{}", first_id)
+                        } else {
+                            format!("ollama_{}", llm)
+                        };
 
-                            if let Ok(_parsed) = toml::from_str::<Config>(new_config_str) {
-                                if fs::write("config.toml", new_config_str).is_ok() {
-                                    let success_msg = json!({
+                        let correlation_id = get_timestamp();
+                        let bus_msg = Message {
+                            to: bus_dest,
+                            from: "web_interface".to_string(),
+                            data: json!({
+                                "type": "chat_request",
+                                "prompt": chat_msg,
+                                "correlation_id": correlation_id,
+                            })
+                            .to_string(),
+                            timestamp: correlation_id,
+                        };
+                        let _ = state.bus.publish(bus_msg);
+
+                        // Echo user message back to UI
+                        let echo_msg = json!({
+                            "type": "user_msg",
+                            "from": "You",
+                            "data": chat_msg
+                        })
+                        .to_string();
+                        let _ = state.msg_tx.send(echo_msg);
+                    }
+
+                    // ── Config save ──────────────────────────────────────
+                    "config_save" => {
+                        let new_config_str = json_val["data"].as_str().unwrap_or("");
+
+                        if let Ok(_parsed) = toml::from_str::<Config>(new_config_str) {
+                            if fs::write("config.toml", new_config_str).is_ok() {
+                                let success_msg = json!({
                                         "type": "config_status",
                                         "status": "success",
                                         "msg": "Config saved successfully. Restart the bot to apply changes."
                                     })
                                     .to_string();
+                                let bus_msg = Message {
+                                    to: "web_interface".to_string(),
+                                    from: "config".to_string(),
+                                    data: success_msg,
+                                    timestamp: get_timestamp(),
+                                };
+                                let _ = state.bus.publish(bus_msg);
 
-                                    let bus_msg = Message {
-                                        to: "web_interface".to_string(),
-                                        from: "config".to_string(),
-                                        data: success_msg,
-                                        timestamp: get_timestamp(),
-                                    };
-                                    state.bus.publish(bus_msg);
-                                } else {
-                                    let error_msg = json!({
-                                        "type": "config_status",
-                                        "status": "error",
-                                        "msg": "Failed to write config file."
-                                    })
-                                    .to_string();
-
-                                    let bus_msg = Message {
-                                        to: "web_interface".to_string(),
-                                        from: "config".to_string(),
-                                        data: error_msg,
-                                        timestamp: get_timestamp(),
-                                    };
-                                    state.bus.publish(bus_msg);
-                                }
+                                // Echo updated config back
+                                let updated_config_msg = json!({
+                                    "type": "config",
+                                    "data": new_config_str
+                                })
+                                .to_string();
+                                let _ = state.msg_tx.send(updated_config_msg);
                             } else {
                                 let error_msg = json!({
                                     "type": "config_status",
                                     "status": "error",
-                                    "msg": "Invalid TOML syntax."
+                                    "msg": "Failed to write config file."
                                 })
                                 .to_string();
-
                                 let bus_msg = Message {
                                     to: "web_interface".to_string(),
                                     from: "config".to_string(),
                                     data: error_msg,
                                     timestamp: get_timestamp(),
                                 };
-                                state.bus.publish(bus_msg);
+                                let _ = state.bus.publish(bus_msg);
                             }
+                        } else {
+                            let error_msg = json!({
+                                "type": "config_status",
+                                "status": "error",
+                                "msg": "Invalid TOML syntax."
+                            })
+                            .to_string();
+                            let bus_msg = Message {
+                                to: "web_interface".to_string(),
+                                from: "config".to_string(),
+                                data: error_msg,
+                                timestamp: get_timestamp(),
+                            };
+                            let _ = state.bus.publish(bus_msg);
                         }
-
-                        _ => {}
                     }
+
+                    // ── Manifest save ────────────────────────────────────
+                    "manifest_save" => {
+                        let new_manifest = json_val["data"].as_str().unwrap_or("");
+
+                        if fs::write("system_manifest.md", new_manifest).is_ok() {
+                            let success_msg = json!({
+                                "type": "manifest_status",
+                                "status": "success",
+                                "msg": "Manifest saved successfully."
+                            })
+                            .to_string();
+                            let bus_msg = Message {
+                                to: "web_interface".to_string(),
+                                from: "manifest".to_string(),
+                                data: success_msg,
+                                timestamp: get_timestamp(),
+                            };
+                            let _ = state.bus.publish(bus_msg);
+
+                            // Echo updated manifest back
+                            let updated_manifest_msg = json!({
+                                "type": "manifest",
+                                "data": new_manifest
+                            })
+                            .to_string();
+                            let _ = state.msg_tx.send(updated_manifest_msg);
+                        } else {
+                            let error_msg = json!({
+                                "type": "manifest_status",
+                                "status": "error",
+                                "msg": "Failed to write manifest file."
+                            })
+                            .to_string();
+                            let bus_msg = Message {
+                                to: "web_interface".to_string(),
+                                from: "manifest".to_string(),
+                                data: error_msg,
+                                timestamp: get_timestamp(),
+                            };
+                            let _ = state.bus.publish(bus_msg);
+                        }
+                    }
+
+                    "slash_cmd" => {
+                        let cmd = json_val["cmd"].as_str().unwrap_or("").trim().to_string();
+                        let result = handle_slash_command(&cmd);
+                        let msg_out = serde_json::json!({
+                            "type": "user_msg",
+                            "from": "You",
+                            "data": cmd.clone()
+                        })
+                        .to_string();
+                        let _ = state.msg_tx.send(msg_out);
+                        let reply = serde_json::json!({
+                            "type": "ollama_response",
+                            "llm": "system",
+                            "msg": result
+                        })
+                        .to_string();
+                        let bus_msg = crate::bus::Message {
+                            to: "web_interface".to_string(),
+                            from: "system".to_string(),
+                            data: reply,
+                            timestamp: get_timestamp(),
+                        };
+                        let _ = state.bus.publish(bus_msg);
+                    }
+
+                    _ => {}
                 }
             }
         }
@@ -258,6 +434,8 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
 
     recv_task.abort();
 }
+
+// ── Axum route helpers ────────────────────────────────────────────────────────
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_ws(socket, state))
@@ -267,147 +445,347 @@ async fn serve_index() -> Html<String> {
     Html(MAIN_HTML.to_string())
 }
 
-const MAIN_HTML: &str = r#"
-<!DOCTYPE html>
+// ── HTML / JS front-end ───────────────────────────────────────────────────────
+
+const MAIN_HTML: &str = r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bot Control Panel</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
-        #tabs { display: flex; margin-bottom: 20px; }
-        #tabs button { padding: 10px 20px; margin-right: 5px; background: #007bff; color: white; border: none; cursor: pointer; }
-        #tabs button.active { background: #0056b3; }
-        .tab-content { display: none; background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a2e; color: #e0e0e0; }
+        h1 { color: #00d4ff; margin-bottom: 15px; }
+        #tabs { display: flex; margin-bottom: 20px; gap: 5px; }
+        #tabs button { padding: 10px 20px; background: #16213e; color: #e0e0e0; border: 1px solid #0f3460; cursor: pointer; border-radius: 4px; }
+        #tabs button.active { background: #0f3460; color: #00d4ff; border-color: #00d4ff; }
+        .tab-content { display: none; background: #16213e; padding: 20px; border-radius: 8px; border: 1px solid #0f3460; }
         .tab-content.active { display: block; }
-        #chat-input { width: 70%; padding: 10px; }
-        #chat-send { padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer; }
-        #chat-messages, #log-output { height: 400px; overflow-y: scroll; border: 1px solid #ddd; padding: 10px; margin-top: 10px; background: #fafafa; }
-        .log-info { color: blue; }
-        .log-error { color: red; }
-        .log-warn { color: orange; }
-        .message { margin-bottom: 10px; }
-        .message strong { color: #007bff; }
+
+        /* LLM Selector */
+        #llm-selector { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+        #llm-selector span { color: #aaa; font-size: 0.9em; margin-right: 4px; }
+        .llm-btn { padding: 6px 16px; border: 1px solid #0f3460; background: #0d1b2a; color: #ccc; cursor: pointer; border-radius: 20px; font-size: 0.85em; transition: all 0.2s; }
+        .llm-btn.active { background: #0f3460; color: #00d4ff; border-color: #00d4ff; font-weight: bold; }
+        .llm-btn:hover { border-color: #00d4ff; color: #00d4ff; }
+
+        /* Chat */
+        #chat-row { display: flex; gap: 8px; }
+        #chat-input { flex: 1; padding: 10px; background: #0d1b2a; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 4px; }
+        #chat-send { padding: 10px 20px; background: #00897b; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        #chat-send:hover { background: #00acc1; }
+
+        #chat-messages, #log-output {
+            height: 400px; overflow-y: scroll; border: 1px solid #0f3460;
+            padding: 12px; margin-top: 10px; background: #0d1b2a; border-radius: 4px;
+        }
+        .message { margin-bottom: 12px; line-height: 1.5; }
+        .message .sender { font-weight: bold; }
+        .you .sender { color: #00d4ff; }
+        .bot .sender { color: #69f0ae; }
+        .error-msg .sender { color: #ff5252; }
+        .warning-msg .sender { color: #ffab40; }
+        .tool-call .sender { color: #ffd54f; }
+        .tool-call code { background: #0d2137; padding: 1px 5px; border-radius: 3px; font-size:0.8em; }
+        .tool-call em { color: #90a4ae; font-size: 0.85em; }
+
+        .log-info  { color: #81d4fa; font-size: 0.85em; font-family: monospace; }
+        .log-error { color: #ff5252; font-size: 0.85em; font-family: monospace; }
+        .log-warn  { color: #ffab40; font-size: 0.85em; font-family: monospace; }
+        .log-debug { color: #aaa;    font-size: 0.85em; font-family: monospace; }
+
+        #status-bar { font-size: 0.8em; color: #aaa; margin-top: 8px; }
+        #status-bar .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff5252; margin-right: 5px; }
+        #status-bar .dot.connected { background: #69f0ae; }
+
+        textarea { width: 100%; background: #0d1b2a; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 4px; padding: 8px; }
+        button.save-btn { margin-top: 8px; padding: 8px 20px; background: #0f3460; color: #00d4ff; border: 1px solid #00d4ff; cursor: pointer; border-radius: 4px; }
+        button.save-btn:hover { background: #1a5276; }
+        .status-msg { margin-top: 8px; font-size: 0.9em; }
     </style>
 </head>
 <body>
-    <h1>Bot Control Panel (like OpenClaw)</h1>
+    <h1>&#x1F916; Bot Control Panel</h1>
+
     <div id="tabs">
-        <button class="tab-button active" onclick="showTab(event, 'chat')">Chat</button>
-        <button class="tab-button" onclick="showTab(event, 'config')">Config</button>
-        <button class="tab-button" onclick="showTab(event, 'logs')">Logs</button>
+        <button class="tab-button active" onclick="showTab(event,'chat')">Chat</button>
+        <button class="tab-button" onclick="showTab(event,'config')">Config</button>
+        <button class="tab-button" onclick="showTab(event,'manifest')">Manifest</button>
+        <button class="tab-button" onclick="showTab(event,'logs')">Logs</button>
     </div>
 
+    <!-- CHAT TAB -->
     <div id="chat-tab" class="tab-content active">
-        <input type="text" id="chat-input" placeholder="Type your message here..." onkeypress="if(event.key==='Enter') sendChat()">
-        <button id="chat-send" onclick="sendChat()">Send</button>
+        <div id="llm-selector">
+            <span>LLM:</span>
+            <!-- Buttons injected dynamically by JS when 'backends' message arrives -->
+            <div id="llm-buttons"></div>
+        </div>
+        <div id="chat-row">
+            <input type="text" id="chat-input" placeholder="Type your message… (Enter to send)"
+                   onkeypress="if(event.key==='Enter') sendChat()">
+            <button id="chat-send" onclick="sendChat()">Send &#x27A4;</button>
+        </div>
         <div id="chat-messages"></div>
+        <div id="status-bar">
+            <span class="dot" id="ws-dot"></span>
+            <span id="ws-status">Connecting…</span>
+        </div>
     </div>
 
+    <!-- CONFIG TAB -->
     <div id="config-tab" class="tab-content">
-        <h2>Configuration</h2>
-        <textarea id="config-textarea" rows="20" cols="80"></textarea><br>
-        <button onclick="saveConfig()">Save Config</button>
-        <div id="config-status"></div>
+        <h2>Configuration (config.toml)</h2>
+        <textarea id="config-textarea" rows="22"></textarea>
+        <button class="save-btn" onclick="saveConfig()">&#x1F4BE; Save Config</button>
+        <div id="config-status" class="status-msg"></div>
     </div>
 
+    <!-- MANIFEST TAB -->
+    <div id="manifest-tab" class="tab-content">
+        <h2>System Manifest</h2>
+        <textarea id="manifest-textarea" rows="22"></textarea>
+        <button class="save-btn" onclick="saveManifest()">&#x1F4BE; Save Manifest</button>
+        <div id="manifest-status" class="status-msg"></div>
+    </div>
+
+    <!-- LOGS TAB -->
     <div id="logs-tab" class="tab-content">
         <h2>Live Logs</h2>
+        <button class="save-btn" style="margin-bottom:8px"
+                onclick="document.getElementById('log-output').innerHTML=''">&#x1F9F9; Clear</button>
         <div id="log-output"></div>
     </div>
 
     <script>
         let ws = null;
-        const WS_URL = 'wss://localhost:8443/ws';
+        let selectedLlm = '';   // '' means "use server default (first backend)"
+        const WS_URL = 'wss://' + location.hostname + ':8443/ws';
 
+        // ── WebSocket ──────────────────────────────────────────────────────────
         function connectWS() {
             ws = new WebSocket(WS_URL);
-            ws.onopen = () => console.log('WebSocket connected');
+            ws.onopen = () => {
+                setStatus(true);
+                console.log('WebSocket connected');
+            };
             ws.onclose = () => {
-                console.log('WebSocket disconnected, reconnecting...');
+                setStatus(false);
+                console.log('WebSocket disconnected, reconnecting in 3s…');
                 setTimeout(connectWS, 3000);
             };
-            ws.onerror = (err) => console.error('WS error:', err);
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    let inner_data;
-                    try {
-                        inner_data = JSON.parse(data.data);
-                    } catch (e) {
-                        inner_data = data.data;
-                    }
-                    let handled = false;
-                    if (data.type === 'user_msg') {
-                        appendChat(data.from || 'You', inner_data);
-                        handled = true;
-                    }
-                    if (!handled && inner_data && inner_data.type === 'log') {
-                        appendLog(inner_data.level || 'info', inner_data.msg || inner_data.data);
-                        handled = true;
-                    }
-                    if (!handled && data.type === 'config') {
-                        document.getElementById('config-textarea').value = data.data;
-                        handled = true;
-                    }
-                    if (!handled && data.type === 'config_status') {
-                        const statusDiv = document.getElementById('config-status');
-                        statusDiv.textContent = data.msg;
-                        statusDiv.style.color = data.status === 'success' ? 'green' : 'red';
-                        handled = true;
-                    }
-                    if (!handled && data.to === 'web_interface') {
-                        appendChat(data.from || 'Bot', inner_data);
-                    }
-                } catch (e) {
-                    console.error('Parse error:', e, event.data);
-                }
-            };
+            ws.onerror = (err) => { console.error('WS error:', err); setStatus(false); };
+            ws.onmessage = handleMessage;
         }
 
+        function setStatus(connected) {
+            document.getElementById('ws-dot').className = 'dot' + (connected ? ' connected' : '');
+            document.getElementById('ws-status').textContent = connected ? 'Connected' : 'Disconnected';
+        }
+
+        // ── Message dispatcher ─────────────────────────────────────────────────
+        function handleMessage(event) {
+            let data;
+            try { data = JSON.parse(event.data); }
+            catch(e) { console.error('WS parse error:', e, event.data); return; }
+
+            // Parse inner data.data (bus messages wrap payload in .data as JSON string)
+            let inner;
+            try {
+                inner = (typeof data.data === 'string') ? JSON.parse(data.data) : data.data;
+            } catch(e) {
+                inner = data.data;
+            }
+
+            // ── Direct-type messages (server-side echoes, not bus-wrapped) ──
+            if (data.type === 'backends') {
+                buildLlmButtons(data.backends || []);
+                return;
+            }
+            if (data.type === 'user_msg') {
+                appendChat('you', 'You', toStr(inner || data.data));
+                return;
+            }
+            if (data.type === 'manifest') {
+                document.getElementById('manifest-textarea').value = data.data || '';
+                return;
+            }
+            if (data.type === 'config') {
+                document.getElementById('config-textarea').value = data.data || '';
+                return;
+            }
+            if (data.type === 'log') {
+                appendLog(data.level || 'info', data.msg || toStr(data));
+                return;
+            }
+
+            // ── Bus-wrapped messages (have .to / .from / .data) ──
+            if (data.to === 'web_interface') {
+                const itype = (inner && typeof inner === 'object') ? inner.type : null;
+                switch (itype) {
+                    case 'log':
+                        appendLog(inner.level || 'info', inner.msg || toStr(inner));
+                        return;
+
+                    case 'tool_call': {
+                        const toolName = inner.tool || '?';
+                        const preview  = inner.result_preview || '';
+                        const argsStr  = inner.args ? JSON.stringify(inner.args) : '';
+                        appendToolCall(toolName, argsStr, preview);
+                        return;
+                    }
+
+                    case 'ollama_response': {
+                        const llmLabel = inner.llm
+                            ? labelFor(inner.llm)
+                            : (data.from || 'Bot');
+                        appendChat('bot', llmLabel, inner.msg || toStr(inner));
+                        return;
+                    }
+
+                    case 'llm_output': {
+                        const llmLabel = data.from || 'Bot';
+                        appendChat('bot', llmLabel, inner.msg || toStr(inner));
+                        return;
+                    }
+
+                    case 'error':
+                        appendChat('error-msg', '\u26A0 Error', inner.msg || toStr(inner));
+                        return;
+
+                    case 'warning':
+                        appendChat('warning-msg', '\u26A0', inner.msg || toStr(inner));
+                        return;
+
+                    case 'config_status': {
+                        const el = document.getElementById('config-status');
+                        el.textContent = inner.msg || '';
+                        el.style.color = inner.status === 'success' ? '#69f0ae' : '#ff5252';
+                        return;
+                    }
+
+                    case 'manifest_status': {
+                        const el = document.getElementById('manifest-status');
+                        el.textContent = inner.msg || '';
+                        el.style.color = inner.status === 'success' ? '#69f0ae' : '#ff5252';
+                        return;
+                    }
+
+                    default:
+                        console.debug('Unhandled bus message:', data);
+                        return;
+                }
+            }
+
+            console.debug('Unhandled WS message:', data);
+        }
+
+        // ── LLM selector ───────────────────────────────────────────────────────
+        const llmLabels = {};
+
+        function buildLlmButtons(backends) {
+            const container = document.getElementById('llm-buttons');
+            container.innerHTML = '';
+            backends.forEach((b, i) => {
+                llmLabels[b.id] = b.label;
+                const btn = document.createElement('button');
+                btn.className = 'llm-btn' + (i === 0 ? ' active' : '');
+                btn.textContent = b.label;
+                btn.dataset.id = b.id;
+                if (i === 0) selectedLlm = b.id;
+                btn.onclick = () => {
+                    document.querySelectorAll('.llm-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedLlm = b.id;
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function labelFor(id) {
+            return llmLabels[id] || id;
+        }
+
+        // ── Chat helpers ────────────────────────────────────────────────────────
         function sendChat() {
             const input = document.getElementById('chat-input');
             const msg = input.value.trim();
-            if (msg && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({type: 'chat', msg: msg}));
+            if (!msg || !ws || ws.readyState !== WebSocket.OPEN) return;
+            // Slash commands → direct skill execution
+            if (msg.startsWith('/')) {
+                ws.send(JSON.stringify({ type: 'slash_cmd', cmd: msg }));
                 input.value = '';
+                return;
             }
+            ws.send(JSON.stringify({ type: 'chat', msg: msg, llm: selectedLlm }));
+            input.value = '';
         }
 
-        function appendChat(from, msg) {
+        function appendChat(cssClass, from, msg) {
             const div = document.createElement('div');
-            div.className = 'message';
-            div.innerHTML = `<strong>${from}:</strong> ${escapeHtml(msg)}`;
-            document.getElementById('chat-messages').appendChild(div);
-            div.scrollIntoView();
+            div.className = 'message ' + cssClass;
+            div.innerHTML =
+                '<span class="sender">' + escapeHtml(toStr(from)) + ':</span> ' +
+                escapeHtml(toStr(msg));
+            const container = document.getElementById('chat-messages');
+            container.appendChild(div);
+            div.scrollIntoView({ behavior: 'smooth' });
         }
 
         function appendLog(level, msg) {
             const div = document.createElement('div');
-            div.className = `log-${level}`;
-            div.textContent = `[${level.toUpperCase()}] ${msg}`;
-            document.getElementById('log-output').appendChild(div);
-            div.scrollIntoView();
+            div.className = 'log-' + (level || 'info');
+            const ts = new Date().toLocaleTimeString();
+            div.textContent = '[' + ts + '][' + (level || 'info').toUpperCase() + '] ' + msg;
+            const container = document.getElementById('log-output');
+            container.appendChild(div);
+            div.scrollIntoView({ behavior: 'smooth' });
         }
 
-        function showTab(event, tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(tabName + '-tab').classList.add('active');
+        function appendToolCall(tool, args, preview) {
+            const div = document.createElement('div');
+            div.className = 'message tool-call';
+            div.innerHTML =
+                `<span class="sender">⚙ Tool [${escapeHtml(tool)}]</span> ` +
+                `<code>${escapeHtml(args)}</code>` +
+                (preview ? ` → <em>${escapeHtml(preview)}</em>` : '');
+            const container = document.getElementById('chat-messages');
+            container.appendChild(div);
+            div.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // ── Tab switching ───────────────────────────────────────────────────────
+        function showTab(event, name) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.getElementById(name + '-tab').classList.add('active');
             event.target.classList.add('active');
         }
 
+        // ── Config / Manifest save ──────────────────────────────────────────────
         function saveConfig() {
             const toml = document.getElementById('config-textarea').value;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({type: 'config_save', data: toml}));
-            }
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'config_save', data: toml }));
+        }
+
+        function saveManifest() {
+            const md = document.getElementById('manifest-textarea').value;
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'manifest_save', data: md }));
+        }
+
+        // ── Utilities ──────────────────────────────────────────────────────────
+        function toStr(v) {
+            if (v === null || v === undefined) return '';
+            if (typeof v === 'string') return v;
+            return JSON.stringify(v);
         }
 
         function escapeHtml(text) {
-            const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
-            return text.replace(/[&<>"']/g, m => map[m]);
+            const map = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
         }
 
         connectWS();
@@ -415,6 +793,66 @@ const MAIN_HTML: &str = r#"
 </body>
 </html>
 "#;
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+/// Execute a slash command typed directly in the chat box.
+/// Returns the result string to display in the chat.
+fn handle_slash_command(cmd: &str) -> String {
+    let parts: Vec<&str> = cmd.splitn(3, ' ').collect();
+    let verb = parts[0].trim_start_matches('/').to_lowercase();
+    let args = serde_json::json!({});
+
+    match verb.as_str() {
+        "status" => crate::tools::execute("system_status", &args),
+        "tools" => crate::tools::execute("list_tools", &args),
+        "notes" => crate::tools::execute("list_notes", &args),
+        "beliefs" => crate::tools::execute("get_beliefs", &args),
+        "note" => {
+            // /note <title>
+            let title = parts.get(1).copied().unwrap_or("untitled");
+            crate::tools::execute("read_note", &serde_json::json!({"title": title}))
+        }
+        "set" => {
+            // /set key=value
+            let kv = parts.get(1).copied().unwrap_or("");
+            if let Some((k, v)) = kv.split_once('=') {
+                crate::tools::execute(
+                    "set_belief",
+                    &serde_json::json!({"key": k.trim(), "value": v.trim()}),
+                )
+            } else {
+                "Usage: /set key=value".to_string()
+            }
+        }
+        "log" => {
+            // /log [filename] — default to chat_log.md
+            let file = parts
+                .get(1)
+                .map(|f| {
+                    if f.contains('/') {
+                        f.to_string()
+                    } else {
+                        format!("logs/{}", f)
+                    }
+                })
+                .unwrap_or_else(|| "logs/chat_log.md".to_string());
+            crate::tools::execute("read_log", &serde_json::json!({"log_file": file}))
+        }
+        "help" => format!(
+            "Slash commands:\n\
+             /status        — system health\n\
+             /tools         — list all tools\n\
+             /notes         — list saved notes\n\
+             /note <title>  — read a note\n\
+             /beliefs       — show agent beliefs\n\
+             /set k=v       — store a belief\n\
+             /log [file]    — tail a log file\n\
+             /help          — this message"
+        ),
+        other => format!("Unknown command '/{}'  — type /help for a list", other),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -424,7 +862,7 @@ mod tests {
     #[tokio::test]
     async fn test_server_start() {
         let bus = Arc::new(Bus::new());
-        // Full start expects certs/port, but verifies no panic
+        // Full start expects certs/port, but verifies no panic on startup path
         tokio::spawn(async move {
             let _ = start_web_server(bus, 8443, "".to_string()).await;
         });

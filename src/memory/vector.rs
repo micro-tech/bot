@@ -60,4 +60,29 @@ mod tests {
         let results = mem.search("Rust", 2);
         assert_eq!(results.len(), 2);
     }
+
+    #[test]
+    fn test_add_fact() {
+        let mut mem = VectorMemory::new();
+        let id = mem.add_fact("test fact".to_string());
+        assert_eq!(id, 0);
+        assert_eq!(mem.facts.len(), 1);
+        assert_eq!(mem.facts[&0].text, "test fact");
+        assert_eq!(mem.next_id, 1);
+    }
+
+    #[test]
+    fn test_search_empty() {
+        let mem = VectorMemory::new();
+        let results = mem.search("query", 5);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_cosine_sim() {
+        let a = vec![1.0, 2.0, 3.0];
+        let b = vec![1.0, 2.0, 3.0];
+        let sim = cosine_sim(&a, &b);
+        assert!((sim - 1.0).abs() < 1e-6);
+    }
 }

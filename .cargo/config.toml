@@ -1,0 +1,45 @@
+# .cargo/config.toml
+# Cargo configuration for the bot project.
+# Optimised for unreliable satellite (Starlink) connections.
+
+# ── Network retries ───────────────────────────────────────────────────────────
+# Retry failed network requests up to 10 times before giving up.
+# Default is 3 — raise it so a brief Starlink drop doesn't abort the build.
+[net]
+retry = 10
+
+# ── Offline / vendor fallback ─────────────────────────────────────────────────
+# Uncomment the [source] block below AFTER running `cargo vendor` on the server.
+# Once active, `cargo build` will never touch the network again.
+#
+# Steps to activate:
+#   1. On a machine with internet: cargo vendor
+#   2. Copy the generated vendor/ directory to the server.
+#   3. Uncomment the block below and commit .cargo/config.toml.
+#
+# [source.crates-io]
+# replace-with = "vendored-sources"
+#
+# [source.vendored-sources]
+# directory = "vendor"
+
+# ── Build settings ────────────────────────────────────────────────────────────
+[build]
+# Use all available CPU cores for parallel compilation.
+# Remove or lower this if the server runs out of memory during large builds.
+jobs = 4
+
+# ── Profile tweaks ────────────────────────────────────────────────────────────
+# Faster incremental dev builds — less optimisation, quicker turnaround.
+[profile.dev]
+opt-level = 0
+debug = true
+incremental = true
+
+# Release builds: full optimisation + strip debug symbols to shrink binary.
+[profile.release]
+opt-level = 3
+debug = false
+strip = "symbols"
+lto = "thin"
+codegen-units = 1
