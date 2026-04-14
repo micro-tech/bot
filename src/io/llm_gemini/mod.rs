@@ -270,7 +270,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_gemini_no_key() {
         use crate::bus::Bus;
-        std::env::remove_var("GEMINI_API_KEY");
+        unsafe { std::env::remove_var("GEMINI_API_KEY") };
         let bus = Arc::new(Bus::new());
         let _rx = bus.subscribe("web_interface");
         let msg = Message {

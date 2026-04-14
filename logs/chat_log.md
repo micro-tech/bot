@@ -137,3 +137,12 @@
 [2026-04-12 16:37:25.573] logger -> web_interface: {"type":"log","level":"info","msg":"Ollama ✅  replied on attempt 3/3 — 32 chars"}
 [2026-04-12 16:37:25.585] ollama_server -> web_interface: {"type":"ollama_response","llm":"server","reply_to":"web_interface","msg":"Hello! How can I help you today?"}
 [2026-04-12 16:37:25.586] cpu -> web_interface: {"type":"llm_output","correlation_id":1776025996078,"msg":"Hello! How can I help you today?"}
+[2026-04-13 13:35:03.200] gemini -> web_interface: {"type":"error","msg":"GEMINI_API_KEY environment variable is not set or empty"}[2026-04-13 13:35:03.199] test -> ollama: Test message[2026-04-13 13:35:03.200] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}
+
+
+[2026-04-13 13:35:31.688] test -> ollama: Test message[2026-04-13 13:35:31.688] gemini -> web_interface: {"type":"error","msg":"GEMINI_API_KEY environment variable is not set or empty"}
+
+[2026-04-13 13:35:31.689] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}
+[2026-04-13 13:37:44.709] gemini -> web_interface: {"type":"error","msg":"GEMINI_API_KEY environment variable is not set or empty"}[2026-04-13 13:37:44.709] test -> ollama: Test message
+
+[2026-04-13 13:37:44.710] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}

@@ -4,6 +4,7 @@
 //! CPU `SkillRegistry` (`skills/mod.rs`) delegate here.  Keeping them in sync
 //! is then automatic.
 
+pub mod email_tools;
 pub mod file_tools;
 pub mod system_tools;
 
@@ -21,7 +22,9 @@ pub fn execute(name: &str, args: &Value) -> String {
         "write_note" => file_tools::write_note(args),
         "read_note" => file_tools::read_note(args),
         "list_notes" => file_tools::list_notes(),
-        "send_email" => system_tools::send_email(args),
+        "send_email" => email_tools::send_email(args),
+        "read_email" => email_tools::read_email(args),
+        "check_inbox" => email_tools::check_inbox(args),
         "system_status" => system_tools::system_status(),
         "list_tools" => system_tools::list_tools(),
         "get_beliefs" => system_tools::get_beliefs(),
@@ -97,7 +100,7 @@ pub fn tool_definitions() -> Value {
             "type": "function",
             "function": {
                 "name": "send_email",
-                "description": "Queue an alert or notification email to be sent.",
+                "description": "Send an email via SMTP. Falls back to logs/email_outbox.md when SMTP is not configured.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -106,6 +109,35 @@ pub fn tool_definitions() -> Value {
                         "body":    { "type": "string", "description": "Plain-text body of the email" }
                     },
                     "required": ["to", "subject", "body"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_email",
+                "description": "Read recent emails from an IMAP folder. Returns subject, sender, and date for the last N messages.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "folder": { "type": "string", "description": "IMAP folder (default: INBOX)" },
+                        "count":  { "type": "integer", "description": "Number of emails to return (default: 5, max: 20)" }
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "check_inbox",
+                "description": "Check how many messages are in an IMAP folder.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "folder": { "type": "string", "description": "IMAP folder name (default: INBOX)" }
+                    },
+                    "required": []
                 }
             }
         },
@@ -181,6 +213,6 @@ mod tests {
         let defs = tool_definitions();
         assert!(defs.is_array());
         let arr = defs.as_array().unwrap();
-        assert!(arr.len() >= 9, "expected >= 9 tools, got {}", arr.len());
+        assert!(arr.len() >= 11, "expected >= 11 tools, got {}", arr.len());
     }
 }
