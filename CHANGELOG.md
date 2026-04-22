@@ -10,6 +10,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.0] - 2026-05-14
+
+### Added — Ollama Model Preload and Keep-Alive (Task #89)
+
+**Author:** AI Assistant (Claude Sonnet 4.6) — triggered by user "Cobble"
+
+#### New `src/io/ollama/keepalive.rs` module
+
+Standalone keepalive module added to the Ollama IO sub-system:
+
+- **`preload_model(base_url, model)`** — async fn that sends a dummy
+  `POST /api/generate` (empty prompt, `num_predict: 0`, `stream: false`) at bot
+  startup to force Ollama to load the model into GPU/CPU memory before the first
+  real user query, eliminating cold-start latency.
+
+- **`spawn_keepalive_task(base_url, model, interval_secs)`** — spawns a
+  long-lived background Tokio task that fires a heartbeat `POST /api/generate`
+  (with `keep_alive: "1h"`) every N seconds (default: 240 s, below Ollama's
+  default 5-minute eviction timeout).  The task never panics.
+
+- **`read_preload_flag()`** / **`read_keep_alive_secs()`** — env-var config
+  helpers with safe defaults.
+
+- **Network resilience (Starlink policy)**: every HTTP call is wrapped in
+  `tokio::time::timeout` and retried up to 3 times with exponential-backoff
+  delays (2 s → 4 s → 8 s, capped at 30 s).  Failures are warnings only —
+  the bot never crashes on keepalive errors.
+
+- **10 unit tests** covering config-flag defaults, custom values, garbage input
+  fallback, unreachable-host resilience, and zero-interval noop.
+
+#### `src/main.rs` updated
+
+- Fixed duplicate `log`/`tracing` import (compilation error).
+- Added `preload_model()` call at startup, guarded by `OLLAMA_PRELOAD` env flag.
+- Added `spawn_keepalive_task()` call to start the background heartbeat.
+- Reads `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_PRELOAD`, `OLLAMA_KEEP_ALIVE_SECS`
+  from `.env`.
+
+#### `Cargo.toml` updated
+
+- Added `reqwest = { version = "0.11", features = ["json"] }`.
+- Added `serde_json = "1.0"`.
+- Added `"time"` to Tokio features (required for `tokio::time::sleep`).
+
+#### `config.toml` updated
+
+- Added `[ollama_keepalive]` section documenting `preload` and `interval_secs`.
+- Added comments for all related `.env` overrides.
+
+---
+
 ## [0.5.0] - 2026-04-12
 
 ### Added — Tools and Skills System (Task #88)

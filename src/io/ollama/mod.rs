@@ -25,6 +25,11 @@ use crate::serde_json::json;
 use crate::utils::log_to_file;
 use crate::utils::now_ms;
 
+// ── sub-modules ───────────────────────────────────────────────────────────────
+
+/// Ollama model preload and keep-alive heartbeat (Task #89).
+pub mod keepalive;
+
 // ── tunables ──────────────────────────────────────────────────────────────────
 
 /// Seconds to wait for the TCP connection to be established.
@@ -708,15 +713,15 @@ mod tests {
 
 pub mod llm {
 
-    use crate::OllamaRouter;
     use crate::cpu::interfaces::LlmInterface;
     use crate::hy_evo::genome::WorkflowGenome;
     use crate::hy_evo::reflection::ReflectionLlm;
     use crate::hy_evo::scoring::ExecutionMetrics;
     use crate::io::ollama::Client;
     use crate::utils::now_ms;
+    use crate::OllamaRouter;
 
-    use anyhow::{Result, anyhow};
+    use anyhow::{anyhow, Result};
     use async_trait::async_trait;
     use serde_json::Value;
     use std::sync::Arc;
