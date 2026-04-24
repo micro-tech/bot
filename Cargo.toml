@@ -7,9 +7,25 @@ edition = "2021"
 log = "0.4"
 env_logger = "0.10"
 serenity = { version = "0.11", features = ["model", "cache", "gateway"] }
-tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.0", features = [
+    "macros",
+    "rt-multi-thread",
+    "time",
+    "net",
+    "sync",
+] }
+axum = { version = "0.7", features = ["ws"] }
+hyper = { version = "1", features = ["http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+rcgen = "0.13"
+tower = "0.5"
+futures-util = { version = "0.3", features = ["sink"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
 dotenv = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-reqwest = { version = "0.11", features = ["json"] }
-serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json", "blocking"] }
