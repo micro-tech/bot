@@ -39,7 +39,7 @@ impl CrossoverEngine {
         parent_a: &WorkflowGenome,
         parent_b: &WorkflowGenome,
     ) -> WorkflowGenome {
-        let mut rng = thread_rng();
+        let mut rng = rand::thread_rng();
         let roll = rng.r#gen::<f32>();
 
         if roll < self.config.single_point_prob {
@@ -58,7 +58,7 @@ impl CrossoverEngine {
     // ---------------------------------------------------------
 
     fn single_point(&self, a: &WorkflowGenome, b: &WorkflowGenome) -> WorkflowGenome {
-        let mut rng = thread_rng();
+        let mut rng = rand::thread_rng();
 
         let split_a = rng.gen_range(0..a.nodes.len().max(1));
         let split_b = rng.gen_range(0..b.nodes.len().max(1));
@@ -85,7 +85,7 @@ impl CrossoverEngine {
     // ---------------------------------------------------------
 
     fn two_point(&self, a: &WorkflowGenome, b: &WorkflowGenome) -> WorkflowGenome {
-        let mut rng = thread_rng();
+        let mut rng = rand::thread_rng();
 
         if a.nodes.is_empty() || b.nodes.is_empty() {
             return a.clone();
@@ -121,7 +121,7 @@ impl CrossoverEngine {
     // ---------------------------------------------------------
 
     fn uniform(&self, a: &WorkflowGenome, b: &WorkflowGenome) -> WorkflowGenome {
-        let mut rng = thread_rng();
+        let mut rng = rand::thread_rng();
         let mut child = WorkflowGenome::new();
 
         let max_len = a.nodes.len().max(b.nodes.len());

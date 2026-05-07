@@ -8,10 +8,8 @@ use axum::{
     response::{Html, IntoResponse},
     routing::get,
 };
-use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
 use log::info;
-use rcgen::generate_simple_self_signed;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::fs;
@@ -72,20 +70,7 @@ pub async fn start_web_server(
     port: u16,
     config_str: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Starting HTTPS Web Server on 0.0.0.0:{}", port);
-
-    // Generate self-signed certs if not present
-    fs::create_dir_all("certs")?;
-    let cert_path = "certs/cert.pem";
-    let key_path = "certs/key.pem";
-    if !Path::new(cert_path).exists() || !Path::new(key_path).exists() {
-        info!("Generating self-signed certificates...");
-        let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
-        let cert = generate_simple_self_signed(subject_alt_names)?;
-        fs::write(cert_path, cert.cert.pem())?;
-        fs::write(key_path, cert.signing_key.serialize_pem())?;
-        info!("Certificates generated at certs/cert.pem and certs/key.pem");
-    }
+    info!("Starting HTTP Web Server on 0.0.0.0:{}", port);
 
     // Create broadcast channel for web messages
     let (msg_tx, _) = broadcast::channel(100);
@@ -148,16 +133,14 @@ pub async fn start_web_server(
         .with_state(state)
         .layer(CorsLayer::permissive());
 
-    let rustls_config = RustlsConfig::from_pem_file(cert_path, key_path).await?;
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!(
-        "Web server listening on https://localhost:{} (accept self-signed cert warning)",
+        "Web server listening on http://localhost:{}",
         port
     );
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    axum_server::bind_rustls(addr, rustls_config)
-        .serve(app.into_make_service())
-        .await?;
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }
@@ -561,7 +544,7 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
     <script>
         let ws = null;
         let selectedLlm = '';   // '' means "use server default (first backend)"
-        const WS_URL = 'wss://' + location.hostname + ':8443/ws';
+        const WS_URL = 'ws://' + location.hostname + ':8443/ws';
 
         // ── WebSocket ──────────────────────────────────────────────────────────
         function connectWS() {

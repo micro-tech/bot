@@ -3,7 +3,7 @@
 use log::info;
 use reqwest::Client;
 
-use crate::OllamaRouter;
+use super::OllamaRouter;
 use crate::cpu::interfaces::LlmInterface;
 use crate::hy_evo::genome::WorkflowGenome;
 use crate::hy_evo::reflection::ReflectionLlm;
