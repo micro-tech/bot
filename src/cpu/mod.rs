@@ -13,8 +13,8 @@ use crate::cpu::executor::CpuExecutor;
 use crate::cpu::instructions::{CpuEvent, CpuEventKind, Instruction};
 use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
 use crate::cpu::state::AgentState;
-use crate::error;
-use log::debug;
+// use crate::error;
+use log::{debug, error};
 
 use crate::hy_evo::integration::{CpuExecutor as HyEvoCpuExecutor, HyEvoIntegration};
 use crate::hy_evo::reflection::ReflectionLlm;

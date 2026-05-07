@@ -146,3 +146,6 @@
 [2026-04-13 13:37:44.709] gemini -> web_interface: {"type":"error","msg":"GEMINI_API_KEY environment variable is not set or empty"}[2026-04-13 13:37:44.709] test -> ollama: Test message
 
 [2026-04-13 13:37:44.710] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}
+[2026-05-04 21:16:20.256] web_interface -> ollama_server: {"correlation_id":1777943780256,"prompt":"hi","type":"chat_request"}
+[2026-05-04 21:34:32.153] web_interface -> ollama_local3090: {"correlation_id":1777944872153,"prompt":"hi","type":"chat_request"}
+[2026-05-04 21:34:37.233] web_interface -> ollama_local3090: {"correlation_id":1777944877232,"prompt":"hi","type":"chat_request"}

@@ -21,14 +21,36 @@ use std::time::Duration;
 
 use crate::bus::Bus;
 use crate::bus::Message;
-use crate::serde_json::json;
+use serde_json::json;
 use crate::utils::log_to_file;
 use crate::utils::now_ms;
 
-// ── sub-modules ───────────────────────────────────────────────────────────────
+// ── OllamaRouter ────────────────────────────────────────────────────────────
 
-/// Ollama model preload and keep-alive heartbeat (Task #89).
-pub mod keepalive;
+#[derive(Debug, Clone)]
+pub struct OllamaBackend {
+    pub url: String,
+    pub model: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct OllamaRouter {
+    backends: Vec<OllamaBackend>,
+}
+
+impl OllamaRouter {
+    pub fn new() -> Self {
+        Self { backends: vec![] }
+    }
+
+    pub fn add_backend(&mut self, url: String, model: String) {
+        self.backends.push(OllamaBackend { url, model });
+    }
+
+    pub fn default(&self) -> Option<&OllamaBackend> {
+        self.backends.first()
+    }
+}
 
 // ── tunables ──────────────────────────────────────────────────────────────────
 
@@ -719,7 +741,7 @@ pub mod llm {
     use crate::hy_evo::scoring::ExecutionMetrics;
     use crate::io::ollama::Client;
     use crate::utils::now_ms;
-    use crate::OllamaRouter;
+    use super::OllamaRouter;
 
     use anyhow::{anyhow, Result};
     use async_trait::async_trait;

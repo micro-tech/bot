@@ -40,7 +40,7 @@ impl MutationEngine {
 
     /// Apply all mutation types to a genome
     pub fn mutate(&self, genome: &mut WorkflowGenome) {
-        let mut rng = thread_rng();
+        let mut rng = rand::thread_rng();
 
         if rng.r#gen::<f32>() < self.config.add_node_prob {
             mutate_add_node(genome);
@@ -71,7 +71,7 @@ impl MutationEngine {
 
     /// Randomly mutate edges (add/remove)
     fn mutate_edges(&self, genome: &mut WorkflowGenome) {
-        let mut rng = thread_rng();
+        let mut rng = rand::thread_rng();
 
         if genome.nodes.len() < 2 {
             return;
@@ -97,7 +97,7 @@ impl MutationEngine {
 
 /// Add a random node to the workflow
 pub fn mutate_add_node(genome: &mut WorkflowGenome) {
-    let mut rng = thread_rng();
+    let mut rng = rand::thread_rng();
 
     let new_node = Node::Skill {
         name: "noop".to_string(),
@@ -121,7 +121,7 @@ pub fn mutate_remove_node(genome: &mut WorkflowGenome) {
         return;
     }
 
-    let mut rng = thread_rng();
+    let mut rng = rand::thread_rng();
     let idx = rng.gen_range(0..genome.nodes.len());
 
     genome.nodes.remove(idx);
@@ -142,13 +142,13 @@ pub fn mutate_remove_node(genome: &mut WorkflowGenome) {
 
 /// Randomly reorder nodes
 pub fn mutate_reorder_nodes(genome: &mut WorkflowGenome) {
-    let mut rng = thread_rng();
+    let mut rng = rand::thread_rng();
     genome.nodes.shuffle(&mut rng);
 }
 
 /// Mutate parameters of a random node
 pub fn mutate_node_params(genome: &mut WorkflowGenome) {
-    let mut rng = thread_rng();
+    let mut rng = rand::thread_rng();
 
     if genome.nodes.is_empty() {
         return;
@@ -168,7 +168,7 @@ pub fn mutate_node_params(genome: &mut WorkflowGenome) {
         }
 
         Node::MemoryWrite { value, .. } => {
-            *value = serde_json::json!(rng.gen_range(0..1000));
+            *value = serde_json::Value::Number(rng.gen_range(0..1000).into());
         }
 
         _ => {}

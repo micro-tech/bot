@@ -3,6 +3,19 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use tokio;
+use toml;
+
+mod config;
+mod bus;
+mod io;
+mod cpu;
+mod hy_evo;
+mod tools;
+mod utils;
+mod memory;
+mod skills;
+mod hooks;
+mod bayesian;
 
 #[tokio::main]
 async fn main() {
@@ -75,7 +88,11 @@ async fn run_bot() {
     // Start the web server
     let config_str = fs::read_to_string("config.toml").unwrap_or_default();
     let bus = std::sync::Arc::new(crate::bus::Bus::new());
-    let port = 8443; // or parse from config
+    // Parse port from config
+    let port: u16 = toml::from_str::<toml::Value>(&config_str)
+        .ok()
+        .and_then(|v| v.get("web")?.get("port")?.as_integer()?.try_into().ok())
+        .unwrap_or(8443);
     if let Err(e) = crate::io::web_server::start_web_server(bus, port, config_str).await {
         eprintln!("Failed to start web server: {}", e);
     }
