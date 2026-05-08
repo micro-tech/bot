@@ -85,14 +85,31 @@ WantedBy=multi-user.target
 
 async fn run_bot() {
     println!("Bot is running...");
-    // Start the web server
-    let config_str = fs::read_to_string("config.toml").unwrap_or_default();
+
+    // Try multiple locations for config.toml
+    let config_paths = [
+        "config.toml",
+        "/etc/bot/config.toml",
+        "/usr/local/etc/bot/config.toml",
+    ];
+
+    let config_str = config_paths
+        .iter()
+        .find_map(|path| fs::read_to_string(path).ok())
+        .unwrap_or_default();
+
+    if config_str.is_empty() {
+        eprintln!("Warning: Could not find config.toml in any standard location.");
+    }
+
     let bus = std::sync::Arc::new(crate::bus::Bus::new());
+
     // Parse port from config
     let port: u16 = toml::from_str::<toml::Value>(&config_str)
         .ok()
         .and_then(|v| v.get("web")?.get("port")?.as_integer()?.try_into().ok())
         .unwrap_or(8443);
+
     if let Err(e) = crate::io::web_server::start_web_server(bus, port, config_str).await {
         eprintln!("Failed to start web server: {}", e);
     }

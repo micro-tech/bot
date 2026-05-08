@@ -6,7 +6,8 @@ edition = "2024"
 [dependencies]
 log = "0.4"
 env_logger = "0.11.10"
-serenity = { version = "0.12.5", features = ["model", "cache", "gateway"] }
+serenity = { version = "0.12", features = ["full"] }
+
 tokio = { version = "1.47.5", features = [
     "macros",
     "rt-multi-thread",
