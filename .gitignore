@@ -45,6 +45,13 @@ Thumbs.db
 ./logs/*
 .logs/*
 
+# Logs
+*.log
+*.logs.*
+./logs*
+./logs/*
+.logs/*
+
 # Temporary files
 *.tmp
 *.temp
@@ -53,3 +60,8 @@ Thumbs.db
 certs/
 cert/
 H:\GitHub\bot\certs
+
+# TLS Certificates (do not commit private keys)
+*.pem
+cert.pem
+key.pem
