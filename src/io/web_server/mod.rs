@@ -19,7 +19,9 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use toml;
-use tower_http::cors::CorsLayer;
+use axum_server::tls_rustls::RustlsConfig;
+use rcgen::{Certificate, CertificateParams, DistinguishedName};
+use std::path::PathBuf;
 
 // ── AppState ──────────────────────────────────────────────────────────────────
 
@@ -56,6 +58,19 @@ struct OllamaConfig {
 #[derive(Deserialize)]
 struct WebConfig {
     port: u16,
+    #[serde(default)]
+    tls_enabled: bool,
+    #[serde(default = "default_cert_path")]
+    cert_path: String,
+    #[serde(default = "default_key_path")]
+    key_path: String,
+}
+
+fn default_cert_path() -> String {
+    "cert.pem".to_string()
+}
+fn default_key_path() -> String {
+    "key.pem".to_string()
 }
 
 #[derive(Deserialize)]
@@ -70,22 +85,33 @@ pub async fn start_web_server(
     port: u16,
     config_str: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Starting HTTP Web Server on 0.0.0.0:{}", port);
-
-    // Create broadcast channel for web messages
-    let (msg_tx, _) = broadcast::channel(100);
-
-    // Build LLM backends list for the UI selector
+    // Parse config (with defaults)
     let parsed_cfg: Config = toml::from_str(&config_str).unwrap_or_else(|_| Config {
         bot: BotConfig {
             name: "Bot".to_string(),
         },
         ollama: vec![],
-        web: WebConfig { port: 8443 },
+        web: WebConfig {
+            port: 8443,
+            tls_enabled: true,
+            cert_path: default_cert_path(),
+            key_path: default_key_path(),
+        },
         heartbeat: HeartbeatConfig {
             interval_seconds: 300,
         },
     });
+
+    let tls_enabled = parsed_cfg.web.tls_enabled;
+    let cert_path = &parsed_cfg.web.cert_path;
+    let key_path = &parsed_cfg.web.key_path;
+
+    // Ensure certificates exist (generate self-signed if missing)
+    if tls_enabled {
+        ensure_certificates(cert_path, key_path)?;
+    }
+
+    // Build backend list...
     let mut backend_list = Vec::new();
     for b in &parsed_cfg.ollama {
         backend_list.push(serde_json::json!({
@@ -103,28 +129,10 @@ pub async fn start_web_server(
 
     let state = AppState {
         bus,
-        msg_tx: msg_tx.clone(),
+        msg_tx: broadcast::channel(100).0,
         config_str,
         backends_json,
     };
-
-    // Spawn bus → broadcast forwarder
-    let state_forwarder = state.clone();
-    tokio::spawn(async move {
-        let rx = state_forwarder.bus.subscribe("web_interface");
-        tokio::task::spawn_blocking(move || {
-            while let Ok(msg) = rx.recv() {
-                // Bug 1 fix: guard the slice so we never panic on short strings
-                println!(
-                    "Forwarding msg from bus: {}",
-                    &msg.data[..50.min(msg.data.len())]
-                );
-                let json_str = serde_json::to_string(&msg)
-                    .unwrap_or_else(|_| r#"{"error":"serialize failed"}"#.to_string());
-                let _ = state_forwarder.msg_tx.send(json_str);
-            }
-        });
-    });
 
     // Build Axum router
     let app = Router::new()
@@ -134,13 +142,20 @@ pub async fn start_web_server(
         .layer(CorsLayer::permissive());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    info!(
-        "Web server listening on http://localhost:{}",
-        port
-    );
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    if tls_enabled {
+        info!("Starting HTTPS Web Server on 0.0.0.0:{}", port);
+        info!("Using certificate: {} and key: {}", cert_path, key_path);
+
+        let rustls_config = RustlsConfig::from_pem_file(cert_path, key_path).await?;
+        axum_server::bind_rustls(addr, rustls_config)
+            .serve(app.into_make_service())
+            .await?;
+    } else {
+        info!("Starting HTTP Web Server on 0.0.0.0:{}", port);
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        axum::serve(listener, app).await?;
+    }
 
     Ok(())
 }
@@ -777,7 +792,32 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
 </html>
 "#;
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+/// Generate self-signed certificate + key if they don't exist.
+/// Uses rcgen to create a 2048-bit RSA cert valid for 10 years.
+fn ensure_certificates(cert_path: &str, key_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if Path::new(cert_path).exists() && Path::new(key_path).exists() {
+        return Ok(());
+    }
+
+    info!("Generating new self-signed certificate...");
+
+    let mut params = CertificateParams::new(vec!["localhost".to_string()]);
+    params.distinguished_name = DistinguishedName::new();
+    params.distinguished_name.push(rcgen::DnType::CommonName, "localhost");
+
+    let cert = Certificate::from_params(params)?;
+    let cert_pem = cert.serialize_pem()?;
+    let key_pem = cert.serialize_private_key_pem();
+
+    fs::write(cert_path, cert_pem)?;
+    fs::write(key_path, key_pem)?;
+
+    info!("Created {} and {}", cert_path, key_path);
+    println!(">>> Generated self-signed certs: {} + {}", cert_path, key_path);
+    println!(">>> You can now access https://localhost:8443");
+
+    Ok(())
+}
 
 /// Execute a slash command typed directly in the chat box.
 /// Returns the result string to display in the chat.

@@ -23,6 +23,9 @@ model = "gemini-3.1-flash-lite-preview"
 
 [web]
 port = 8443
+tls_enabled = true
+cert_path = "cert.pem"
+key_path = "key.pem"
 
 [heartbeat]
 interval_seconds = 300
