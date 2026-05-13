@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed — Dependency Updates
+- Upgraded `tokio` from `1.47.5` to `1.52.3` for improved stability and performance.
+
+---
+
+## [Unreleased]
+
 ### Audit — Code vs Task List Verification for Tasks 1–59 (2026-04-24)
 
 **Author:** AI Assistant (Claude Sonnet 4.6) — triggered by user "Cobble"

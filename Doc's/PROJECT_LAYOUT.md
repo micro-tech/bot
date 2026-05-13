@@ -7,12 +7,8 @@ This document outlines the directory structure and key modules of the bot projec
 - `config.toml`: Configuration file for bot name, Ollama settings, web port, heartbeat interval.
 - `.env`: Environment variables (if any).
 - `readme.md`: Project overview and setup instructions.
-- `PROJECT_LAYOUT.md`: This file.
-- `flow_map.md`: High-level data and control flow diagrams.
-- `Grok.md`: Grok-specific notes and integration details.
-- `system_manifest.md`: Agent constitution and core policies.
 - `CHANGELOG.md`: Version history and notable changes.
-- `Doc's/`: Additional documentation and AI summaries.
+- `Doc's/`: Additional documentation and AI summaries (including this file).
 - `logs/`: Directory for log files.
 - `certs/`: Certificates for HTTPS.
 - `tooling/`: Tools and scripts.
