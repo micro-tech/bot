@@ -19,7 +19,7 @@ Agent OS Bot
 - **Resilient Networking**: Retries, timeouts, exponential backoff for unreliable connections (e.g., Starlink).
 - **Test Binary**: `test_ollama` to verify Ollama connectivity.
 
-The system acts as a kernel (`src/main.rs`), coordinating subsystems via the bus. All settings in `config.toml`. Full architecture: [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md). Data flows: [flow_map.md](flow_map.md).
+The system acts as a kernel (`src/main.rs`), coordinating subsystems via the bus. All settings in `config.toml`. Full architecture: [Doc's/PROJECT_LAYOUT.md](Doc's/PROJECT_LAYOUT.md). Data flows: [Doc's/flow_map.md](Doc's/flow_map.md).
 
 ## Prerequisites
 

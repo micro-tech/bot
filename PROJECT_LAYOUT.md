@@ -9,8 +9,10 @@ This document outlines the directory structure and key modules of the bot projec
 - `readme.md`: Project overview and setup instructions.
 - `PROJECT_LAYOUT.md`: This file.
 - `flow_map.md`: High-level data and control flow diagrams.
-- `Grok.md`, `hartbeat.md`: Additional documentation.
-- `Doc's/`: Documentation directory.
+- `Grok.md`: Grok-specific notes and integration details.
+- `system_manifest.md`: Agent constitution and core policies.
+- `CHANGELOG.md`: Version history and notable changes.
+- `Doc's/`: Additional documentation and AI summaries.
 - `logs/`: Directory for log files.
 - `certs/`: Certificates for HTTPS.
 - `tooling/`: Tools and scripts.
@@ -47,8 +49,9 @@ Handles instruction execution, scheduling, interrupts, and integration with othe
 ### `cron/` (Cron Jobs)
 - `cron_handler.rs`: Handler for scheduled tasks.
 
-### `hartbeat/` (Heartbeat)
-- (Empty or placeholder for heartbeat functionality)
+### `hartbeat/` (Heartbeat System)
+- `mod.rs`: Heartbeat scheduler and message publishing.
+- `hartbeat.rs`: Core heartbeat logic and status reporting.
 
 ### `hooks/` (Lifecycle Event Handlers)
 Registry for phases (e.g., init, post-execution) with mutable state updates.
@@ -72,12 +75,10 @@ Adaptive system for evolving workflows using LLMs for reflection. Integrates wit
 Handles external I/O like web server, LLM services, terminal.
 - `mod.rs`: Declares submodules.
 - `io.rs`: General IO utilities.
-- `ollama/`: Submodule for Ollama integration.
-- `web_server/`: HTTPS web server for interface.
-- `terminal/`: Terminal I/O.
-- `llm_gemini/`: Gemini LLM integration.
-- `tests/`: IO tests.
-- `logs/`: Log handling.
+- `io/ollama/`: Ollama integration (keepalive, API calls).
+- `io/web_server/`: HTTPS web server + WebSocket handling.
+- `io/llm_gemini/`: Gemini LLM integration.
+- `io/terminal/`: Terminal CLI.
 
 ### `llm/` (Large Language Model Interfaces)
 - `mod.rs`: Declares ollama submodule.
@@ -96,8 +97,10 @@ Handles external I/O like web server, LLM services, terminal.
 - `mod.rs`: Defines `SkillRegistry` and `SkillInterface`.
 - `bayesian.rs`: Bayesian skills.
 
-### `tools/` (Tools)
-- (Empty or placeholder)
+### `tools/` (Tools & Slash Commands)
+- `mod.rs`: Central tool dispatcher (`execute`, `tool_definitions`).
+- `file_tools.rs`: File-related tools (read_log, write_note, read_note, list_notes).
+- `system_tools.rs`: System tools (status, beliefs, list_tools, etc.).
 
 ## `tests/` (Unit and Integration Tests)
 - Various test files for modules.
@@ -108,7 +111,9 @@ Handles external I/O like web server, LLM services, terminal.
 - `cargo run`: Run the bot (uses config.toml).
 
 ## Future Plans
-- Implement missing modules like hartbeat, tools.
-- Expand LLM providers.
-- Add more I/O interfaces.
-- Enhance HyEvo with more evolution strategies.
+- Expand A2A (agent-to-agent) communication.
+- Implement full MCP (Model Context Protocol) support.
+- Add more cron job capabilities.
+- Enhance HyEvo with advanced mutation/crossover strategies.
+- Improve vector memory with real embeddings.
+- Add Docker and systemd deployment support.
