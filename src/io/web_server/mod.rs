@@ -8,20 +8,21 @@ use axum::{
     response::{Html, IntoResponse},
     routing::get,
 };
+use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
 use log::info;
+use rcgen::{Certificate, CertificateParams, DistinguishedName};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use toml;
-use axum_server::tls_rustls::RustlsConfig;
-use rcgen::{Certificate, CertificateParams, DistinguishedName};
-use std::path::PathBuf;
+use tower_http::cors::CorsLayer;
 
 // ── AppState ──────────────────────────────────────────────────────────────────
 
@@ -559,7 +560,8 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
     <script>
         let ws = null;
         let selectedLlm = '';   // '' means "use server default (first backend)"
-        const WS_URL = 'ws://' + location.hostname + ':8443/ws';
+        const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname + ':8443/ws';
+
 
         // ── WebSocket ──────────────────────────────────────────────────────────
         function connectWS() {
@@ -795,26 +797,16 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
 /// Generate self-signed certificate + key if they don't exist.
 /// Uses rcgen to create a 2048-bit RSA cert valid for 10 years.
 fn ensure_certificates(cert_path: &str, key_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    if Path::new(cert_path).exists() && Path::new(key_path).exists() {
+    if std::path::Path::new(cert_path).exists() && std::path::Path::new(key_path).exists() {
         return Ok(());
     }
 
-    info!("Generating new self-signed certificate...");
+    let key_pair = rcgen::KeyPair::generate()?;
+    let params = rcgen::CertificateParams::new(vec!["localhost".to_string()])?;
+    let cert = params.self_signed(&key_pair)?;
 
-    let mut params = CertificateParams::new(vec!["localhost".to_string()]);
-    params.distinguished_name = DistinguishedName::new();
-    params.distinguished_name.push(rcgen::DnType::CommonName, "localhost");
-
-    let cert = Certificate::from_params(params)?;
-    let cert_pem = cert.serialize_pem()?;
-    let key_pem = cert.serialize_private_key_pem();
-
-    fs::write(cert_path, cert_pem)?;
-    fs::write(key_path, key_pem)?;
-
-    info!("Created {} and {}", cert_path, key_path);
-    println!(">>> Generated self-signed certs: {} + {}", cert_path, key_path);
-    println!(">>> You can now access https://localhost:8443");
+    std::fs::write(cert_path, cert.pem())?;
+    std::fs::write(key_path, key_pair.serialize_pem())?;
 
     Ok(())
 }
