@@ -29,6 +29,12 @@ pub fn execute(name: &str, args: &Value) -> String {
         "list_tools" => system_tools::list_tools(),
         "get_beliefs" => system_tools::get_beliefs(),
         "set_belief" => system_tools::set_belief(args),
+        "bayes_show" => system_tools::bayes_show(),
+        "bayes_update" => {
+            let evidence = args["evidence"].as_str().unwrap_or("");
+            system_tools::bayes_update(evidence)
+        }
+        "bayes_reset" => system_tools::bayes_reset(),
         other => format!(
             "Unknown tool '{}' — not registered. Use list_tools to see available tools.",
             other
@@ -179,6 +185,36 @@ pub fn tool_definitions() -> Value {
                     "required": ["key", "value"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "bayes_show",
+                "description": "Show the current Bayesian belief state (probabilities for positive/negative/neutral hypotheses). Reads persisted state from beliefs_bayes.json.",
+                "parameters": { "type": "object", "properties": {}, "required": [] }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "bayes_update",
+                "description": "Apply a Bayesian update for a piece of evidence. Evidence containing 'pos'/'good'/'yes' boosts positive; 'neg'/'bad'/'no' boosts negative; anything else boosts neutral. State persists in beliefs_bayes.json.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "evidence": { "type": "string", "description": "A short evidence string, e.g. 'positive_signal' or 'bad_outcome'" }
+                    },
+                    "required": ["evidence"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "bayes_reset",
+                "description": "Reset the Bayesian belief state back to default priors (positive=50%, negative=30%, neutral=20%).",
+                "parameters": { "type": "object", "properties": {}, "required": [] }
+            }
         }
     ])
 }
@@ -213,6 +249,6 @@ mod tests {
         let defs = tool_definitions();
         assert!(defs.is_array());
         let arr = defs.as_array().unwrap();
-        assert!(arr.len() >= 11, "expected >= 11 tools, got {}", arr.len());
+        assert!(arr.len() >= 12, "expected >= 12 tools, got {}", arr.len());
     }
 }

@@ -854,16 +854,43 @@ fn handle_slash_command(cmd: &str) -> String {
                 .unwrap_or_else(|| "logs/chat_log.md".to_string());
             crate::tools::execute("read_log", &serde_json::json!({"log_file": file}))
         }
+        "bayes" => {
+            // /bayes [show|status|update <evidence>|reset]
+            let sub = parts.get(1).copied().unwrap_or("show").to_lowercase();
+            match sub.as_str() {
+                "show" | "status" => crate::tools::execute("bayes_show", &args),
+                "reset" => crate::tools::execute("bayes_reset", &args),
+                "update" => {
+                    let evidence = parts.get(2).copied().unwrap_or("");
+                    if evidence.is_empty() {
+                        "Usage: /bayes update <evidence>\nExample: /bayes update positive_signal"
+                            .to_string()
+                    } else {
+                        crate::tools::execute(
+                            "bayes_update",
+                            &serde_json::json!({"evidence": evidence}),
+                        )
+                    }
+                }
+                _ => format!(
+                    "Unknown bayes sub-command '{}'.\nAvailable: /bayes show  /bayes status  /bayes update <evidence>  /bayes reset",
+                    sub
+                ),
+            }
+        }
         "help" => format!(
             "Slash commands:\n\
-             /status        — system health\n\
-             /tools         — list all tools\n\
-             /notes         — list saved notes\n\
-             /note <title>  — read a note\n\
-             /beliefs       — show agent beliefs\n\
-             /set k=v       — store a belief\n\
-             /log [file]    — tail a log file\n\
-             /help          — this message"
+             /status              — system health\n\
+             /tools               — list all tools\n\
+             /notes               — list saved notes\n\
+             /note <title>        — read a note\n\
+             /beliefs             — show agent beliefs\n\
+             /set k=v             — store a belief\n\
+             /log [file]          — tail a log file\n\
+             /bayes show          — show Bayesian belief state\n\
+             /bayes update <ev>   — apply Bayesian evidence update\n\
+             /bayes reset         — reset to default priors\n\
+             /help                — this message"
         ),
         other => format!("Unknown command '/{}'  — type /help for a list", other),
     }
