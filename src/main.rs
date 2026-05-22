@@ -86,6 +86,10 @@ WantedBy=multi-user.target
 async fn run_bot() {
     println!("Bot is running...");
 
+    // Ensure required directories exist (prevents panics on first run)
+    let _ = std::fs::create_dir_all("logs");
+    let _ = std::fs::create_dir_all("/etc/bot/logs");
+
     // Try multiple locations for config.toml
     let config_paths = [
         "config.toml",
@@ -110,6 +114,48 @@ async fn run_bot() {
         .and_then(|v| v.get("web")?.get("port")?.as_integer()?.try_into().ok())
         .unwrap_or(8443);
 
+    // ── Parse Ollama backends from config ─────────────────────────────────────
+    let ollama_backends: Vec<(String, String, String)> = toml::from_str::<toml::Value>(&config_str)
+        .ok()
+        .and_then(|v| v.get("ollama").and_then(|o| o.as_array()).cloned())
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|entry| {
+            let name = entry.get("name")?.as_str()?.to_string();
+            let url = entry.get("url")?.as_str()?.to_string();
+            let model = entry.get("model")?.as_str()?.to_string();
+            Some((name, url, model))
+        })
+        .collect();
+
+    // ── Spawn one listener per Ollama backend ─────────────────────────────────
+    for (name, url, model) in ollama_backends.clone() {
+        let bus_clone = bus.clone();
+        let backend_name = name.clone();
+
+        tokio::spawn(async move {
+            let topic = format!("ollama_{}", backend_name);
+            let rx = bus_clone.subscribe(&topic);
+
+            println!("Ollama listener started for {}", topic);
+
+            while let Ok(msg) = rx.recv() {
+                // Only handle chat requests
+                if msg.data.contains("\"type\":\"chat_request\"") {
+                    let _ = crate::io::ollama::handle_ollama_message(
+                        msg,
+                        &bus_clone,
+                        &url,
+                        &model,
+                        &backend_name,
+                    )
+                    .await;
+                }
+            }
+        });
+    }
+
+    // Start the web server (this blocks)
     if let Err(e) = crate::io::web_server::start_web_server(bus, port, config_str).await {
         eprintln!("Failed to start web server: {}", e);
     }
