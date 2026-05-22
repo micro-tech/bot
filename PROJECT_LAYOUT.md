@@ -22,6 +22,10 @@ The core Rust modules. The crate is a binary with main.rs.
 
 - `main.rs`: Entry point; initializes bus, subsystems (memory manager with working/episodic/vector, skills, hooks, hy_evo), spawns web server, Ollama handler, CPU, time scheduler for heartbeat, and other handlers like a2a, cron, mcp.
 - `utils.rs`: Utility functions, e.g., log_to_file.
+- `commands/`: Command handlers (TypeScript-based, e.g., hello, help, ping, index).
+- `config/`: Configuration loading and management.
+- `events/`: Event definitions and handling.
+- `utils/`: Additional utility modules and `utils.rs`.
 - `bayesian.rs`: Bayesian reasoning module (likely for probabilistic inference).
 
 ### `a2a/` (Agent-to-Agent Communication)
@@ -79,6 +83,7 @@ Handles external I/O like web server, LLM services, terminal.
 - `io/web_server/`: HTTPS web server + WebSocket handling.
 - `io/llm_gemini/`: Gemini LLM integration.
 - `io/terminal/`: Terminal CLI.
+- `io_test.rs`, `tests/`: IO related tests.
 
 ### `llm/` (Large Language Model Interfaces)
 - `mod.rs`: Declares ollama submodule.
