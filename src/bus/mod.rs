@@ -38,14 +38,23 @@ impl Bus {
         let subscribers = Arc::new(Mutex::new(Vec::<(String, Sender<Message>)>::new()));
         let subs_clone = Arc::clone(&subscribers);
         thread::spawn(move || {
+            println!("[Bus] Router thread started");
             while let Ok(message) = receiver.recv() {
                 let subs_guard = subs_clone.lock().unwrap();
+                let mut delivered = false;
                 for (component, sub_sender) in subs_guard.iter() {
                     if component == &message.to {
-                        let _ = sub_sender.send(message.clone());
+                        if sub_sender.send(message.clone()).is_ok() {
+                            delivered = true;
+                        }
                     }
                 }
+                if !delivered {
+                    // Optional: log undelivered messages
+                    eprintln!("[Bus] No subscriber for destination: {}", message.to);
+                }
             }
+            println!("[Bus] Router thread exited");
         });
         Self {
             sender,

@@ -6,7 +6,7 @@ use axum::{
         ws::{Message as WsMessage, WebSocket},
     },
     response::{Html, IntoResponse},
-    routing::get,
+    routing::{get, post},
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
@@ -140,6 +140,7 @@ pub async fn start_web_server(
         .route("/", get(serve_index))
         .route("/ws", get(ws_handler))
         .route("/logs/chat", get(serve_chat_log))
+        .route("/logs/chat/clear", post(clear_chat_log))
         .route("/logs/error", get(serve_error_log))
         .route("/logs/bus", get(serve_bus_log))
         .route("/logs/hartbeat", get(serve_hartbeat_log))
@@ -474,6 +475,15 @@ async fn serve_chat_log() -> impl IntoResponse {
     Html(format!("<pre style='white-space:pre-wrap;'>{}</pre>", html_escape(&content)))
 }
 
+async fn clear_chat_log() -> impl IntoResponse {
+    let init_line = format!(
+        "[INIT] Chat log cleared via web UI at {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+    );
+    let _ = fs::write("logs/chat_log.md", init_line);
+    Html("<span style='color:#69f0ae'>Chat log cleared.</span>")
+}
+
 async fn serve_error_log() -> impl IntoResponse {
     let content = fs::read_to_string("logs/error_log.md")
         .unwrap_or_else(|_| "error_log.md not found or empty".to_string());
@@ -613,6 +623,9 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
             <button class="save-btn" onclick="loadLog('/logs/error')">Error Log</button>
             <button class="save-btn" onclick="loadLog('/logs/bus')">Bus Log</button>
             <button class="save-btn" onclick="loadLog('/logs/hartbeat')">Hartbeat Log</button>
+
+            <button class="save-btn" style="background:#5c2d2d; border-color:#ff5252; margin-left:20px"
+                    onclick="clearChatLog()">Clear Chat Log</button>
             <button class="save-btn" style="background:#5c2d2d; border-color:#ff5252"
                     onclick="document.getElementById('log-output').innerHTML=''">Clear Display</button>
         </div>
@@ -657,6 +670,20 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
                 output.scrollTop = 0;
             } catch (e) {
                 output.innerHTML = `<span style="color:#ff5252">Failed to load log: ${e}</span>`;
+            }
+        }
+
+        async function clearChatLog() {
+            if (!confirm("Clear the chat_log.md file? This cannot be undone.")) return;
+
+            const output = document.getElementById('log-output');
+            try {
+                const res = await fetch('/logs/chat/clear', { method: 'POST' });
+                const text = await res.text();
+                output.innerHTML = text;
+                setTimeout(() => { output.innerHTML = ''; }, 1500);
+            } catch (e) {
+                output.innerHTML = `<span style="color:#ff5252">Failed to clear log: ${e}</span>`;
             }
         }
 
