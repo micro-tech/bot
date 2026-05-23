@@ -254,7 +254,8 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                 "from": msg.from,
                 "data": msg.data,
                 "timestamp": msg.timestamp
-            }).to_string();
+            })
+            .to_string();
 
             let _ = msg_tx_clone.send(json_msg);
         }
@@ -472,7 +473,10 @@ async fn serve_index() -> Html<String> {
 async fn serve_chat_log() -> impl IntoResponse {
     let content = fs::read_to_string("logs/chat_log.md")
         .unwrap_or_else(|_| "chat_log.md not found or empty".to_string());
-    Html(format!("<pre style='white-space:pre-wrap;'>{}</pre>", html_escape(&content)))
+    Html(format!(
+        "<pre style='white-space:pre-wrap;'>{}</pre>",
+        html_escape(&content)
+    ))
 }
 
 async fn clear_chat_log() -> impl IntoResponse {
@@ -487,25 +491,34 @@ async fn clear_chat_log() -> impl IntoResponse {
 async fn serve_error_log() -> impl IntoResponse {
     let content = fs::read_to_string("logs/error_log.md")
         .unwrap_or_else(|_| "error_log.md not found or empty".to_string());
-    Html(format!("<pre style='white-space:pre-wrap;'>{}</pre>", html_escape(&content)))
+    Html(format!(
+        "<pre style='white-space:pre-wrap;'>{}</pre>",
+        html_escape(&content)
+    ))
 }
 
 async fn serve_bus_log() -> impl IntoResponse {
     let content = fs::read_to_string("logs/bus_log.md")
         .unwrap_or_else(|_| "bus_log.md not found or empty".to_string());
-    Html(format!("<pre style='white-space:pre-wrap;'>{}</pre>", html_escape(&content)))
+    Html(format!(
+        "<pre style='white-space:pre-wrap;'>{}</pre>",
+        html_escape(&content)
+    ))
 }
 
 async fn serve_hartbeat_log() -> impl IntoResponse {
     let content = fs::read_to_string("logs/hartbeat_log.md")
         .unwrap_or_else(|_| "hartbeat_log.md not found or empty".to_string());
-    Html(format!("<pre style='white-space:pre-wrap;'>{}</pre>", html_escape(&content)))
+    Html(format!(
+        "<pre style='white-space:pre-wrap;'>{}</pre>",
+        html_escape(&content)
+    ))
 }
 
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
-     .replace('<', "&lt;")
-     .replace('>', "&gt;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 // ── HTML / JS front-end ───────────────────────────────────────────────────────
@@ -589,7 +602,7 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
             <input type="text" id="chat-input" placeholder="Type your message… (Enter to send)"
                    onkeypress="if(event.key==='Enter') sendChat()">
             <button id="chat-send" onclick="sendChat()">Send &#x27A4;</button>
-            <button onclick="document.getElementById('chat-messages').innerHTML=''" 
+            <button onclick="document.getElementById('chat-messages').innerHTML=''"
                     style="background:#5c2d2d; border:1px solid #ff5252; color:white; margin-left:8px;">Clear Chat</button>
         </div>
         <div id="chat-messages"></div>
@@ -732,37 +745,19 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
 
             // ── Bus-wrapped messages (have .to / .from / .data) ──
             if (data.to === 'web_interface') {
-                console.log('[WS] Bus message received:', data);
-
                 const itype = (inner && typeof inner === 'object') ? inner.type : null;
-                console.log('[WS] Parsed inner type:', itype);
 
                 switch (itype) {
-                    case 'ollama_response': {
-                        const llmLabel = inner.llm || 'Ollama';
-                        appendChat('bot', llmLabel, inner.msg || '(no message)');
-                        return;
-                    }
-                    case 'llm_output': {
-                        appendChat('bot', 'LLM', inner.msg || inner.data || '(no message)');
-                        return;
-                    }
-                    case 'error':
-                        appendChat('error', 'Error', inner.msg || toStr(inner));
-                        return;
-                    default:
-                        console.log('[WS] Unhandled bus message type:', itype, inner);
-                }
-            }esult_preview || '';
-                        const argsStr  = inner.args ? JSON.stringify(inner.args) : '';
+                    case 'tool_call': {
+                        const toolName = inner.tool || 'Unknown';
+                        const preview = inner.result_preview || '';
+                        const argsStr = inner.args ? JSON.stringify(inner.args) : '';
                         appendToolCall(toolName, argsStr, preview);
                         return;
                     }
 
                     case 'ollama_response': {
-                        const llmLabel = inner.llm
-                            ? labelFor(inner.llm)
-                            : (data.from || 'Bot');
+                        const llmLabel = inner.llm ? labelFor(inner.llm) : (data.from || 'Bot');
                         appendChat('bot', llmLabel, inner.msg || toStr(inner));
                         return;
                     }
