@@ -68,6 +68,40 @@ async fn run_bot() {
         })
         .collect();
 
+    // ── CPU response forwarder (handles llm_response → web_interface) ────────
+    {
+        let bus_clone = bus.clone();
+        tokio::spawn(async move {
+            let rx = bus_clone.subscribe("cpu");
+            println!("CPU response forwarder started (subscribed to 'cpu')");
+
+            while let Ok(msg) = rx.recv() {
+                if msg.data.contains("\"type\":\"llm_response\"") {
+                    // Forward the response to the web UI
+                    let payload: serde_json::Value =
+                        serde_json::from_str(&msg.data).unwrap_or_default();
+                    let text = payload["msg"].as_str().unwrap_or("").to_string();
+                    let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+
+                    let ui_msg = crate::bus::Message {
+                        to: "web_interface".to_string(),
+                        from: msg.from.clone(),
+                        data: serde_json::json!({
+                            "type": "llm_output",
+                            "correlation_id": correlation_id,
+                            "msg": text
+                        })
+                        .to_string(),
+                        timestamp: crate::utils::now_ms(),
+                    };
+
+                    let _ = bus_clone.publish(ui_msg);
+                    println!("[CPU-Forwarder] Forwarded LLM response to web_interface");
+                }
+            }
+        });
+    }
+
     // ── Spawn one listener per Ollama backend ─────────────────────────────────
     for (name, url, model) in ollama_backends.clone() {
         let bus_clone = bus.clone();

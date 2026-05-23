@@ -296,6 +296,8 @@ where
 
     /// Handle an LLM response coming back on the bus.
     pub fn handle_llm_response(&mut self, msg: Message) -> Result<(), String> {
+        println!("[CPU] Received llm_response from {}", msg.from);
+
         let payload: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_else(|e| {
             let err = format!("Failed to parse LLM response payload: {}", e);
             log_to_file(&err);
@@ -305,6 +307,8 @@ where
 
         let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
         let text = payload["msg"].as_str().unwrap_or("").to_string();
+
+        println!("[CPU] Forwarding response to web_interface ({} chars)", text.len());
 
         // Build UI message
         let ui_msg = Message {
@@ -319,17 +323,19 @@ where
             timestamp: now_ms(),
         };
 
-        if let Err(e) = self.bus.publish(ui_msg.clone()) {
-            let err = format!("CPU failed to publish LLM output to UI: {}", e);
-            log_to_file(&err);
-            error!("{}", err);
-            return Err(err);
+        match self.bus.publish(ui_msg) {
+            Ok(()) => {
+                println!("[CPU] Successfully forwarded LLM response to web_interface");
+                debug!("CPU forwarded LLM response to UI");
+                Ok(())
+            }
+            Err(e) => {
+                let err = format!("CPU failed to publish LLM output to UI: {}", e);
+                log_to_file(&err);
+                error!("{}", err);
+                Err(err)
+            }
         }
-
-        debug!("CPU forwarded LLM response to UI");
-        log_to_file("CPU forwarded LLM response to UI");
-
-        Ok(())
     }
 
     pub fn handle_bus_message(&mut self, msg: Message) {

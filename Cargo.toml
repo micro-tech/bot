@@ -22,7 +22,7 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 tokio-rustls = "0.26"
 rustls = "0.23"
 rustls-pemfile = "2"
-rcgen = "0.14.7"
+rcgen = "0.14.8"
 tower = "0.5"
 futures-util = { version = "0.3", features = ["sink"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -37,10 +37,10 @@ tower-http = { version = "0.6", features = ["cors"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 async-trait = "0.1"
-rand = "0.8.6"
+rand = "0.9.4"
 uuid = { version = "1.23.1", features = ["v4", "serde"] }
-lettre = { version = "0.11.21", features = ["smtp-transport", "native-tls"] }
+lettre = { version = "0.11.22", features = ["smtp-transport", "native-tls"] }
 imap = "3.0.0-alpha.15"
 native-tls = "0.2"
-pulldown-cmark = "0.13.3"
+pulldown-cmark = "0.13.4"
 similar = "3.1.0"
