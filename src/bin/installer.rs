@@ -35,12 +35,20 @@ fn install() {
     fs::copy(bot_binary, "/usr/local/bin/bot").expect("Failed to copy bot binary");
     println!("Copied bot binary to /usr/local/bin/bot");
 
-    // Copy all support files
-    fs::create_dir_all("/etc/bot").ok();
-    let files = ["config.toml", "system_manifest.md", ".env", "cert.pem", "key.pem"];
+    // Copy all support files (force overwrite)
+    fs::create_dir_all("/etc/bot").expect("Failed to create /etc/bot");
+    let files = [
+        "config.toml",
+        "system_manifest.md",
+        ".env",
+        "cert.pem",
+        "key.pem",
+    ];
     for f in &files {
         if Path::new(f).exists() {
-            let _ = fs::copy(f, Path::new("/etc/bot").join(f));
+            let dest = Path::new("/etc/bot").join(f);
+            let _ = fs::remove_file(&dest); // ensure overwrite
+            fs::copy(f, &dest).unwrap_or_else(|e| panic!("Failed to copy {}: {}", f, e));
             println!("Copied {}", f);
         }
     }
@@ -55,9 +63,17 @@ fn install() {
         .unwrap_or_default()
         .as_secs();
 
-    let log_header = format!("[INIT] Log file created by AgentOS installer at unix timestamp {}\n", now);
+    let log_header = format!(
+        "[INIT] Log file created by AgentOS installer at unix timestamp {}\n",
+        now
+    );
 
-    for filename in ["chat_log.md", "error_log.md", "bus_log.md", "hartbeat_log.md"] {
+    for filename in [
+        "chat_log.md",
+        "error_log.md",
+        "bus_log.md",
+        "hartbeat_log.md",
+    ] {
         // Primary location
         let primary = format!("/home/cobble/bot/logs/{}", filename);
         if !Path::new(&primary).exists() {
