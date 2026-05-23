@@ -139,6 +139,10 @@ pub async fn start_web_server(
     let app = Router::new()
         .route("/", get(serve_index))
         .route("/ws", get(ws_handler))
+        .route("/logs/chat", get(serve_chat_log))
+        .route("/logs/error", get(serve_error_log))
+        .route("/logs/bus", get(serve_bus_log))
+        .route("/logs/hartbeat", get(serve_hartbeat_log))
         .with_state(state)
         .layer(CorsLayer::permissive());
 
@@ -444,6 +448,38 @@ async fn serve_index() -> Html<String> {
     Html(MAIN_HTML.to_string())
 }
 
+// ── Log file handlers ────────────────────────────────────────────────────────
+
+async fn serve_chat_log() -> impl IntoResponse {
+    let content = fs::read_to_string("logs/chat_log.md")
+        .unwrap_or_else(|_| "chat_log.md not found or empty".to_string());
+    Html(format!("<pre style='white-space:pre-wrap;'>{}</pre>", html_escape(&content)))
+}
+
+async fn serve_error_log() -> impl IntoResponse {
+    let content = fs::read_to_string("logs/error_log.md")
+        .unwrap_or_else(|_| "error_log.md not found or empty".to_string());
+    Html(format!("<pre style='white-space:pre-wrap;'>{}</pre>", html_escape(&content)))
+}
+
+async fn serve_bus_log() -> impl IntoResponse {
+    let content = fs::read_to_string("logs/bus_log.md")
+        .unwrap_or_else(|_| "bus_log.md not found or empty".to_string());
+    Html(format!("<pre style='white-space:pre-wrap;'>{}</pre>", html_escape(&content)))
+}
+
+async fn serve_hartbeat_log() -> impl IntoResponse {
+    let content = fs::read_to_string("logs/hartbeat_log.md")
+        .unwrap_or_else(|_| "hartbeat_log.md not found or empty".to_string());
+    Html(format!("<pre style='white-space:pre-wrap;'>{}</pre>", html_escape(&content)))
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+     .replace('<', "&lt;")
+     .replace('>', "&gt;")
+}
+
 // ── HTML / JS front-end ───────────────────────────────────────────────────────
 
 const MAIN_HTML: &str = r#"<!DOCTYPE html>
@@ -551,10 +587,16 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
 
     <!-- LOGS TAB -->
     <div id="logs-tab" class="tab-content">
-        <h2>Live Logs</h2>
-        <button class="save-btn" style="margin-bottom:8px"
-                onclick="document.getElementById('log-output').innerHTML=''">&#x1F9F9; Clear</button>
-        <div id="log-output"></div>
+        <h2>System Logs</h2>
+        <div style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="save-btn" onclick="loadLog('/logs/chat')">Chat Log</button>
+            <button class="save-btn" onclick="loadLog('/logs/error')">Error Log</button>
+            <button class="save-btn" onclick="loadLog('/logs/bus')">Bus Log</button>
+            <button class="save-btn" onclick="loadLog('/logs/hartbeat')">Hartbeat Log</button>
+            <button class="save-btn" style="background:#5c2d2d; border-color:#ff5252"
+                    onclick="document.getElementById('log-output').innerHTML=''">Clear</button>
+        </div>
+        <div id="log-output" style="height:500px; overflow-y:auto; background:#0d1b2a; border:1px solid #0f3460; padding:12px; border-radius:4px; font-family:monospace; white-space:pre-wrap;"></div>
     </div>
 
     <script>
@@ -582,6 +624,20 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
         function setStatus(connected) {
             document.getElementById('ws-dot').className = 'dot' + (connected ? ' connected' : '');
             document.getElementById('ws-status').textContent = connected ? 'Connected' : 'Disconnected';
+        }
+
+        // ── Load static log files ─────────────────────────────────────────────
+        async function loadLog(url) {
+            const output = document.getElementById('log-output');
+            output.innerHTML = '<em>Loading...</em>';
+            try {
+                const res = await fetch(url);
+                const text = await res.text();
+                output.innerHTML = text;
+                output.scrollTop = 0;
+            } catch (e) {
+                output.innerHTML = `<span style="color:#ff5252">Failed to load log: ${e}</span>`;
+            }
         }
 
         // ── Message dispatcher ─────────────────────────────────────────────────
