@@ -45,14 +45,41 @@ fn install() {
         }
     }
 
-    // Create systemd service
+    // === Create logs directory and default log files ===
+    fs::create_dir_all("/home/cobble/bot/logs").ok();
+    fs::create_dir_all("/etc/bot/logs").ok();
+
+    // Create default log files with initialization header
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let log_header = format!("[INIT] Log file created by AgentOS installer at unix timestamp {}\n", now);
+
+    for filename in ["chat_log.md", "error_log.md", "bus_log.md", "hartbeat_log.md"] {
+        // Primary location
+        let primary = format!("/home/cobble/bot/logs/{}", filename);
+        if !Path::new(&primary).exists() {
+            let _ = fs::write(&primary, &log_header);
+            println!("Created {}", primary);
+        }
+
+        // Secondary location
+        let secondary = format!("/etc/bot/logs/{}", filename);
+        if !Path::new(&secondary).exists() {
+            let _ = fs::write(&secondary, &log_header);
+        }
+    }
+
+    // Create systemd service with correct WorkingDirectory
     let service = r#"[Unit]
 Description=Bot Service
 After=network.target
 
 [Service]
 ExecStart=/usr/local/bin/bot
-WorkingDirectory=/etc/bot
+WorkingDirectory=/home/cobble/bot
 Restart=always
 User=cobble
 
@@ -60,6 +87,7 @@ User=cobble
 WantedBy=multi-user.target
 "#;
     fs::write("/etc/systemd/system/bot.service", service).expect("Failed to write service file");
+    println!("Created systemd service file");
 
     // Enable and start
     let _ = Command::new("systemctl").arg("daemon-reload").status();
