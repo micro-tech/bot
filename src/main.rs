@@ -28,67 +28,64 @@ async fn main() {
 }
 
 fn install() {
-    println!("Installing bot...");
+    println!("=== Installing bot ===");
 
-    // Assume the binary is built in target/release/bot_installer
-    // In practice, this might need adjustment
     let current_exe = env::current_exe().unwrap();
     let install_path = Path::new("/usr/local/bin/bot");
-    
+
     // Copy binary
-    fs::copy(&current_exe, &install_path).expect("Failed to copy binary");
-    
+    if let Err(e) = fs::copy(&current_exe, &install_path) {
+        eprintln!("Failed to copy bot binary: {}", e);
+        return;
+    }
+
     // Make executable
-    Command::new("chmod")
+    let _ = Command::new("chmod")
         .arg("+x")
         .arg(&install_path)
-        .status()
-        .expect("Failed to make executable");
-    
-    // Create systemd service file
+        .status();
+
+    // Create logs directory in the correct location
+    let _ = fs::create_dir_all("/home/cobble/bot/logs");
+    let _ = fs::create_dir_all("/etc/bot/logs");
+
+    // Create improved systemd service file
     let service_content = r#"[Unit]
 Description=Bot Service
 After=network.target
 
 [Service]
 ExecStart=/usr/local/bin/bot
+WorkingDirectory=/home/cobble/bot
 Restart=always
-User=your_user  # Change to appropriate user
+User=cobble
 
 [Install]
 WantedBy=multi-user.target
 "#;
-    
+
     let service_path = Path::new("/etc/systemd/system/bot.service");
-    fs::write(&service_path, service_content).expect("Failed to write service file");
-    
-    // Enable and start service
-    Command::new("systemctl")
-        .arg("daemon-reload")
-        .status()
-        .expect("Failed to reload daemon");
-    
-    Command::new("systemctl")
-        .arg("enable")
-        .arg("bot")
-        .status()
-        .expect("Failed to enable service");
-    
-    Command::new("systemctl")
-        .arg("start")
-        .arg("bot")
-        .status()
-        .expect("Failed to start service");
-    
+    if let Err(e) = fs::write(&service_path, service_content) {
+        eprintln!("Failed to write service file: {}", e);
+        return;
+    }
+
+    // Reload and enable service
+    let _ = Command::new("systemctl").arg("daemon-reload").status();
+    let _ = Command::new("systemctl").arg("enable").arg("bot").status();
+    let _ = Command::new("systemctl").arg("start").arg("bot").status();
+
     println!("Bot installed and started as a service.");
+    println!("Logs directory created at /home/cobble/bot/logs");
 }
 
 async fn run_bot() {
-    println!("Bot is running...");
-
-    // Ensure required directories exist (prevents panics on first run)
+    // Ensure required directories exist very early (prevents panics)
     let _ = std::fs::create_dir_all("logs");
     let _ = std::fs::create_dir_all("/etc/bot/logs");
+    let _ = std::fs::create_dir_all("/etc/bot");
+
+    println!("Bot is running...");
 
     // Try multiple locations for config.toml
     let config_paths = [
