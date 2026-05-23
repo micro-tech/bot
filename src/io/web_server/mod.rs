@@ -732,15 +732,28 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
 
             // ── Bus-wrapped messages (have .to / .from / .data) ──
             if (data.to === 'web_interface') {
-                const itype = (inner && typeof inner === 'object') ? inner.type : null;
-                switch (itype) {
-                    case 'log':
-                        appendLog(inner.level || 'info', inner.msg || toStr(inner));
-                        return;
+                console.log('[WS] Bus message received:', data);
 
-                    case 'tool_call': {
-                        const toolName = inner.tool || '?';
-                        const preview  = inner.result_preview || '';
+                const itype = (inner && typeof inner === 'object') ? inner.type : null;
+                console.log('[WS] Parsed inner type:', itype);
+
+                switch (itype) {
+                    case 'ollama_response': {
+                        const llmLabel = inner.llm || 'Ollama';
+                        appendChat('bot', llmLabel, inner.msg || '(no message)');
+                        return;
+                    }
+                    case 'llm_output': {
+                        appendChat('bot', 'LLM', inner.msg || inner.data || '(no message)');
+                        return;
+                    }
+                    case 'error':
+                        appendChat('error', 'Error', inner.msg || toStr(inner));
+                        return;
+                    default:
+                        console.log('[WS] Unhandled bus message type:', itype, inner);
+                }
+            }esult_preview || '';
                         const argsStr  = inner.args ? JSON.stringify(inner.args) : '';
                         appendToolCall(toolName, argsStr, preview);
                         return;
