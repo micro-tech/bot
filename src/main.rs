@@ -19,64 +19,7 @@ mod bayesian;
 
 #[tokio::main]
 async fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() > 1 && args[1] == "--install" {
-        install();
-    } else {
-        run_bot().await;
-    }
-}
-
-fn install() {
-    println!("=== Installing bot ===");
-
-    let current_exe = env::current_exe().unwrap();
-    let install_path = Path::new("/usr/local/bin/bot");
-
-    // Copy binary
-    if let Err(e) = fs::copy(&current_exe, &install_path) {
-        eprintln!("Failed to copy bot binary: {}", e);
-        return;
-    }
-
-    // Make executable
-    let _ = Command::new("chmod")
-        .arg("+x")
-        .arg(&install_path)
-        .status();
-
-    // Create logs directory in the correct location
-    let _ = fs::create_dir_all("/home/cobble/bot/logs");
-    let _ = fs::create_dir_all("/etc/bot/logs");
-
-    // Create improved systemd service file
-    let service_content = r#"[Unit]
-Description=Bot Service
-After=network.target
-
-[Service]
-ExecStart=/usr/local/bin/bot
-WorkingDirectory=/home/cobble/bot
-Restart=always
-User=cobble
-
-[Install]
-WantedBy=multi-user.target
-"#;
-
-    let service_path = Path::new("/etc/systemd/system/bot.service");
-    if let Err(e) = fs::write(&service_path, service_content) {
-        eprintln!("Failed to write service file: {}", e);
-        return;
-    }
-
-    // Reload and enable service
-    let _ = Command::new("systemctl").arg("daemon-reload").status();
-    let _ = Command::new("systemctl").arg("enable").arg("bot").status();
-    let _ = Command::new("systemctl").arg("start").arg("bot").status();
-
-    println!("Bot installed and started as a service.");
-    println!("Logs directory created at /home/cobble/bot/logs");
+    run_bot().await;
 }
 
 async fn run_bot() {

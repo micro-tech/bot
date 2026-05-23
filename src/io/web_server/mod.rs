@@ -242,6 +242,27 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
         }
     });
 
+    // 6. NEW: Subscribe to bus messages destined for web_interface and forward them
+    let bus_clone = state.bus.clone();
+    let msg_tx_clone = state.msg_tx.clone();
+    let bus_forward_task = tokio::spawn(async move {
+        let rx = bus_clone.subscribe("web_interface");
+        while let Ok(msg) = rx.recv() {
+            // Forward the message to all WebSocket clients
+            let json_msg = json!({
+                "to": msg.to,
+                "from": msg.from,
+                "data": msg.data,
+                "timestamp": msg.timestamp
+            }).to_string();
+
+            if let Err(e) = msg_tx_clone.send(json_msg) {
+                eprintln!("Failed to forward bus message to WebSocket clients: {}", e);
+                break;
+            }
+        }
+    });
+
     // 6. Main loop: WebSocket messages → Bus
     while let Some(msg) = ws_receiver.next().await {
         let msg = match msg {
@@ -436,6 +457,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     }
 
     recv_task.abort();
+    bus_forward_task.abort();
 }
 
 // ── Axum route helpers ────────────────────────────────────────────────────────
