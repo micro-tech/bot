@@ -242,13 +242,12 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
         }
     });
 
-    // 6. NEW: Subscribe to bus messages destined for web_interface and forward them
+    // 6. Bus → WebSocket forwarder (single source of truth)
     let bus_clone = state.bus.clone();
     let msg_tx_clone = state.msg_tx.clone();
     let bus_forward_task = tokio::spawn(async move {
         let rx = bus_clone.subscribe("web_interface");
         while let Ok(msg) = rx.recv() {
-            // Forward the message to all WebSocket clients
             let json_msg = json!({
                 "to": msg.to,
                 "from": msg.from,
@@ -256,10 +255,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                 "timestamp": msg.timestamp
             }).to_string();
 
-            if let Err(e) = msg_tx_clone.send(json_msg) {
-                eprintln!("Failed to forward bus message to WebSocket clients: {}", e);
-                break;
-            }
+            let _ = msg_tx_clone.send(json_msg);
         }
     });
 
@@ -583,6 +579,8 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
             <input type="text" id="chat-input" placeholder="Type your message… (Enter to send)"
                    onkeypress="if(event.key==='Enter') sendChat()">
             <button id="chat-send" onclick="sendChat()">Send &#x27A4;</button>
+            <button onclick="document.getElementById('chat-messages').innerHTML=''" 
+                    style="background:#5c2d2d; border:1px solid #ff5252; color:white; margin-left:8px;">Clear Chat</button>
         </div>
         <div id="chat-messages"></div>
         <div id="status-bar">
@@ -616,7 +614,7 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
             <button class="save-btn" onclick="loadLog('/logs/bus')">Bus Log</button>
             <button class="save-btn" onclick="loadLog('/logs/hartbeat')">Hartbeat Log</button>
             <button class="save-btn" style="background:#5c2d2d; border-color:#ff5252"
-                    onclick="document.getElementById('log-output').innerHTML=''">Clear</button>
+                    onclick="document.getElementById('log-output').innerHTML=''">Clear Display</button>
         </div>
         <div id="log-output" style="height:500px; overflow-y:auto; background:#0d1b2a; border:1px solid #0f3460; padding:12px; border-radius:4px; font-family:monospace; white-space:pre-wrap;"></div>
     </div>
@@ -663,10 +661,17 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
         }
 
         // ── Message dispatcher ─────────────────────────────────────────────────
+        let lastMessage = '';
+
         function handleMessage(event) {
             let data;
             try { data = JSON.parse(event.data); }
             catch(e) { console.error('WS parse error:', e, event.data); return; }
+
+            // Simple deduplication
+            const raw = event.data;
+            if (raw === lastMessage) return;
+            lastMessage = raw;
 
             // Parse inner data.data (bus messages wrap payload in .data as JSON string)
             let inner;
