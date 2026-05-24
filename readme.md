@@ -80,7 +80,7 @@ cargo build --release
 ### 2. Install as Systemd Service
 Run the installer (creates `/etc/systemd/system/bot.service` and enables it):
 ```bash
-sudo ./target/release/bot_installer
+
 ```
 
 Or manually install:
