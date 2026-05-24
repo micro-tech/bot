@@ -705,8 +705,14 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
 
         function handleMessage(event) {
             let data;
-            try { data = JSON.parse(event.data); }
-            // Unwrap bus messages
+            try {
+                data = JSON.parse(event.data);
+            } catch (e) {
+                console.error('WS parse error:', e);
+                return;
+            }
+
+            // Unwrap bus messages: {to, from, data: "...json...", timestamp}
             if (data.data && typeof data.data === 'string') {
                 try {
                     const inner = JSON.parse(data.data);
@@ -714,95 +720,42 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
                 } catch (_) {}
             }
 
-            catch(e) { console.error('WS parse error:', e, event.data); return; }
+            switch (data.type) {
+                case 'user_msg':
+                    appendChat('you', data.from || 'You', data.data);
+                    break;
 
-            // Simple deduplication
-            const raw = event.data;
-            if (raw === lastMessage) return;
-            lastMessage = raw;
+                case 'ollama_response':
+                case 'llm_output':
+                    appendChat('bot', data.llm || data.from || 'Bot', data.msg || data.data);
+                    break;
 
-            // Parse inner data.data (bus messages wrap payload in .data as JSON string)
-            let inner;
-            try {
-                inner = (typeof data.data === 'string') ? JSON.parse(data.data) : data.data;
-            } catch(e) {
-                inner = data.data;
+                case 'error':
+                    appendChat('error-msg', 'Error', data.msg || data.data);
+                    break;
+
+                case 'warning':
+                    appendChat('warning-msg', 'Warning', data.msg || data.data);
+                    break;
+
+                case 'backends':
+                    renderLlmButtons(data.backends);
+                    break;
+
+                case 'config':
+                    const cfg = document.getElementById('config-textarea');
+                    if (cfg) cfg.value = data.data;
+                    break;
+
+                case 'manifest':
+                    const mnf = document.getElementById('manifest-textarea');
+                    if (mnf) mnf.value = data.data;
+                    break;
+
+                default:
+                    break;
             }
-
-            // ── Direct-type messages (server-side echoes, not bus-wrapped) ──
-            if (data.type === 'backends') {
-                buildLlmButtons(data.backends || []);
-                return;
-            }
-            if (data.type === 'user_msg') {
-                appendChat('you', 'You', toStr(inner || data.data));
-                return;
-            }
-            if (data.type === 'manifest') {
-                document.getElementById('manifest-textarea').value = data.data || '';
-                return;
-            }
-            if (data.type === 'config') {
-                document.getElementById('config-textarea').value = data.data || '';
-                return;
-            }
-            if (data.type === 'log') {
-                appendLog(data.level || 'info', data.msg || toStr(data));
-                return;
-            }
-
-            // ── Bus-wrapped messages (have .to / .from / .data) ──
-            if (data.to === 'web_interface') {
-                const itype = (inner && typeof inner === 'object') ? inner.type : null;
-
-                switch (itype) {
-                    case 'tool_call': {
-                        const toolName = inner.tool || 'Unknown';
-                        const preview = inner.result_preview || '';
-                        const argsStr = inner.args ? JSON.stringify(inner.args) : '';
-                        appendToolCall(toolName, argsStr, preview);
-                        return;
-                    }
-
-                    case 'ollama_response': {
-                        const llmLabel = inner.llm ? labelFor(inner.llm) : (data.from || 'Bot');
-                        appendChat('bot', llmLabel, inner.msg || toStr(inner));
-                        return;
-                    }
-
-                    case 'llm_output': {
-                        const llmLabel = data.from || 'Bot';
-                        appendChat('bot', llmLabel, inner.msg || toStr(inner));
-                        return;
-                    }
-
-                    case 'error':
-                        appendChat('error-msg', '\u26A0 Error', inner.msg || toStr(inner));
-                        return;
-
-                    case 'warning':
-                        appendChat('warning-msg', '\u26A0', inner.msg || toStr(inner));
-                        return;
-
-                    case 'config_status': {
-                        const el = document.getElementById('config-status');
-                        el.textContent = inner.msg || '';
-                        el.style.color = inner.status === 'success' ? '#69f0ae' : '#ff5252';
-                        return;
-                    }
-
-                    case 'manifest_status': {
-                        const el = document.getElementById('manifest-status');
-                        el.textContent = inner.msg || '';
-                        el.style.color = inner.status === 'success' ? '#69f0ae' : '#ff5252';
-                        return;
-                    }
-
-                    default:
-                        console.debug('Unhandled bus message:', data);
-                        return;
-                }
-            }
+        }
 
             console.debug('Unhandled WS message:', data);
         }
