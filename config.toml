@@ -2,7 +2,15 @@
 name = "Bot"
 
 # --- MULTIPLE OLLAMA INSTANCES ---
-C
+[[ollama]]
+name = "server"
+url = "http://192.168.1.149:11434"
+model = "qwen3.5:0.8b"
+
+[[ollama]]
+name = "desktop"
+url = "http://192.168.1.196:11434"
+model = "gemma4:e4b"
 
 [gemini]
 # Model to use for Gemini API calls.

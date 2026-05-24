@@ -129,6 +129,37 @@ async fn run_bot() {
         });
     }
 
+    // ── Spawn Gemini listener ────────────────────────────────────────────────
+    {
+        let bus_clone = bus.clone();
+        // Resolve model: env var > config.toml [gemini] model > default
+        let gemini_model: String = std::env::var("GEMINI_MODEL")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                toml::from_str::<toml::Value>(&config_str)
+                    .ok()
+                    .and_then(|v| {
+                        v.get("gemini")?
+                            .get("model")?
+                            .as_str()
+                            .map(|s| s.to_string())
+                    })
+            })
+            .unwrap_or_else(|| "gemini-2.0-flash".to_string());
+
+        tokio::spawn(async move {
+            let rx = bus_clone.subscribe("gemini");
+            println!("Gemini listener started (subscribed to 'gemini', model={})", gemini_model);
+
+            while let Ok(msg) = rx.recv() {
+                if msg.data.contains("\"type\":\"chat_request\"") {
+                    crate::io::llm_gemini::handle_gemini_bus_message(msg, &bus_clone, &gemini_model).await;
+                }
+            }
+        });
+    }
+
     // Start the web server (this blocks)
     if let Err(e) = crate::io::web_server::start_web_server(bus, port, config_str).await {
         eprintln!("Failed to start web server: {}", e);
