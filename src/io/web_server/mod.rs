@@ -706,6 +706,14 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
         function handleMessage(event) {
             let data;
             try { data = JSON.parse(event.data); }
+            // Unwrap bus messages
+            if (data.data && typeof data.data === 'string') {
+                try {
+                    const inner = JSON.parse(data.data);
+                    if (inner.type) data = inner;
+                } catch (_) {}
+            }
+
             catch(e) { console.error('WS parse error:', e, event.data); return; }
 
             // Simple deduplication
