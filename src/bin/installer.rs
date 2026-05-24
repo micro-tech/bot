@@ -36,7 +36,11 @@ fn install() {
     println!("Copied bot binary to /usr/local/bin/bot");
 
     // Copy all support files (force overwrite)
+    // Primary location for runtime (matches WorkingDirectory in bot.service)
+    fs::create_dir_all("/home/cobble/bot").expect("Failed to create /home/cobble/bot");
+    // Secondary location for reference
     fs::create_dir_all("/etc/bot").expect("Failed to create /etc/bot");
+
     let files = [
         "config.toml",
         "system_manifest.md",
@@ -46,10 +50,16 @@ fn install() {
     ];
     for f in &files {
         if Path::new(f).exists() {
-            let dest = Path::new("/etc/bot").join(f);
-            let _ = fs::remove_file(&dest); // ensure overwrite
-            fs::copy(f, &dest).unwrap_or_else(|e| panic!("Failed to copy {}: {}", f, e));
-            println!("Copied {}", f);
+            // Write to working dir (primary)
+            let primary_dest = Path::new("/home/cobble/bot").join(f);
+            let _ = fs::remove_file(&primary_dest);
+            fs::copy(f, &primary_dest).unwrap_or_else(|e| panic!("Failed to copy {}: {}", f, e));
+            println!("Copied {} -> /home/cobble/bot/{}", f, f);
+
+            // Also write to /etc/bot (secondary)
+            let etc_dest = Path::new("/etc/bot").join(f);
+            let _ = fs::remove_file(&etc_dest);
+            let _ = fs::copy(f, &etc_dest);
         }
     }
 
@@ -74,18 +84,16 @@ fn install() {
         "bus_log.md",
         "hartbeat_log.md",
     ] {
-        // Primary location
+        // Primary location (force overwrite)
         let primary = format!("/home/cobble/bot/logs/{}", filename);
-        if !Path::new(&primary).exists() {
-            let _ = fs::write(&primary, &log_header);
-            println!("Created {}", primary);
-        }
+        let _ = fs::remove_file(&primary);
+        let _ = fs::write(&primary, &log_header);
+        println!("Created/updated {}", primary);
 
-        // Secondary location
+        // Secondary location (force overwrite)
         let secondary = format!("/etc/bot/logs/{}", filename);
-        if !Path::new(&secondary).exists() {
-            let _ = fs::write(&secondary, &log_header);
-        }
+        let _ = fs::remove_file(&secondary);
+        let _ = fs::write(&secondary, &log_header);
     }
 
     // Create systemd service with correct WorkingDirectory
