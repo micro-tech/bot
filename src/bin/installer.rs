@@ -53,13 +53,18 @@ fn install() {
             // Write to working dir (primary)
             let primary_dest = Path::new("/home/cobble/bot").join(f);
             let _ = fs::remove_file(&primary_dest);
-            fs::copy(f, &primary_dest).unwrap_or_else(|e| panic!("Failed to copy {}: {}", f, e));
-            println!("Copied {} -> /home/cobble/bot/{}", f, f);
+            if let Err(e) = fs::copy(f, &primary_dest) {
+                eprintln!("Warning: Failed to copy {}: {}", f, e);
+            } else {
+                println!("Copied {} -> /home/cobble/bot/{}", f, f);
+            }
 
             // Also write to /etc/bot (secondary)
             let etc_dest = Path::new("/etc/bot").join(f);
             let _ = fs::remove_file(&etc_dest);
             let _ = fs::copy(f, &etc_dest);
+        } else {
+            println!("Skipping {} (not found in source)", f);
         }
     }
 
