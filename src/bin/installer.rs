@@ -16,19 +16,22 @@ fn main() {
     }
 }
 
-/// Walk up from `start` looking for a directory that contains both
-/// `Cargo.toml` and either `config.toml` or `target/release/bot`.
-/// Falls back to the executable's own directory, then CWD.
+// ---------------------------------------------------------------------------
+// Source directory discovery
+// ---------------------------------------------------------------------------
+
+/// Walk up the directory tree looking for the project root.
+/// A directory qualifies when it has `Cargo.toml` AND either
+/// `config.toml` or `target/release/bot`.
 fn get_source_dir() -> PathBuf {
-    // Helper: does a path look like the project root?
     fn is_project_root(p: &Path) -> bool {
         p.join("Cargo.toml").exists()
             && (p.join("config.toml").exists() || p.join("target/release/bot").exists())
     }
 
-    // 1. Walk up from the current working directory.
+    // 1. Walk up from CWD.
     if let Ok(cwd) = env::current_dir() {
-        let mut candidate = cwd.clone();
+        let mut candidate = cwd;
         loop {
             if is_project_root(&candidate) {
                 return candidate;
@@ -53,7 +56,7 @@ fn get_source_dir() -> PathBuf {
                 None => break,
             }
         }
-        // Last resort: return the binary's own directory even if incomplete.
+        // Last resort: binary's own directory even if incomplete.
         if let Some(dir) = exe.parent() {
             return dir.to_path_buf();
         }
@@ -62,11 +65,34 @@ fn get_source_dir() -> PathBuf {
     PathBuf::from(".")
 }
 
+// ---------------------------------------------------------------------------
+// Install
+// ---------------------------------------------------------------------------
+
 fn install() {
     println!("=== Installing AgentOS bot ===");
 
     let source_dir = get_source_dir();
     println!("Source directory : {}", source_dir.display());
+
+    // Show which config files are present in the source dir so failures are
+    // easy to diagnose.
+    for name in [
+        "config.toml",
+        "system_manifest.md",
+        ".env",
+        "cert.pem",
+        "key.pem",
+    ] {
+        if source_dir.join(name).exists() {
+            println!("  [found] {}", name);
+        } else {
+            println!(
+                "  [missing in source] {} — will use embedded/template",
+                name
+            );
+        }
+    }
 
     // The bot binary must exist before we do anything else.
     let bot_binary = source_dir.join("target/release/bot");
@@ -80,7 +106,7 @@ fn install() {
         std::process::exit(1);
     }
 
-    // Stop / remove old service, but preserve existing runtime data.
+    // Stop / remove old service; never touch existing config files.
     let _ = Command::new("systemctl").args(["stop", "bot"]).status();
     let _ = Command::new("systemctl").args(["disable", "bot"]).status();
     let _ = fs::remove_file("/etc/systemd/system/bot.service");
@@ -88,27 +114,32 @@ fn install() {
 
     // Deploy the bot binary.
     fs::copy(&bot_binary, "/usr/local/bin/bot").expect("Failed to copy bot binary");
-    println!("Copied bot binary  -> /usr/local/bin/bot");
+    println!("Copied bot binary -> /usr/local/bin/bot");
 
-    // Create runtime directories.
-    fs::create_dir_all("/home/cobble/bot").expect("Failed to create /home/cobble/bot");
-    fs::create_dir_all("/etc/bot").expect("Failed to create /etc/bot");
+    // Create runtime directories and fix ownership so `cobble` can always
+    // read/write both locations (FileZilla uploads included).
+    for dir in ["/home/cobble/bot", "/etc/bot"] {
+        fs::create_dir_all(dir).unwrap_or_else(|e| eprintln!("WARNING: mkdir {}: {}", dir, e));
+    }
+    set_ownership("/home/cobble/bot", "cobble", "cobble");
+    set_ownership("/etc/bot", "cobble", "cobble");
 
-    // ── Copy tracked source files (fall back to embedded defaults) ─────────
-    // include_str! bakes these into the binary at compile time, so they are
-    // always available even on a stale or incomplete Linux clone.
+    // ── Tracked config files — embedded at compile time as fallback ─────────
+    // include_str! bakes the file into the binary when compiled on the dev
+    // machine, so the installer always has a valid default even on a fresh
+    // Linux clone that hasn't been `git pull`-ed yet.
     const DEFAULT_CONFIG: &str = include_str!("../../config.toml");
     const DEFAULT_MANIFEST: &str = include_str!("../../system_manifest.md");
 
     deploy_tracked_file("config.toml", &source_dir, DEFAULT_CONFIG);
     deploy_tracked_file("system_manifest.md", &source_dir, DEFAULT_MANIFEST);
 
-    // ── .env  (git-ignored — create template if absent) ───────────────────
+    // ── .env — git-ignored, create template when absent ────────────────────
     let env_src = source_dir.join(".env");
     if env_src.exists() {
-        copy_to_both(".env", &env_src);
+        safe_copy_to_both(".env", &env_src);
     } else {
-        println!("No .env in source — writing template .env");
+        println!("No .env in source — writing template");
         let template = concat!(
             "# AgentOS environment variables\n",
             "# Fill in real values before starting the service.\n",
@@ -122,24 +153,27 @@ fn install() {
             "# OLLAMA_PRELOAD=true\n",
             "# OLLAMA_KEEP_ALIVE_SECS=240\n",
         );
-        write_to_both(".env", template.as_bytes());
-        println!("  !! Edit /home/cobble/bot/.env and add your real API keys before starting.");
+        safe_write_to_both(".env", template.as_bytes());
+        println!("  !! Edit /home/cobble/bot/.env — add your real API keys before starting.");
     }
 
-    // ── TLS certificates (git-ignored — generate self-signed if absent) ───
+    // ── TLS certificates — generate self-signed when absent ────────────────
     let cert_src = source_dir.join("cert.pem");
     let key_src = source_dir.join("key.pem");
     if cert_src.exists() && key_src.exists() {
-        copy_to_both("cert.pem", &cert_src);
-        copy_to_both("key.pem", &key_src);
+        safe_copy_to_both("cert.pem", &cert_src);
+        safe_copy_to_both("key.pem", &key_src);
     } else {
-        println!("TLS certs not found in source — attempting self-signed cert generation...");
+        println!("TLS certs not found in source — generating self-signed cert...");
         generate_self_signed_certs(&source_dir);
     }
 
-    // ── Log files ─────────────────────────────────────────────────────────
-    fs::create_dir_all("/home/cobble/bot/logs").ok();
-    fs::create_dir_all("/etc/bot/logs").ok();
+    // ── Log files — always reset on install ────────────────────────────────
+    for dir in ["/home/cobble/bot/logs", "/etc/bot/logs"] {
+        fs::create_dir_all(dir).ok();
+    }
+    set_ownership("/home/cobble/bot/logs", "cobble", "cobble");
+    set_ownership("/etc/bot/logs", "cobble", "cobble");
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -156,16 +190,19 @@ fn install() {
         "bus_log.md",
         "hartbeat_log.md",
     ] {
+        // Logs intentionally overwritten on every install.
         let primary = format!("/home/cobble/bot/logs/{}", filename);
         let secondary = format!("/etc/bot/logs/{}", filename);
-        let _ = fs::remove_file(&primary);
-        let _ = fs::write(&primary, &log_header);
-        let _ = fs::remove_file(&secondary);
-        let _ = fs::write(&secondary, &log_header);
+        if let Err(e) = fs::write(&primary, &log_header) {
+            eprintln!("WARNING: could not write {}: {}", primary, e);
+        }
+        if let Err(e) = fs::write(&secondary, &log_header) {
+            eprintln!("WARNING: could not write {}: {}", secondary, e);
+        }
         println!("Created log: {}", primary);
     }
 
-    // ── systemd service ───────────────────────────────────────────────────
+    // ── systemd service ─────────────────────────────────────────────────────
     let service = r#"[Unit]
 Description=AgentOS Bot Service
 After=network.target
@@ -180,8 +217,11 @@ User=cobble
 [Install]
 WantedBy=multi-user.target
 "#;
-    fs::write("/etc/systemd/system/bot.service", service).expect("Failed to write service file");
-    println!("Created systemd service file");
+    if let Err(e) = fs::write("/etc/systemd/system/bot.service", service) {
+        eprintln!("WARNING: could not write service file: {}", e);
+    } else {
+        println!("Created systemd service file");
+    }
 
     let _ = Command::new("systemctl").arg("daemon-reload").status();
     let _ = Command::new("systemctl").args(["enable", "bot"]).status();
@@ -191,15 +231,20 @@ WantedBy=multi-user.target
     println!("\nInstallation complete!");
 }
 
-/// Copy a file to both /home/cobble/bot/<f> and /etc/bot/<f>.
-fn copy_to_both(name: &str, src: &Path) {
+// ---------------------------------------------------------------------------
+// File helpers  — NO pre-delete; overwrite in place
+// ---------------------------------------------------------------------------
+
+/// Copy `src` to /home/cobble/bot/<name> and /etc/bot/<name>.
+/// Does NOT delete the destination first — overwrites atomically in place.
+/// If the copy fails the original file is untouched.
+fn safe_copy_to_both(name: &str, src: &Path) {
     for dest_dir in ["/home/cobble/bot", "/etc/bot"] {
         let dest = Path::new(dest_dir).join(name);
-        let _ = fs::remove_file(&dest);
         match fs::copy(src, &dest) {
             Ok(_) => println!("Copied {} -> {}", name, dest.display()),
             Err(e) => eprintln!(
-                "WARNING: failed to copy {} to {}: {}",
+                "WARNING: failed to copy {} -> {}: {}",
                 name,
                 dest.display(),
                 e
@@ -208,42 +253,50 @@ fn copy_to_both(name: &str, src: &Path) {
     }
 }
 
-/// Deploy a tracked (git-committed) config file.
-/// Prefers the live copy in `source_dir`; falls back to the content embedded
-/// in the binary at compile time via `include_str!`.
-fn deploy_tracked_file(name: &str, source_dir: &Path, embedded: &str) {
-    let src = source_dir.join(name);
-    if src.exists() {
-        copy_to_both(name, &src);
-    } else {
-        println!(
-            "{} not found in source dir — deploying embedded default",
-            name
-        );
-        write_to_both(name, embedded.as_bytes());
-        println!(
-            "  !! Review /home/cobble/bot/{} and update settings for your environment.",
-            name
-        );
-    }
-}
-
-/// Write raw bytes to both runtime directories.
-fn write_to_both(name: &str, data: &[u8]) {
+/// Write `data` to /home/cobble/bot/<name> and /etc/bot/<name>.
+/// Does NOT delete the destination first — overwrites in place.
+fn safe_write_to_both(name: &str, data: &[u8]) {
     for dest_dir in ["/home/cobble/bot", "/etc/bot"] {
         let dest = Path::new(dest_dir).join(name);
-        let _ = fs::remove_file(&dest);
         match fs::write(&dest, data) {
-            Ok(_) => println!("Wrote template {} -> {}", name, dest.display()),
+            Ok(_) => println!("Wrote {} -> {}", name, dest.display()),
             Err(e) => eprintln!("WARNING: failed to write {}: {}", dest.display(), e),
         }
     }
 }
 
-/// Try to generate a self-signed certificate with openssl.
-/// If openssl is not available, write placeholder files and print instructions.
+/// Deploy a tracked config file.
+/// Uses the live copy from `source_dir` if present; otherwise writes the
+/// content embedded in the binary at compile time.
+fn deploy_tracked_file(name: &str, source_dir: &Path, embedded: &str) {
+    let src = source_dir.join(name);
+    if src.exists() {
+        safe_copy_to_both(name, &src);
+    } else {
+        println!("{} — deploying embedded default", name);
+        safe_write_to_both(name, embedded.as_bytes());
+        println!(
+            "  !! Review /home/cobble/bot/{} and update any environment-specific settings.",
+            name
+        );
+    }
+}
+
+/// Run `chown <user>:<group> <path>` so that the runtime user can write files
+/// there directly (e.g. via FileZilla SFTP as `cobble`).
+fn set_ownership(path: &str, user: &str, group: &str) {
+    let owner = format!("{}:{}", user, group);
+    match Command::new("chown").args(["-R", &owner, path]).status() {
+        Ok(s) if s.success() => {}
+        Ok(_) | Err(_) => eprintln!("WARNING: could not chown {} to {}", path, owner),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TLS
+// ---------------------------------------------------------------------------
+
 fn generate_self_signed_certs(source_dir: &Path) {
-    // Generate into a temp path first, then copy to both destinations.
     let tmp_cert = "/tmp/bot_cert.pem";
     let tmp_key = "/tmp/bot_key.pem";
 
@@ -267,10 +320,9 @@ fn generate_self_signed_certs(source_dir: &Path) {
 
     match status {
         Ok(s) if s.success() => {
-            // Copy generated certs to both destinations.
-            copy_to_both("cert.pem", Path::new(tmp_cert));
-            copy_to_both("key.pem", Path::new(tmp_key));
-            // Also save back to source dir for future installs.
+            safe_copy_to_both("cert.pem", Path::new(tmp_cert));
+            safe_copy_to_both("key.pem", Path::new(tmp_key));
+            // Save back so future installs can copy instead of regenerating.
             let _ = fs::copy(tmp_cert, source_dir.join("cert.pem"));
             let _ = fs::copy(tmp_key, source_dir.join("key.pem"));
             let _ = fs::remove_file(tmp_cert);
@@ -280,16 +332,20 @@ fn generate_self_signed_certs(source_dir: &Path) {
         }
         _ => {
             eprintln!("WARNING: openssl not found or failed — writing placeholder cert files.");
-            eprintln!("  Generate real certs with:");
+            eprintln!("  Generate certs manually with:");
             eprintln!("    openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \\");
             eprintln!("      -days 3650 -nodes -subj '/CN=localhost'");
             eprintln!("  Then re-run the installer.");
-            let placeholder = b"# Placeholder - replace with real TLS certificate\n";
-            write_to_both("cert.pem", placeholder);
-            write_to_both("key.pem", placeholder);
+            let placeholder = b"# Placeholder - replace with a real TLS certificate\n";
+            safe_write_to_both("cert.pem", placeholder);
+            safe_write_to_both("key.pem", placeholder);
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Uninstall
+// ---------------------------------------------------------------------------
 
 fn uninstall() {
     println!("=== Uninstalling AgentOS bot ===");
@@ -297,35 +353,33 @@ fn uninstall() {
     let _ = Command::new("systemctl").args(["disable", "bot"]).status();
     let _ = fs::remove_file("/etc/systemd/system/bot.service");
     let _ = fs::remove_file("/usr/local/bin/bot");
-    // Preserve /etc/bot and /home/cobble/bot — user data stays intact.
+    // Config and logs in /home/cobble/bot and /etc/bot are intentionally kept.
     let _ = Command::new("systemctl").arg("daemon-reload").status();
-    println!("Bot uninstalled. Config and logs preserved in /home/cobble/bot and /etc/bot.");
+    println!("Bot uninstalled. Config and logs preserved.");
 }
+
+// ---------------------------------------------------------------------------
+// Verification
+// ---------------------------------------------------------------------------
 
 fn verify_installation() {
     println!("\n=== Verifying installation ===");
     let mut all_good = true;
 
-    // Binary
     check_path("/usr/local/bin/bot", true, &mut all_good);
 
-    // Config files that are tracked in git — must be present.
+    // Tracked config files — required.
     for f in ["config.toml", "system_manifest.md"] {
         check_path(&format!("/home/cobble/bot/{}", f), true, &mut all_good);
         check_path(&format!("/etc/bot/{}", f), true, &mut all_good);
     }
 
-    // Files that may be templates / placeholders — warn but don't fail.
+    // User-edited files — present but may contain placeholder values.
     for f in [".env", "cert.pem", "key.pem"] {
         let primary = format!("/home/cobble/bot/{}", f);
         let secondary = format!("/etc/bot/{}", f);
-        let p_exists = Path::new(&primary).exists();
-        let s_exists = Path::new(&secondary).exists();
-        print_check(&primary, p_exists);
-        print_check(&secondary, s_exists);
-        if !p_exists || !s_exists {
-            eprintln!("  ↳ Edit this file with real values before starting the service.");
-        }
+        print_check(&primary, Path::new(&primary).exists());
+        print_check(&secondary, Path::new(&secondary).exists());
     }
 
     // Logs
@@ -365,6 +419,6 @@ fn print_check(path: &str, exists: bool) {
     if exists {
         println!("✓ {} exists", path);
     } else {
-        eprintln!("✗ {} MISSING (template expected)", path);
+        eprintln!("✗ {} MISSING", path);
     }
 }
