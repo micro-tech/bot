@@ -70,7 +70,10 @@ fn get_source_dir() -> PathBuf {
 // ---------------------------------------------------------------------------
 
 fn install() {
-    println!("=== Installing AgentOS bot ===");
+    println!(
+        "=== Installing AgentOS bot (built {}) ===",
+        env!("BUILD_TIMESTAMP")
+    );
 
     let source_dir = get_source_dir();
     println!("Source directory : {}", source_dir.display());
