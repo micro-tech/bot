@@ -44,3 +44,7 @@ imap = "3.0.0-alpha.15"
 native-tls = "0.2"
 pulldown-cmark = "0.13.4"
 similar = "3.1.0"
+
+[[bin]]
+name = "install"
+path = "src/bin/installer.rs"

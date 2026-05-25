@@ -6,13 +6,11 @@ use std::process::Command;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() > 1 && args[1] == "--install" {
-        install();
-    } else if args.len() > 1 && args[1] == "--uninstall" {
+    // Binary is now named "install"
+    if args.len() > 1 && args[1] == "--uninstall" {
         uninstall();
     } else {
-        println!("Bot Installer");
-        println!("Usage: installer --install | --uninstall");
+        install();
     }
 }
 
@@ -41,7 +39,10 @@ fn install() {
     // The bot binary must exist
     let bot_binary = source_dir.join("target/release/bot");
     if !bot_binary.exists() {
-        eprintln!("ERROR: target/release/bot not found in {}", source_dir.display());
+        eprintln!(
+            "ERROR: target/release/bot not found in {}",
+            source_dir.display()
+        );
         eprintln!("Please run this from the project root after building:");
         eprintln!("    cargo build -r");
         std::process::exit(1);
@@ -144,6 +145,7 @@ WantedBy=multi-user.target
     let _ = Command::new("systemctl").args(["enable", "bot"]).status();
     let _ = Command::new("systemctl").args(["start", "bot"]).status();
 
+    verify_installation(&source_dir);
     println!("Bot installed and started successfully!");
 }
 
@@ -156,4 +158,75 @@ fn uninstall() {
     // Do NOT remove /etc/bot or /home/cobble/bot - user data should stay
     let _ = Command::new("systemctl").arg("daemon-reload").status();
     println!("Bot uninstalled (config and logs preserved).");
+}
+
+fn verify_installation(_source_dir: &Path) {
+    println!("\n=== Verifying installation ===");
+
+    let mut all_good = true;
+
+    // Binary
+    if Path::new("/usr/local/bin/bot").exists() {
+        println!("✓ /usr/local/bin/bot exists");
+    } else {
+        eprintln!("✗ /usr/local/bin/bot MISSING");
+        all_good = false;
+    }
+
+    // Config and supporting files
+    for f in [
+        "config.toml",
+        "system_manifest.md",
+        ".env",
+        "cert.pem",
+        "key.pem",
+    ] {
+        let primary = Path::new("/home/cobble/bot").join(f);
+        let secondary = Path::new("/etc/bot").join(f);
+
+        if primary.exists() {
+            println!("✓ /home/cobble/bot/{} exists", f);
+        } else {
+            eprintln!("✗ /home/cobble/bot/{} MISSING", f);
+            all_good = false;
+        }
+
+        if secondary.exists() {
+            println!("✓ /etc/bot/{} exists", f);
+        } else {
+            eprintln!("✗ /etc/bot/{} MISSING", f);
+            all_good = false;
+        }
+    }
+
+    // Logs
+    for filename in [
+        "chat_log.md",
+        "error_log.md",
+        "bus_log.md",
+        "hartbeat_log.md",
+    ] {
+        let primary = format!("/home/cobble/bot/logs/{}", filename);
+        let secondary = format!("/etc/bot/logs/{}", filename);
+
+        if Path::new(&primary).exists() {
+            println!("✓ {} exists", primary);
+        } else {
+            eprintln!("✗ {} MISSING", primary);
+            all_good = false;
+        }
+
+        if Path::new(&secondary).exists() {
+            println!("✓ {} exists", secondary);
+        } else {
+            eprintln!("✗ {} MISSING", secondary);
+            all_good = false;
+        }
+    }
+
+    if all_good {
+        println!("\nAll files verified successfully (overwrites performed where needed).");
+    } else {
+        eprintln!("\nSome files are missing! Check above.");
+    }
 }
