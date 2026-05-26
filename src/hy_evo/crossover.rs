@@ -1,8 +1,6 @@
 use rand::prelude::*;
-use uuid::Uuid;
 
 use super::genome::WorkflowGenome;
-use super::node::{Node, NodeMetadata};
 
 /// Crossover configuration (can be extended later)
 #[derive(Debug, Clone)]
@@ -39,8 +37,8 @@ impl CrossoverEngine {
         parent_a: &WorkflowGenome,
         parent_b: &WorkflowGenome,
     ) -> WorkflowGenome {
-        let mut rng = rand::thread_rng();
-        let roll = rng.r#gen::<f32>();
+        let mut rng = rand::rng();
+        let roll = rng.random::<f32>();
 
         if roll < self.config.single_point_prob {
             return self.single_point(parent_a, parent_b);
@@ -58,10 +56,10 @@ impl CrossoverEngine {
     // ---------------------------------------------------------
 
     fn single_point(&self, a: &WorkflowGenome, b: &WorkflowGenome) -> WorkflowGenome {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
-        let split_a = rng.gen_range(0..a.nodes.len().max(1));
-        let split_b = rng.gen_range(0..b.nodes.len().max(1));
+        let split_a = rng.random_range(0..a.nodes.len().max(1));
+        let split_b = rng.random_range(0..b.nodes.len().max(1));
 
         let mut child = WorkflowGenome::new();
 
@@ -85,7 +83,7 @@ impl CrossoverEngine {
     // ---------------------------------------------------------
 
     fn two_point(&self, a: &WorkflowGenome, b: &WorkflowGenome) -> WorkflowGenome {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         if a.nodes.is_empty() || b.nodes.is_empty() {
             return a.clone();
@@ -121,20 +119,18 @@ impl CrossoverEngine {
     // ---------------------------------------------------------
 
     fn uniform(&self, a: &WorkflowGenome, b: &WorkflowGenome) -> WorkflowGenome {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut child = WorkflowGenome::new();
 
         let max_len = a.nodes.len().max(b.nodes.len());
 
         for i in 0..max_len {
-            if rng.gen_bool(0.5) {
+            if rng.random_bool(0.5) {
                 if let Some(node) = a.nodes.get(i) {
                     child.nodes.push(node.clone());
                 }
-            } else {
-                if let Some(node) = b.nodes.get(i) {
-                    child.nodes.push(node.clone());
-                }
+            } else if let Some(node) = b.nodes.get(i) {
+                child.nodes.push(node.clone());
             }
         }
 
@@ -161,14 +157,15 @@ impl CrossoverEngine {
     }
 }
 
-/// Generate a random (start, end) pair where start < end
-fn random_range_pair(len: usize, rng: &mut rand::rngs::ThreadRng) -> (usize, usize) {
+/// Generate a random (start, end) pair where start < end.
+/// Generic over Rng so it works with any rand RNG type.
+fn random_range_pair<R: Rng>(len: usize, rng: &mut R) -> (usize, usize) {
     if len < 2 {
         return (0, len);
     }
 
-    let a = rng.gen_range(0..len);
-    let b = rng.gen_range(0..len);
+    let a = rng.random_range(0..len);
+    let b = rng.random_range(0..len);
 
     if a < b { (a, b) } else { (b, a) }
 }

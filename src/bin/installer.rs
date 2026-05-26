@@ -239,11 +239,24 @@ WantedBy=multi-user.target
 // ---------------------------------------------------------------------------
 
 /// Copy `src` to /home/cobble/bot/<name> and /etc/bot/<name>.
-/// Does NOT delete the destination first — overwrites atomically in place.
-/// If the copy fails the original file is untouched.
+/// Does NOT delete the destination first — overwrites in place.
+/// Skips iterations where src and dest resolve to the same path to avoid
+/// the truncation-before-read problem on Linux (fs::copy(x, x) empties x).
 fn safe_copy_to_both(name: &str, src: &Path) {
+    // Resolve src once so we can compare canonicalized paths.
+    let src_canonical = src.canonicalize().ok();
+
     for dest_dir in ["/home/cobble/bot", "/etc/bot"] {
         let dest = Path::new(dest_dir).join(name);
+
+        // Skip if source and destination are the same file.
+        if let Some(ref sc) = src_canonical {
+            if dest.canonicalize().ok().as_ref() == Some(sc) {
+                println!("Skipped {} (already in place at {})", name, dest.display());
+                continue;
+            }
+        }
+
         match fs::copy(src, &dest) {
             Ok(_) => println!("Copied {} -> {}", name, dest.display()),
             Err(e) => eprintln!(

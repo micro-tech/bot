@@ -31,19 +31,19 @@ toml = "1.1.2"
 dotenv = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-reqwest = { version = "0.13.3", features = ["json", "blocking", "rustls"] }
+reqwest = { version = "0.13.4", features = ["json", "blocking", "rustls"] }
 axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
 tower-http = { version = "0.6", features = ["cors"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 async-trait = "0.1"
-rand = "0.9.4"
+rand = "0.10.1"
 uuid = { version = "1.23.1", features = ["v4", "serde"] }
 lettre = { version = "0.11.22", features = ["smtp-transport", "native-tls"] }
 imap = "3.0.0-alpha.15"
 native-tls = "0.2"
 pulldown-cmark = "0.13.4"
-similar = "3.1.0"
+similar = "3.1.1"
 
 [[bin]]
 name = "install"
