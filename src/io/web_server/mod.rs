@@ -873,12 +873,24 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
 </html>
 "#;
 
-/// Generate self-signed certificate + key if they don't exist.
-/// Uses rcgen to create a 2048-bit RSA cert valid for 10 years.
+/// Returns true if a file exists AND contains valid PEM data (not a placeholder).
+fn is_valid_pem(path: &str, expected_header: &str) -> bool {
+    std::fs::read_to_string(path)
+        .map(|s| s.contains(expected_header))
+        .unwrap_or(false)
+}
+
+/// Generate self-signed certificate + key if they are missing or contain
+/// placeholder content (not real PEM data).
 fn ensure_certificates(cert_path: &str, key_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    if std::path::Path::new(cert_path).exists() && std::path::Path::new(key_path).exists() {
+    let cert_ok = is_valid_pem(cert_path, "-----BEGIN CERTIFICATE-----");
+    let key_ok = is_valid_pem(key_path, "-----BEGIN");
+
+    if cert_ok && key_ok {
         return Ok(());
     }
+
+    log::info!("TLS cert/key missing or invalid — generating self-signed certificate");
 
     let key_pair = rcgen::KeyPair::generate()?;
     let params = rcgen::CertificateParams::new(vec!["localhost".to_string()])?;
@@ -886,6 +898,12 @@ fn ensure_certificates(cert_path: &str, key_path: &str) -> Result<(), Box<dyn st
 
     std::fs::write(cert_path, cert.pem())?;
     std::fs::write(key_path, key_pair.serialize_pem())?;
+
+    log::info!(
+        "Self-signed certificate written to {} / {}",
+        cert_path,
+        key_path
+    );
 
     Ok(())
 }
