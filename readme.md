@@ -19,7 +19,7 @@ Agent OS Bot
 - **Resilient Networking**: Retries, timeouts, exponential backoff for unreliable connections (e.g., Starlink).
 - **Test Binary**: `test_ollama` to verify Ollama connectivity.
 
-The system acts as a kernel (`src/main.rs`), coordinating subsystems via the bus. All settings in `config.toml`. Full architecture: [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md). Data flows: [flow_map.md](flow_map.md).
+The system acts as a kernel (`src/main.rs`), coordinating subsystems via the bus. All settings in `config.toml`. Full architecture: [Doc's/PROJECT_LAYOUT.md](Doc's/PROJECT_LAYOUT.md). Data flows: [Doc's/flow_map.md](Doc's/flow_map.md).
 
 ## Prerequisites
 
@@ -69,6 +69,42 @@ cargo run
 - Heartbeats/logs routed to Ollama via bus for analysis.
 
 **Daemon Mode** (future): Use systemd/supervisor.
+
+## Linux Server Deployment (systemd)
+
+### 1. Build Release Binary
+```bash
+cargo build --release
+```
+
+### 2. Install as Systemd Service
+Run the installer (creates `/etc/systemd/system/bot.service` and enables it):
+```bash
+
+```
+
+Or manually install:
+```bash
+cargo run --bin installer
+```
+
+### 3. Manage the Bot Service
+
+| Command | Description |
+|---------|-------------|
+| `sudo systemctl start bot` | Start the bot |
+| `sudo systemctl stop bot` | Stop the bot |
+| `sudo systemctl restart bot` | **Restart the bot** |
+| `sudo systemctl status bot` | Check status and recent logs |
+| `sudo journalctl -u bot -f` | Follow live logs |
+| `sudo systemctl enable bot` | Enable auto-start on boot |
+| `sudo systemctl disable bot` | Disable auto-start |
+
+After making code changes, rebuild and restart:
+```bash
+cargo build --release
+sudo systemctl restart bot
+```
 
 ## How to Communicate
 

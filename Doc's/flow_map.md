@@ -155,10 +155,7 @@ graph LR
 - Serde serialization for events/params.
 - Logs sent to bus for forwarding.
 
-## Additional Components
-- **commands/**: TypeScript command handlers for bot interactions.
-- **config/** & **events/**: Supporting modules for configuration and event-driven architecture.
-- **A2A, Cron, MCP, Hartbeat**: Fully integrated into the bus and CPU execution flows for multi-agent, scheduling, protocol, and monitoring capabilities.
+## Future Flows
 - **Multi-Agent**: Bus for inter-agent communication via A2A.
 - **Cron Jobs**: Scheduled tasks via cron handler.
 - **MCP**: Model control protocol integration.

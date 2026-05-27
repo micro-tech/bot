@@ -5,12 +5,12 @@ name = "Bot"
 [[ollama]]
 name = "server"
 url = "http://192.168.1.149:11434"
-model = "qwen3.5:0.8b "
+model = "qwen3.5:0.8b"
 
 [[ollama]]
-name = "local3090"
+name = "desktop"
 url = "http://192.168.1.196:11434"
-model = "qwen3.5:27b"
+model = "gemma4:e4b"
 
 [gemini]
 # Model to use for Gemini API calls.
@@ -23,6 +23,31 @@ model = "gemini-3.1-flash-lite-preview"
 
 [web]
 port = 8443
+tls_enabled = true
+cert_path = "cert.pem"
+key_path = "key.pem"
 
 [heartbeat]
 interval_seconds = 300
+
+# --- OLLAMA MODEL PRELOAD AND KEEP-ALIVE (Task #89) ---
+# These settings keep the Ollama model loaded in GPU/CPU memory at all times.
+# They can also be set via .env to avoid recompiling.
+#
+# OLLAMA_PRELOAD=true
+#   Send a dummy request at bot startup to pre-warm the model.
+#   Eliminates the cold-start delay on the first real user query.
+#   Set to "false" to skip (e.g. during development to speed up restarts).
+#
+# OLLAMA_KEEP_ALIVE_SECS=240
+#   How often (in seconds) the keepalive heartbeat fires.
+#   Default: 240 s (4 minutes), just below Ollama's default 5-minute
+#   eviction timeout.  Set to 0 to disable.
+#
+# OLLAMA_URL / OLLAMA_MODEL
+#   Override the Ollama backend URL and model for the keepalive task.
+#   Falls back to the first [[ollama]] entry in this file when absent.
+
+[ollama_keepalive]
+preload       = true
+interval_secs = 240

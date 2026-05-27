@@ -281,8 +281,13 @@ fn imap_connect(host: &str, port: u16, user: &str, pass: &str) -> Result<ImapSes
         .build()
         .map_err(|e| format!("TLS error: {}", e))?;
 
-    let client = imap::connect((host, port), host, &tls)
-        .map_err(|e| format!("IMAP connect to {}:{} failed: {}", host, port, e))?;
+    let tcp = TcpStream::connect((host, port))
+        .map_err(|e| format!("TCP connect to {}:{} failed: {}", host, port, e))?;
+
+    let tls_stream = tls.connect(host, tcp)
+        .map_err(|e| format!("TLS handshake to {} failed: {}", host, e))?;
+
+    let client = imap::Client::new(tls_stream);
 
     client
         .login(user, pass)
