@@ -1,6 +1,6 @@
 // cpu/instructions.rs
 
-use crate::Message;
+use crate::bus::Message;
 use crate::io::ollama::LlmTarget;
 
 /// Enum representing the source of a CPU event.

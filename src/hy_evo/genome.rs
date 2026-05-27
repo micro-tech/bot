@@ -86,7 +86,7 @@ impl WorkflowGenome {
 
     /// Apply a random mutation
     pub fn mutate(&mut self) {
-        let mutation_type = (chrono::Utc::now().timestamp_nanos() % 4) as u32; // simple random
+        let mutation_type = (chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0) % 4) as u32; // simple random
         match mutation_type {
             0 => mutate_add_node(self),
             1 => mutate_remove_node(self),

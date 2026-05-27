@@ -1,6 +1,7 @@
 use std::net::TcpStream;
 use std::process::Command;
 use std::time::Duration;
+// use serenity::Client;
 
 fn ping_host(host: &str) -> bool {
     let output = Command::new("ping").args(["-n", "1", host]).output();

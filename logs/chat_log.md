@@ -146,3 +146,14 @@
 [2026-04-13 13:37:44.709] gemini -> web_interface: {"type":"error","msg":"GEMINI_API_KEY environment variable is not set or empty"}[2026-04-13 13:37:44.709] test -> ollama: Test message
 
 [2026-04-13 13:37:44.710] ollama -> web_interface: {"type":"error","msg":"test error — should not panic"}
+[2026-05-04 21:16:20.256] web_interface -> ollama_server: {"correlation_id":1777943780256,"prompt":"hi","type":"chat_request"}
+2026-05-16 20:18:08.810] web_interface -> ollama_server: {"correlation_id":1778977088810,"prompt":"hi","type":"chat_request"}
+[2026-05-16 22:01:15.786] web_interface -> ollama_local3090: {"correlation_id":1778983275786,"prompt":"hi","type":"chat_request"}
+[2026-05-16 23:39:20.809] web_interface -> gemini: {"correlation_id":1778989160809,"prompt":"hi","type":"chat_request"}
+[2026-05-17 18:56:38.076] web_interface -> gemini: {"correlation_id":1779058598076,"prompt":"hello","type":"chat_request"}
+[2026-05-17 19:01:16.372] web_interface -> gemini: {"correlation_id":1779058876372,"prompt":"hello","type":"chat_request"}
+[2026-05-17 20:53:03.152] web_interface -> gemini: {"correlation_id":1779065583152,"prompt":"hi","type":"chat_request"}
+[2026-05-17 22:47:09.631] web_interface -> gemini: {"correlation_id":1779072429631,"prompt":"hi","type":"chat_request"}
+[2026-05-18 00:09:52.902] web_interface -> gemini: {"correlation_id":1779077392902,"prompt":"hii","type":"chat_request"}
+[2026-05-18 00:10:18.810] web_interface -> ollama_local3090: {"correlation_id":1779077418810,"prompt":"hi ollama","type":"chat_request"}
+[2026-05-18 00:10:27.426] web_interface -> ollama_server: {"correlation_id":1779077427426,"prompt":"hi","type":"chat_request"}

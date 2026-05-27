@@ -8,6 +8,183 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed — Dependency Updates
+- Upgraded `tokio` from `1.47.5` to `1.52.3` for improved stability and performance.
+
+---
+
+## [Unreleased]
+
+### Audit — Code vs Task List Verification for Tasks 1–59 (2026-04-24)
+
+**Author:** AI Assistant (Claude Sonnet 4.6) — triggered by user "Cobble"
+
+Every task 1–59 was cross-checked against actual source code in `src/`. Task
+statuses in `task_list.json` were corrected where the code did not match the
+claimed status.
+
+#### Status corrections applied to `task_list.json`
+
+| Task | Title | Was | Now | Reason |
+|------|-------|-----|-----|--------|
+| 2 | Vector Memory Search | `done` | `in_progress` | `dummy_embed()` placeholder — no real embeddings |
+| 3 | Docker & Systemd Deploy | `done` | `pending` | No `Dockerfile` or `.service` file exists |
+| 4 | Web Auth & Polish | `done` | `pending` | Zero JWT / auth code in web server |
+| 5 | Planning Loop | `done` | `in_progress` | Executor stubs only — no real planning logic |
+| 7 | Logging instructions.rs | `done` | `in_progress` | Only 1 log call found; rest are comments |
+| 16 | Node-level Mutations | `done` | `in_progress` | `replace_node()` function absent |
+| 31 | Workflow Execution in CPU | `pending` | `done` | Fully implemented in `cpu/` + `integration.rs` |
+| 47 | Memory-Aware Prompting | `done` | `in_progress` | Subtasks 47.2 (vector) & 47.3 (episodic) not wired |
+| 54 | Agent Personality Profiles | `done` | `in_progress` | Single hardcoded `"neutral"` string, no profiles |
+
+#### Final tally for tasks 1–59
+
+| Verdict | Count | IDs |
+|---------|-------|-----|
+| ✅ done | 39 | 1,6,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,31,41,42,43,44,45,46,48,49,50,51,52,53,55,56,57,58,59 |
+| ⚠️ in_progress | 6 | 2, 5, 7, 16, 47, 54 |
+| ❌ pending | 13 | 3, 4, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 39 |
+| ⏸️ deferred | 1 | 40 |
+
+Full detail report saved to `Doc's/AiSummary/task_audit_1_59.md`.
+
+---
+
+### Fixed — `.zed/task_list.json` Full Renumber from ID 1 (2026-04-24)
+
+**Author:** AI Assistant (Claude Sonnet 4.6) — triggered by user "Cobble"
+
+#### Problem
+The task list started at ID 31 (tasks 1–30 were from a prior phase and had
+been removed). This caused Grok-CLI to miscalculate task positions when
+navigating by sequential index, producing the wrong task for a given ID.
+
+#### Changes Made
+
+All 75 tasks were renumbered sequentially starting at **ID 1**. Every
+reference throughout the file was updated accordingly:
+
+- **75 top-level task `id` fields** renumbered (old 31–105 → new 1–75)
+- **All top-level `dependencies` arrays** remapped to new IDs
+  - 12 external dependency references to old tasks 1–30 (not in the file,
+    all already `"done"`) were dropped cleanly
+- **222 subtask `id` strings** remapped (e.g. `"90.1"` → `"60.1"`)
+- **28 subtask `dependencies` groups** remapped
+
+#### Key ID mapping (notable tasks)
+
+| Old ID | New ID | Task Title |
+|--------|--------|------------|
+| 31 | 1 | LLM Tool Calling (Ollama Functions) |
+| 70 | 40 | Reserved / Removed Task (stub) |
+| 85 | 55 | Self-Repair Routines |
+| 90 | 60 | Design Reasoning Protocol Layer (RPL) Architecture |
+| 105 | 75 | End-to-End Reasoning Engine CPU Integration Tests |
+
+#### Result
+- JSON validates cleanly — zero parse errors
+- IDs 1–75, perfectly sequential, no gaps
+- All subtask IDs and dependency references consistent and correct
+
+---
+
+### Fixed — `.zed/task_list.json` Audit and Structural Repair (2026-04-24)
+
+**Author:** AI Assistant (Claude Sonnet 4.6) — triggered by user "Cobble"
+
+#### Problem
+Grok-CLI was confusing task IDs when navigating the task list. Asking for
+"task 90" would execute a different task, and searching by title
+`"Design Reasoning Protocol Layer (RPL) Architecture"` returned the wrong
+task number (85 instead of 90).
+
+#### Root Causes Found and Fixed
+
+1. **10 wrong subtask dependency IDs in tasks 90–96** (critical)
+   All subtask-level `dependencies` fields inside tasks 90 through 96 were
+   offset by exactly 54, pointing to completely unrelated tasks:
+   - `task 90.2` had `"dependencies": [36.1]` → fixed to `[90.1]`
+   - `task 90.3` had `"dependencies": [36.2]` → fixed to `[90.2]`
+   - `task 91.2` had `"dependencies": [37.1]` → fixed to `[91.1]`
+   - `task 91.3` had `"dependencies": [37.2]` → fixed to `[91.2]`
+   - `task 92.2` had `"dependencies": [38.1]` → fixed to `[92.1]`
+   - `task 92.3` had `"dependencies": [38.2]` → fixed to `[92.2]`
+   - `task 93.2` had `"dependencies": [39.1]` → fixed to `[93.1]`
+   - `task 94.2` had `"dependencies": [40.1]` → fixed to `[94.1]`
+   - `task 95.2` had `"dependencies": [41.1]` → fixed to `[95.1]`
+   - `task 96.2` had `"dependencies": [42.1]` → fixed to `[96.1]`
+
+2. **Inconsistent subtask ID types** (structural)
+   Subtask IDs were a mix of JSON numbers (`31.1`, `90.2`) and strings
+   (`"42.10"`, `"87.11"`). JSON numbers cannot distinguish `42.10` from
+   `42.1` (they are equal as floats), making `.10+` subtasks unreliable.
+   All 215 subtask IDs and 28 subtask dependency references were normalised
+   to strings consistently.
+
+3. **Missing task ID 70** (gap in sequence)
+   Task 70 was absent, creating a gap between task 69 and task 71. A
+   `"deferred"` stub entry was inserted to maintain sequential numbering
+   and prevent any array-position-based tool from miscounting tasks.
+
+#### Result
+- JSON validates cleanly with no parse errors
+- 75 tasks, IDs 31–105, no gaps
+- All subtask IDs are strings
+- All subtask dependencies reference the correct parent task
+
+
+---
+
+## [0.6.0] - 2026-05-14
+
+### Added — Ollama Model Preload and Keep-Alive (Task #89)
+
+**Author:** AI Assistant (Claude Sonnet 4.6) — triggered by user "Cobble"
+
+#### New `src/io/ollama/keepalive.rs` module
+
+Standalone keepalive module added to the Ollama IO sub-system:
+
+- **`preload_model(base_url, model)`** — async fn that sends a dummy
+  `POST /api/generate` (empty prompt, `num_predict: 0`, `stream: false`) at bot
+  startup to force Ollama to load the model into GPU/CPU memory before the first
+  real user query, eliminating cold-start latency.
+
+- **`spawn_keepalive_task(base_url, model, interval_secs)`** — spawns a
+  long-lived background Tokio task that fires a heartbeat `POST /api/generate`
+  (with `keep_alive: "1h"`) every N seconds (default: 240 s, below Ollama's
+  default 5-minute eviction timeout).  The task never panics.
+
+- **`read_preload_flag()`** / **`read_keep_alive_secs()`** — env-var config
+  helpers with safe defaults.
+
+- **Network resilience (Starlink policy)**: every HTTP call is wrapped in
+  `tokio::time::timeout` and retried up to 3 times with exponential-backoff
+  delays (2 s → 4 s → 8 s, capped at 30 s).  Failures are warnings only —
+  the bot never crashes on keepalive errors.
+
+- **10 unit tests** covering config-flag defaults, custom values, garbage input
+  fallback, unreachable-host resilience, and zero-interval noop.
+
+#### `src/main.rs` updated
+
+- Fixed duplicate `log`/`tracing` import (compilation error).
+- Added `preload_model()` call at startup, guarded by `OLLAMA_PRELOAD` env flag.
+- Added `spawn_keepalive_task()` call to start the background heartbeat.
+- Reads `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_PRELOAD`, `OLLAMA_KEEP_ALIVE_SECS`
+  from `.env`.
+
+#### `Cargo.toml` updated
+
+- Added `reqwest = { version = "0.11", features = ["json"] }`.
+- Added `serde_json = "1.0"`.
+- Added `"time"` to Tokio features (required for `tokio::time::sleep`).
+
+#### `config.toml` updated
+
+- Added `[ollama_keepalive]` section documenting `preload` and `interval_secs`.
+- Added comments for all related `.env` overrides.
+
 ---
 
 ## [0.5.0] - 2026-04-12

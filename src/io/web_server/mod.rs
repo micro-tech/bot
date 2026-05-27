@@ -6,17 +6,18 @@ use axum::{
         ws::{Message as WsMessage, WebSocket},
     },
     response::{Html, IntoResponse},
-    routing::get,
+    routing::{get, post},
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
 use log::info;
-use rcgen::generate_simple_self_signed;
+use rcgen::{Certificate, CertificateParams, DistinguishedName};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
@@ -58,6 +59,19 @@ struct OllamaConfig {
 #[derive(Deserialize)]
 struct WebConfig {
     port: u16,
+    #[serde(default)]
+    tls_enabled: bool,
+    #[serde(default = "default_cert_path")]
+    cert_path: String,
+    #[serde(default = "default_key_path")]
+    key_path: String,
+}
+
+fn default_cert_path() -> String {
+    "cert.pem".to_string()
+}
+fn default_key_path() -> String {
+    "key.pem".to_string()
 }
 
 #[derive(Deserialize)]
@@ -72,35 +86,33 @@ pub async fn start_web_server(
     port: u16,
     config_str: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Starting HTTPS Web Server on 0.0.0.0:{}", port);
-
-    // Generate self-signed certs if not present
-    fs::create_dir_all("certs")?;
-    let cert_path = "certs/cert.pem";
-    let key_path = "certs/key.pem";
-    if !Path::new(cert_path).exists() || !Path::new(key_path).exists() {
-        info!("Generating self-signed certificates...");
-        let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
-        let cert = generate_simple_self_signed(subject_alt_names)?;
-        fs::write(cert_path, cert.cert.pem())?;
-        fs::write(key_path, cert.signing_key.serialize_pem())?;
-        info!("Certificates generated at certs/cert.pem and certs/key.pem");
-    }
-
-    // Create broadcast channel for web messages
-    let (msg_tx, _) = broadcast::channel(100);
-
-    // Build LLM backends list for the UI selector
+    // Parse config (with defaults)
     let parsed_cfg: Config = toml::from_str(&config_str).unwrap_or_else(|_| Config {
         bot: BotConfig {
             name: "Bot".to_string(),
         },
         ollama: vec![],
-        web: WebConfig { port: 8443 },
+        web: WebConfig {
+            port: 8443,
+            tls_enabled: true,
+            cert_path: default_cert_path(),
+            key_path: default_key_path(),
+        },
         heartbeat: HeartbeatConfig {
             interval_seconds: 300,
         },
     });
+
+    let tls_enabled = parsed_cfg.web.tls_enabled;
+    let cert_path = &parsed_cfg.web.cert_path;
+    let key_path = &parsed_cfg.web.key_path;
+
+    // Ensure certificates exist (generate self-signed if missing)
+    if tls_enabled {
+        ensure_certificates(cert_path, key_path)?;
+    }
+
+    // Build backend list...
     let mut backend_list = Vec::new();
     for b in &parsed_cfg.ollama {
         backend_list.push(serde_json::json!({
@@ -118,46 +130,38 @@ pub async fn start_web_server(
 
     let state = AppState {
         bus,
-        msg_tx: msg_tx.clone(),
+        msg_tx: broadcast::channel(100).0,
         config_str,
         backends_json,
     };
-
-    // Spawn bus → broadcast forwarder
-    let state_forwarder = state.clone();
-    tokio::spawn(async move {
-        let rx = state_forwarder.bus.subscribe("web_interface");
-        tokio::task::spawn_blocking(move || {
-            while let Ok(msg) = rx.recv() {
-                // Bug 1 fix: guard the slice so we never panic on short strings
-                println!(
-                    "Forwarding msg from bus: {}",
-                    &msg.data[..50.min(msg.data.len())]
-                );
-                let json_str = serde_json::to_string(&msg)
-                    .unwrap_or_else(|_| r#"{"error":"serialize failed"}"#.to_string());
-                let _ = state_forwarder.msg_tx.send(json_str);
-            }
-        });
-    });
 
     // Build Axum router
     let app = Router::new()
         .route("/", get(serve_index))
         .route("/ws", get(ws_handler))
+        .route("/logs/chat", get(serve_chat_log))
+        .route("/logs/chat/clear", post(clear_chat_log))
+        .route("/logs/error", get(serve_error_log))
+        .route("/logs/bus", get(serve_bus_log))
+        .route("/logs/hartbeat", get(serve_hartbeat_log))
         .with_state(state)
         .layer(CorsLayer::permissive());
 
-    let rustls_config = RustlsConfig::from_pem_file(cert_path, key_path).await?;
-    info!(
-        "Web server listening on https://localhost:{} (accept self-signed cert warning)",
-        port
-    );
-
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    axum_server::bind_rustls(addr, rustls_config)
-        .serve(app.into_make_service())
-        .await?;
+
+    if tls_enabled {
+        info!("Starting HTTPS Web Server on 0.0.0.0:{}", port);
+        info!("Using certificate: {} and key: {}", cert_path, key_path);
+
+        let rustls_config = RustlsConfig::from_pem_file(cert_path, key_path).await?;
+        axum_server::bind_rustls(addr, rustls_config)
+            .serve(app.into_make_service())
+            .await?;
+    } else {
+        info!("Starting HTTP Web Server on 0.0.0.0:{}", port);
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        axum::serve(listener, app).await?;
+    }
 
     Ok(())
 }
@@ -236,6 +240,24 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
             {
                 break;
             }
+        }
+    });
+
+    // 6. Bus → WebSocket forwarder (single source of truth)
+    let bus_clone = state.bus.clone();
+    let msg_tx_clone = state.msg_tx.clone();
+    let bus_forward_task = tokio::spawn(async move {
+        let rx = bus_clone.subscribe("web_interface");
+        while let Ok(msg) = rx.recv() {
+            let json_msg = json!({
+                "to": msg.to,
+                "from": msg.from,
+                "data": msg.data,
+                "timestamp": msg.timestamp
+            })
+            .to_string();
+
+            let _ = msg_tx_clone.send(json_msg);
         }
     });
 
@@ -433,6 +455,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     }
 
     recv_task.abort();
+    bus_forward_task.abort();
 }
 
 // ── Axum route helpers ────────────────────────────────────────────────────────
@@ -443,6 +466,59 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl
 
 async fn serve_index() -> Html<String> {
     Html(MAIN_HTML.to_string())
+}
+
+// ── Log file handlers ────────────────────────────────────────────────────────
+
+async fn serve_chat_log() -> impl IntoResponse {
+    let content = fs::read_to_string("logs/chat_log.md")
+        .unwrap_or_else(|_| "chat_log.md not found or empty".to_string());
+    Html(format!(
+        "<pre style='white-space:pre-wrap;'>{}</pre>",
+        html_escape(&content)
+    ))
+}
+
+async fn clear_chat_log() -> impl IntoResponse {
+    let init_line = format!(
+        "[INIT] Chat log cleared via web UI at {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+    );
+    let _ = fs::write("logs/chat_log.md", init_line);
+    Html("<span style='color:#69f0ae'>Chat log cleared.</span>")
+}
+
+async fn serve_error_log() -> impl IntoResponse {
+    let content = fs::read_to_string("logs/error_log.md")
+        .unwrap_or_else(|_| "error_log.md not found or empty".to_string());
+    Html(format!(
+        "<pre style='white-space:pre-wrap;'>{}</pre>",
+        html_escape(&content)
+    ))
+}
+
+async fn serve_bus_log() -> impl IntoResponse {
+    let content = fs::read_to_string("logs/bus_log.md")
+        .unwrap_or_else(|_| "bus_log.md not found or empty".to_string());
+    Html(format!(
+        "<pre style='white-space:pre-wrap;'>{}</pre>",
+        html_escape(&content)
+    ))
+}
+
+async fn serve_hartbeat_log() -> impl IntoResponse {
+    let content = fs::read_to_string("logs/hartbeat_log.md")
+        .unwrap_or_else(|_| "hartbeat_log.md not found or empty".to_string());
+    Html(format!(
+        "<pre style='white-space:pre-wrap;'>{}</pre>",
+        html_escape(&content)
+    ))
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 // ── HTML / JS front-end ───────────────────────────────────────────────────────
@@ -526,6 +602,8 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
             <input type="text" id="chat-input" placeholder="Type your message… (Enter to send)"
                    onkeypress="if(event.key==='Enter') sendChat()">
             <button id="chat-send" onclick="sendChat()">Send &#x27A4;</button>
+            <button onclick="document.getElementById('chat-messages').innerHTML=''"
+                    style="background:#5c2d2d; border:1px solid #ff5252; color:white; margin-left:8px;">Clear Chat</button>
         </div>
         <div id="chat-messages"></div>
         <div id="status-bar">
@@ -552,16 +630,26 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
 
     <!-- LOGS TAB -->
     <div id="logs-tab" class="tab-content">
-        <h2>Live Logs</h2>
-        <button class="save-btn" style="margin-bottom:8px"
-                onclick="document.getElementById('log-output').innerHTML=''">&#x1F9F9; Clear</button>
-        <div id="log-output"></div>
+        <h2>System Logs</h2>
+        <div style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="save-btn" onclick="loadLog('/logs/chat')">Chat Log</button>
+            <button class="save-btn" onclick="loadLog('/logs/error')">Error Log</button>
+            <button class="save-btn" onclick="loadLog('/logs/bus')">Bus Log</button>
+            <button class="save-btn" onclick="loadLog('/logs/hartbeat')">Hartbeat Log</button>
+
+            <button class="save-btn" style="background:#5c2d2d; border-color:#ff5252; margin-left:20px"
+                    onclick="clearChatLog()">Clear Chat Log</button>
+            <button class="save-btn" style="background:#5c2d2d; border-color:#ff5252"
+                    onclick="document.getElementById('log-output').innerHTML=''">Clear Display</button>
+        </div>
+        <div id="log-output" style="height:500px; overflow-y:auto; background:#0d1b2a; border:1px solid #0f3460; padding:12px; border-radius:4px; font-family:monospace; white-space:pre-wrap;"></div>
     </div>
 
     <script>
         let ws = null;
         let selectedLlm = '';   // '' means "use server default (first backend)"
-        const WS_URL = 'wss://' + location.hostname + ':8443/ws';
+        const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname + ':8443/ws';
+
 
         // ── WebSocket ──────────────────────────────────────────────────────────
         function connectWS() {
@@ -584,99 +672,90 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
             document.getElementById('ws-status').textContent = connected ? 'Connected' : 'Disconnected';
         }
 
+        // ── Load static log files ─────────────────────────────────────────────
+        async function loadLog(url) {
+            const output = document.getElementById('log-output');
+            output.innerHTML = '<em>Loading...</em>';
+            try {
+                const res = await fetch(url);
+                const text = await res.text();
+                output.innerHTML = text;
+                output.scrollTop = 0;
+            } catch (e) {
+                output.innerHTML = `<span style="color:#ff5252">Failed to load log: ${e}</span>`;
+            }
+        }
+
+        async function clearChatLog() {
+            if (!confirm("Clear the chat_log.md file? This cannot be undone.")) return;
+
+            const output = document.getElementById('log-output');
+            try {
+                const res = await fetch('/logs/chat/clear', { method: 'POST' });
+                const text = await res.text();
+                output.innerHTML = text;
+                setTimeout(() => { output.innerHTML = ''; }, 1500);
+            } catch (e) {
+                output.innerHTML = `<span style="color:#ff5252">Failed to clear log: ${e}</span>`;
+            }
+        }
+
         // ── Message dispatcher ─────────────────────────────────────────────────
+        let lastMessage = '';
+
         function handleMessage(event) {
             let data;
-            try { data = JSON.parse(event.data); }
-            catch(e) { console.error('WS parse error:', e, event.data); return; }
-
-            // Parse inner data.data (bus messages wrap payload in .data as JSON string)
-            let inner;
             try {
-                inner = (typeof data.data === 'string') ? JSON.parse(data.data) : data.data;
-            } catch(e) {
-                inner = data.data;
-            }
-
-            // ── Direct-type messages (server-side echoes, not bus-wrapped) ──
-            if (data.type === 'backends') {
-                buildLlmButtons(data.backends || []);
-                return;
-            }
-            if (data.type === 'user_msg') {
-                appendChat('you', 'You', toStr(inner || data.data));
-                return;
-            }
-            if (data.type === 'manifest') {
-                document.getElementById('manifest-textarea').value = data.data || '';
-                return;
-            }
-            if (data.type === 'config') {
-                document.getElementById('config-textarea').value = data.data || '';
-                return;
-            }
-            if (data.type === 'log') {
-                appendLog(data.level || 'info', data.msg || toStr(data));
+                data = JSON.parse(event.data);
+            } catch (e) {
+                console.error('WS parse error:', e);
                 return;
             }
 
-            // ── Bus-wrapped messages (have .to / .from / .data) ──
-            if (data.to === 'web_interface') {
-                const itype = (inner && typeof inner === 'object') ? inner.type : null;
-                switch (itype) {
-                    case 'log':
-                        appendLog(inner.level || 'info', inner.msg || toStr(inner));
-                        return;
-
-                    case 'tool_call': {
-                        const toolName = inner.tool || '?';
-                        const preview  = inner.result_preview || '';
-                        const argsStr  = inner.args ? JSON.stringify(inner.args) : '';
-                        appendToolCall(toolName, argsStr, preview);
-                        return;
-                    }
-
-                    case 'ollama_response': {
-                        const llmLabel = inner.llm
-                            ? labelFor(inner.llm)
-                            : (data.from || 'Bot');
-                        appendChat('bot', llmLabel, inner.msg || toStr(inner));
-                        return;
-                    }
-
-                    case 'llm_output': {
-                        const llmLabel = data.from || 'Bot';
-                        appendChat('bot', llmLabel, inner.msg || toStr(inner));
-                        return;
-                    }
-
-                    case 'error':
-                        appendChat('error-msg', '\u26A0 Error', inner.msg || toStr(inner));
-                        return;
-
-                    case 'warning':
-                        appendChat('warning-msg', '\u26A0', inner.msg || toStr(inner));
-                        return;
-
-                    case 'config_status': {
-                        const el = document.getElementById('config-status');
-                        el.textContent = inner.msg || '';
-                        el.style.color = inner.status === 'success' ? '#69f0ae' : '#ff5252';
-                        return;
-                    }
-
-                    case 'manifest_status': {
-                        const el = document.getElementById('manifest-status');
-                        el.textContent = inner.msg || '';
-                        el.style.color = inner.status === 'success' ? '#69f0ae' : '#ff5252';
-                        return;
-                    }
-
-                    default:
-                        console.debug('Unhandled bus message:', data);
-                        return;
-                }
+            // Unwrap bus messages: {to, from, data: "...json...", timestamp}
+            if (data.data && typeof data.data === 'string') {
+                try {
+                    const inner = JSON.parse(data.data);
+                    if (inner.type) data = inner;
+                } catch (_) {}
             }
+
+            switch (data.type) {
+                case 'user_msg':
+                    appendChat('you', data.from || 'You', data.data);
+                    break;
+
+                case 'ollama_response':
+                case 'llm_output':
+                    appendChat('bot', data.llm || data.from || 'Bot', data.msg || data.data);
+                    break;
+
+                case 'error':
+                    appendChat('error-msg', 'Error', data.msg || data.data);
+                    break;
+
+                case 'warning':
+                    appendChat('warning-msg', 'Warning', data.msg || data.data);
+                    break;
+
+                case 'backends':
+                    renderLlmButtons(data.backends);
+                    break;
+
+                case 'config':
+                    const cfg = document.getElementById('config-textarea');
+                    if (cfg) cfg.value = data.data;
+                    break;
+
+                case 'manifest':
+                    const mnf = document.getElementById('manifest-textarea');
+                    if (mnf) mnf.value = data.data;
+                    break;
+
+                default:
+                    break;
+            }
+        }
 
             console.debug('Unhandled WS message:', data);
         }
@@ -794,7 +873,40 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
 </html>
 "#;
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+/// Returns true if a file exists AND contains valid PEM data (not a placeholder).
+fn is_valid_pem(path: &str, expected_header: &str) -> bool {
+    std::fs::read_to_string(path)
+        .map(|s| s.contains(expected_header))
+        .unwrap_or(false)
+}
+
+/// Generate self-signed certificate + key if they are missing or contain
+/// placeholder content (not real PEM data).
+fn ensure_certificates(cert_path: &str, key_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let cert_ok = is_valid_pem(cert_path, "-----BEGIN CERTIFICATE-----");
+    let key_ok = is_valid_pem(key_path, "-----BEGIN");
+
+    if cert_ok && key_ok {
+        return Ok(());
+    }
+
+    log::info!("TLS cert/key missing or invalid — generating self-signed certificate");
+
+    let key_pair = rcgen::KeyPair::generate()?;
+    let params = rcgen::CertificateParams::new(vec!["localhost".to_string()])?;
+    let cert = params.self_signed(&key_pair)?;
+
+    std::fs::write(cert_path, cert.pem())?;
+    std::fs::write(key_path, key_pair.serialize_pem())?;
+
+    log::info!(
+        "Self-signed certificate written to {} / {}",
+        cert_path,
+        key_path
+    );
+
+    Ok(())
+}
 
 /// Execute a slash command typed directly in the chat box.
 /// Returns the result string to display in the chat.
@@ -839,16 +951,43 @@ fn handle_slash_command(cmd: &str) -> String {
                 .unwrap_or_else(|| "logs/chat_log.md".to_string());
             crate::tools::execute("read_log", &serde_json::json!({"log_file": file}))
         }
+        "bayes" => {
+            // /bayes [show|status|update <evidence>|reset]
+            let sub = parts.get(1).copied().unwrap_or("show").to_lowercase();
+            match sub.as_str() {
+                "show" | "status" => crate::tools::execute("bayes_show", &args),
+                "reset" => crate::tools::execute("bayes_reset", &args),
+                "update" => {
+                    let evidence = parts.get(2).copied().unwrap_or("");
+                    if evidence.is_empty() {
+                        "Usage: /bayes update <evidence>\nExample: /bayes update positive_signal"
+                            .to_string()
+                    } else {
+                        crate::tools::execute(
+                            "bayes_update",
+                            &serde_json::json!({"evidence": evidence}),
+                        )
+                    }
+                }
+                _ => format!(
+                    "Unknown bayes sub-command '{}'.\nAvailable: /bayes show  /bayes status  /bayes update <evidence>  /bayes reset",
+                    sub
+                ),
+            }
+        }
         "help" => format!(
             "Slash commands:\n\
-             /status        — system health\n\
-             /tools         — list all tools\n\
-             /notes         — list saved notes\n\
-             /note <title>  — read a note\n\
-             /beliefs       — show agent beliefs\n\
-             /set k=v       — store a belief\n\
-             /log [file]    — tail a log file\n\
-             /help          — this message"
+             /status              — system health\n\
+             /tools               — list all tools\n\
+             /notes               — list saved notes\n\
+             /note <title>        — read a note\n\
+             /beliefs             — show agent beliefs\n\
+             /set k=v             — store a belief\n\
+             /log [file]          — tail a log file\n\
+             /bayes show          — show Bayesian belief state\n\
+             /bayes update <ev>   — apply Bayesian evidence update\n\
+             /bayes reset         — reset to default priors\n\
+             /help                — this message"
         ),
         other => format!("Unknown command '/{}'  — type /help for a list", other),
     }

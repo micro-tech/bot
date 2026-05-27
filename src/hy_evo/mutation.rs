@@ -1,7 +1,6 @@
 use rand::prelude::*;
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use super::genome::WorkflowGenome;
 use super::node::{Node, NodeMetadata};
@@ -40,25 +39,25 @@ impl MutationEngine {
 
     /// Apply all mutation types to a genome
     pub fn mutate(&self, genome: &mut WorkflowGenome) {
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
 
-        if rng.r#gen::<f32>() < self.config.add_node_prob {
+        if rng.random::<f32>() < self.config.add_node_prob {
             mutate_add_node(genome);
         }
 
-        if rng.r#gen::<f32>() < self.config.remove_node_prob {
+        if rng.random::<f32>() < self.config.remove_node_prob {
             mutate_remove_node(genome);
         }
 
-        if rng.r#gen::<f32>() < self.config.reorder_prob {
+        if rng.random::<f32>() < self.config.reorder_prob {
             mutate_reorder_nodes(genome);
         }
 
-        if rng.r#gen::<f32>() < self.config.param_mutation_prob {
+        if rng.random::<f32>() < self.config.param_mutation_prob {
             mutate_node_params(genome);
         }
 
-        if rng.r#gen::<f32>() < self.config.edge_mutation_prob {
+        if rng.random::<f32>() < self.config.edge_mutation_prob {
             self.mutate_edges(genome);
         }
 
@@ -71,16 +70,16 @@ impl MutationEngine {
 
     /// Randomly mutate edges (add/remove)
     fn mutate_edges(&self, genome: &mut WorkflowGenome) {
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
 
         if genome.nodes.len() < 2 {
             return;
         }
 
         // 50% chance: add edge
-        if rng.gen_bool(0.5) {
-            let from = rng.gen_range(0..genome.nodes.len());
-            let to = rng.gen_range(0..genome.nodes.len());
+        if rng.random_bool(0.5) {
+            let from = rng.random_range(0..genome.nodes.len());
+            let to = rng.random_range(0..genome.nodes.len());
 
             if from != to {
                 genome.edges.push((from, to));
@@ -88,7 +87,7 @@ impl MutationEngine {
         } else {
             // 50% chance: remove edge
             if !genome.edges.is_empty() {
-                let idx = rng.gen_range(0..genome.edges.len());
+                let idx = rng.random_range(0..genome.edges.len());
                 genome.edges.remove(idx);
             }
         }
@@ -97,7 +96,7 @@ impl MutationEngine {
 
 /// Add a random node to the workflow
 pub fn mutate_add_node(genome: &mut WorkflowGenome) {
-    let mut rng = thread_rng();
+    let mut rng = rand::rng();
 
     let new_node = Node::Skill {
         name: "noop".to_string(),
@@ -110,7 +109,7 @@ pub fn mutate_add_node(genome: &mut WorkflowGenome) {
 
     // Add a random edge from an existing node to the new node
     if index > 0 {
-        let from = rng.gen_range(0..index);
+        let from = rng.random_range(0..index);
         genome.add_edge(from, index);
     }
 }
@@ -121,8 +120,8 @@ pub fn mutate_remove_node(genome: &mut WorkflowGenome) {
         return;
     }
 
-    let mut rng = thread_rng();
-    let idx = rng.gen_range(0..genome.nodes.len());
+    let mut rng = rand::rng();
+    let idx = rng.random_range(0..genome.nodes.len());
 
     genome.nodes.remove(idx);
 
@@ -142,19 +141,19 @@ pub fn mutate_remove_node(genome: &mut WorkflowGenome) {
 
 /// Randomly reorder nodes
 pub fn mutate_reorder_nodes(genome: &mut WorkflowGenome) {
-    let mut rng = thread_rng();
+    let mut rng = rand::rng();
     genome.nodes.shuffle(&mut rng);
 }
 
 /// Mutate parameters of a random node
 pub fn mutate_node_params(genome: &mut WorkflowGenome) {
-    let mut rng = thread_rng();
+    let mut rng = rand::rng();
 
     if genome.nodes.is_empty() {
         return;
     }
 
-    let idx = rng.gen_range(0..genome.nodes.len());
+    let idx = rng.random_range(0..genome.nodes.len());
     let (metadata, node) = &mut genome.nodes[idx];
 
     metadata.last_modified = chrono::Utc::now().timestamp_millis() as u64;
@@ -163,12 +162,12 @@ pub fn mutate_node_params(genome: &mut WorkflowGenome) {
         Node::Skill { params, .. } | Node::Llm { params, .. } | Node::Code { params, .. } => {
             params.insert(
                 "mutated".to_string(),
-                serde_json::json!(rng.gen_range(0..1000)),
+                serde_json::json!(rng.random_range(0..1000u32)),
             );
         }
 
         Node::MemoryWrite { value, .. } => {
-            *value = serde_json::json!(rng.gen_range(0..1000));
+            *value = serde_json::Value::Number(rng.random_range(0..1000u32).into());
         }
 
         _ => {}

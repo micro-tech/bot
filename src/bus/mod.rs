@@ -38,14 +38,23 @@ impl Bus {
         let subscribers = Arc::new(Mutex::new(Vec::<(String, Sender<Message>)>::new()));
         let subs_clone = Arc::clone(&subscribers);
         thread::spawn(move || {
+            println!("[Bus] Router thread started");
             while let Ok(message) = receiver.recv() {
                 let subs_guard = subs_clone.lock().unwrap();
+                let mut delivered = false;
                 for (component, sub_sender) in subs_guard.iter() {
                     if component == &message.to {
-                        let _ = sub_sender.send(message.clone());
+                        if sub_sender.send(message.clone()).is_ok() {
+                            delivered = true;
+                        }
                     }
                 }
+                if !delivered {
+                    // Optional: log undelivered messages
+                    eprintln!("[Bus] No subscriber for destination: {}", message.to);
+                }
             }
+            println!("[Bus] Router thread exited");
         });
         Self {
             sender,
@@ -77,24 +86,32 @@ impl Bus {
         Ok(())
     }
 
-    /// Logs bus transactions to logs/chat_log.md with timestamp, to, from, and data summary.
+    /// Logs bus transactions to logs/bus_log.md
     fn log_transaction(&self, message: &Message) {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
-        let summary = if message.data.len() > 200 {
-            format!("{}...", &message.data[..200])
+        let summary = if message.data.len() > 300 {
+            format!("{}...", &message.data[..300])
         } else {
             message.data.clone()
         };
+
         let log_entry = format!(
             "[{}] {} -> {}: {}",
             timestamp, message.from, message.to, summary
         );
-        let mut file = OpenOptions::new()
+
+        // Try to write to bus_log.md, fall back gracefully on error
+        if let Ok(mut file) = OpenOptions::new()
             .append(true)
             .create(true)
-            .open("logs/chat_log.md")
-            .expect("Failed to open logs/chat_log.md");
-        writeln!(file, "{}", log_entry).expect("Failed to write to chat_log.md");
+            .open("logs/bus_log.md")
+        {
+            if let Err(e) = writeln!(file, "{}", log_entry) {
+                eprintln!("Warning: Failed to write to bus_log.md: {}", e);
+            }
+        } else {
+            eprintln!("Warning: Could not open logs/bus_log.md for writing");
+        }
     }
 }
 
