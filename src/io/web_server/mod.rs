@@ -698,7 +698,7 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
             } catch (e) {
                 output.innerHTML = `<span style="color:#ff5252">Failed to clear log: ${e}</span>`;
             }
-        }
+        }      }
 
         // ── Message dispatcher ─────────────────────────────────────────────────
         let lastMessage = '';
