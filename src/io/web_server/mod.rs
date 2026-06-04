@@ -530,175 +530,130 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bot Control Panel</title>
     <style>
-        * { box-sizing: border-box; }
         body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a2e; color: #e0e0e0; }
-        h1 { color: #00d4ff; margin-bottom: 15px; }
-        #tabs { display: flex; margin-bottom: 20px; gap: 5px; }
-        #tabs button { padding: 10px 20px; background: #16213e; color: #e0e0e0; border: 1px solid #0f3460; cursor: pointer; border-radius: 4px; }
-        #tabs button.active { background: #0f3460; color: #00d4ff; border-color: #00d4ff; }
-        .tab-content { display: none; background: #16213e; padding: 20px; border-radius: 8px; border: 1px solid #0f3460; }
+        h1 { color: #00d4ff; }
+        #tabs { display: flex; gap: 5px; margin-bottom: 15px; }
+        .tab-button { padding: 10px 20px; background: #16213e; color: #e0e0e0; border: 1px solid #0f3460; cursor: pointer; }
+        .tab-button.active { background: #0f3460; color: #00d4ff; border-color: #00d4ff; }
+        .tab-content { display: none; background: #16213e; padding: 20px; border: 1px solid #0f3460; }
         .tab-content.active { display: block; }
-
-        /* LLM Selector */
-        #llm-selector { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
-        #llm-selector span { color: #aaa; font-size: 0.9em; margin-right: 4px; }
-        .llm-btn { padding: 6px 16px; border: 1px solid #0f3460; background: #0d1b2a; color: #ccc; cursor: pointer; border-radius: 20px; font-size: 0.85em; transition: all 0.2s; }
-        .llm-btn.active { background: #0f3460; color: #00d4ff; border-color: #00d4ff; font-weight: bold; }
-        .llm-btn:hover { border-color: #00d4ff; color: #00d4ff; }
-
-        /* Chat */
-        #chat-row { display: flex; gap: 8px; }
-        #chat-input { flex: 1; padding: 10px; background: #0d1b2a; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 4px; }
-        #chat-send { padding: 10px 20px; background: #00897b; color: white; border: none; cursor: pointer; border-radius: 4px; }
-        #chat-send:hover { background: #00acc1; }
-
-        #chat-messages, #log-output {
-            height: 400px; overflow-y: scroll; border: 1px solid #0f3460;
-            padding: 12px; margin-top: 10px; background: #0d1b2a; border-radius: 4px;
-        }
-        .message { margin-bottom: 12px; line-height: 1.5; }
-        .message .sender { font-weight: bold; }
-        .you .sender { color: #00d4ff; }
-        .bot .sender { color: #69f0ae; }
-        .error-msg .sender { color: #ff5252; }
-        .warning-msg .sender { color: #ffab40; }
-        .tool-call .sender { color: #ffd54f; }
-        .tool-call code { background: #0d2137; padding: 1px 5px; border-radius: 3px; font-size:0.8em; }
-        .tool-call em { color: #90a4ae; font-size: 0.85em; }
-
-        .log-info  { color: #81d4fa; font-size: 0.85em; font-family: monospace; }
-        .log-error { color: #ff5252; font-size: 0.85em; font-family: monospace; }
-        .log-warn  { color: #ffab40; font-size: 0.85em; font-family: monospace; }
-        .log-debug { color: #aaa;    font-size: 0.85em; font-family: monospace; }
-
-        #status-bar { font-size: 0.8em; color: #aaa; margin-top: 8px; }
-        #status-bar .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff5252; margin-right: 5px; }
-        #status-bar .dot.connected { background: #69f0ae; }
-
-        textarea { width: 100%; background: #0d1b2a; color: #e0e0e0; border: 1px solid #0f3460; border-radius: 4px; padding: 8px; }
-        button.save-btn { margin-top: 8px; padding: 8px 20px; background: #0f3460; color: #00d4ff; border: 1px solid #00d4ff; cursor: pointer; border-radius: 4px; }
-        button.save-btn:hover { background: #1a5276; }
-        .status-msg { margin-top: 8px; font-size: 0.9em; }
+        #chat-input { width: 70%; padding: 10px; background: #0d1b2a; color: #e0e0e0; border: 1px solid #0f3460; }
+        #chat-send { padding: 10px 20px; background: #00897b; color: white; border: none; cursor: pointer; }
+        #chat-messages { height: 400px; overflow-y: auto; border: 1px solid #0f3460; padding: 12px; margin-top: 10px; background: #0d1b2a; }
+        .message { margin-bottom: 10px; }
+        .sender { font-weight: bold; color: #00d4ff; }
+        textarea { width: 100%; background: #0d1b2a; color: #e0e0e0; border: 1px solid #0f3460; padding: 8px; }
+        button { margin-top: 8px; padding: 8px 16px; background: #0f3460; color: #00d4ff; border: 1px solid #00d4ff; cursor: pointer; }
     </style>
 </head>
 <body>
-    <h1>&#x1F916; Bot Control Panel</h1>
+    <h1>Bot Control Panel</h1>
 
     <div id="tabs">
-        <button class="tab-button active" onclick="showTab(event,'chat')">Chat</button>
-        <button class="tab-button" onclick="showTab(event,'config')">Config</button>
-        <button class="tab-button" onclick="showTab(event,'manifest')">Manifest</button>
-        <button class="tab-button" onclick="showTab(event,'logs')">Logs</button>
+        <button class="tab-button active" onclick="showTab('chat')">Chat</button>
+        <button class="tab-button" onclick="showTab('config')">Config</button>
+        <button class="tab-button" onclick="showTab('logs')">Logs</button>
     </div>
 
     <!-- CHAT TAB -->
     <div id="chat-tab" class="tab-content active">
-        <div id="llm-selector">
-            <span>LLM:</span>
-            <!-- Buttons injected dynamically by JS when 'backends' message arrives -->
-            <div id="llm-buttons"></div>
+        <div id="llm-selector" style="margin-bottom:12px;">
+            <span>LLM: </span>
+            <span id="llm-buttons"></span>
         </div>
-        <div id="chat-row">
-            <input type="text" id="chat-input" placeholder="Type your message… (Enter to send)"
-                   onkeypress="if(event.key==='Enter') sendChat()">
-            <button id="chat-send" onclick="sendChat()">Send &#x27A4;</button>
-            <button onclick="document.getElementById('chat-messages').innerHTML=''"
-                    style="background:#5c2d2d; border:1px solid #ff5252; color:white; margin-left:8px;">Clear Chat</button>
-        </div>
+        <input type="text" id="chat-input" placeholder="Type message..." onkeypress="if(event.key==='Enter') sendChat()">
+        <button id="chat-send" onclick="sendChat()">Send</button>
         <div id="chat-messages"></div>
-        <div id="status-bar">
-            <span class="dot" id="ws-dot"></span>
-            <span id="ws-status">Connecting…</span>
-        </div>
     </div>
 
     <!-- CONFIG TAB -->
     <div id="config-tab" class="tab-content">
-        <h2>Configuration (config.toml)</h2>
-        <textarea id="config-textarea" rows="22"></textarea>
-        <button class="save-btn" onclick="saveConfig()">&#x1F4BE; Save Config</button>
-        <div id="config-status" class="status-msg"></div>
-    </div>
-
-    <!-- MANIFEST TAB -->
-    <div id="manifest-tab" class="tab-content">
-        <h2>System Manifest</h2>
-        <textarea id="manifest-textarea" rows="22"></textarea>
-        <button class="save-btn" onclick="saveManifest()">&#x1F4BE; Save Manifest</button>
-        <div id="manifest-status" class="status-msg"></div>
+        <h2>Config</h2>
+        <textarea id="config-textarea" rows="20"></textarea>
+        <button onclick="saveConfig()">Save Config</button>
+        <div id="config-status"></div>
     </div>
 
     <!-- LOGS TAB -->
     <div id="logs-tab" class="tab-content">
-        <h2>System Logs</h2>
-        <div style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="save-btn" onclick="loadLog('/logs/chat')">Chat Log</button>
-            <button class="save-btn" onclick="loadLog('/logs/error')">Error Log</button>
-            <button class="save-btn" onclick="loadLog('/logs/bus')">Bus Log</button>
-            <button class="save-btn" onclick="loadLog('/logs/hartbeat')">Hartbeat Log</button>
-
-            <button class="save-btn" style="background:#5c2d2d; border-color:#ff5252; margin-left:20px"
-                    onclick="clearChatLog()">Clear Chat Log</button>
-            <button class="save-btn" style="background:#5c2d2d; border-color:#ff5252"
-                    onclick="document.getElementById('log-output').innerHTML=''">Clear Display</button>
-        </div>
-        <div id="log-output" style="height:500px; overflow-y:auto; background:#0d1b2a; border:1px solid #0f3460; padding:12px; border-radius:4px; font-family:monospace; white-space:pre-wrap;"></div>
+        <h2>Logs</h2>
+        <button onclick="loadLog('/logs/chat')">Chat Log</button>
+        <button onclick="loadLog('/logs/error')">Error Log</button>
+        <pre id="log-output" style="white-space:pre-wrap; background:#0d1b2a; padding:12px; border:1px solid #0f3460;"></pre>
     </div>
 
     <script>
-        let ws = null;
-        let selectedLlm = '';   // '' means "use server default (first backend)"
-        const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname + ':8443/ws';
+        let ws;
+        let selectedLlm = '';
 
+        function showTab(name) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+            document.getElementById(name + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
 
-        // ── WebSocket ──────────────────────────────────────────────────────────
         function connectWS() {
-            ws = new WebSocket(WS_URL);
-            ws.onopen = () => {
-                setStatus(true);
-                console.log('WebSocket connected');
-            };
-            ws.onclose = () => {
-                setStatus(false);
-                console.log('WebSocket disconnected, reconnecting in 3s…');
-                setTimeout(connectWS, 3000);
-            };
-            ws.onerror = (err) => { console.error('WS error:', err); setStatus(false); };
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(protocol + '//' + location.hostname + ':8443/ws');
+            ws.onopen = () => console.log('WS connected');
             ws.onmessage = handleMessage;
+            ws.onclose = () => setTimeout(connectWS, 3000);
         }
 
-        function setStatus(connected) {
-            document.getElementById('ws-dot').className = 'dot' + (connected ? ' connected' : '');
-            document.getElementById('ws-status').textContent = connected ? 'Connected' : 'Disconnected';
-        }
-
-        // ── Load static log files ─────────────────────────────────────────────
-        async function loadLog(url) {
-            const output = document.getElementById('log-output');
-            output.innerHTML = '<em>Loading...</em>';
-            try {
-                const res = await fetch(url);
-                const text = await res.text();
-                output.innerHTML = text;
-                output.scrollTop = 0;
-            } catch (e) {
-                output.innerHTML = `<span style="color:#ff5252">Failed to load log: ${e}</span>`;
+        function handleMessage(event) {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'backends') {
+                buildLlmButtons(msg.backends);
+            } else if (msg.type === 'user_msg' || msg.type === 'ollama_response') {
+                appendChat(msg);
             }
         }
 
-        async function clearChatLog() {
-            if (!confirm("Clear the chat_log.md file? This cannot be undone.")) return;
+        function buildLlmButtons(backends) {
+            const container = document.getElementById('llm-buttons');
+            container.innerHTML = '';
+            backends.forEach(b => {
+                const btn = document.createElement('button');
+                btn.textContent = b.label;
+                btn.onclick = () => { selectedLlm = b.id; };
+                container.appendChild(btn);
+            });
+        }
 
-            const output = document.getElementById('log-output');
-            try {
-                const res = await fetch('/logs/chat/clear', { method: 'POST' });
-                const text = await res.text();
-                output.innerHTML = text;
-                setTimeout(() => { output.innerHTML = ''; }, 1500);
-            } catch (e) {
-                output.innerHTML = `<span style="color:#ff5252">Failed to clear log: ${e}</span>`;
-            }
-        }      }
+        function sendChat() {
+            const input = document.getElementById('chat-input');
+            if (!input.value.trim()) return;
+            ws.send(JSON.stringify({ type: 'chat', msg: input.value, llm: selectedLlm }));
+            input.value = '';
+        }
+
+        function appendChat(msg) {
+            const div = document.getElementById('chat-messages');
+            const p = document.createElement('div');
+            p.innerHTML = `<span class="sender">${msg.from || 'Bot'}:</span> ${msg.data || msg.msg}`;
+            div.appendChild(p);
+            div.scrollTop = div.scrollHeight;
+        }
+
+        function loadLog(url) {
+            fetch(url).then(r => r.text()).then(t => {
+                document.getElementById('log-output').textContent = t;
+            });
+        }
+
+        function saveConfig() {
+            const val = document.getElementById('config-textarea').value;
+            ws.send(JSON.stringify({ type: 'config_save', data: val }));
+        }
+
+        window.onload = () => {
+            connectWS();
+        };
+    </script>
+</body>
+</html>
+"#;      }
 
         // ── Message dispatcher ─────────────────────────────────────────────────
         let lastMessage = '';
