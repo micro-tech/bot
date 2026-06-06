@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bot Control Panel</title>
+    <!-- Version: 2025-04-12-v2 -->
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a2e; color: #e0e0e0; }
         h1 { color: #00d4ff; }
@@ -22,7 +23,7 @@
     </style>
 </head>
 <body>
-    <h1>Bot Control Panel</h1>
+    <h1>Bot Control Panel <span style="font-size:0.5em; color:#666;">v2025-04-12-v2</span></h1>
 
     <div id="tabs">
         <button class="tab-button active" onclick="showTab('chat')">Chat</button>
@@ -64,8 +65,14 @@
         function showTab(name) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
-            document.getElementById(name + '-tab').classList.add('active');
-            event.target.classList.add('active');
+            const tab = document.getElementById(name + '-tab');
+            if (tab) tab.classList.add('active');
+
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes("'" + name + "'")) {
+                    btn.classList.add('active');
+                }
+            });
         }
 
         function connectWS() {
@@ -98,13 +105,14 @@
 
         function sendChat() {
             const input = document.getElementById('chat-input');
-            if (!input.value.trim()) return;
+            if (!input || !input.value.trim() || !ws) return;
             ws.send(JSON.stringify({ type: 'chat', msg: input.value, llm: selectedLlm }));
             input.value = '';
         }
 
         function appendChat(msg) {
             const div = document.getElementById('chat-messages');
+            if (!div) return;
             const p = document.createElement('div');
             p.innerHTML = `<span class="sender">${msg.from || 'Bot'}:</span> ${msg.data || msg.msg}`;
             div.appendChild(p);
@@ -113,13 +121,14 @@
 
         function loadLog(url) {
             fetch(url).then(r => r.text()).then(t => {
-                document.getElementById('log-output').textContent = t;
+                const out = document.getElementById('log-output');
+                if (out) out.textContent = t;
             });
         }
 
         function saveConfig() {
             const val = document.getElementById('config-textarea').value;
-            ws.send(JSON.stringify({ type: 'config_save', data: val }));
+            if (ws) ws.send(JSON.stringify({ type: 'config_save', data: val }));
         }
 
         window.onload = () => {
