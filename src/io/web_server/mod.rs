@@ -653,140 +653,31 @@ const MAIN_HTML: &str = r#"<!DOCTYPE html>
     </script>
 </body>
 </html>
-"#;      }
+"#;
 
-        // ── Message dispatcher ─────────────────────────────────────────────────
-        let lastMessage = '';
+fn handle_slash_command(cmd: &str) -> String {
+    match cmd {
+        "help" => "Available commands:\n\
+             /help                — this message".to_string(),
+        other => format!("Unknown command '/{}' — type /help for a list", other),
+    }
+}
+}
 
-        function handleMessage(event) {
-            let data;
-            try {
-                data = JSON.parse(event.data);
-            } catch (e) {
-                console.error('WS parse error:', e);
-                return;
-            }
-
-            // Unwrap bus messages: {to, from, data: "...json...", timestamp}
-            if (data.data && typeof data.data === 'string') {
-                try {
-                    const inner = JSON.parse(data.data);
-                    if (inner.type) data = inner;
-                } catch (_) {}
-            }
-
-            switch (data.type) {
-                case 'user_msg':
-                    appendChat('you', data.from || 'You', data.data);
-                    break;
-
-                case 'ollama_response':
-                case 'llm_output':
-                    appendChat('bot', data.llm || data.from || 'Bot', data.msg || data.data);
-                    break;
-
-                case 'error':
-                    appendChat('error-msg', 'Error', data.msg || data.data);
-                    break;
-
-                case 'warning':
-                    appendChat('warning-msg', 'Warning', data.msg || data.data);
-                    break;
-
-                case 'backends':
-                    renderLlmButtons(data.backends);
-                    break;
-
-                case 'config':
-                    const cfg = document.getElementById('config-textarea');
-                    if (cfg) cfg.value = data.data;
-                    break;
-
-                case 'manifest':
-                    const mnf = document.getElementById('manifest-textarea');
-                    if (mnf) mnf.value = data.data;
-                    break;
-
-                default:
-                    break;
-            }
-        }
-
-            console.debug('Unhandled WS message:', data);
-        }
-
-        // ── LLM selector ───────────────────────────────────────────────────────
-        const llmLabels = {};
-
-        function buildLlmButtons(backends) {
-            const container = document.getElementById('llm-buttons');
-            container.innerHTML = '';
-            backends.forEach((b, i) => {
-                llmLabels[b.id] = b.label;
-                const btn = document.createElement('button');
-                btn.className = 'llm-btn' + (i === 0 ? ' active' : '');
-                btn.textContent = b.label;
-                btn.dataset.id = b.id;
-                if (i === 0) selectedLlm = b.id;
-                btn.onclick = () => {
-                    document.querySelectorAll('.llm-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    selectedLlm = b.id;
-                };
-                container.appendChild(btn);
-            });
-        }
-
-        function labelFor(id) {
-            return llmLabels[id] || id;
-        }
-
-        // ── Chat helpers ────────────────────────────────────────────────────────
-        function sendChat() {
-            const input = document.getElementById('chat-input');
-            const msg = input.value.trim();
-            if (!msg || !ws || ws.readyState !== WebSocket.OPEN) return;
-            // Slash commands → direct skill execution
-            if (msg.startsWith('/')) {
-                ws.send(JSON.stringify({ type: 'slash_cmd', cmd: msg }));
-                input.value = '';
-                return;
-            }
-            ws.send(JSON.stringify({ type: 'chat', msg: msg, llm: selectedLlm }));
-            input.value = '';
-        }
-
-        function appendChat(cssClass, from, msg) {
-            const div = document.createElement('div');
-            div.className = 'message ' + cssClass;
-            div.innerHTML =
-                '<span class="sender">' + escapeHtml(toStr(from)) + ':</span> ' +
-                escapeHtml(toStr(msg));
-            const container = document.getElementById('chat-messages');
-            container.appendChild(div);
-            div.scrollIntoView({ behavior: 'smooth' });
-        }
-
-        function appendLog(level, msg) {
-            const div = document.createElement('div');
-            div.className = 'log-' + (level || 'info');
-            const ts = new Date().toLocaleTimeString();
-            div.textContent = '[' + ts + '][' + (level || 'info').toUpperCase() + '] ' + msg;
-            const container = document.getElementById('log-output');
-            container.appendChild(div);
-            div.scrollIntoView({ behavior: 'smooth' });
-        }
-
-        function appendToolCall(tool, args, preview) {
-            const div = document.createElement('div');
-            div.className = 'message tool-call';
+#[cfg(test)]
             div.innerHTML =
                 `<span class="sender">⚙ Tool [${escapeHtml(tool)}]</span> ` +
                 `<code>${escapeHtml(args)}</code>` +
                 (preview ? ` → <em>${escapeHtml(preview)}</em>` : '');
-            const container = document.getElementById('chat-messages');
-            container.appendChild(div);
-            div.scrollIntoView({ behavior: 'smooth' });
+}
+
+#[cfg(test)]
+}
+
+#[cfg(test)]
+}
+
+#[cfg(test)]
         }
 
         // ── Tab switching ───────────────────────────────────────────────────────
