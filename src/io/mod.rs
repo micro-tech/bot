@@ -2,6 +2,7 @@
 // This mod.rs file declares the sub-modules for the IO component.
 
 pub mod io;
+#[cfg(unix)]
 pub mod unix_socket;
 
 // Including sub-modules with test files to run their tests

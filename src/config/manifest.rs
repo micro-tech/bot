@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use pulldown_cmark::Parser;
+// use pulldown_cmark::Parser;
 use similar::TextDiff;
 
 #[derive(Debug, Clone)]
