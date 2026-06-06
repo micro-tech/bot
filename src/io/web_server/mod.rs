@@ -282,12 +282,12 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             continue;
                         }
 
-                        // Which LLM did the user select?
                         let llm = json_val["llm"].as_str().unwrap_or("").to_string();
+                        info!("Chat request received | llm='{}' | msg='{}'", llm, chat_msg);
+
                         let bus_dest = if llm == "gemini" {
                             "gemini".to_string()
                         } else if llm.is_empty() {
-                            // No explicit selection — use the first ollama backend
                             let backends: serde_json::Value =
                                 serde_json::from_str(&state.backends_json)
                                     .unwrap_or(serde_json::Value::Array(vec![]));
@@ -296,6 +296,8 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         } else {
                             format!("ollama_{}", llm)
                         };
+
+                        info!("Routing chat to bus destination: {}", bus_dest);
 
                         let correlation_id = get_timestamp();
                         let bus_msg = Message {
@@ -471,7 +473,11 @@ async fn serve_index() -> Html<String> {
 // ── Log file handlers ────────────────────────────────────────────────────────
 
 async fn serve_chat_log() -> impl IntoResponse {
-    let content = fs::read_to_string("logs/chat_log.md")
+    let path = "logs/chat_log.md";
+    if !std::path::Path::new(path).exists() {
+        let _ = std::fs::write(path, "[INIT] Chat log created\n");
+    }
+    let content = fs::read_to_string(path)
         .unwrap_or_else(|_| "chat_log.md not found or empty".to_string());
     Html(format!(
         "<pre style='white-space:pre-wrap;'>{}</pre>",
@@ -489,7 +495,11 @@ async fn clear_chat_log() -> impl IntoResponse {
 }
 
 async fn serve_error_log() -> impl IntoResponse {
-    let content = fs::read_to_string("logs/error_log.md")
+    let path = "logs/error_log.md";
+    if !std::path::Path::new(path).exists() {
+        let _ = std::fs::write(path, "[INIT] Error log created\n");
+    }
+    let content = fs::read_to_string(path)
         .unwrap_or_else(|_| "error_log.md not found or empty".to_string());
     Html(format!(
         "<pre style='white-space:pre-wrap;'>{}</pre>",
