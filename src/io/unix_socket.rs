@@ -1,21 +1,32 @@
 // Task 76: UNIX domain socket server for CLI interface
 // Provides a secure local socket at /var/run/bot.sock (or configurable path)
 
+#[cfg(unix)]
 use crate::config::socket::SocketConfig;
-use crate::bus::Bus;
+#[cfg(unix)]
+use crate::bus::{Bus, Message};
+#[cfg(unix)]
 use tokio::net::UnixListener;
+#[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(unix)]
 use std::path::Path;
+#[cfg(unix)]
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
 use serde_json::Value;
+#[cfg(unix)]
 use tracing::{info, error};
 
+#[cfg(unix)]
 pub struct UnixSocketServer {
     config: SocketConfig,
     bus: Bus,
 }
 
+#[cfg(unix)]
 impl UnixSocketServer {
     pub fn new(config: SocketConfig, bus: Bus) -> Self {
         Self { config, bus }
@@ -48,17 +59,21 @@ impl UnixSocketServer {
     }
 }
 
-async fn handle_client(stream: UnixStream, bus: Bus) -> anyhow::Result<()> {
-    let (reader, mut writer) = stream.into_split();
+#[cfg(unix)]
+async fn handle_client(mut stream: tokio::net::UnixStream, bus: Bus) -> anyhow::Result<()> {
+    let (reader, mut writer) = stream.split();
     let mut lines = BufReader::new(reader).lines();
 
     while let Some(line) = lines.next_line().await? {
-        // Expect JSON-lines protocol
         if let Ok(msg) = serde_json::from_str::<Value>(&line) {
-            // Forward into internal bus
-            bus.publish("unix_socket", msg).await;
-            
-            // Simple ack
+            let bus_msg = Message {
+                to: "unix_socket".to_string(),
+                from: "unix_socket".to_string(),
+                data: msg.to_string(),
+                timestamp: crate::utils::now_ms(),
+            };
+            let _ = bus.publish(bus_msg);
+
             writer.write_all(b"{\"status\":\"ok\"}\n").await?;
         } else {
             writer.write_all(b"{\"error\":\"invalid json\"}\n").await?;

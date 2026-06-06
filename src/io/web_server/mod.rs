@@ -11,13 +11,13 @@ use axum::{
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
 use log::info;
-use rcgen::{Certificate, CertificateParams, DistinguishedName};
+use rcgen::{ /* Certificate, CertificateParams, DistinguishedName */ };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::path::PathBuf;
+// use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
@@ -521,203 +521,8 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-// ── HTML / JS front-end ───────────────────────────────────────────────────────
+const MAIN_HTML: &str = include_str!("static/index.html");
 
-const MAIN_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bot Control Panel</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a2e; color: #e0e0e0; }
-        h1 { color: #00d4ff; }
-        #tabs { display: flex; gap: 5px; margin-bottom: 15px; }
-        .tab-button { padding: 10px 20px; background: #16213e; color: #e0e0e0; border: 1px solid #0f3460; cursor: pointer; }
-        .tab-button.active { background: #0f3460; color: #00d4ff; border-color: #00d4ff; }
-        .tab-content { display: none; background: #16213e; padding: 20px; border: 1px solid #0f3460; }
-        .tab-content.active { display: block; }
-        #chat-input { width: 70%; padding: 10px; background: #0d1b2a; color: #e0e0e0; border: 1px solid #0f3460; }
-        #chat-send { padding: 10px 20px; background: #00897b; color: white; border: none; cursor: pointer; }
-        #chat-messages { height: 400px; overflow-y: auto; border: 1px solid #0f3460; padding: 12px; margin-top: 10px; background: #0d1b2a; }
-        .message { margin-bottom: 10px; }
-        .sender { font-weight: bold; color: #00d4ff; }
-        textarea { width: 100%; background: #0d1b2a; color: #e0e0e0; border: 1px solid #0f3460; padding: 8px; }
-        button { margin-top: 8px; padding: 8px 16px; background: #0f3460; color: #00d4ff; border: 1px solid #00d4ff; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <h1>Bot Control Panel</h1>
-
-    <div id="tabs">
-        <button class="tab-button active" onclick="showTab('chat')">Chat</button>
-        <button class="tab-button" onclick="showTab('config')">Config</button>
-        <button class="tab-button" onclick="showTab('logs')">Logs</button>
-    </div>
-
-    <!-- CHAT TAB -->
-    <div id="chat-tab" class="tab-content active">
-        <div id="llm-selector" style="margin-bottom:12px;">
-            <span>LLM: </span>
-            <span id="llm-buttons"></span>
-        </div>
-        <input type="text" id="chat-input" placeholder="Type message..." onkeypress="if(event.key==='Enter') sendChat()">
-        <button id="chat-send" onclick="sendChat()">Send</button>
-        <div id="chat-messages"></div>
-    </div>
-
-    <!-- CONFIG TAB -->
-    <div id="config-tab" class="tab-content">
-        <h2>Config</h2>
-        <textarea id="config-textarea" rows="20"></textarea>
-        <button onclick="saveConfig()">Save Config</button>
-        <div id="config-status"></div>
-    </div>
-
-    <!-- LOGS TAB -->
-    <div id="logs-tab" class="tab-content">
-        <h2>Logs</h2>
-        <button onclick="loadLog('/logs/chat')">Chat Log</button>
-        <button onclick="loadLog('/logs/error')">Error Log</button>
-        <pre id="log-output" style="white-space:pre-wrap; background:#0d1b2a; padding:12px; border:1px solid #0f3460;"></pre>
-    </div>
-
-    <script>
-        let ws;
-        let selectedLlm = '';
-
-        function showTab(name) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
-            document.getElementById(name + '-tab').classList.add('active');
-            event.target.classList.add('active');
-        }
-
-        function connectWS() {
-            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(protocol + '//' + location.hostname + ':8443/ws');
-            ws.onopen = () => console.log('WS connected');
-            ws.onmessage = handleMessage;
-            ws.onclose = () => setTimeout(connectWS, 3000);
-        }
-
-        function handleMessage(event) {
-            const msg = JSON.parse(event.data);
-            if (msg.type === 'backends') {
-                buildLlmButtons(msg.backends);
-            } else if (msg.type === 'user_msg' || msg.type === 'ollama_response') {
-                appendChat(msg);
-            }
-        }
-
-        function buildLlmButtons(backends) {
-            const container = document.getElementById('llm-buttons');
-            container.innerHTML = '';
-            backends.forEach(b => {
-                const btn = document.createElement('button');
-                btn.textContent = b.label;
-                btn.onclick = () => { selectedLlm = b.id; };
-                container.appendChild(btn);
-            });
-        }
-
-        function sendChat() {
-            const input = document.getElementById('chat-input');
-            if (!input.value.trim()) return;
-            ws.send(JSON.stringify({ type: 'chat', msg: input.value, llm: selectedLlm }));
-            input.value = '';
-        }
-
-        function appendChat(msg) {
-            const div = document.getElementById('chat-messages');
-            const p = document.createElement('div');
-            p.innerHTML = `<span class="sender">${msg.from || 'Bot'}:</span> ${msg.data || msg.msg}`;
-            div.appendChild(p);
-            div.scrollTop = div.scrollHeight;
-        }
-
-        function loadLog(url) {
-            fetch(url).then(r => r.text()).then(t => {
-                document.getElementById('log-output').textContent = t;
-            });
-        }
-
-        function saveConfig() {
-            const val = document.getElementById('config-textarea').value;
-            ws.send(JSON.stringify({ type: 'config_save', data: val }));
-        }
-
-        window.onload = () => {
-            connectWS();
-        };
-    </script>
-</body>
-</html>
-"#;
-
-fn handle_slash_command(cmd: &str) -> String {
-    match cmd {
-        "help" => "Available commands:\n\
-             /help                — this message".to_string(),
-        other => format!("Unknown command '/{}' — type /help for a list", other),
-    }
-}
-}
-
-#[cfg(test)]
-            div.innerHTML =
-                `<span class="sender">⚙ Tool [${escapeHtml(tool)}]</span> ` +
-                `<code>${escapeHtml(args)}</code>` +
-                (preview ? ` → <em>${escapeHtml(preview)}</em>` : '');
-}
-
-#[cfg(test)]
-}
-
-#[cfg(test)]
-}
-
-#[cfg(test)]
-        }
-
-        // ── Tab switching ───────────────────────────────────────────────────────
-        function showTab(event, name) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-            document.getElementById(name + '-tab').classList.add('active');
-            event.target.classList.add('active');
-        }
-
-        // ── Config / Manifest save ──────────────────────────────────────────────
-        function saveConfig() {
-            const toml = document.getElementById('config-textarea').value;
-            if (ws && ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({ type: 'config_save', data: toml }));
-        }
-
-        function saveManifest() {
-            const md = document.getElementById('manifest-textarea').value;
-            if (ws && ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({ type: 'manifest_save', data: md }));
-        }
-
-        // ── Utilities ──────────────────────────────────────────────────────────
-        function toStr(v) {
-            if (v === null || v === undefined) return '';
-            if (typeof v === 'string') return v;
-            return JSON.stringify(v);
-        }
-
-        function escapeHtml(text) {
-            const map = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' };
-            return String(text).replace(/[&<>"']/g, m => map[m]);
-        }
-
-        connectWS();
-    </script>
-</body>
-</html>
-"#;
 
 /// Returns true if a file exists AND contains valid PEM data (not a placeholder).
 fn is_valid_pem(path: &str, expected_header: &str) -> bool {
