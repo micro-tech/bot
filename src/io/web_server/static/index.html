@@ -242,6 +242,15 @@
                 div.scrollTop = div.scrollHeight;
             }
 
+            function loadLog(url) {
+                fetch(url)
+                    .then((r) => r.text())
+                    .then((t) => {
+                        const out = document.getElementById("log-output");
+                        if (out) out.textContent = t;
+                    });
+            }
+
             function clearLog(url, type) {
                 fetch(url, { method: 'POST' })
                     .then(r => r.text())

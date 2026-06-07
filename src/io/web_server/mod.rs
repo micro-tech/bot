@@ -142,6 +142,7 @@ pub async fn start_web_server(
         .route("/logs/chat", get(serve_chat_log))
         .route("/logs/chat/clear", post(clear_chat_log))
         .route("/logs/error", get(serve_error_log))
+        .route("/logs/error/clear", post(clear_error_log))
         .route("/logs/bus", get(serve_bus_log))
         .route("/logs/hartbeat", get(serve_hartbeat_log))
         .with_state(state)
@@ -532,6 +533,15 @@ async fn clear_chat_log() -> impl IntoResponse {
     );
     let _ = fs::write("logs/chat_log.md", init_line);
     Html("<span style='color:#69f0ae'>Chat log cleared.</span>")
+}
+
+async fn clear_error_log() -> impl IntoResponse {
+    let init_line = format!(
+        "[INIT] Error log cleared via web UI at {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+    );
+    let _ = fs::write("logs/error_log.md", init_line);
+    Html("<span style='color:#69f0ae'>Error log cleared.</span>")
 }
 
 async fn serve_error_log() -> impl IntoResponse {
