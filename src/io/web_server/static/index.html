@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Bot Control Panel</title>
-        <!-- Version: 2026-06-6-v2 -->
+        <!-- Version: 2026-06-6-v2.2.0 -->
         <style>
             body {
                 font-family: Arial, sans-serif;
@@ -90,7 +90,7 @@
     <body>
         <h1>
             Bot Control Panel
-            <span style="font-size: 0.5em; color: #666">v2026-06-6-v2.1</span>
+            <span style="font-size: 0.5em; color: #666">v2026-06-6-v2.2.0</span>
         </h1>
 
         <div id="tabs">
@@ -131,7 +131,9 @@
         <div id="logs-tab" class="tab-content">
             <h2>Logs</h2>
             <button onclick="loadLog('/logs/chat')">Chat Log</button>
+            <button onclick="clearLog('/logs/chat/clear', 'chat')">Clear Chat Log</button>
             <button onclick="loadLog('/logs/error')">Error Log</button>
+            <button onclick="clearLog('/logs/error/clear', 'error')">Clear Error Log</button>
             <pre
                 id="log-output"
                 style="
@@ -180,7 +182,7 @@
 
             function handleMessage(event) {
                 const msg = JSON.parse(event.data);
-                console.log('[WS] Received:', msg);
+                console.log("[WS] Received:", msg);
 
                 if (msg.type === "config") {
                     const ta = document.getElementById("config-textarea");
@@ -231,7 +233,7 @@
             }
 
             function appendChat(msg) {
-                console.log('[Chat] Appending message:', msg);
+                console.log("[Chat] Appending message:", msg);
                 const div = document.getElementById("chat-messages");
                 if (!div) return;
                 const p = document.createElement("div");
@@ -240,10 +242,10 @@
                 div.scrollTop = div.scrollHeight;
             }
 
-            function loadLog(url) {
-                fetch(url)
-                    .then((r) => r.text())
-                    .then((t) => {
+            function clearLog(url, type) {
+                fetch(url, { method: 'POST' })
+                    .then(r => r.text())
+                    .then(t => {
                         const out = document.getElementById("log-output");
                         if (out) out.textContent = t;
                     });

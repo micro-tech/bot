@@ -261,6 +261,35 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
         }
     });
 
+    // 7. Direct CPU → Web forwarder (for LLM responses)
+    let bus_clone2 = state.bus.clone();
+    let msg_tx_clone2 = state.msg_tx.clone();
+    let cpu_forward_task = tokio::spawn(async move {
+        let rx = bus_clone2.subscribe("cpu");
+        while let Ok(msg) = rx.recv() {
+            if msg.data.contains("\"type\":\"llm_response\"")
+                || msg.data.contains("\"type\":\"ollama_response\"")
+                || msg.data.contains("\"type\":\"llm_output\"")
+            {
+                // Extract the actual response text
+                let payload: serde_json::Value =
+                    serde_json::from_str(&msg.data).unwrap_or_default();
+                let text = payload["msg"].as_str().unwrap_or("").to_string();
+
+                if !text.is_empty() {
+                    let clean_msg = json!({
+                        "type": "llm_output",
+                        "from": msg.from,
+                        "msg": text
+                    })
+                    .to_string();
+
+                    let _ = msg_tx_clone2.send(clean_msg);
+                }
+            }
+        }
+    });
+
     // 6. Main loop: WebSocket messages → Bus
     while let Some(msg) = ws_receiver.next().await {
         let msg = match msg {
@@ -468,6 +497,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
 
     recv_task.abort();
     bus_forward_task.abort();
+    cpu_forward_task.abort();
 }
 
 // ── Axum route helpers ────────────────────────────────────────────────────────

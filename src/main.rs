@@ -88,7 +88,6 @@ async fn run_bot() {
                         from: msg.from.clone(),
                         data: serde_json::json!({
                             "type": "llm_output",
-                            "correlation_id": correlation_id,
                             "msg": text
                         })
                         .to_string(),
