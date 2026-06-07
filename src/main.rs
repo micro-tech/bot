@@ -95,6 +95,16 @@ async fn run_bot() {
                         timestamp: crate::utils::now_ms(),
                     };
 
+                    // Also write response to chat log
+                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open("logs/chat_log.md")
+                    {
+                        use std::io::Write;
+                        let _ = writeln!(f, "[{}] Bot: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), text);
+                    }
+
                     let _ = bus_clone.publish(ui_msg);
                     println!("[CPU-Forwarder] Forwarded LLM response to web_interface");
                 }

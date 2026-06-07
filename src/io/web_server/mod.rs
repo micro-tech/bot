@@ -282,6 +282,16 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             continue;
                         }
 
+                    // Write to chat log
+                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open("logs/chat_log.md")
+                    {
+                        use std::io::Write;
+                        let _ = writeln!(f, "[{}] User: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), chat_msg);
+                    }
+
                         let llm = json_val["llm"].as_str().unwrap_or("").to_string();
                         info!("Chat request received | llm='{}' | msg='{}'", llm, chat_msg);
 
