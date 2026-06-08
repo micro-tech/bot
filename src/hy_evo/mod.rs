@@ -11,14 +11,27 @@
 //! - Evolution engine
 //! - CPU integration helpers
 
+pub mod ab_testing;
+pub mod chaos;
 pub mod crossover;
+pub mod diff;
 pub mod engine;
+pub mod failure_injection;
 pub mod genome;
 pub mod integration;
+pub mod metrics;
 pub mod mutation;
 pub mod node;
+pub mod population;
 pub mod reflection;
+pub mod registry;
 pub mod scoring;
+pub mod selection;
+pub mod storage;
+pub mod templates;
+pub mod tests;
+pub mod triggers;
+pub mod visualization;
 pub mod workflow;
 
 // Re‑exports for convenience

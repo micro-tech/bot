@@ -2,6 +2,7 @@ use crate::hy_evo::genome::WorkflowGenome;
 use crate::hy_evo::node::Node;
 use crate::hy_evo::reflection::{ReflectionLlm, ReflectionRecord};
 use crate::hy_evo::scoring::ExecutionMetrics;
+use rand::Rng;
 
 /// The HyEvo evolution engine.
 /// Maintains a population of workflow genomes and evolves them using LLM feedback.
@@ -77,5 +78,56 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoEngine<L> {
                 .partial_cmp(&b.score)
                 .unwrap_or(std::cmp::Ordering::Equal)
         })
+    }
+
+    /// Run a full evolution cycle on the population.
+    ///
+    /// Steps:
+    /// 1. Select top N workflows
+    /// 2. Mutate + crossover to produce offspring
+    /// 3. Score new genomes (placeholder scoring for now)
+    /// 4. Replace worst performers
+    pub fn evolution_cycle(&mut self, top_n: usize, offspring_count: usize) {
+        if self.population.len() < 2 {
+            return;
+        }
+
+        // 1. Select top N
+        let mut sorted: Vec<_> = self.population.iter().cloned().collect();
+        sorted.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        let parents: Vec<_> = sorted.into_iter().take(top_n).collect();
+
+        // 2. Generate offspring via mutation + crossover
+        let mut offspring = Vec::new();
+        let mut rng = rand::rng();
+
+        for _ in 0..offspring_count {
+            if parents.len() >= 2 {
+                let a = &parents[rng.random_range(0..parents.len())];
+                let b = &parents[rng.random_range(0..parents.len())];
+
+                // Crossover
+                let mut child = crate::hy_evo::crossover::CrossoverEngine::new(Default::default())
+                    .crossover(a, b);
+
+                // Mutate
+                crate::hy_evo::mutation::MutationEngine::new(Default::default()).mutate(&mut child);
+
+                offspring.push(child);
+            }
+        }
+
+        // 3. Simple scoring (can be replaced with real ExecutionMetrics later)
+        for genome in &mut offspring {
+            genome.score = genome.nodes.len() as f64 * 0.1; // placeholder
+        }
+
+        // 4. Replace worst performers
+        self.population.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
+
+        let replace_count = offspring.len().min(self.population.len());
+        for i in 0..replace_count {
+            self.population[i] = offspring[i].clone();
+        }
     }
 }

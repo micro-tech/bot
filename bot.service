@@ -1,0 +1,15 @@
+[Unit]
+Description=AgentOS Bot Service
+After=network.target
+
+[Service]
+Type=simple
+User=bot
+WorkingDirectory=/opt/bot
+ExecStart=/usr/local/bin/bot
+Restart=always
+RestartSec=5
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

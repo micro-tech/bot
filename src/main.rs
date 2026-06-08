@@ -16,6 +16,7 @@ mod memory;
 mod skills;
 mod hooks;
 mod bayesian;
+mod planning;
 
 #[tokio::main]
 async fn main() {

@@ -480,6 +480,12 @@ pub mod tools {
                     let name = tool["function"]["name"].as_str().unwrap_or("");
                     let args = tool["function"]["arguments"].clone();
                     let tool_result = crate::tools::execute(name, &args);
+
+                    // Basic error detection for tool failures
+                    if tool_result.starts_with("Error") || tool_result.starts_with("Unknown tool") {
+                        warn!("Tool '{}' execution reported error: {}", name, tool_result);
+                    }
+
                     info!("Tool called: '{}' → {} chars", name, tool_result.len());
 
                     // Notify web UI that a tool was executed

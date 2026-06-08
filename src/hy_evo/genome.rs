@@ -26,6 +26,9 @@ pub struct WorkflowGenome {
     /// Fitness score assigned by the scoring engine
     pub score: f64,
 
+    /// Version number (incremented on mutation/crossover)
+    pub version: u32,
+
     /// Timestamp (ms) when this workflow was created
     pub created_at: u64,
 
@@ -44,6 +47,7 @@ impl WorkflowGenome {
             edges: Vec::new(),
             metadata: HashMap::new(),
             score: 0.0,
+            version: 1,
             created_at: now,
             last_modified: now,
         }
@@ -86,7 +90,7 @@ impl WorkflowGenome {
 
     /// Apply a random mutation
     pub fn mutate(&mut self) {
-        let mutation_type = (chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0) % 4) as u32; // simple random
+        let mutation_type = (chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0) % 4) as u32;
         match mutation_type {
             0 => mutate_add_node(self),
             1 => mutate_remove_node(self),
@@ -94,6 +98,7 @@ impl WorkflowGenome {
             3 => mutate_node_params(self),
             _ => {}
         }
+        self.version += 1;
         self.touch();
     }
 }
