@@ -9,6 +9,14 @@ struct DummyLlm;
 
 #[async_trait]
 impl ReflectionLlm for DummyLlm {
+    async fn reflect(
+        &self,
+        _workflow: &WorkflowGenome,
+        _metrics: &ExecutionMetrics,
+    ) -> anyhow::Result<String> {
+        Ok("Dummy reflection: workflow executed successfully.".to_string())
+    }
+
     async fn evolve_code(&self, _feedback: &str, _genome: &str) -> anyhow::Result<String> {
         Ok("- improve node ordering\n- add error handling".to_string())
     }

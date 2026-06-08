@@ -46,18 +46,18 @@ impl Workflow {
         let (_, node) = &self.ordered_nodes[index];
 
         match node {
-            Node::Skill { name, params } => {
-                let params_val = serde_json::to_value(params).unwrap_or_default();
+            Node::Skill { name, args } => {
+                let params_val = serde_json::to_value(args).unwrap_or_default();
                 ctx.execute_skill(name, &params_val).await
             }
 
             Node::Llm {
                 model,
-                prompt_template,
+                prompt,
                 params,
             } => {
                 let params_val = serde_json::to_value(params).unwrap_or_default();
-                ctx.execute_llm(model, prompt_template, &params_val).await
+                ctx.execute_llm(model, prompt, &params_val).await
             }
 
             Node::Code { function, params } => {
@@ -68,6 +68,24 @@ impl Workflow {
             Node::MemoryRead { key } => ctx.memory_read(key),
 
             Node::MemoryWrite { key, value } => ctx.memory_write(key, value.clone()),
+
+            Node::Memory { operation, key, value } => {
+                match operation.as_str() {
+                    "read" => ctx.memory_read(key),
+                    "write" => {
+                        if let Some(v) = value {
+                            ctx.memory_write(key, v.clone())
+                        } else {
+                            NodeResult::Error("Missing value for memory write".into())
+                        }
+                    }
+                    _ => NodeResult::Error("Unknown memory operation".into()),
+                }
+            }
+
+            Node::Reflection { target: _, prompt } => {
+                NodeResult::Text(format!("Reflection: {}", prompt))
+            }
 
             Node::BusPublish { to, data } => ctx.bus_publish(to, data.clone()).await,
 

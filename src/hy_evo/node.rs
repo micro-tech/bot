@@ -9,19 +9,32 @@ pub enum Node {
     /// Call a skill by name (your skills/ folder)
     Skill {
         name: String,
-        params: HashMap<String, serde_json::Value>,
+        args: HashMap<String, serde_json::Value>,
     },
 
     /// Call an LLM (Ollama, Groq, etc.)
     Llm {
         model: String,
-        prompt_template: String,
+        prompt: String,
         params: HashMap<String, serde_json::Value>,
+    },
+
+    /// Memory operations
+    Memory {
+        operation: String, // "read" or "write"
+        key: String,
+        value: Option<serde_json::Value>,
+    },
+
+    /// Reflection step
+    Reflection {
+        target: String,
+        prompt: String,
     },
 
     /// Execute a deterministic Rust function
     Code {
-        function: String, // name of registered function
+        function: String,
         params: HashMap<String, serde_json::Value>,
     },
 
@@ -40,7 +53,7 @@ pub enum Node {
     /// Conditional branching
     Conditional {
         condition: ConditionNode,
-        then_branch: Vec<Uuid>, // node IDs
+        then_branch: Vec<Uuid>,
         else_branch: Vec<Uuid>,
     },
 }
@@ -48,16 +61,11 @@ pub enum Node {
 /// Represents a condition used in Conditional nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConditionNode {
-    /// Compare a memory value
     MemoryEquals {
         key: String,
         value: serde_json::Value,
     },
-
-    /// Check if last LLM output contains text
     OutputContains { text: String },
-
-    /// Custom condition (future‑proof)
     Custom {
         name: String,
         params: HashMap<String, serde_json::Value>,
@@ -65,30 +73,23 @@ pub enum ConditionNode {
 }
 
 /// Result of executing a node.
-/// The CPU will use this to pass data between nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NodeResult {
-    /// Node produced a JSON value
     Value(serde_json::Value),
-
-    /// Node produced a string (LLM output, logs, etc.)
     Text(String),
-
-    /// Node produced no meaningful output
     None,
-
-    /// Node failed (HyEvo uses this for scoring)
     Error(String),
+    Success, // Added for compatibility
 }
 
 /// Metadata for each node instance inside a workflow.
-/// This allows nodes to be uniquely identified and evolved.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeMetadata {
     pub id: Uuid,
     pub description: String,
     pub created_at: u64,
     pub last_modified: u64,
+    pub version: u32,
 }
 
 impl NodeMetadata {
@@ -99,6 +100,7 @@ impl NodeMetadata {
             description: description.into(),
             created_at: now,
             last_modified: now,
+            version: 1,
         }
     }
 }

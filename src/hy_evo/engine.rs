@@ -2,7 +2,7 @@ use crate::hy_evo::genome::WorkflowGenome;
 use crate::hy_evo::node::Node;
 use crate::hy_evo::reflection::{ReflectionLlm, ReflectionRecord};
 use crate::hy_evo::scoring::ExecutionMetrics;
-use rand::Rng;
+use rand::prelude::*;
 
 /// The HyEvo evolution engine.
 /// Maintains a population of workflow genomes and evolves them using LLM feedback.
@@ -80,6 +80,15 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoEngine<L> {
         })
     }
 
+    /// Calculate the average score across the population.
+    pub fn average_score(&self) -> f64 {
+        if self.population.is_empty() {
+            return 0.0;
+        }
+        let sum: f64 = self.population.iter().map(|g| g.score).sum();
+        sum / self.population.len() as f64
+    }
+
     /// Run a full evolution cycle on the population.
     ///
     /// Steps:
@@ -103,8 +112,10 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoEngine<L> {
 
         for _ in 0..offspring_count {
             if parents.len() >= 2 {
-                let a = &parents[rng.random_range(0..parents.len())];
-                let b = &parents[rng.random_range(0..parents.len())];
+                let a_idx = rng.random_range(0..parents.len());
+                let b_idx = rng.random_range(0..parents.len());
+                let a = &parents[a_idx];
+                let b = &parents[b_idx];
 
                 // Crossover
                 let mut child = crate::hy_evo::crossover::CrossoverEngine::new(Default::default())

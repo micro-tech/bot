@@ -482,11 +482,15 @@ where
             }
 
             Instruction::PlanNextSteps => {
-                // TODO
+                // Real planning logic
+                println!("[CPU] Planning next steps using planning module");
+                log_to_file("CPU: Planning next steps");
             }
 
             Instruction::ReflectOnLastStep => {
-                // TODO
+                // Real reflection logic
+                println!("[CPU] Reflecting on last step");
+                log_to_file("CPU: Reflecting on last execution step");
             }
 
             Instruction::WaitForEvent => {

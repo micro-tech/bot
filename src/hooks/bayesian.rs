@@ -15,12 +15,12 @@ pub struct BayesianHook {
 
 impl BayesianHook {
     pub fn new(config: BayesianHookConfig) -> Self {
-        let mut priors = config.priors.clone();
+        let priors = config.priors.clone();
         let reasoner = BayesianReasoner::new(priors);
 
         let mut nb = NaiveBayesMultinomial::new(1.0);
         // Load training data from memory or config
-        nb.fit(&vec![]); // Placeholder
+        nb.fit(&vec![]); // Placeholder - in real use, load from memory
 
         Self { reasoner, nb_classifier: nb }
     }

@@ -5,28 +5,14 @@ use serde::{Deserialize, Serialize};
 /// The CPU will populate this after running a workflow.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ExecutionMetrics {
-    /// Total execution time in milliseconds
     pub latency_ms: u64,
-
-    /// Number of LLM calls made
     pub llm_calls: u32,
-
-    /// Number of skill calls made
     pub skill_calls: u32,
-
-    /// Number of memory reads/writes
     pub memory_ops: u32,
-
-    /// Number of bus publishes
     pub bus_ops: u32,
-
-    /// Number of errors encountered
     pub errors: u32,
-
-    /// Whether the workflow completed successfully
     pub success: bool,
-
-    /// Optional user rating (thumbs up/down)
+    pub success_count: u32, // Added for compatibility
     pub user_score: Option<f32>,
 }
 
