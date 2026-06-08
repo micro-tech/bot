@@ -332,6 +332,7 @@ dependencies = [
  "rustls-pemfile",
  "serde",
  "serde_json",
+ "sha2",
  "similar",
  "sqlx",
  "tokio",
