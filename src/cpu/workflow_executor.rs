@@ -19,7 +19,7 @@ impl WorkflowExecutor {
         genome: &WorkflowGenome,
         ctx: &mut WorkflowContext<'_>,
     ) -> anyhow::Result<crate::hy_evo::scoring::ExecutionMetrics> {
-        let workflow = Workflow::from_genome(genome);
+        let workflow = Workflow::from_genome(genome.clone())?;
         self.execute(&workflow, ctx).await
     }
 
@@ -32,7 +32,7 @@ impl WorkflowExecutor {
         let mut metrics = crate::hy_evo::scoring::ExecutionMetrics::default();
         let start = std::time::Instant::now();
 
-        for (i, node) in workflow.ordered_nodes.iter().enumerate() {
+        for (i, (meta, node)) in workflow.ordered_nodes.iter().enumerate() {
             let result = workflow.execute_node(i, ctx).await;
 
             match result {

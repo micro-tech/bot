@@ -29,7 +29,7 @@ impl GenomeStore {
         sqlx::query(
             "INSERT OR REPLACE INTO genomes (id, data, score, created_at) VALUES (?, ?, ?, ?)",
         )
-        .bind(&genome.id)
+        .bind(genome.id.to_string())
         .bind(data)
         .bind(genome.score)
         .bind(chrono::Utc::now().timestamp())

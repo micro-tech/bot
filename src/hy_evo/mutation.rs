@@ -100,7 +100,7 @@ pub fn mutate_add_node(genome: &mut WorkflowGenome) {
 
     let new_node = Node::Skill {
         name: "noop".to_string(),
-        params: Default::default(),
+        args: Default::default(),
     };
 
     let metadata = NodeMetadata::new("auto-added mutation node");
@@ -159,8 +159,8 @@ pub fn mutate_node_params(genome: &mut WorkflowGenome) {
     metadata.last_modified = chrono::Utc::now().timestamp_millis() as u64;
 
     match node {
-        Node::Skill { params, .. } | Node::Llm { params, .. } | Node::Code { params, .. } => {
-            params.insert(
+        Node::Skill { args, .. } | Node::Llm { params: args, .. } | Node::Code { params: args, .. } => {
+            args.insert(
                 "mutated".to_string(),
                 serde_json::json!(rng.random_range(0..1000u32)),
             );
