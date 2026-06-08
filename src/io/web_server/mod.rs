@@ -250,15 +250,23 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     let bus_forward_task = tokio::spawn(async move {
         let rx = bus_clone.subscribe("web_interface");
         while let Ok(msg) = rx.recv() {
-            let json_msg = json!({
-                "to": msg.to,
-                "from": msg.from,
-                "data": msg.data,
-                "timestamp": msg.timestamp
-            })
-            .to_string();
-
-            let _ = msg_tx_clone.send(json_msg);
+            // If this is already a clean llm_output / user_msg style message, forward as-is
+            if msg.data.contains("\"type\":\"llm_output\"")
+                || msg.data.contains("\"type\":\"user_msg\"")
+                || msg.data.contains("\"type\":\"ollama_response\"")
+            {
+                let _ = msg_tx_clone.send(msg.data.clone());
+            } else {
+                // Otherwise wrap it (config, manifest, etc.)
+                let json_msg = json!({
+                    "to": msg.to,
+                    "from": msg.from,
+                    "data": msg.data,
+                    "timestamp": msg.timestamp
+                })
+                .to_string();
+                let _ = msg_tx_clone.send(json_msg);
+            }
         }
     });
 
