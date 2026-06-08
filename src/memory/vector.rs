@@ -28,11 +28,16 @@ impl VectorMemory {
     }
 
     pub fn search(&self, query: &str, top_k: usize) -> Vec<String> {
+        if self.facts.is_empty() {
+            return Vec::new();
+        }
+
         let query_emb = dummy_embed(query);
-        let mut scores = self.facts.values()
+        let mut scores: Vec<(f32, &String)> = self.facts.values()
             .map(|f| (cosine_sim(&query_emb, &f.embedding), &f.text))
-            .collect::<Vec<_>>();
-        scores.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+            .collect();
+
+        scores.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         scores.into_iter().take(top_k).map(|(_, text)| text.clone()).collect()
     }
 }

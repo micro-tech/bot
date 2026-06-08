@@ -1,4 +1,6 @@
 pub mod bayesian;
+pub mod marketplace;
+pub mod sandbox;
 
 use async_trait::async_trait;
 use serde_json::Value;

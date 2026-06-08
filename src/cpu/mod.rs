@@ -4,6 +4,7 @@ pub mod instructions;
 pub mod interfaces;
 pub mod state;
 pub mod time_scheduler;
+pub mod workflow_executor;
 
 use std::sync::Arc;
 use std::time::Instant;
