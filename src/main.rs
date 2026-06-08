@@ -17,6 +17,7 @@ mod skills;
 mod hooks;
 mod bayesian;
 mod planning;
+mod reasoning;
 
 #[tokio::main]
 async fn main() {
