@@ -1,6 +1,7 @@
 //! Reflection — analyzes past execution and suggests improvements using LLM.
 use crate::cpu::interfaces::LlmInterface;
 use crate::io::ollama::llm::OllamaLlm;
+#[allow(unused_imports)]
 use anyhow::Result;
 use async_trait::async_trait;
 

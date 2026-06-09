@@ -2,10 +2,11 @@
 
 use crate::reasoning::state::ReasoningState;
 use serde_json::json;
-use tracing::{info, debug};
+use tracing::debug;
 
 /// Structured log entry for reasoning events
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ReasoningLogEntry {
     pub correlation_id: String,
     pub phase: String,
@@ -14,8 +15,10 @@ pub struct ReasoningLogEntry {
 }
 
 /// Observability helper for reasoning engine
+#[allow(dead_code)]
 pub struct ReasoningObserver;
 
+#[allow(dead_code)]
 impl ReasoningObserver {
     /// Emit a structured reasoning event to logs
     pub fn log_event(state: &ReasoningState, event: &str, extra: Option<serde_json::Value>) {

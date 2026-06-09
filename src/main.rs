@@ -83,7 +83,7 @@ async fn run_bot() {
                     let payload: serde_json::Value =
                         serde_json::from_str(&msg.data).unwrap_or_default();
                     let text = payload["msg"].as_str().unwrap_or("").to_string();
-                    let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+                    let _correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
 
                     let ui_msg = crate::bus::Message {
                         to: "web_interface".to_string(),

@@ -12,6 +12,8 @@
 //! client is built with explicit connect + total-request timeouts so nothing
 //! ever hangs silently.
 
+#![allow(dead_code)]
+
 use log::{debug, error};
 use log::{info, warn};
 use reqwest::Client;
@@ -741,18 +743,26 @@ mod tests {
 
 pub mod llm {
 
-    use crate::cpu::interfaces::LlmInterface;
-    use crate::hy_evo::genome::WorkflowGenome;
-    use crate::hy_evo::reflection::ReflectionLlm;
-    use crate::hy_evo::scoring::ExecutionMetrics;
-    use crate::io::ollama::Client;
+    #[allow(unused_imports)]
     use crate::utils::now_ms;
     use super::OllamaRouter;
 
+    #[allow(unused_imports)]
     use anyhow::{anyhow, Result};
     use async_trait::async_trait;
+    use reqwest::Client;
     use serde_json::Value;
     use std::sync::Arc;
+
+    // Imports needed for the OllamaLlm implementation
+    #[allow(unused_imports)]
+    use crate::cpu::interfaces::LlmInterface;
+    #[allow(unused_imports)]
+    use crate::hy_evo::reflection::ReflectionLlm;
+    #[allow(unused_imports)]
+    use crate::hy_evo::scoring::ExecutionMetrics;
+    #[allow(unused_imports)]
+    use crate::hy_evo::genome::WorkflowGenome;
 
     /// Ollama-backed LLM client.
     /// Implements `ReflectionLlm` so it can drive HyEvo reflection and evolution.

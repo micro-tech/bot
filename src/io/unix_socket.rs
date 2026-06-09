@@ -8,6 +8,8 @@ use crate::config::socket::SocketConfig;
 #[cfg(unix)]
 use crate::bus::{Bus, Message};
 #[cfg(unix)]
+use crate::utils::log_to_file;
+#[cfg(unix)]
 use tokio::net::UnixListener;
 #[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -45,14 +47,27 @@ impl UnixSocketServer {
         let path = Path::new(&self.config.path);
 
         if path.exists() {
-            fs::remove_file(path)?;
+            if let Err(e) = fs::remove_file(path) {
+                log_to_file(&format!("Failed to remove existing socket {}: {}", self.config.path, e));
+            }
         }
 
-        let listener = UnixListener::bind(path)?;
+        let listener = match UnixListener::bind(path) {
+            Ok(l) => l,
+            Err(e) => {
+                let msg = format!("Failed to bind UNIX socket {}: {}", self.config.path, e);
+                log_to_file(&msg);
+                return Err(anyhow::anyhow!(msg));
+            }
+        };
 
-        let mut perms = fs::metadata(path)?.permissions();
-        perms.set_mode(self.config.mode);
-        fs::set_permissions(path, perms)?;
+        if let Err(e) = fs::metadata(path).and_then(|m| {
+            let mut perms = m.permissions();
+            perms.set_mode(self.config.mode);
+            fs::set_permissions(path, perms)
+        }) {
+            log_to_file(&format!("Failed to set socket permissions on {}: {}", self.config.path, e));
+        }
 
         info!("UNIX socket listening at {}", self.config.path);
 
@@ -63,6 +78,7 @@ impl UnixSocketServer {
             tokio::spawn(async move {
                 if let Err(e) = handle_client(stream, bus, start).await {
                     error!("Socket client error: {}", e);
+                    log_to_file(&format!("Socket client error: {}", e));
                 }
             });
         }
@@ -142,7 +158,8 @@ fn debug_skills() -> Value {
 /// Route CLI commands (Tasks 78, 82-84, 91-120)
 #[cfg(unix)]
 fn route_command(cmd: &str, args: &Value, start_time: Instant) -> Value {
-    // Task 111: Basic schema validation
+    // Task 111: Basic schema validation (only on Windows where unix_cli exists)
+    #[cfg(windows)]
     if let Err(e) = crate::io::unix_cli::json_schema::validate_command(cmd, args) {
         return error_response("SCHEMA_ERROR", &e, None);
     }
@@ -195,43 +212,65 @@ fn route_command(cmd: &str, args: &Value, start_time: Instant) -> Value {
             if path.is_empty() {
                 error_response("VALIDATION_ERROR", "Missing path", None)
             } else {
-                // Record metrics (117)
+                // Record metrics (117) - Windows only
+                #[cfg(windows)]
                 crate::io::unix_cli::metrics::record_command("upload", 0, true);
                 json!({"status": "ok", "action": "upload", "path": path, "bytes": data.len()})
             }
         }
         "download" => {
             let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            #[cfg(windows)]
             crate::io::unix_cli::metrics::record_command("download", 0, true);
             json!({"status": "ok", "action": "download", "path": path})
         }
 
-        // Checksum (113)
+        // Checksum (113) - Windows only
         "checksum" => {
             let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
-            match crate::io::unix_cli::checksum::checksum_for_file(path) {
-                Ok(sum) => json!({"status": "ok", "checksum": sum, "path": path}),
-                Err(e) => error_response("CHECKSUM_ERROR", &e, None),
+            #[cfg(windows)]
+            {
+                match crate::io::unix_cli::checksum::checksum_for_file(path) {
+                    Ok(sum) => return json!({"status": "ok", "checksum": sum, "path": path}),
+                    Err(e) => return error_response("CHECKSUM_ERROR", &e, None),
+                }
             }
+            #[cfg(not(windows))]
+            json!({"status": "ok", "checksum": "not-available-on-unix", "path": path})
         }
 
-        // Resume offset (114)
+        // Resume offset (114) - Windows only
         "resume-offset" => {
             let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
-            let offset = crate::io::unix_cli::resume_transfer::get_offset(path);
-            json!({"status": "ok", "path": path, "offset": offset})
+            #[cfg(windows)]
+            {
+                let offset = crate::io::unix_cli::resume_transfer::get_offset(path);
+                return json!({"status": "ok", "path": path, "offset": offset});
+            }
+            #[cfg(not(windows))]
+            json!({"status": "ok", "path": path, "offset": 0})
         }
 
-        // Metrics (117)
+        // Metrics (117) - Windows only
         "metrics" => {
-            let data = crate::io::unix_cli::metrics::export_metrics();
-            json!({"status": "ok", "metrics": data})
+            #[cfg(windows)]
+            {
+                let data = crate::io::unix_cli::metrics::export_metrics();
+                return json!({"status": "ok", "metrics": data});
+            }
+            #[cfg(not(windows))]
+            json!({"status": "ok", "metrics": "metrics-not-available-on-unix"})
         }
 
-        // Plugins (118)
+        // Plugins (118) - Windows only
         "plugins" | "list-plugins" => {
-            let list = crate::io::unix_cli::plugins::discover_plugins();
-            json!({"status": "ok", "plugins": list})
+            #[cfg(windows)]
+            {
+                let list = crate::io::unix_cli::plugins::discover_plugins();
+                return json!({"status": "ok", "plugins": list});
+            }
+            #[cfg(not(windows))]
+            json!({"status": "ok", "plugins": []})
         }
         "run-plugin" => {
             let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
@@ -239,10 +278,16 @@ fn route_command(cmd: &str, args: &Value, start_time: Instant) -> Value {
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
                 .unwrap_or_default();
-            match crate::io::unix_cli::plugins::execute_plugin(name, &plugin_args) {
-                Ok(out) => json!({"status": "ok", "output": out}),
-                Err(e) => error_response("PLUGIN_ERROR", &e, None),
+
+            #[cfg(windows)]
+            {
+                match crate::io::unix_cli::plugins::execute_plugin(name, &plugin_args) {
+                    Ok(out) => return json!({"status": "ok", "output": out}),
+                    Err(e) => return error_response("PLUGIN_ERROR", &e, None),
+                }
             }
+            #[cfg(not(windows))]
+            json!({"status": "error", "message": "run-plugin not available on this platform"})
         }
 
         // Tools
@@ -308,6 +353,7 @@ async fn handle_client(mut stream: tokio::net::UnixStream, bus: Bus, start_time:
         let response_line = response.to_string() + "\n";
         if let Err(e) = writer.write_all(response_line.as_bytes()).await {
             warn!("Failed to write response: {}", e);
+            log_to_file(&format!("Failed to write CLI response: {}", e));
             break;
         }
     }

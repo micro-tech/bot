@@ -1,4 +1,5 @@
 //! Basic tests for the HyEvo evolution system.
+#[allow(unused_imports)]
 use crate::hy_evo::engine::HyEvoEngine;
 use crate::hy_evo::genome::WorkflowGenome;
 use crate::hy_evo::reflection::ReflectionLlm;

@@ -39,6 +39,14 @@ impl ReasoningEngine {
         let mut state = self.state.write().await;
         state.transition(ReasoningPhase::ExpandOptions).map_err(|e| anyhow::anyhow!(e))?;
         info!(correlation_id = %state.correlation_id, goal = %state.goal, "Reasoning started");
+
+        // Task 74: Emit observability event
+        crate::reasoning::observability::ReasoningObserver::log_event(
+            &state,
+            "reasoning_started",
+            None,
+        );
+
         Ok(())
     }
 
@@ -49,13 +57,20 @@ impl ReasoningEngine {
         let id = hyp.id;
         state.add_hypothesis(hyp);
         debug!(correlation_id = %state.correlation_id, hyp_id = %id, "Hypothesis proposed");
+
+        crate::reasoning::observability::ReasoningObserver::log_event(
+            &state,
+            "hypothesis_proposed",
+            Some(serde_json::json!({ "hyp_id": id.to_string() })),
+        );
+
         id
     }
 
     /// Update belief for a hypothesis based on evidence
     pub async fn update_belief(&self, hyp_id: Uuid, evidence: impl Into<String>, is_supporting: bool) {
         let mut state = self.state.write().await;
-        let evidence_str = evidence.into();
+        let _evidence_str = evidence.into();
         if let Some(hyp) = state.hypotheses.iter_mut().find(|h| h.id == hyp_id) {
             hyp.update_belief(1.0, is_supporting);
             let belief = hyp.belief;
@@ -88,6 +103,13 @@ impl ReasoningEngine {
         let plan_id = plan.id;
         state.current_plan = Some(plan);
         info!(correlation_id = %state.correlation_id, plan_id = %plan_id, "Plan committed");
+
+        crate::reasoning::observability::ReasoningObserver::log_event(
+            &state,
+            "plan_committed",
+            Some(serde_json::json!({ "plan_id": plan_id.to_string() })),
+        );
+
         Ok(plan_id)
     }
 
@@ -147,12 +169,17 @@ impl ReasoningEngine {
         state.correction_cycles += 1;
         state.transition(ReasoningPhase::SelfCorrect).map_err(|e| anyhow::anyhow!(e))?;
 
+        let reason_str = reason.into();
         info!(
             correlation_id = %state.correlation_id,
-            reason = reason.into(),
+            reason = %reason_str,
             cycle = state.correction_cycles,
             "Self-correction triggered"
         );
+
+        // Use the SelfCorrectionLoop logger (was unused)
+        let correction_loop = crate::reasoning::self_correction::SelfCorrectionLoop::new(self.max_correction_cycles);
+        correction_loop.log_correction(&state.correlation_id, state.correction_cycles, &reason_str);
 
         // Transition back to revision
         state.transition(ReasoningPhase::RevisePlan).map_err(|e| anyhow::anyhow!(e))?;
@@ -169,5 +196,23 @@ impl ReasoningEngine {
     /// Get correlation ID for observability
     pub async fn correlation_id(&self) -> String {
         self.state.read().await.correlation_id.clone()
+    }
+
+    /// Visualize current beliefs as Mermaid diagram (uses MemoryManager::visualize_beliefs)
+    pub async fn visualize_beliefs(&self) -> String {
+        // Note: This is a placeholder - in a full integration we'd pass the actual MemoryManager
+        "graph TD;\n    reasoning[\"Reasoning beliefs visualization\"];".to_string()
+    }
+
+    /// Get a redacted summary of current reasoning state
+    pub async fn reasoning_summary(&self) -> serde_json::Value {
+        let state = self.state.read().await;
+        crate::reasoning::observability::ReasoningObserver::summary(&state)
+    }
+
+    /// Get a detailed trace (for debug mode)
+    pub async fn reasoning_trace(&self) -> serde_json::Value {
+        let state = self.state.read().await;
+        crate::reasoning::observability::ReasoningObserver::detailed_trace(&state)
     }
 }

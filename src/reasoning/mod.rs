@@ -9,6 +9,9 @@ pub mod planning;
 pub mod self_correction;
 pub mod observability;
 
+#[allow(unused_imports)]
 pub use state::{ReasoningState, ReasoningPhase, Hypothesis, PlanStep};
+#[allow(unused_imports)]
 pub use engine::ReasoningEngine;
+#[allow(unused_imports)]
 pub use planning::ExecutionPlan;

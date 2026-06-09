@@ -5,7 +5,6 @@
 use crate::hy_evo::genome::WorkflowGenome;
 use crate::hy_evo::node::{Node, NodeMetadata};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 pub struct WorkflowTemplates;
 
