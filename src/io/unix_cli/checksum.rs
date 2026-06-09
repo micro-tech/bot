@@ -28,3 +28,23 @@ pub fn checksum_for_file(path: &str) -> Result<String, String> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sha256_known_value() {
+        let data = b"hello";
+        let hash = sha256(data);
+        assert_eq!(hash, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+    }
+
+    #[test]
+    fn test_verify_checksum() {
+        let data = b"test";
+        let hash = sha256(data);
+        assert!(verify_checksum(data, &hash));
+        assert!(!verify_checksum(data, "wronghash"));
+    }
+}

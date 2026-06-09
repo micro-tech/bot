@@ -32,3 +32,17 @@ pub fn clear_resume(path: &str) {
         log_to_file(&format!("Resume state cleared for {}", path));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resume_offset_roundtrip() {
+        init_resume_state();
+        set_offset("/tmp/test.bin", 12345);
+        assert_eq!(get_offset("/tmp/test.bin"), 12345);
+        clear_resume("/tmp/test.bin");
+        assert_eq!(get_offset("/tmp/test.bin"), 0);
+    }
+}

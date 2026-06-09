@@ -10,8 +10,6 @@ use std::collections::VecDeque;
 
 use crate::cpu::interfaces::MemoryInterface;
 use crate::hy_evo::node::NodeResult;
-use crate::memory::episodic::EpisodicMemory;
-use crate::memory::vector::VectorMemory;
 
 /// Short-term working memory
 pub struct MemoryHandle {

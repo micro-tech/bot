@@ -11,7 +11,6 @@ use axum::{
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
 use log::info;
-use rcgen::{ /* Certificate, CertificateParams, DistinguishedName */ };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::fs;

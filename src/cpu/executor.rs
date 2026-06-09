@@ -3,10 +3,8 @@
 use crate::cpu::instructions::Instruction;
 use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
 use crate::cpu::state::AgentState;
-// use crate::error;
 use crate::hy_evo::NodeResult;
 use crate::utils::log_to_file;
-use async_trait::async_trait;
 use log::{debug, error};
 use serde_json::Value;
 use std::sync::Arc;

@@ -1,5 +1,4 @@
 //! A2A Communication Module - Real Implementation with error handling
-use std::sync::Arc;
 use crate::bus::{Bus, Message};
 use log::{info, error};
 

@@ -6,21 +6,16 @@ use std::time::Instant;
 use crate::bus::{Bus, Message};
 use crate::cpu::executor::{CpuExecutor, CpuExecutorImpl};
 use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
-use crate::cpu::state::AgentState;
+use crate::cpu::state::{AgentState, Instruction};
 use crate::hy_evo::integration::HyEvoIntegration;
 use crate::hy_evo::reflection::ReflectionLlm;
 use crate::hy_evo::scoring::ExecutionMetrics;
 use crate::llm::LlmTarget;
 use crate::memory::MemoryManager;
-use crate::utils::now_ms;
+use crate::utils::{log_to_file, now_ms};
 
 use log::{debug, error};
 use serde_json::Value;
-
-// If you have an Instruction enum somewhere else, import it:
-use crate::cpu::state::Instruction; // adjust path if needed
-use crate::utils::log_to_file; // adjust path if needed
-use log::{debug, error};
 
 /// Main CPU struct, generic over the LLM type.
 pub struct Cpu<L>

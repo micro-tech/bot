@@ -1,7 +1,6 @@
 //! A/B Testing Framework (Task 44)
 
 use crate::hy_evo::genome::WorkflowGenome;
-use rand::Rng;
 
 pub struct ABTest {
     pub name: String,

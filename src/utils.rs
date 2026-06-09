@@ -39,7 +39,7 @@ fn error_log_path() -> PathBuf {
 /// Logs a message to the error log file with a timestamp.
 /// The log is human-readable markdown format.
 pub fn log_to_file(message: &str) {
-    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let timestamp = Local::now().format("%Y-%m-%d %I:%M:%S %p").to_string();
     let log_entry = format!(
         "[{}] {}
 ",

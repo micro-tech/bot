@@ -35,14 +35,23 @@ pub mod visualization;
 pub mod workflow;
 
 // Re‑exports for convenience
+#[allow(unused_imports)]
 pub use crossover::*;
+#[allow(unused_imports)]
 pub use engine::*;
+#[allow(unused_imports)]
 pub use genome::*;
+#[allow(unused_imports)]
 pub use integration::*;
+#[allow(unused_imports)]
 pub use mutation::*;
+#[allow(unused_imports)]
 pub use node::*;
+#[allow(unused_imports)]
 pub use reflection::*;
+#[allow(unused_imports)]
 pub use scoring::*;
+#[allow(unused_imports)]
 pub use workflow::*;
 
 /// HyEvo version identifier

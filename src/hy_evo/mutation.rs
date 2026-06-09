@@ -129,9 +129,9 @@ pub fn mutate_remove_node(genome: &mut WorkflowGenome) {
     genome.edges.retain(|(from, to)| *from != idx && *to != idx);
 
     // Reindex edges
-    for (from, to) in &mut genome.edges {
-        if *from > idx {
-            *from -= 1;
+    for (_from, to) in &mut genome.edges {
+        if *_from > idx {
+            *_from -= 1;
         }
         if *to > idx {
             *to -= 1;

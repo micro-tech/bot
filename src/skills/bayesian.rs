@@ -22,7 +22,7 @@ impl BayesianSkill {
             let parts: Vec<&str> = command.splitn(3, ' ').collect();
             if parts.len() == 3 {
                 let evidence = parts[1].to_string();
-                let lik_str = parts[2];
+                let _lik_str = parts[2];
                 // Parse lik map, simple mock
                 let mut lik = HashMap::new();
                 lik.insert(evidence.clone(), 0.8);

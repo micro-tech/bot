@@ -1,4 +1,6 @@
 // src/cpu/mod.rs
+#![allow(unused_imports)]
+
 pub mod executor;
 pub mod instructions;
 pub mod interfaces;
@@ -10,11 +12,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::bus::{Bus, Message};
-use crate::cpu::executor::CpuExecutor;
-use crate::cpu::instructions::{CpuEvent, CpuEventKind, Instruction};
+use crate::cpu::instructions::Instruction;
+#[allow(unused_imports)]
 use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
 use crate::cpu::state::AgentState;
-// use crate::error;
 use log::{debug, error};
 
 use crate::hy_evo::integration::{CpuExecutor as HyEvoCpuExecutor, HyEvoIntegration};

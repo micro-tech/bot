@@ -94,8 +94,11 @@ impl Workflow {
                 then_branch,
                 else_branch,
             } => {
-                ctx.execute_conditional(condition, then_branch, else_branch)
-                    .await
+                #[allow(unused_variables)]
+                {
+                    ctx.execute_conditional(condition, then_branch, else_branch)
+                        .await
+                }
             }
         }
     }
