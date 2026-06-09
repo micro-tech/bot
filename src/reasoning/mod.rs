@@ -3,6 +3,8 @@
 //! Implements tasks 68-74: Core state, Bayesian integration, planning, memory/skill
 //! integration, self-correction, and observability.
 
+#![allow(dead_code)]
+
 pub mod state;
 pub mod engine;
 pub mod planning;

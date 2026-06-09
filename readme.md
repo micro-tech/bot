@@ -26,6 +26,7 @@ It provides a central bus, execution engine, memory system, plugin architecture,
 - **[Metrics Collection](docs/metrics.md)** — Command usage and performance tracking
 - **[Human-Readable Logging](docs/logging.md)** — 12-hour timestamped Markdown logs (`error_log.md`, etc.)
 - **[Configuration](docs/configuration.md)** — All settings via `config.toml`
+- **Reasoning Engine** — Hypothesis → Plan → Execute loop with self-correction, pause/resume, metrics, and bus control
 
 ### Integration
 - **Ollama Integration** — Direct API access with retry/backoff logic
@@ -100,6 +101,7 @@ All feature documentation lives in the `docs/` folder:
 |-------|------|
 | Architecture Overview | [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md) |
 | Data Flows | [flow_map.md](flow_map.md) |
+| Reasoning Engine | [docs/reasoning.md](docs/reasoning.md) *(new)* |
 | Configuration | [docs/configuration.md](docs/configuration.md) |
 | CLI Commands | [docs/cli_commands.md](docs/cli_commands.md) |
 | UNIX Socket | [docs/unix_socket.md](docs/unix_socket.md) |

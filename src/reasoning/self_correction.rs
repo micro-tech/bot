@@ -1,5 +1,7 @@
 //! Self-correction and error recovery (Task 73)
 
+#![allow(dead_code)]
+
 use crate::reasoning::state::ReasoningState;
 use tracing::info;
 

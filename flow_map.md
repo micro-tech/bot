@@ -144,6 +144,43 @@ graph LR
     style G fill:#ff9,stroke:#f66
 ```
 
+## Reasoning Engine Flow
+**Purpose**: Provides a first-class hypothesis → plan → execute reasoning loop with self-correction, observability, and bus control.
+
+Text Flow:
+1. **Startup**: CPU auto-starts `ReasoningEngine` on a default goal every 50 ticks if none exists.
+2. **Cycle Execution**: Every 20 ticks (unless paused), `run_reasoning_cycle()` proposes hypotheses, creates plans, and executes steps.
+3. **Control**: `pause_reasoning` / `resume_reasoning` gates cycles. `change_goal`, `reset_reasoning`, and `force_next_reasoning_step` allow external control.
+4. **Observability**: `reasoning_metrics`, `reasoning_health_check`, and `reasoning_status` are published to the bus every 40 ticks.
+5. **Bus Commands**: `reasoning_command` messages (`pause`/`resume`/`reset`/`force_step`) are handled in `handle_bus_message`.
+6. **Self-Healing**: `self_repair()` checks reasoning health and can auto-reset unhealthy engines.
+7. **Output**: Metrics and state are published to `web_interface` for UI display.
+
+Mermaid Diagram:
+```mermaid
+graph TD
+    A[Heartbeat every 20 ticks] -->|!paused| B[CPU: run_reasoning_cycle]
+    B --> C[Propose Hypothesis]
+    C --> D[Create Plan]
+    D --> E[Execute Next Step]
+    E --> F{More steps?}
+    F -->|Yes| B
+    F -->|No| G[Log completion]
+    
+    H[Bus: reasoning_command] --> I[handle_bus_message]
+    I --> J{pause/resume/reset/force}
+    J --> K[Update reasoning_paused flag]
+    
+    L[Every 40 ticks] --> M[reasoning_metrics + health]
+    M --> N[Bus.publish to web_interface]
+    
+    O[self_repair every 100 ticks] --> P[reasoning_health_check]
+    P -->|unhealthy| Q[Optional auto-reset]
+    
+    style B fill:#9f9,stroke:#3a3
+    style N fill:#ff9,stroke:#f66
+```
+
 **HyEvo Node Execution Sub-Flow**:
 - Skill Node: `params: HashMap -> to_value()` -> `execute_skill(name, &Value)`.
 - LLM Node: Similar, with model/prompt.

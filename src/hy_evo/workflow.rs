@@ -145,9 +145,9 @@ impl<'a> WorkflowContext<'a> {
 
     pub async fn execute_conditional(
         &mut self,
-        condition: &super::node::ConditionNode,
-        then_branch: &Vec<Uuid>,
-        else_branch: &Vec<Uuid>,
+        _condition: &super::node::ConditionNode,
+        _then_branch: &Vec<Uuid>,
+        _else_branch: &Vec<Uuid>,
     ) -> NodeResult {
         // Placeholder — real logic will be added in integration.rs
         NodeResult::None
@@ -159,7 +159,7 @@ fn topological_sort(genome: &WorkflowGenome) -> anyhow::Result<Vec<usize>> {
     let node_count = genome.nodes.len();
     let mut indegree = vec![0usize; node_count];
 
-    for (from, to) in &genome.edges {
+    for (_from, to) in &genome.edges {
         indegree[*to] += 1;
     }
 

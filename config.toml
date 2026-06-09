@@ -51,3 +51,11 @@ interval_seconds = 300
 [ollama_keepalive]
 preload       = true
 interval_secs = 240
+
+# --- REASONING ENGINE CONFIG ---
+[reasoning]
+enabled = true
+default_goal = "Improve agent reliability, safety, and self-correction"
+cycle_interval_ticks = 20
+metrics_interval_ticks = 40
+health_check_interval_ticks = 100

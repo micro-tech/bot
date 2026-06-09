@@ -4,11 +4,13 @@ use std::fs;
 use similar::TextDiff;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SystemManifest {
     pub raw: String,
     pub sections: HashMap<String, String>,
 }
 
+#[allow(dead_code)]
 impl SystemManifest {
     pub fn load(path: &str) -> std::io::Result<Self> {
         let raw = fs::read_to_string(path)?;

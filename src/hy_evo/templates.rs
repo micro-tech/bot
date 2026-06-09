@@ -11,7 +11,7 @@ pub struct WorkflowTemplates;
 impl WorkflowTemplates {
     /// Simple chat + memory workflow
     pub fn chat_with_memory() -> WorkflowGenome {
-        let now = chrono::Utc::now().timestamp_millis() as u64;
+        let _now = chrono::Utc::now().timestamp_millis() as u64;
 
         let mut genome = WorkflowGenome::new();
 

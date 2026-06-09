@@ -12,11 +12,12 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::bus::{Bus, Message};
+use crate::reasoning::engine::ReasoningEngine;
 use crate::cpu::instructions::Instruction;
 #[allow(unused_imports)]
 use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
 use crate::cpu::state::AgentState;
-use log::{debug, error};
+use log::{debug, error, warn};
 
 use crate::hy_evo::integration::{CpuExecutor as HyEvoCpuExecutor, HyEvoIntegration};
 use crate::hy_evo::reflection::ReflectionLlm;
@@ -43,6 +44,8 @@ where
     pub hyevo: HyEvoIntegration<L>,
     pub manifest: SystemManifest,
     pub personality: String,
+    pub reasoning: Option<ReasoningEngine>,
+    pub reasoning_config: crate::config::reasoning::ReasoningConfig,
 }
 
 impl<L> Cpu<L>
@@ -56,6 +59,7 @@ where
         bus: Arc<Bus>,
         hyevo: HyEvoIntegration<L>,
         manifest_path: &str,
+        reasoning_config: crate::config::reasoning::ReasoningConfig,
     ) -> std::io::Result<Self> {
         // Load the system manifest from disk
         let manifest = SystemManifest::load(manifest_path)?;
@@ -69,6 +73,181 @@ where
             hyevo,
             manifest,
             personality: "neutral".to_string(),
+            reasoning: None,
+            reasoning_config,
+        })
+    }
+
+    /// Initialize or replace the reasoning engine with a new goal.
+    pub async fn start_reasoning(&mut self, goal: &str) -> anyhow::Result<()> {
+        let engine = ReasoningEngine::new(goal.to_string(), (*self.bus).clone());
+        engine.start().await?;
+        self.reasoning = Some(engine);
+        log_to_file(&format!("ReasoningEngine started with goal: {}", goal));
+        Ok(())
+    }
+
+    /// Stop and clear the current reasoning engine
+    pub fn stop_reasoning(&mut self) {
+        if self.reasoning.take().is_some() {
+            log_to_file("ReasoningEngine stopped and cleared");
+        }
+    }
+
+    /// Change the current reasoning goal (restarts the engine with a new goal)
+    pub async fn change_goal(&mut self, new_goal: &str) -> anyhow::Result<()> {
+        self.stop_reasoning();
+        self.start_reasoning(new_goal).await?;
+        log_to_file(&format!("Reasoning goal changed to: {}", new_goal));
+        Ok(())
+    }
+
+    /// Get current reasoning metrics
+    pub async fn reasoning_metrics(&self) -> serde_json::Value {
+        match &self.reasoning {
+            Some(engine) => {
+                let state = engine.get_state().await;
+                serde_json::json!({
+                    "goal": state.goal,
+                    "phase": format!("{:?}", state.phase),
+                    "hypotheses_count": state.hypotheses.len(),
+                    "correction_cycles": state.correction_cycles,
+                    "has_plan": state.current_plan.is_some(),
+                    "plan_steps": state.current_plan.as_ref().map(|p| p.steps.len()).unwrap_or(0),
+                    "tick": self.state.tick_count
+                })
+            }
+            None => serde_json::json!({
+                "status": "no_reasoning_engine"
+            }),
+        }
+    }
+
+    /// Simple reasoning health check — returns whether the engine appears to be making progress
+    pub async fn reasoning_health_check(&self) -> serde_json::Value {
+        match &self.reasoning {
+            Some(engine) => {
+                let state = engine.get_state().await;
+                let has_progress = !state.hypotheses.is_empty() || state.current_plan.is_some();
+                let is_active = !state.hypotheses.is_empty() || state.current_plan.is_some();
+
+                serde_json::json!({
+                    "healthy": has_progress || is_active,
+                    "has_hypotheses": !state.hypotheses.is_empty(),
+                    "has_plan": state.current_plan.is_some(),
+                    "phase": format!("{:?}", state.phase),
+                    "correction_cycles": state.correction_cycles,
+                    "message": if has_progress || is_active {
+                        "Reasoning engine is active and making progress"
+                    } else {
+                        "Reasoning engine started but no hypotheses or plan yet"
+                    }
+                })
+            }
+            None => serde_json::json!({
+                "healthy": false,
+                "status": "no_reasoning_engine",
+                "message": "No reasoning engine is currently running"
+            }),
+        }
+    }
+
+    /// Reset reasoning state (stop + clear goal)
+    pub fn reset_reasoning(&mut self) {
+        self.stop_reasoning();
+        log_to_file("Reasoning state fully reset");
+    }
+
+    /// Run one full reasoning cycle (hypothesis → plan → execute).
+    /// Returns true if more steps remain, false if the plan completed or failed.
+    pub async fn run_reasoning_cycle(&mut self) -> anyhow::Result<bool> {
+        let engine = match &self.reasoning {
+            Some(e) => e,
+            None => {
+                self.start_reasoning("Improve agent reliability and self-correction").await?;
+                self.reasoning.as_ref().unwrap()
+            }
+        };
+
+        // If no hypotheses yet, propose one
+        let state = engine.get_state().await;
+        if state.hypotheses.is_empty() {
+            engine.propose_hypothesis("Use self-correction loops to recover from failures").await;
+        }
+
+        // Create plan if we don't have one
+        if state.current_plan.is_none() {
+            engine.create_plan().await?;
+        }
+
+        // Execute next step
+        let more_steps = engine.execute_next_step().await?;
+        Ok(more_steps)
+    }
+
+    /// Get a redacted summary of the current reasoning state
+    pub async fn reasoning_summary(&self) -> serde_json::Value {
+        match &self.reasoning {
+            Some(engine) => engine.reasoning_summary().await,
+            None => serde_json::json!({ "status": "no_reasoning_engine" }),
+        }
+    }
+
+    /// Pause the reasoning engine (prevents cycles from running)
+    pub fn pause_reasoning(&mut self) {
+        self.state.reasoning_paused = true;
+        log_to_file("Reasoning engine paused");
+    }
+
+    /// Resume the reasoning engine
+    pub fn resume_reasoning(&mut self) {
+        self.state.reasoning_paused = false;
+        log_to_file("Reasoning engine resumed");
+    }
+
+    // -------------------------------------------------------------------------
+// Reasoning Engine API
+// -------------------------------------------------------------------------
+//
+// Public methods for controlling and observing the ReasoningEngine:
+//
+// Control:
+//   - start_reasoning(goal)
+//   - stop_reasoning()
+//   - reset_reasoning()
+//   - change_goal(new_goal)
+//   - pause_reasoning()
+//   - resume_reasoning()
+//   - force_next_reasoning_step()   [manual trigger]
+//
+// Observation:
+//   - reasoning_metrics()
+//   - reasoning_health_check()
+//   - reasoning_status()            [combined view]
+//   - reasoning_summary()
+//   - reasoning_trace()
+//
+// Bus integration:
+//   - reasoning_command messages (pause/resume/reset/force_step)
+//   - Periodic publishing of metrics and state
+// -------------------------------------------------------------------------
+
+    /// Check if reasoning is currently paused
+    pub fn is_reasoning_paused(&self) -> bool {
+        self.state.reasoning_paused
+    }
+
+    /// Combined reasoning status (pause state + key metrics + health)
+    pub async fn reasoning_status(&self) -> serde_json::Value {
+        let paused = self.is_reasoning_paused();
+        let metrics = self.reasoning_metrics().await;
+        let health = self.reasoning_health_check().await;
+
+        serde_json::json!({
+            "paused": paused,
+            "metrics": metrics,
+            "health": health,
+            "tick": self.state.tick_count
         })
     }
 
@@ -221,6 +400,22 @@ where
                 .context
                 .truncate(self.memory.working.max_len);
             log_to_file("Repaired: truncated working memory");
+        }
+
+        // Reasoning engine health check
+        if self.reasoning.is_some() {
+            let health = self.reasoning_health_check().await;
+            if !health["healthy"].as_bool().unwrap_or(true) {
+                log_to_file(&format!(
+                    "Reasoning engine unhealthy: {}",
+                    health["message"].as_str().unwrap_or("unknown")
+                ));
+                // Optionally auto-reset if stuck
+                if self.state.tick_count % 200 == 0 {
+                    self.reset_reasoning();
+                    log_to_file("Auto-reset reasoning engine due to poor health");
+                }
+            }
         }
 
         // Check manifest integrity (placeholder)
@@ -405,6 +600,19 @@ where
                     }
                 }
 
+                "reasoning_command" => {
+                    let cmd = payload["command"].as_str().unwrap_or("");
+                    match cmd {
+                        "pause" => self.pause_reasoning(),
+                        "resume" => self.resume_reasoning(),
+                        "reset" => self.reset_reasoning(),
+                        "force_step" => {
+                            log_to_file("force_step requested via bus (not yet supported in sync handler)");
+                        }
+                        _ => log_to_file(&format!("Unknown reasoning_command: {}", cmd)),
+                    }
+                }
+
                 "skill_request" => {
                     // Direct skill execution request — CPU runs the skill synchronously
                     // and publishes the result back to web_interface.
@@ -478,7 +686,7 @@ where
                 }
             }
 
-            Instruction::ExecuteHooks { phase } => {
+            Instruction::ExecuteHooks { phase: _ } => {
                 // If you have hooks, wire them here
             }
 
@@ -529,6 +737,49 @@ where
         // Self-repair every 100 ticks
         if self.state.tick_count % 100 == 0 {
             self.self_repair().await;
+        }
+
+        // Auto-start reasoning engine if we don't have one
+        if self.state.tick_count % 50 == 0 && self.reasoning.is_none() && self.reasoning_config.is_enabled() {
+            if let Err(e) = self.start_reasoning(&self.reasoning_config.default_goal()).await {
+                warn!("Failed to start reasoning engine: {}", e);
+            }
+        }
+
+        // Run reasoning cycle every N ticks (respect pause flag)
+        if !self.state.reasoning_paused
+            && self.state.tick_count % self.reasoning_config.cycle_interval() == 0
+            && self.reasoning.is_some()
+            && self.reasoning_config.is_enabled()
+        {
+            match self.run_reasoning_cycle().await {
+                Ok(more) => {
+                    if !more {
+                        log_to_file("Reasoning plan completed or exhausted");
+                    }
+                }
+                Err(e) => warn!("Reasoning cycle error: {}", e),
+            }
+        }
+
+        // Publish reasoning metrics to the bus every N ticks
+        if self.state.tick_count % self.reasoning_config.metrics_interval() == 0 && self.reasoning.is_some() {
+            let metrics = self.reasoning_metrics().await;
+
+            let msg = Message {
+                to: "web_interface".to_string(),
+                from: "cpu".to_string(),
+                data: serde_json::json!({
+                    "type": "reasoning_metrics",
+                    "metrics": metrics,
+                    "tick": self.state.tick_count
+                }).to_string(),
+                timestamp: now_ms(),
+            };
+
+            if let Err(e) = self.bus.publish(msg) {
+                warn!("Failed to publish reasoning metrics: {}", e);
+            }
         }
 
         if self.state.tick_count % 10 == 0 {

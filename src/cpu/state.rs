@@ -34,6 +34,9 @@ pub struct AgentState {
 
     // Last error message
     pub error: Option<String>,
+
+    // Reasoning control
+    pub reasoning_paused: bool,
 }
 
 impl AgentState {
@@ -56,6 +59,7 @@ impl AgentState {
             working_memory_key: None,
 
             error: None,
+            reasoning_paused: false,
         }
     }
 
