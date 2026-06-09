@@ -3,11 +3,9 @@ use reqwest::Client;
 use serde_json::{json, Value};
 
 use super::llm_trait::OllamaLlm;
+use crate::cpu::interfaces::LlmInterface;
 use crate::hy_evo::node::NodeResult;
 use crate::io::ollama::build_client;
-use crate::cpu::interfaces::LlmInterface;
-use crate::hy_evo::reflection::ReflectionLlm;
-use crate::hy_evo::scoring::ExecutionMetrics;
 
 /// Concrete implementation of `OllamaLlm` for the Ollama backend.
 pub struct OllamaLlmImpl {
@@ -25,42 +23,6 @@ impl OllamaLlmImpl {
         }
     }
 }
-
-
-// --------------------------- Tests ---------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_ollama_llm_impl_model_name() {
-        let llm = OllamaLlmImpl::new("http://localhost:11434", "llama3.2");
-        assert_eq!(llm.model_name(), "llama3.2");
-    }
-
-    // These tests will only pass if Ollama is running locally with the model.
-    // They are ignored by default.
-    #[tokio::test]
-    #[ignore]
-    async fn test_generate_live() {
-        let llm = OllamaLlmImpl::new("http://localhost:11434", "llama3.2");
-        let result = llm.generate("Say hello in one word.").await;
-        assert!(result.is_ok());
-        let text = result.unwrap();
-        assert!(!text.is_empty());
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_chat_live() {
-        let llm = OllamaLlmImpl::new("http://localhost:11434", "llama3.2");
-        let messages = vec![json!({"role": "user", "content": "What is 2+2?"})];
-        let result = llm.chat(&messages).await;
-        assert!(result.is_ok());
-    }
-}
-
 
 #[async_trait]
 impl OllamaLlm for OllamaLlmImpl {
@@ -113,8 +75,6 @@ impl OllamaLlm for OllamaLlmImpl {
         messages: &[Value],
         tools_json: Value,
     ) -> anyhow::Result<String> {
-        // Clean implementation that does NOT require a Bus.
-        // This is a simplified version of the tool loop without bus publishing.
         let mut history = messages.to_vec();
         let max_tool_rounds = 10usize;
         let mut tool_rounds = 0usize;
@@ -173,41 +133,6 @@ impl OllamaLlm for OllamaLlmImpl {
     }
 }
 
-// --------------------------- Tests ---------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_ollama_llm_impl_model_name() {
-        let llm = OllamaLlmImpl::new("http://localhost:11434", "llama3.2");
-        assert_eq!(llm.model_name(), "llama3.2");
-    }
-
-    // These tests will only pass if Ollama is running locally with the model.
-    // They are ignored by default.
-    #[tokio::test]
-    #[ignore]
-    async fn test_generate_live() {
-        let llm = OllamaLlmImpl::new("http://localhost:11434", "llama3.2");
-        let result = llm.generate("Say hello in one word.").await;
-        assert!(result.is_ok());
-        let text = result.unwrap();
-        assert!(!text.is_empty());
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_chat_live() {
-        let llm = OllamaLlmImpl::new("http://localhost:11434", "llama3.2");
-        let messages = vec![json!({"role": "user", "content": "What is 2+2?"})];
-        let result = llm.chat(&messages).await;
-        assert!(result.is_ok());
-    }
-}
-
-
 // Implement LlmInterface so OllamaLlmImpl can be used with Cpu<L>
 #[async_trait]
 impl LlmInterface for OllamaLlmImpl {
@@ -227,7 +152,6 @@ impl LlmInterface for OllamaLlmImpl {
     }
 }
 
-
 // --------------------------- Tests ---------------------------
 
 #[cfg(test)]
@@ -240,8 +164,6 @@ mod tests {
         assert_eq!(llm.model_name(), "llama3.2");
     }
 
-    // These tests will only pass if Ollama is running locally with the model.
-    // They are ignored by default.
     #[tokio::test]
     #[ignore]
     async fn test_generate_live() {
@@ -261,5 +183,3 @@ mod tests {
         assert!(result.is_ok());
     }
 }
-
-
