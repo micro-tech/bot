@@ -3,6 +3,8 @@
 //! Core reasoning engine that manages state, integrates with Bayesian reasoning,
 //! memory, and skill arbitration, supports self-correction, and provides observability.
 
+#![allow(dead_code)]
+
 use crate::reasoning::state::{ReasoningState, ReasoningPhase, Hypothesis, Plan, PlanStep};
 use crate::bus::Bus;
 use anyhow::Result;

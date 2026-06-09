@@ -8,8 +8,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-### Changed — Dependency Updates
-- Upgraded `tokio` from `1.47.5` to `1.52.3` for improved stability and performance.
+### Added — ReasoningEngine Integration (B1–B14)
+
+**Author:** AI Assistant — triggered by user "Cobble"
+
+Completed full integration of the `ReasoningEngine` into the `Cpu<L>`.
+
+#### New Reasoning Features
+
+- **Core reasoning loop** (`run_reasoning_cycle`): hypothesis → plan → execute with self-correction.
+- **Lifecycle control**: `start_reasoning`, `stop_reasoning`, `reset_reasoning`, `change_goal`.
+- **Observability**:
+  - `reasoning_metrics()` — goal, phase, hypothesis count, plan steps, correction cycles.
+  - `reasoning_health_check()` — progress detection.
+  - `reasoning_status()` — combined paused + metrics + health snapshot.
+  - `reasoning_summary()` and `reasoning_trace()` for debug/UI.
+- **Pause/Resume**: `pause_reasoning()`, `resume_reasoning()`, `is_reasoning_paused()`.
+- **Manual trigger**: `force_next_reasoning_step()`.
+- **Bus integration**:
+  - Periodic publishing of `reasoning_metrics` every 40 ticks.
+  - `reasoning_command` messages (`pause`/`resume`/`reset`/`force_step`).
+- **Self-healing**: Reasoning health is now checked inside `self_repair()` with optional auto-reset.
+- **Heartbeat integration**: Auto-starts reasoning engine; runs cycles every 20 ticks (respecting pause flag).
+
+#### Files Changed
+
+- `src/cpu/mod.rs` — Added all reasoning control + observation methods.
+- `src/cpu/state.rs` — Added `reasoning_paused` flag to `AgentState`.
+- `src/reasoning/engine.rs` — Core engine (already present).
+
+#### Documentation
+
+- Added Reasoning API summary comment block in `cpu/mod.rs`.
+- Updated `CHANGELOG.md`, `readme.md`, and `flow_map.md`.
+
+**Result**: The agent now has a first-class, observable, controllable reasoning layer that can be driven from the bus or internally via heartbeat.
 
 ---
 

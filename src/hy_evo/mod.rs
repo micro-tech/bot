@@ -11,6 +11,8 @@
 //! - Evolution engine
 //! - CPU integration helpers
 
+#![allow(dead_code)]
+
 pub mod ab_testing;
 pub mod chaos;
 pub mod crossover;

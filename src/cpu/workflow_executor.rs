@@ -32,7 +32,7 @@ impl WorkflowExecutor {
         let mut metrics = crate::hy_evo::scoring::ExecutionMetrics::default();
         let start = std::time::Instant::now();
 
-        for (i, (meta, node)) in workflow.ordered_nodes.iter().enumerate() {
+        for (i, (_meta, node)) in workflow.ordered_nodes.iter().enumerate() {
             let result = workflow.execute_node(i, ctx).await;
 
             match result {
