@@ -27,6 +27,12 @@ use serde_json::json;
 use crate::utils::log_to_file;
 use crate::utils::now_ms;
 
+// OllamaLlm trait (step 1)
+pub mod llm_trait;
+
+// OllamaLlm implementation (step 2)
+pub mod llm_impl;
+
 // ── OllamaRouter ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
