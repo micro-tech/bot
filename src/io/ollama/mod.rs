@@ -23,9 +23,9 @@ use std::time::Duration;
 
 use crate::bus::Bus;
 use crate::bus::Message;
-use serde_json::json;
 use crate::utils::log_to_file;
 use crate::utils::now_ms;
+use serde_json::json;
 
 // OllamaLlm trait (step 1)
 pub mod llm_trait;
@@ -749,12 +749,12 @@ mod tests {
 
 pub mod llm {
 
+    use super::OllamaRouter;
     #[allow(unused_imports)]
     use crate::utils::now_ms;
-    use super::OllamaRouter;
 
     #[allow(unused_imports)]
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
     use async_trait::async_trait;
     use reqwest::Client;
     use serde_json::Value;
@@ -764,11 +764,11 @@ pub mod llm {
     #[allow(unused_imports)]
     use crate::cpu::interfaces::LlmInterface;
     #[allow(unused_imports)]
+    use crate::hy_evo::genome::WorkflowGenome;
+    #[allow(unused_imports)]
     use crate::hy_evo::reflection::ReflectionLlm;
     #[allow(unused_imports)]
     use crate::hy_evo::scoring::ExecutionMetrics;
-    #[allow(unused_imports)]
-    use crate::hy_evo::genome::WorkflowGenome;
 
     /// Ollama-backed LLM client.
     /// Implements `ReflectionLlm` so it can drive HyEvo reflection and evolution.
@@ -874,9 +874,9 @@ pub mod llm {
     impl LlmInterface for OllamaLlm {
         async fn call(
             &self,
-            model: &str,
+            _model: &str,
             prompt: &str,
-            params: &Value,
+            _params: &Value,
         ) -> crate::hy_evo::node::NodeResult {
             match self.call_ollama(prompt).await {
                 Ok(response) => crate::hy_evo::node::NodeResult::Text(response),
