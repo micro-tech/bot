@@ -131,9 +131,13 @@
         <div id="logs-tab" class="tab-content">
             <h2>Logs</h2>
             <button onclick="loadLog('/logs/chat')">Chat Log</button>
-            <button onclick="clearLog('/logs/chat/clear', 'chat')">Clear Chat Log</button>
+            <button onclick="clearLog('/logs/chat/clear', 'chat')">
+                Clear Chat Log
+            </button>
             <button onclick="loadLog('/logs/error')">Error Log</button>
-            <button onclick="clearLog('/logs/error/clear', 'error')">Clear Error Log</button>
+            <button onclick="clearLog('/logs/error/clear', 'error')">
+                Clear Error Log
+            </button>
             <pre
                 id="log-output"
                 style="
@@ -160,9 +164,9 @@
             }
 
             function clearLog(url, type) {
-                fetch(url, { method: 'POST' })
-                    .then(r => r.text())
-                    .then(t => {
+                fetch(url, { method: "POST" })
+                    .then((r) => r.text())
+                    .then((t) => {
                         const out = document.getElementById("log-output");
                         if (out) out.textContent = t;
                     });
@@ -206,6 +210,8 @@
                 if (msg.type === "config") {
                     const ta = document.getElementById("config-textarea");
                     if (ta) ta.value = msg.data;
+                } else if (msg.type === "manifest") {
+                    // ignore manifest on the UI for now
                 } else if (msg.type === "backends") {
                     buildLlmButtons(msg.backends);
                 } else if (
@@ -255,8 +261,23 @@
                 console.log("[Chat] Appending message:", msg);
                 const div = document.getElementById("chat-messages");
                 if (!div) return;
+
+                // Determine sender label
+                let sender;
+                if (msg.type === "user_msg") {
+                    sender = msg.from || "You";
+                } else {
+                    // LLM response — use the backend name if available
+                    sender = msg.from || "Bot";
+                }
+
+                // Text may be in msg.data or msg.msg
+                const text = msg.data || msg.msg || "";
+                if (!text) return;
+
                 const p = document.createElement("div");
-                p.innerHTML = `<span class="sender">${msg.from || "Bot"}:</span> ${msg.data || msg.msg}`;
+                p.className = "message";
+                p.innerHTML = `<span class="sender">${sender}:</span> ${text}`;
                 div.appendChild(p);
                 div.scrollTop = div.scrollHeight;
             }
