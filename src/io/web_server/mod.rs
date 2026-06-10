@@ -249,54 +249,61 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     let bus_forward_task = tokio::spawn(async move {
         let rx = bus_clone.subscribe("web_interface");
         while let Ok(msg) = rx.recv() {
-            // If this is already a clean llm_output / user_msg style message, forward as-is
-            if msg.data.contains("\"type\":\"llm_output\"")
-                || msg.data.contains("\"type\":\"user_msg\"")
-                || msg.data.contains("\"type\":\"ollama_response\"")
-            {
-                let _ = msg_tx_clone.send(msg.data.clone());
-            } else {
-                // Otherwise wrap it (config, manifest, etc.)
-                let json_msg = json!({
-                    "to": msg.to,
-                    "from": msg.from,
-                    "data": msg.data,
-                    "timestamp": msg.timestamp
-                })
-                .to_string();
-                let _ = msg_tx_clone.send(json_msg);
-            }
-        }
-    });
+            // Parse the inner data to check its type field reliably (avoids
+            // fragile string matching that breaks when serde adds spaces).
+            let inner: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
+            let msg_type = inner["type"].as_str().unwrap_or("");
 
-    // 7. Direct CPU → Web forwarder (for LLM responses)
-    let bus_clone2 = state.bus.clone();
-    let msg_tx_clone2 = state.msg_tx.clone();
-    let cpu_forward_task = tokio::spawn(async move {
-        let rx = bus_clone2.subscribe("cpu");
-        while let Ok(msg) = rx.recv() {
-            if msg.data.contains("\"type\":\"llm_response\"")
-                || msg.data.contains("\"type\":\"ollama_response\"")
-                || msg.data.contains("\"type\":\"llm_output\"")
-            {
-                // Extract the actual response text
-                let payload: serde_json::Value =
-                    serde_json::from_str(&msg.data).unwrap_or_default();
-                let text = payload["msg"].as_str().unwrap_or("").to_string();
-
-                if !text.is_empty() {
-                    let clean_msg = json!({
-                        "type": "llm_output",
+            match msg_type {
+                // LLM responses — normalise to a consistent shape the UI understands
+                "llm_output" | "llm_response" => {
+                    let text = inner["msg"].as_str().unwrap_or("").to_string();
+                    if !text.is_empty() {
+                        let out = json!({
+                            "type": "llm_output",
+                            "from": msg.from,
+                            "data": text
+                        })
+                        .to_string();
+                        let _ = msg_tx_clone.send(out);
+                    }
+                }
+                "ollama_response" => {
+                    let text = inner["msg"].as_str().unwrap_or("").to_string();
+                    if !text.is_empty() {
+                        let out = json!({
+                            "type": "ollama_response",
+                            "from": inner["llm"].as_str().unwrap_or(&msg.from),
+                            "data": text
+                        })
+                        .to_string();
+                        let _ = msg_tx_clone.send(out);
+                    }
+                }
+                // Already well-formed UI messages — forward as-is
+                "user_msg" | "config" | "manifest" | "config_status" | "manifest_status"
+                | "log" => {
+                    let _ = msg_tx_clone.send(msg.data.clone());
+                }
+                _ => {
+                    // Unknown type — forward as a generic envelope so nothing is lost
+                    let json_msg = json!({
+                        "type": "bus_msg",
+                        "to": msg.to,
                         "from": msg.from,
-                        "msg": text
+                        "data": msg.data,
+                        "timestamp": msg.timestamp
                     })
                     .to_string();
-
-                    let _ = msg_tx_clone2.send(clean_msg);
+                    let _ = msg_tx_clone.send(json_msg);
                 }
             }
         }
     });
+
+    // 7. Removed — llm_output messages are now forwarded via bus_forward_task
+    //    (CPU publishes them to "web_interface", not "cpu").
+    let cpu_forward_task = tokio::spawn(async move { /* no-op */ });
 
     // 6. Main loop: WebSocket messages → Bus
     while let Some(msg) = ws_receiver.next().await {
@@ -319,15 +326,20 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             continue;
                         }
 
-                    // Write to chat log
-                    if let Ok(mut f) = std::fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open("logs/chat_log.md")
-                    {
-                        use std::io::Write;
-                        let _ = writeln!(f, "[{}] User: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), chat_msg);
-                    }
+                        // Write to chat log
+                        if let Ok(mut f) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open("logs/chat_log.md")
+                        {
+                            use std::io::Write;
+                            let _ = writeln!(
+                                f,
+                                "[{}] User: {}",
+                                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                                chat_msg
+                            );
+                        }
 
                         let llm = json_val["llm"].as_str().unwrap_or("").to_string();
                         info!("Chat request received | llm='{}' | msg='{}'", llm, chat_msg);
@@ -525,8 +537,8 @@ async fn serve_chat_log() -> impl IntoResponse {
     if !std::path::Path::new(path).exists() {
         let _ = std::fs::write(path, "[INIT] Chat log created\n");
     }
-    let content = fs::read_to_string(path)
-        .unwrap_or_else(|_| "chat_log.md not found or empty".to_string());
+    let content =
+        fs::read_to_string(path).unwrap_or_else(|_| "chat_log.md not found or empty".to_string());
     Html(format!(
         "<pre style='white-space:pre-wrap;'>{}</pre>",
         html_escape(&content)
@@ -556,8 +568,8 @@ async fn serve_error_log() -> impl IntoResponse {
     if !std::path::Path::new(path).exists() {
         let _ = std::fs::write(path, "[INIT] Error log created\n");
     }
-    let content = fs::read_to_string(path)
-        .unwrap_or_else(|_| "error_log.md not found or empty".to_string());
+    let content =
+        fs::read_to_string(path).unwrap_or_else(|_| "error_log.md not found or empty".to_string());
     Html(format!(
         "<pre style='white-space:pre-wrap;'>{}</pre>",
         html_escape(&content)
@@ -589,7 +601,6 @@ fn html_escape(s: &str) -> String {
 }
 
 const MAIN_HTML: &str = include_str!("static/index.html");
-
 
 /// Returns true if a file exists AND contains valid PEM data (not a placeholder).
 fn is_valid_pem(path: &str, expected_header: &str) -> bool {
