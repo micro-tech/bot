@@ -243,66 +243,76 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
         }
     });
 
-    // 6. Bus → WebSocket forwarder (single source of truth)
+    // 6. Bus → WebSocket forwarder.
+    //
+    // IMPORTANT: state.bus uses std::sync::mpsc (blocking).  Calling
+    // rx.recv() directly inside an async task blocks the Tokio thread and
+    // starves other tasks on the same thread (including recv_task above).
+    //
+    // Solution: run the blocking recv loop on a dedicated OS thread via
+    // std::thread::spawn, bridge into async-land through a tokio mpsc channel,
+    // then have a lightweight async task drain that channel into msg_tx.
     let bus_clone = state.bus.clone();
     let msg_tx_clone = state.msg_tx.clone();
-    let bus_forward_task = tokio::spawn(async move {
+
+    // Bridge channel: blocking thread → async task
+    let (bridge_tx, mut bridge_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+
+    // Blocking thread: subscribes to the bus and forwards to the bridge
+    std::thread::spawn(move || {
         let rx = bus_clone.subscribe("web_interface");
         while let Ok(msg) = rx.recv() {
-            // Parse the inner data to check its type field reliably (avoids
-            // fragile string matching that breaks when serde adds spaces).
+            // Parse the inner data to check its type field reliably.
             let inner: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
             let msg_type = inner["type"].as_str().unwrap_or("");
 
-            match msg_type {
-                // LLM responses — normalise to a consistent shape the UI understands
+            let out = match msg_type {
                 "llm_output" | "llm_response" => {
                     let text = inner["msg"].as_str().unwrap_or("").to_string();
-                    if !text.is_empty() {
-                        let out = json!({
-                            "type": "llm_output",
-                            "from": msg.from,
-                            "data": text
-                        })
-                        .to_string();
-                        let _ = msg_tx_clone.send(out);
+                    if text.is_empty() {
+                        continue;
                     }
+                    json!({ "type": "llm_output", "from": msg.from, "data": text }).to_string()
                 }
                 "ollama_response" => {
                     let text = inner["msg"].as_str().unwrap_or("").to_string();
-                    if !text.is_empty() {
-                        let out = json!({
-                            "type": "ollama_response",
-                            "from": inner["llm"].as_str().unwrap_or(&msg.from),
-                            "data": text
-                        })
-                        .to_string();
-                        let _ = msg_tx_clone.send(out);
+                    if text.is_empty() {
+                        continue;
                     }
+                    let from = inner["llm"].as_str().unwrap_or(&msg.from).to_string();
+                    json!({ "type": "ollama_response", "from": from, "data": text }).to_string()
                 }
-                // Already well-formed UI messages — forward as-is
+                // Well-formed UI messages — forward as-is
                 "user_msg" | "config" | "manifest" | "config_status" | "manifest_status"
-                | "log" => {
-                    let _ = msg_tx_clone.send(msg.data.clone());
-                }
+                | "log" => msg.data.clone(),
                 _ => {
-                    // Unknown type — forward as a generic envelope so nothing is lost
-                    let json_msg = json!({
+                    // Unknown — wrap so nothing is silently dropped
+                    json!({
                         "type": "bus_msg",
                         "to": msg.to,
                         "from": msg.from,
                         "data": msg.data,
                         "timestamp": msg.timestamp
                     })
-                    .to_string();
-                    let _ = msg_tx_clone.send(json_msg);
+                    .to_string()
                 }
+            };
+
+            if bridge_tx.send(out).is_err() {
+                break; // async side dropped (WS closed)
             }
         }
     });
 
-    // 7. Removed — llm_output messages are now forwarded via bus_forward_task
-    //    (CPU publishes them to "web_interface", not "cpu").
+    // Async task: drains the bridge and fans out into the broadcast channel
+    let bus_forward_task = tokio::spawn(async move {
+        while let Some(out) = bridge_rx.recv().await {
+            let _ = msg_tx_clone.send(out);
+        }
+    });
+
+    // 7. No longer needed — CPU already publishes to "web_interface" which
+    //    the bus_forward_task above now correctly handles.
     let cpu_forward_task = tokio::spawn(async move { /* no-op */ });
 
     // 6. Main loop: WebSocket messages → Bus
