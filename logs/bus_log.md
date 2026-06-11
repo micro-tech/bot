@@ -24,3 +24,12 @@
 [2026-06-11 00:41:55.573] harness -> test_topic: {"seq":2}
 [2026-06-11 00:41:55.575] harness -> test_topic: {"seq":3}
 [2026-06-11 00:41:55.575] harness -> test_topic: {"seq":4}
+[2026-06-11 00:51:44.418] harness -> test_topic: {"seq":0}[2026-06-11 00:51:44.418] harness -> test_harness: {"type":"error","msg":"test failure"}
+[2026-06-11 00:51:44.418] harness -> ollama_local: {"type":"chat_request","prompt":"hello"}[2026-06-11 00:51:44.419] harness -> test_harness: not valid json {[2026-06-11 00:51:44.419] test_harness -> nonexistent: {"type":"ping"}
+
+
+
+[2026-06-11 00:51:44.427] harness -> test_topic: {"seq":1}
+[2026-06-11 00:51:44.428] harness -> test_topic: {"seq":2}
+[2026-06-11 00:51:44.429] harness -> test_topic: {"seq":3}
+[2026-06-11 00:51:44.429] harness -> test_topic: {"seq":4}
