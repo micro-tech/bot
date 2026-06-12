@@ -54,7 +54,7 @@ where
     /// Route an LLM request to the appropriate backend.
     fn route_llm_request(&self, target: LlmTarget, prompt: String, correlation_id: u64) {
         let to = match target {
-            LlmTarget::OllamaLan => "ollama_lan",
+            LlmTarget::OllamaLan => "ollama_server",
             LlmTarget::OllamaLocal => "ollama_local",
             LlmTarget::Gemini => "gemini",
             LlmTarget::Grok => "grok",
