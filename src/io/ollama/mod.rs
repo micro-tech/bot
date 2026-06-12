@@ -313,7 +313,7 @@ pub async fn handle_ollama_message(
                 // Build the correct CPU-bound message
                 let response_msg = Message {
                     to: "cpu".to_string(),
-                    from: "ollama_lan".to_string(),
+                    from: format!("ollama_{}", backend_name),
                     data: serde_json::json!({
                         "type": "llm_response",
                         "correlation_id": correlation_id,
@@ -325,12 +325,12 @@ pub async fn handle_ollama_message(
 
                 // Publish to CPU
                 if let Err(e) = bus.publish(response_msg.clone()) {
-                    let error_msg = format!("Ollama LAN failed to publish LLM response: {}", e);
+                    let error_msg = format!("Ollama {} failed to publish LLM response: {}", backend_name, e);
                     log_to_file(&error_msg);
                     error!("{}", error_msg);
                 } else {
-                    debug!("Ollama LAN published LLM response to CPU");
-                    log_to_file("Ollama LAN published LLM response to CPU");
+                    debug!("Ollama {} published LLM response to CPU", backend_name);
+                    log_to_file(&format!("Ollama {} published LLM response to CPU", backend_name));
                 }
 
                 // Also forward to web UI
