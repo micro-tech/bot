@@ -16,9 +16,6 @@
 .env.local
 .env.*.local
 
-# Zed editor directories
-.zed/
-
 # Custom exclusions from project rules
 .grok/
 
@@ -28,6 +25,7 @@
 *.swp
 *.swo
 *~
+.zed/  # Zed editor directories
 
 # OS generated files
 .DS_Store
@@ -65,3 +63,4 @@ H:\GitHub\bot\certs
 *.pem
 cert.pem
 key.pem
+.zed/settings.json
