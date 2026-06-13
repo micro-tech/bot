@@ -81,15 +81,24 @@ async fn run_bot() {
 
             while let Ok(msg) = rx.recv() {
                 if msg.data.contains("\"type\":\"llm_response\"") {
-                    // Forward the response to the web UI
                     let payload: serde_json::Value =
                         serde_json::from_str(&msg.data).unwrap_or_default();
                     let text = payload["msg"].as_str().unwrap_or("").to_string();
-                    let _correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+                    if text.is_empty() {
+                        continue;
+                    }
+
+                    // Normalize the 'from' label for the UI
+                    // "ollama_server" → "server", "ollama_desktop" → "desktop", "gemini" → "gemini"
+                    let display_from = if msg.from.starts_with("ollama_") {
+                        msg.from.strip_prefix("ollama_").unwrap_or(&msg.from).to_string()
+                    } else {
+                        msg.from.clone()
+                    };
 
                     let ui_msg = crate::bus::Message {
                         to: "web_interface".to_string(),
-                        from: msg.from.clone(),
+                        from: display_from.clone(),
                         data: serde_json::json!({
                             "type": "llm_output",
                             "msg": text
@@ -98,18 +107,18 @@ async fn run_bot() {
                         timestamp: crate::utils::now_ms(),
                     };
 
-                    // Also write response to chat log
+                    // Write to chat log
                     if let Ok(mut f) = std::fs::OpenOptions::new()
                         .create(true)
                         .append(true)
                         .open("logs/chat_log.md")
                     {
                         use std::io::Write;
-                        let _ = writeln!(f, "[{}] Bot: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), text);
+                        let _ = writeln!(f, "[{}] {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), display_from, text);
                     }
 
                     let _ = bus_clone.publish(ui_msg);
-                    println!("[CPU-Forwarder] Forwarded LLM response to web_interface");
+                    println!("[CPU-Forwarder] Forwarded LLM response from {} to web_interface", display_from);
                 }
             }
         });

@@ -323,7 +323,7 @@ pub async fn handle_ollama_message(
                     timestamp: now_ms(),
                 };
 
-                // Publish to CPU
+                // Publish to CPU (single source of truth for responses)
                 if let Err(e) = bus.publish(response_msg.clone()) {
                     let error_msg = format!("Ollama {} failed to publish LLM response: {}", backend_name, e);
                     log_to_file(&error_msg);
@@ -333,19 +333,8 @@ pub async fn handle_ollama_message(
                     log_to_file(&format!("Ollama {} published LLM response to CPU", backend_name));
                 }
 
-                // Also forward to web UI
-                let _ = bus.publish(Message {
-                    to: "web_interface".to_string(),
-                    from: format!("ollama_{}", backend_name),
-                    data: json!({
-                        "type": "ollama_response",
-                        "llm": backend_name,
-                        "reply_to": message.from,
-                        "msg": response
-                    })
-                    .to_string(),
-                    timestamp: now_ms(),
-                });
+                // REMOVED: direct publish to web_interface to avoid duplicate replies.
+                // The CPU forwarder will handle turning llm_response into llm_output.
 
                 return Some(response);
             }
