@@ -111,21 +111,7 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
                     response.len()
                 );
 
-                // Forward to web UI
-                let _ = bus.publish(Message {
-                    to: "web_interface".to_string(),
-                    from: "gemini".to_string(),
-                    data: json!({
-                        "type": "ollama_response",
-                        "llm": "gemini",
-                        "correlation_id": correlation_id,
-                        "msg": response,
-                    })
-                    .to_string(),
-                    timestamp: now_ms(),
-                });
-
-                // Also notify CPU if there is a correlation
+                // Forward ONLY to CPU as llm_response (single source of truth)
                 if correlation_id != 0 {
                     let _ = bus.publish(Message {
                         to: "cpu".to_string(),
@@ -139,6 +125,9 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
                         timestamp: now_ms(),
                     });
                 }
+
+                // REMOVED: direct publish to web_interface to avoid duplicate replies.
+                // The CPU forwarder in main.rs will convert llm_response → llm_output.
 
                 return;
             }
