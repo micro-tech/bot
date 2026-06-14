@@ -11,6 +11,6 @@ pub mod strategy;
 pub mod telemetry;
 
 pub use context::{LLMBackend, RoutingContext};
-pub use config::RouterConfig;
+pub use config::{RouterConfig, ConfigManager, ComplexityConfig, ScheduleConfig, LoadThresholds, HealthThresholds};
 pub use strategy::{RoutingStrategy, DefaultStrategy};
 pub use fallback::{BackendSelection, resolve_with_fallback};

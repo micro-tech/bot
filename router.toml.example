@@ -1,0 +1,43 @@
+# router.toml - Production-ready LLM Router Configuration
+# This file demonstrates all major configuration options.
+
+[complexity]
+token_weight = 0.20
+code_weight = 0.25
+reasoning_weight = 0.20
+math_weight = 0.15
+multi_step_weight = 0.10
+structural_weight = 0.10
+global_threshold = 0.65
+
+[load_thresholds]
+gpu_max = 85.0
+vram_max = 90.0
+rtt_max_ms = 40.0
+
+[health_thresholds]
+error_rate_max = 0.05
+latency_max_ms = 2000
+unreachable_seconds = 30
+
+[schedule]
+# Example time windows (add more as needed)
+# [[schedule.windows]]
+# start_hour = 22
+# end_hour = 6
+# profile = "night"
+# days = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+
+[profiles.default]
+complexity_threshold = 0.70
+preferred_backends = ["gemini"]
+fallback_chain = ["ollama"]
+
+[profiles.night]
+complexity_threshold = 0.50
+preferred_backends = ["ollama"]
+fallback_chain = ["gemini"]
+
+fallback_chain = ["ollama", "gemini", "fallback"]
+
+hot_reload = true
