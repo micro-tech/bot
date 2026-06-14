@@ -1,7 +1,8 @@
-// router/complexity.rs - Complexity Scoring Engine (task 145)
+// router/complexity.rs - Full Complexity Scoring Engine (Task 128)
 use regex::Regex;
+use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ComplexityFeatures {
     pub token_count: usize,
     pub code_density: f32,
@@ -11,34 +12,120 @@ pub struct ComplexityFeatures {
     pub structural_depth: f32,
 }
 
-pub fn extract_features(prompt: &str) -> ComplexityFeatures {
-    let token_count = prompt.split_whitespace().count();
-    let code_blocks = prompt.matches("```").count() as f32 / 2.0;
-    let code_density = (code_blocks * 0.3).min(1.0);
+/// Trait for pluggable heuristic modules
+pub trait Heuristic: Send + Sync {
+    fn name(&self) -> &str;
+    fn score(&self, prompt: &str) -> f32;
+}
 
-    let reasoning = ["explain", "step-by-step", "prove", "why", "how"].iter()
-        .filter(|&w| prompt.to_lowercase().contains(w))
-        .count() as f32 / 5.0;
+/// Registry for dynamic heuristic registration
+pub struct HeuristicRegistry {
+    heuristics: HashMap<String, Box<dyn Heuristic>>,
+    weights: HashMap<String, f32>,
+}
 
-    let math = prompt.matches(|c: char| "+-*/=^".contains(c)).count() as f32 / 20.0;
+impl HeuristicRegistry {
+    pub fn new() -> Self {
+        Self {
+            heuristics: HashMap::new(),
+            weights: HashMap::new(),
+        }
+    }
 
-    let multi_step = prompt.matches(|c| c == '\n').count() as f32 / 10.0;
+    pub fn register(&mut self, h: Box<dyn Heuristic>, weight: f32) {
+        let name = h.name().to_string();
+        self.heuristics.insert(name.clone(), h);
+        self.weights.insert(name, weight);
+    }
 
-    ComplexityFeatures {
-        token_count,
-        code_density,
-        reasoning_keywords: reasoning.min(1.0),
-        math_symbols: math.min(1.0),
-        multi_step: multi_step.min(1.0),
-        structural_depth: 0.5, // placeholder
+    pub fn score(&self, prompt: &str) -> f32 {
+        let mut total = 0.0;
+        let mut weight_sum = 0.0;
+
+        for (name, heuristic) in &self.heuristics {
+            if let Some(&w) = self.weights.get(name) {
+                total += heuristic.score(prompt) * w;
+                weight_sum += w;
+            }
+        }
+
+        if weight_sum > 0.0 {
+            (total / weight_sum).clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
     }
 }
 
-pub fn score(features: &ComplexityFeatures) -> f32 {
-    let score = 0.3 * features.code_density
-        + 0.25 * features.reasoning_keywords
-        + 0.2 * features.math_symbols
-        + 0.15 * features.multi_step
-        + 0.1 * (features.token_count as f32 / 4000.0).min(1.0);
-    score.min(1.0)
+// ============== Core Heuristic Implementations ==============
+
+pub struct TokenCountHeuristic;
+impl Heuristic for TokenCountHeuristic {
+    fn name(&self) -> &str { "token_count" }
+    fn score(&self, prompt: &str) -> f32 {
+        (prompt.split_whitespace().count() as f32 / 4000.0).clamp(0.0, 1.0)
+    }
+}
+
+pub struct CodeDensityHeuristic;
+impl Heuristic for CodeDensityHeuristic {
+    fn name(&self) -> &str { "code_density" }
+    fn score(&self, prompt: &str) -> f32 {
+        let code_blocks = prompt.matches("```").count() as f32 / 2.0;
+        (code_blocks * 0.4).clamp(0.0, 1.0)
+    }
+}
+
+pub struct ReasoningKeywordsHeuristic;
+impl Heuristic for ReasoningKeywordsHeuristic {
+    fn name(&self) -> &str { "reasoning_keywords" }
+    fn score(&self, prompt: &str) -> f32 {
+        let keywords = ["explain", "step-by-step", "prove", "why", "how", "analyze", "compare"];
+        let count = keywords.iter().filter(|&w| prompt.to_lowercase().contains(w)).count();
+        (count as f32 / keywords.len() as f32).clamp(0.0, 1.0)
+    }
+}
+
+pub struct MathSymbolsHeuristic;
+impl Heuristic for MathSymbolsHeuristic {
+    fn name(&self) -> &str { "math_symbols" }
+    fn score(&self, prompt: &str) -> f32 {
+        let symbols = prompt.matches(|c: char| "+-*/=^√∫∑".contains(c)).count();
+        (symbols as f32 / 25.0).clamp(0.0, 1.0)
+    }
+}
+
+pub struct MultiStepHeuristic;
+impl Heuristic for MultiStepHeuristic {
+    fn name(&self) -> &str { "multi_step" }
+    fn score(&self, prompt: &str) -> f32 {
+        let lines = prompt.matches('\n').count();
+        let numbered = prompt.matches(|c: char| c.is_ascii_digit()).count();
+        ((lines + numbered) as f32 / 20.0).clamp(0.0, 1.0)
+    }
+}
+
+pub struct StructuralDepthHeuristic;
+impl Heuristic for StructuralDepthHeuristic {
+    fn name(&self) -> &str { "structural_depth" }
+    fn score(&self, prompt: &str) -> f32 {
+        let nested_lists = prompt.matches("  -").count() + prompt.matches("    ").count();
+        (nested_lists as f32 / 15.0).clamp(0.0, 1.0)
+    }
+}
+
+/// Convenience function to build default registry with sensible weights
+pub fn default_registry() -> HeuristicRegistry {
+    let mut reg = HeuristicRegistry::new();
+    reg.register(Box::new(TokenCountHeuristic), 0.20);
+    reg.register(Box::new(CodeDensityHeuristic), 0.25);
+    reg.register(Box::new(ReasoningKeywordsHeuristic), 0.20);
+    reg.register(Box::new(MathSymbolsHeuristic), 0.15);
+    reg.register(Box::new(MultiStepHeuristic), 0.10);
+    reg.register(Box::new(StructuralDepthHeuristic), 0.10);
+    reg
+}
+
+pub fn score_prompt(prompt: &str) -> f32 {
+    default_registry().score(prompt)
 }
