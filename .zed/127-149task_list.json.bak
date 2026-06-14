@@ -840,7 +840,7 @@
           "status": "pending",
           "details": "Roadmap without breaking determinism.",
         },
-      ]
+      ],
     },
     {
       "id": 142,
@@ -893,7 +893,7 @@
           "status": "pending",
           "details": "Full coverage of aggregation and export correctness.",
         }
-      ]
+      ],
     },
     {
       "id": "143",
@@ -1165,7 +1165,7 @@
           "status": "pending",
           "details": "Explains how validation works and how to extend it."
         }
-      ]
+      ],
     },
     {
       "id": 147,

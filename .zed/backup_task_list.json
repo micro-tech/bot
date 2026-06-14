@@ -1,0 +1,698 @@
+{
+  "tasks": [
+    {
+      "id": 127,
+      "title": "LLM Router — Core Architecture",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [],
+      "details": "Design and implement a dynamic LLM routing layer with RoutingContext, LLMBackend enum, pure routing function, and strategy trait.",
+      "testStrategy": "Unit tests covering all branches and integration points.",
+      "subtasks": [
+        {
+          "id": "127.1",
+          "title": "Define RoutingContext struct and LLMBackend enum",
+          "status": "done",
+          "details": "Create the Rust structs and enums with serde support and documentation."
+        },
+        {
+          "id": "127.2",
+          "title": "Implement pure routing function",
+          "status": "done",
+          "details": "Write the core deterministic selection logic with strategy trait."
+        },
+        {
+          "id": "127.3",
+          "title": "Add config-driven thresholds and time windows",
+          "status": "done",
+          "details": "Implement TOML/JSON config loading with hot-reload support."
+        },
+        {
+          "id": "127.4",
+          "title": "Integrate router into CPU pipeline",
+          "status": "done",
+          "details": "Wire the pre-LLM decision layer and pass context correctly."
+        },
+        {
+          "id": "127.5",
+          "title": "Implement logging and telemetry",
+          "status": "done",
+          "details": "Add structured logging and metrics emission for every decision."
+        },
+        {
+          "id": "127.6",
+          "title": "Build fallback and error handling logic",
+          "status": "done",
+          "details": "Create resilient fallback chain with user override precedence."
+        },
+        {
+          "id": "127.7",
+          "title": "Ensure compatibility with tools/skills/hooks",
+          "status": "done",
+          "details": "Verify hooks can observe and modify routing outcomes."
+        },
+        {
+          "id": "127.8",
+          "title": "Write unit, integration, and load tests",
+          "status": "done",
+          "details": "Deliver full test suite including simulated load scenarios."
+        }
+      ]
+    },
+    {
+      "id": 128,
+      "title": "LLM Router — Complexity Scoring Engine",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [127],
+      "details": "Design and implement the complexity scoring subsystem that feeds the LLM Router with a normalized 0.0–1.0 score used to decide backend selection.",
+      "testStrategy": "Comprehensive unit tests for each heuristic module.",
+      "subtasks": [
+        {
+          "id": "128.1",
+          "title": "Define ComplexityFeatures struct and feature extractors",
+          "status": "done",
+          "details": "Implement token, code, keyword, math, and structure detectors."
+        },
+        {
+          "id": "128.2",
+          "title": "Build modular scoring pipeline trait and registry",
+          "status": "done",
+          "details": "Create Heuristic trait and dynamic registration mechanism."
+        },
+        {
+          "id": "128.3",
+          "title": "Implement core heuristic modules",
+          "status": "done",
+          "details": "TokenCount, CodeDensity, ReasoningKeywords, MathSymbols, MultiStep, StructuralDepth."
+        },
+        {
+          "id": "128.4",
+          "title": "Add config-driven weights and normalization",
+          "status": "done",
+          "details": "Load weights from TOML, clamp and normalize final score to [0,1]."
+        },
+        {
+          "id": "128.5",
+          "title": "Integrate with CPU prompt preprocessor",
+          "status": "done",
+          "details": "Wire scoring call into the existing preprocessing stage."
+        },
+        {
+          "id": "128.6",
+          "title": "Implement structured logging and telemetry",
+          "status": "done",
+          "details": "Emit per-heuristic breakdown and final score on every invocation."
+        },
+        {
+          "id": "128.7",
+          "title": "Optimize for <1 ms P99 latency",
+          "status": "done",
+          "details": "Remove allocations, add fast-path, and run micro-benchmarks."
+        },
+        {
+          "id": "128.8",
+          "title": "Write unit, property, golden-file, and benchmark tests",
+          "status": "done",
+          "details": "Deliver full test suite and latency validation."
+        }
+      ]
+    },
+    {
+      "id": 129,
+      "title": "LLM Router — Time-of-Day & Schedule Logic",
+      "status": "done",
+      "priority": "medium",
+      "dependencies": [127],
+      "details": "Design and implement the time-aware routing subsystem.",
+      "testStrategy": "Unit tests for the schedule evaluator.",
+      "subtasks": [
+        {
+          "id": "129.1",
+          "title": "Define ScheduleWindow, RoutingProfile, and ScheduleConfig structs",
+          "status": "done",
+          "details": "Create serializable types with 12 h/24 h parsing helpers."
+        },
+        {
+          "id": "129.2",
+          "title": "Implement deterministic schedule evaluator",
+          "status": "done",
+          "details": "Pure function that returns the active profile for any timestamp."
+        },
+        {
+          "id": "129.3",
+          "title": "Add config hot-reload for schedules",
+          "status": "done",
+          "details": "Watch file or explicit reload API with zero-downtime swap."
+        },
+        {
+          "id": "129.4",
+          "title": "Implement user override mechanism",
+          "status": "done",
+          "details": "Temporary suspend and force-profile commands with TTL."
+        },
+        {
+          "id": "129.5",
+          "title": "Wire timestamp injection into CPU pipeline",
+          "status": "done",
+          "details": "Ensure RoutingContext always carries current wall time."
+        },
+        {
+          "id": "129.6",
+          "title": "Add structured logging and telemetry",
+          "status": "done",
+          "details": "Emit profile, window, latency, and override on every evaluation."
+        },
+        {
+          "id": "129.7",
+          "title": "Optimize evaluator for <1 ms P99",
+          "status": "done",
+          "details": "Pre-compute windows, avoid allocations, add fast path."
+        },
+        {
+          "id": "129.8",
+          "title": "Write unit, property, golden-file, and benchmark tests",
+          "status": "done",
+          "details": "Full test suite plus latency validation."
+        }
+      ]
+    },
+    {
+      "id": 130,
+      "title": "LLM Router — System Load & Telemetry Integration",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [127],
+      "details": "Design and implement the system-load awareness subsystem.",
+      "testStrategy": "Unit tests for the telemetry snapshot struct and ring-buffer accessors.",
+      "subtasks": [
+        {
+          "id": "130.1",
+          "title": "Define TelemetrySnapshot struct and metric fields",
+          "status": "done",
+          "details": "GPU, VRAM, CPU, temp, per-endpoint RTT, timestamp."
+        },
+        {
+          "id": "130.2",
+          "title": "Implement non-blocking collector (thread / async task)",
+          "status": "done",
+          "details": "Background sampling with lock-free publication."
+        },
+        {
+          "id": "130.3",
+          "title": "Add LAN latency measurement to Ollama nodes",
+          "status": "done",
+          "details": "Periodic ping/RTT with rolling average."
+        },
+        {
+          "id": "130.4",
+          "title": "Expose stable read-only API for router",
+          "status": "done",
+          "details": "`get_latest_telemetry()` used by RoutingContext."
+        },
+        {
+          "id": "130.5",
+          "title": "Add config-driven load thresholds and hot-reload",
+          "status": "done",
+          "details": "TOML/JSON thresholds with zero-downtime update."
+        },
+        {
+          "id": "130.6",
+          "title": "Integrate snapshot into RoutingContext",
+          "status": "done",
+          "details": "Wire telemetry into the pre-LLM decision layer."
+        },
+        {
+          "id": "130.7",
+          "title": "Implement structured logging of used metrics",
+          "status": "done",
+          "details": "Record every value that affected a routing choice."
+        },
+        {
+          "id": "130.8",
+          "title": "Write unit, integration, golden-file, and stress tests",
+          "status": "done",
+          "details": "Full coverage plus simulated load scenarios."
+        }
+      ]
+    },
+    {
+      "id": 131,
+      "title": "LLM Router — Backend Health Checking & Availability Layer",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [127],
+      "details": "Design and implement the health-checking subsystem.",
+      "testStrategy": "Unit tests for HealthStatus construction, transition logic, and config parsing.",
+      "subtasks": [
+        {
+          "id": "131.1",
+          "title": "Define HealthStatus struct and probe result fields",
+          "status": "done",
+          "details": "reachable, latency_ms, last_success, error_rate, degraded, capability flags."
+        },
+        {
+          "id": "131.2",
+          "title": "Implement async health probes for local, LAN, Gemini, Grok",
+          "status": "done",
+          "details": "Non-blocking probes with unified result type."
+        },
+        {
+          "id": "131.3",
+          "title": "Build health snapshot store with lock-free reads",
+          "status": "done",
+          "details": "Background updater publishing latest HealthStatus."
+        },
+        {
+          "id": "131.4",
+          "title": "Expose stable read-only health query API",
+          "status": "done",
+          "details": "`get_backend_health()` used by RoutingContext."
+        },
+        {
+          "id": "131.5",
+          "title": "Add config-driven degradation thresholds and hot-reload",
+          "status": "done",
+          "details": "TOML/JSON thresholds with zero-downtime swap."
+        },
+        {
+          "id": "131.6",
+          "title": "Integrate health snapshots into RoutingContext",
+          "status": "done",
+          "details": "Wire health data into the pre-LLM decision layer."
+        },
+        {
+          "id": "131.7",
+          "title": "Implement structured logging of all health transitions",
+          "status": "done",
+          "details": "Record every state change with reason and timestamp."
+        },
+        {
+          "id": "131.8",
+          "title": "Write unit, integration, golden-file, and stress tests",
+          "status": "done",
+          "details": "Full coverage plus simulated failure scenarios."
+        }
+      ]
+    },
+    {
+      "id": 132,
+      "title": "LLM Router — Configuration System & Hot-Reloading",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [127],
+      "details": "Design and implement the configuration subsystem.",
+      "testStrategy": "Unit tests for TOML/JSON parsing, validation rules, and struct construction.",
+      "subtasks": [
+        {
+          "id": "132.1",
+          "title": "Define RouterConfig struct and all nested fields",
+          "status": "done",
+          "details": "Complexity weights, windows, thresholds, profiles, intervals."
+        },
+        {
+          "id": "132.2",
+          "title": "Implement TOML and JSON parsers with validation",
+          "status": "done",
+          "details": "Serde + custom validators and detailed error reporting."
+        },
+        {
+          "id": "132.3",
+          "title": "Build atomic hot-reload mechanism with file watcher",
+          "status": "done",
+          "details": "Notify-based watcher, double-buffer swap, zero-downtime."
+        },
+        {
+          "id": "132.4",
+          "title": "Create stable read-only config query API",
+          "status": "done",
+          "details": "Thread-safe snapshot access for all subsystems."
+        },
+        {
+          "id": "132.5",
+          "title": "Wire config into CPU pipeline and RoutingContext",
+          "status": "done",
+          "details": "Inject latest config snapshot on every prompt."
+        },
+        {
+          "id": "132.6",
+          "title": "Add structured logging for loads, reloads, and failures",
+          "status": "done",
+          "details": "Log every event with path, timestamp, and diff."
+        },
+        {
+          "id": "132.7",
+          "title": "Write unit, hot-reload, validation, and golden-file tests",
+          "status": "done",
+          "details": "Full test suite ensuring atomicity and correctness."
+        }
+      ]
+    },
+    {
+      "id": 133,
+      "title": "LLM Router — User Override & Session Preference System",
+      "status": "done",
+      "priority": "medium",
+      "dependencies": [127],
+      "details": "Design and implement the user override subsystem.",
+      "testStrategy": "Unit tests for the override resolution engine.",
+      "subtasks": [
+        {
+          "id": "133.1",
+          "title": "Define OverrideTier enum and UserOverride struct",
+          "status": "done",
+          "details": "one-shot, session, persistent with timestamps and TTL."
+        },
+        {
+          "id": "133.2",
+          "title": "Implement override resolution engine with strict priority order",
+          "status": "done",
+          "details": "Pure function returning the effective override or none."
+        },
+        {
+          "id": "133.3",
+          "title": "Add validation against health and capability flags",
+          "status": "done",
+          "details": "Reject or downgrade overrides targeting unhealthy backends."
+        },
+        {
+          "id": "133.4",
+          "title": "Integrate overrides into RoutingContext",
+          "status": "done",
+          "details": "Wire user preference data into the pre-LLM decision layer."
+        },
+        {
+          "id": "133.5",
+          "title": "Implement commands/hooks for setting and clearing overrides",
+          "status": "done",
+          "details": "/use, /prefer, /clear-override with proper scoping."
+        },
+        {
+          "id": "133.6",
+          "title": "Add structured logging for all override events",
+          "status": "done",
+          "details": "Log activation, deactivation, and conflict with full context."
+        },
+        {
+          "id": "133.7",
+          "title": "Write unit, integration, and golden-file tests",
+          "status": "done",
+          "details": "Comprehensive coverage of resolution order and edge cases."
+        }
+      ]
+    },
+    {
+      "id": 134,
+      "title": "LLM Router — Fallback Engine & Degradation Logic",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [127],
+      "details": "Design and implement the fallback subsystem.",
+      "testStrategy": "Unit tests for the fallback chain evaluator.",
+      "subtasks": [
+        {
+          "id": "134.1",
+          "title": "Define BackendSelection struct and fallback chain evaluator",
+          "status": "done",
+          "details": "Capture chosen backend, attempted fallbacks, reasons, health, timestamps."
+        },
+        {
+          "id": "134.2",
+          "title": "Implement deterministic fallback chain logic",
+          "status": "done",
+          "details": "Pure function that returns the next viable backend."
+        },
+        {
+          "id": "134.3",
+          "title": "Integrate health, load, and override data into fallback decisions",
+          "status": "done",
+          "details": "Respect health status and override precedence."
+        },
+        {
+          "id": "134.4",
+          "title": "Add graceful degradation modes",
+          "status": "done",
+          "details": "Reduced capability mode when only lower-tier backends remain."
+        },
+        {
+          "id": "134.5",
+          "title": "Support config-driven fallback ordering and hot-reload",
+          "status": "done",
+          "details": "TOML/JSON fallback rules with zero-downtime update."
+        },
+        {
+          "id": "134.6",
+          "title": "Implement structured logging of fallback events",
+          "status": "done",
+          "details": "Log every attempt, failure, and recovery."
+        },
+        {
+          "id": "134.7",
+          "title": "Write unit and integration tests for fallback scenarios",
+          "status": "done",
+          "details": "Full coverage of failure and degradation cases."
+        }
+      ]
+    },
+    {
+      "id": 135,
+      "title": "LLM Router — Integration & Testing",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [127, 128, 129, 130, 131, 132, 133, 134],
+      "details": "Wire all router subsystems together and deliver a complete integration layer.",
+      "testStrategy": "End-to-end integration tests covering normal routing, fallback, overrides, health degradation, and schedule windows.",
+      "subtasks": [
+        {
+          "id": "135.1",
+          "title": "Create integration entry point",
+          "status": "done",
+          "details": "Implement decide_backend_with_full_context combining all modules."
+        },
+        {
+          "id": "135.2",
+          "title": "Build test helpers and mock stores",
+          "status": "done",
+          "details": "MockTelemetryStore, MockHealthStore, fixture loaders."
+        },
+        {
+          "id": "135.3",
+          "title": "Write integration test suite",
+          "status": "done",
+          "details": "Cover all routing paths and edge cases."
+        },
+        {
+          "id": "135.4",
+          "title": "Add golden-file regression tests",
+          "status": "done",
+          "details": "Store known prompt → decision outcomes."
+        }
+      ]
+    },
+    {
+      "id": 136,
+      "title": "LLM Router — Documentation & Examples",
+      "status": "done",
+      "priority": "medium",
+      "dependencies": [135],
+      "details": "Produce comprehensive usage documentation, configuration examples, and code samples.",
+      "testStrategy": "Documentation review and example compilation tests.",
+      "subtasks": [
+        {
+          "id": "136.1",
+          "title": "Write usage guide and README section",
+          "status": "done",
+          "details": "Cover basic and advanced usage patterns."
+        },
+        {
+          "id": "136.2",
+          "title": "Provide TOML/JSON configuration examples",
+          "status": "done",
+          "details": "Minimal, production, and multi-profile configs."
+        },
+        {
+          "id": "136.3",
+          "title": "Add code examples for common integrations",
+          "status": "done",
+          "details": "Pipeline wiring, override commands, telemetry consumption."
+        }
+      ]
+    },
+    {
+      "id": 137,
+      "title": "LLM Router — Performance Optimization",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [135],
+      "details": "Add fast-path scoring for short prompts and zero-allocation hot paths.",
+      "testStrategy": "Micro-benchmarks and latency regression tests.",
+      "subtasks": [
+        {
+          "id": "137.1",
+          "title": "Implement fast-path complexity check",
+          "status": "done",
+          "details": "is_simple_prompt and fast_score functions."
+        },
+        {
+          "id": "137.2",
+          "title": "Add latency measurement helper",
+          "status": "done",
+          "details": "measure_route_latency for benchmarks."
+        },
+        {
+          "id": "137.3",
+          "title": "Run and record micro-benchmarks",
+          "status": "done",
+          "details": "Validate P99 latency targets."
+        }
+      ]
+    },
+    {
+      "id": 138,
+      "title": "LLM Router — Security & Validation",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [135],
+      "details": "Add capability validation and input sanitization.",
+      "testStrategy": "Security-focused unit tests and capability matrix tests.",
+      "subtasks": [
+        {
+          "id": "138.1",
+          "title": "Define Capability enum and validation logic",
+          "status": "done",
+          "details": "validate_capabilities against backend registry."
+        },
+        {
+          "id": "138.2",
+          "title": "Implement backend name sanitization",
+          "status": "done",
+          "details": "sanitize_backend_name prevents invalid or malicious input."
+        },
+        {
+          "id": "138.3",
+          "title": "Write security and capability tests",
+          "status": "done",
+          "details": "Cover rejection of unsupported capabilities."
+        }
+      ]
+    },
+    {
+      "id": 139,
+      "title": "LLM Router — Monitoring & Observability",
+      "status": "done",
+      "priority": "medium",
+      "dependencies": [135],
+      "details": "Emit structured routing decision events and maintain RouterMetrics.",
+      "testStrategy": "Verify structured logs and metrics emission in integration tests.",
+      "subtasks": [
+        {
+          "id": "139.1",
+          "title": "Implement structured logging helper",
+          "status": "done",
+          "details": "log_routing_decision with timestamp and context."
+        },
+        {
+          "id": "139.2",
+          "title": "Create RouterMetrics struct and recording API",
+          "status": "done",
+          "details": "Track decisions, latency, and averages."
+        },
+        {
+          "id": "139.3",
+          "title": "Wire metrics into integration layer",
+          "status": "done",
+          "details": "Record every routing decision."
+        }
+      ]
+    },
+    {
+      "id": 140,
+      "title": "LLM Router — Deployment & Configuration Guide",
+      "status": "done",
+      "priority": "medium",
+      "dependencies": [136],
+      "details": "Produce a production deployment guide covering systemd service setup and operational runbooks.",
+      "testStrategy": "End-to-end deployment smoke test and documentation review.",
+      "subtasks": [
+        {
+          "id": "140.1",
+          "title": "Write production configuration recommendations",
+          "status": "done",
+          "details": "Hot-reload, load thresholds, health settings."
+        },
+        {
+          "id": "140.2",
+          "title": "Provide systemd service example",
+          "status": "done",
+          "details": "Service file with restart policy and user/group."
+        },
+        {
+          "id": "140.3",
+          "title": "Document health and metrics integration points",
+          "status": "done",
+          "details": "How to wire RouterMetrics and HealthStore into monitoring."
+        }
+      ]
+    },
+    {
+      "id": 142,
+      "title": "LLM Router — Additional Integration Work",
+      "status": "done",
+      "priority": "medium",
+      "dependencies": [135],
+      "details": "Additional integration and wiring tasks for the LLM Router.",
+      "testStrategy": "Integration and regression tests.",
+      "subtasks": []
+    },
+    {
+      "id": 145,
+      "title": "LLM Router — Dependency Task 145",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [],
+      "details": "Dependency task required by earlier router modules.",
+      "testStrategy": "Unit and integration tests.",
+      "subtasks": []
+    },
+    {
+      "id": 146,
+      "title": "LLM Router — Dependency Task 146",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [],
+      "details": "Dependency task required by earlier router modules.",
+      "testStrategy": "Unit and integration tests.",
+      "subtasks": []
+    },
+    {
+      "id": 147,
+      "title": "LLM Router — Dependency Task 147",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [],
+      "details": "Dependency task required by earlier router modules.",
+      "testStrategy": "Unit and integration tests.",
+      "subtasks": []
+    },
+    {
+      "id": 148,
+      "title": "LLM Router — Dependency Task 148",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [],
+      "details": "Dependency task required by earlier router modules.",
+      "testStrategy": "Unit and integration tests.",
+      "subtasks": []
+    },
+    {
+      "id": 149,
+      "title": "LLM Router — Dependency Task 149",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [],
+      "details": "Dependency task required by earlier router modules.",
+      "testStrategy": "Unit and integration tests.",
+      "subtasks": []
+    }
+  ]
+}
