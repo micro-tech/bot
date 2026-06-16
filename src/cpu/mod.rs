@@ -29,6 +29,13 @@ use crate::io::ollama::LlmTarget;
 use crate::memory::MemoryManager;
 use crate::utils::{log_to_file, now_ms};
 
+use crate::agents::{
+    agent_state::AgentState as UnifiedAgentState,
+    planner::Planner,
+    rule_layer::RuleLayer,
+    runtime_loop::RuntimeLoop,
+};
+
 use chrono::{Timelike, Utc};
 
 /// Main CPU struct, generic over the LLM type.
@@ -149,6 +156,33 @@ where
                 "status": "no_reasoning_engine",
                 "message": "No reasoning engine is currently running"
             }),
+        }
+    }
+
+    /// Light bridge to the new Unified Agent Runtime Loop.
+    /// This is a non-breaking integration point.
+    pub async fn run_unified_agent<P: Planner + Send + Sync + 'static>(
+        &self,
+        goal: &str,
+        planner: P,
+        allowed_tools: Vec<String>,
+        max_steps: u32,
+    ) -> anyhow::Result<String> {
+        log_to_file(&format!("[CPU] Starting unified agent runtime with goal: {}", goal));
+
+        let mut state = UnifiedAgentState::new();
+        state.messages.push(format!("goal: {}", goal));
+
+        let rule_layer = RuleLayer::new(allowed_tools);
+        let runtime = RuntimeLoop::new(planner, rule_layer, max_steps);
+
+        let final_state = runtime.run(state).await;
+
+        if let Some(err) = final_state.last_error {
+            Err(anyhow::anyhow!("Agent halted with error: {}", err))
+        } else {
+            log_to_file("[CPU] Unified agent runtime completed successfully");
+            Ok("Agent completed".to_string())
         }
     }
 

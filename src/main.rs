@@ -20,6 +20,7 @@ mod hooks;
 mod bayesian;
 mod planning;
 mod reasoning;
+mod agents;
 
 #[tokio::main]
 async fn main() {

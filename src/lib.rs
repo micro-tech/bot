@@ -14,6 +14,7 @@ pub mod tools;
 pub mod planning;
 pub mod reasoning;
 pub mod bayesian;
+pub mod agents;
 
 // Re-export commonly used types
 pub use bus::{Bus, Message};
