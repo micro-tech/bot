@@ -1,99 +1,357 @@
 {
   "tasks": [
     {
-      "id": 145,
-      "title": "LLM Router — Configuration System Deep Dive & Schema Validation",
-      "status": "done",
-      "priority": "high",
       "dependencies": [],
       "details": "Deepen the configuration system with strict schema validation, default value handling, environment variable overrides, and comprehensive error reporting.",
-      "testStrategy": "Unit tests for parsing, validation, defaulting, and error messages. Golden-file tests for config examples.",
+      "id": 145,
+      "priority": "high",
+      "status": "done",
       "subtasks": [
-        { "id": "145.1", "title": "Define complete RouterConfig struct with all nested sections", "status": "done" },
-        { "id": "145.2", "title": "Implement TOML + JSON parsing with serde and custom deserializers", "status": "done" },
-        { "id": "145.3", "title": "Add field-level and cross-field validation rules", "status": "done" },
-        { "id": "145.4", "title": "Implement default value system with documentation", "status": "done" },
-        { "id": "145.5", "title": "Support environment variable overrides", "status": "done" },
-        { "id": "145.6", "title": "Create comprehensive router.toml example with comments", "status": "done" },
-        { "id": "145.7", "title": "Build hot-reload with atomic swap and validation", "status": "done" },
-        { "id": "145.8", "title": "Write unit, integration, and golden-file config tests", "status": "done" }
-      ]
+        {
+          "id": "145.1",
+          "status": "done",
+          "title": "Define complete RouterConfig struct with all nested sections"
+        },
+        {
+          "id": "145.2",
+          "status": "done",
+          "title": "Implement TOML + JSON parsing with serde and custom deserializers"
+        },
+        {
+          "id": "145.3",
+          "status": "done",
+          "title": "Add field-level and cross-field validation rules"
+        },
+        {
+          "id": "145.4",
+          "status": "done",
+          "title": "Implement default value system with documentation"
+        },
+        {
+          "id": "145.5",
+          "status": "done",
+          "title": "Support environment variable overrides"
+        },
+        {
+          "id": "145.6",
+          "status": "done",
+          "title": "Create comprehensive router.toml example with comments"
+        },
+        {
+          "id": "145.7",
+          "status": "done",
+          "title": "Build hot-reload with atomic swap and validation"
+        },
+        {
+          "id": "145.8",
+          "status": "done",
+          "title": "Write unit, integration, and golden-file config tests"
+        }
+      ],
+      "testStrategy": "Unit tests for parsing, validation, defaulting, and error messages. Golden-file tests for config examples.",
+      "title": "LLM Router — Configuration System Deep Dive & Schema Validation"
     },
     {
-      "id": 146,
-      "title": "LLM Router — Cross-Module Integration & Dependency Resolution",
-      "status": "done",
-      "priority": "high",
       "dependencies": [],
       "details": "Ensure all router subsystems are correctly wired together with proper dependency injection and no circular dependencies.",
-      "testStrategy": "Integration tests that exercise the full decision pipeline. Dependency graph validation.",
+      "id": 146,
+      "priority": "high",
+      "status": "done",
       "subtasks": [
-        { "id": "146.1", "title": "Define stable public API surface for all router modules", "status": "done" },
-        { "id": "146.2", "title": "Implement dependency injection for RoutingContext construction", "status": "done" },
-        { "id": "146.3", "title": "Resolve and document all inter-module dependencies", "status": "done" },
-        { "id": "146.4", "title": "Add integration test harness with mock stores", "status": "done" },
-        { "id": "146.5", "title": "Verify deterministic behavior across all module combinations", "status": "done" },
-        { "id": "146.6", "title": "Implement graceful degradation when optional modules are missing", "status": "done" },
-        { "id": "146.7", "title": "Write end-to-end integration tests for the full pipeline", "status": "done" },
-        { "id": "146.8", "title": "Document integration points and extension hooks", "status": "done" }
-      ]
+        {
+          "id": "146.1",
+          "status": "done",
+          "title": "Define stable public API surface for all router modules"
+        },
+        {
+          "id": "146.2",
+          "status": "done",
+          "title": "Implement dependency injection for RoutingContext construction"
+        },
+        {
+          "id": "146.3",
+          "status": "done",
+          "title": "Resolve and document all inter-module dependencies"
+        },
+        {
+          "id": "146.4",
+          "status": "done",
+          "title": "Add integration test harness with mock stores"
+        },
+        {
+          "id": "146.5",
+          "status": "done",
+          "title": "Verify deterministic behavior across all module combinations"
+        },
+        {
+          "id": "146.6",
+          "status": "done",
+          "title": "Implement graceful degradation when optional modules are missing"
+        },
+        {
+          "id": "146.7",
+          "status": "done",
+          "title": "Write end-to-end integration tests for the full pipeline"
+        },
+        {
+          "id": "146.8",
+          "status": "done",
+          "title": "Document integration points and extension hooks"
+        }
+      ],
+      "testStrategy": "Integration tests that exercise the full decision pipeline. Dependency graph validation.",
+      "title": "LLM Router — Cross-Module Integration & Dependency Resolution"
     },
     {
-      "id": 147,
-      "title": "LLM Router — Debug, Inspection & Explainability Layer",
-      "status": "done",
-      "priority": "medium",
       "dependencies": [],
       "details": "Build a comprehensive debug and explainability system that allows developers and operators to understand exactly why a particular backend was chosen.",
-      "testStrategy": "Unit tests for explain output determinism. Integration tests with live router. Golden-file tests for visualization output.",
+      "id": 147,
+      "priority": "medium",
+      "status": "done",
       "subtasks": [
-        { "id": "147.1", "title": "Define DecisionTree, ExplainStep, and VizJSON data structures", "status": "done" },
-        { "id": "147.2", "title": "Implement explain-mode narrative generator", "status": "done" },
-        { "id": "147.3", "title": "Build machine-readable visualization JSON emitter", "status": "done" },
-        { "id": "147.4", "title": "Add router_debug CLI command and API endpoint", "status": "done" },
-        { "id": "147.5", "title": "Implement snapshot capture and replay functionality", "status": "done" },
-        { "id": "147.6", "title": "Create lightweight TUI / interactive inspector", "status": "done" },
-        { "id": "147.7", "title": "Ensure production safety (redaction, zero side effects)", "status": "done" },
-        { "id": "147.8", "title": "Write unit, integration, and golden-file debug tests", "status": "done" }
-      ]
+        {
+          "id": "147.1",
+          "status": "done",
+          "title": "Define DecisionTree, ExplainStep, and VizJSON data structures"
+        },
+        {
+          "id": "147.2",
+          "status": "done",
+          "title": "Implement explain-mode narrative generator"
+        },
+        {
+          "id": "147.3",
+          "status": "done",
+          "title": "Build machine-readable visualization JSON emitter"
+        },
+        {
+          "id": "147.4",
+          "status": "done",
+          "title": "Add router_debug CLI command and API endpoint"
+        },
+        {
+          "id": "147.5",
+          "status": "done",
+          "title": "Implement snapshot capture and replay functionality"
+        },
+        {
+          "id": "147.6",
+          "status": "done",
+          "title": "Create lightweight TUI / interactive inspector"
+        },
+        {
+          "id": "147.7",
+          "status": "done",
+          "title": "Ensure production safety (redaction, zero side effects)"
+        },
+        {
+          "id": "147.8",
+          "status": "done",
+          "title": "Write unit, integration, and golden-file debug tests"
+        }
+      ],
+      "testStrategy": "Unit tests for explain output determinism. Integration tests with live router. Golden-file tests for visualization output.",
+      "title": "LLM Router — Debug, Inspection & Explainability Layer"
     },
     {
-      "id": 148,
-      "title": "LLM Router — Documentation, Examples & Developer Onboarding",
-      "status": "done",
-      "priority": "medium",
       "dependencies": [],
       "details": "Produce high-quality, comprehensive documentation for the entire LLM Router subsystem.",
-      "testStrategy": "Documentation linting, link checking, example validation, and consistency reviews.",
+      "id": 148,
+      "priority": "medium",
+      "status": "done",
       "subtasks": [
-        { "id": "148.1", "title": "Write high-level architecture overview", "status": "done" },
-        { "id": "148.2", "title": "Document each subsystem in detail", "status": "done" },
-        { "id": "148.3", "title": "Create data-flow and decision-flow diagrams (ASCII + Mermaid)", "status": "done" },
-        { "id": "148.4", "title": "Write 'How to Add a New Backend' guide", "status": "done" },
-        { "id": "148.5", "title": "Write 'How to Tune Router Behavior' guide", "status": "done" },
-        { "id": "148.6", "title": "Write 'How to Debug Routing Decisions' guide", "status": "done" },
-        { "id": "148.7", "title": "Add concrete RoutingContext / BackendSelection examples", "status": "done" },
-        { "id": "148.8", "title": "Establish documentation linting and validation pipeline", "status": "done" }
-      ]
+        {
+          "id": "148.1",
+          "status": "done",
+          "title": "Write high-level architecture overview"
+        },
+        {
+          "id": "148.2",
+          "status": "done",
+          "title": "Document each subsystem in detail"
+        },
+        {
+          "id": "148.3",
+          "status": "done",
+          "title": "Create data-flow and decision-flow diagrams (ASCII + Mermaid)"
+        },
+        {
+          "id": "148.4",
+          "status": "done",
+          "title": "Write 'How to Add a New Backend' guide"
+        },
+        {
+          "id": "148.5",
+          "status": "done",
+          "title": "Write 'How to Tune Router Behavior' guide"
+        },
+        {
+          "id": "148.6",
+          "status": "done",
+          "title": "Write 'How to Debug Routing Decisions' guide"
+        },
+        {
+          "id": "148.7",
+          "status": "done",
+          "title": "Add concrete RoutingContext / BackendSelection examples"
+        },
+        {
+          "id": "148.8",
+          "status": "done",
+          "title": "Establish documentation linting and validation pipeline"
+        }
+      ],
+      "testStrategy": "Documentation linting, link checking, example validation, and consistency reviews.",
+      "title": "LLM Router — Documentation, Examples & Developer Onboarding"
     },
     {
-      "id": 149,
-      "title": "LLM Router — Final Integration, Testing & Epic Completion",
-      "status": "done",
-      "priority": "high",
       "dependencies": [],
       "details": "Complete the final integration of the LLM Router into the CPU pipeline, run the full test suite, verify all performance budgets, clear all TODOs, and mark the epic as production-ready.",
-      "testStrategy": "Full regression suite, performance benchmarks, chaos tests, and production-readiness checklist.",
+      "id": 149,
+      "priority": "high",
+      "status": "done",
       "subtasks": [
-        { "id": "149.1", "title": "Wire final integration points into CPU pipeline", "status": "done" },
-        { "id": "149.2", "title": "Run complete unit + integration test suite", "status": "done" },
-        { "id": "149.3", "title": "Execute full golden-file regression suite", "status": "done" },
-        { "id": "149.4", "title": "Validate performance budgets (P99 < 2ms, low allocations)", "status": "done" },
-        { "id": "149.5", "title": "Run chaos and failure-mode test suite", "status": "done" },
-        { "id": "149.6", "title": "Clear all TODOs, warnings, and incomplete items", "status": "done" },
-        { "id": "149.7", "title": "Finalize production-readiness checklist", "status": "done" },
-        { "id": "149.8", "title": "Mark LLM Router epic complete and update project status", "status": "done" }
-      ]
+        {
+          "id": "149.1",
+          "status": "done",
+          "title": "Wire final integration points into CPU pipeline"
+        },
+        {
+          "id": "149.2",
+          "status": "done",
+          "title": "Run complete unit + integration test suite"
+        },
+        {
+          "id": "149.3",
+          "status": "done",
+          "title": "Execute full golden-file regression suite"
+        },
+        {
+          "id": "149.4",
+          "status": "done",
+          "title": "Validate performance budgets (P99 < 2ms, low allocations)"
+        },
+        {
+          "id": "149.5",
+          "status": "done",
+          "title": "Run chaos and failure-mode test suite"
+        },
+        {
+          "id": "149.6",
+          "status": "done",
+          "title": "Clear all TODOs, warnings, and incomplete items"
+        },
+        {
+          "id": "149.7",
+          "status": "done",
+          "title": "Finalize production-readiness checklist"
+        },
+        {
+          "id": "149.8",
+          "status": "done",
+          "title": "Mark LLM Router epic complete and update project status"
+        }
+      ],
+      "testStrategy": "Full regression suite, performance benchmarks, chaos tests, and production-readiness checklist.",
+      "title": "LLM Router — Final Integration, Testing & Epic Completion"
+    },
+    {
+      "dependencies": [
+        149
+      ],
+      "details": "Create a central, deterministic runtime loop that orchestrates all agent activity. This loop becomes the “brainstem” of the Agent OS, coordinating the planner, router, tool supervisor, memory system, hooks, and CPU.\n\nThe runtime loop should:\n- Initialize AgentState (messages, scratchpad, memory deltas, last tool result, step counter, halted flag)\n- Enter a step-by-step execution cycle\n- On each iteration: run pre-step hooks, invoke Planner, pass through Rule Layer, handle LLM/Tool/Final Answer actions, run post-step hooks, emit bus events, increment step counter\n- Enforce deterministic safety rules (max steps, max tool retries, no hallucinated tools, no invalid JSON, no infinite loops)\n- Integrate with memory (write deltas, update episodic + semantic memory, trigger memory hooks)\n- Terminate cleanly on halt, error, or max steps reached",
+      "id": 150,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "150.0",
+          "status": "pending",
+          "title": "Define AgentStep enum (LLMCall, ToolCall, FinalAnswer, Error)"
+        },
+        {
+          "id": "150.1",
+          "status": "pending",
+          "title": "Define AgentState struct and initialization logic"
+        },
+        {
+          "id": "150.3.2",
+          "status": "pending",
+          "title": "Define Planner trait interface"
+        },
+        {
+          "id": "150.3.1",
+          "status": "pending",
+          "title": "Implement Rule Layer validation (safety checks)"
+        },
+        {
+          "id": "150.2",
+          "status": "pending",
+          "title": "Implement core step loop with hook points"
+        },
+        {
+          "id": "150.4",
+          "status": "pending",
+          "title": "Implement LLM action path via Router"
+        },
+        {
+          "id": "150.5",
+          "status": "pending",
+          "title": "Implement Tool action path via Tool Supervisor"
+        },
+        {
+          "id": "150.6",
+          "status": "pending",
+          "title": "Add Final Answer termination handling"
+        },
+        {
+          "id": "150.7",
+          "status": "pending",
+          "title": "Implement safety rules and loop guards"
+        },
+        {
+          "id": "150.8",
+          "status": "pending",
+          "title": "Integrate memory delta writes and hooks"
+        },
+        {
+          "id": "150.9",
+          "status": "pending",
+          "title": "Add clean termination + event emission on bus"
+        },
+        {
+          "id": "150.10",
+          "status": "pending",
+          "title": "Write integration and safety tests"
+        },
+        {
+          "id": "150.11",
+          "status": "pending",
+          "title": "Add Runtime Trace Logging (structured JSON per step)"
+        },
+        {
+          "id": "150.12",
+          "status": "pending",
+          "title": "Integrate pre-step and post-step hooks into the runtime loop"
+        },
+        {
+          "id": "150.13",
+          "status": "pending",
+          "title": "Add RuntimeConfig (max_steps, retries, timeouts, trace settings) loaded from config.toml"
+        },
+        {
+          "id": "150.14",
+          "status": "pending",
+          "title": "Define ToolSupervisor trait for clean abstraction and testability"
+        },
+        {
+          "id": "150.15",
+          "status": "pending",
+          "title": "Wire the runtime loop into src/cpu/ as the main execution entrypoint"
+        }
+      ],
+      "testStrategy": "Integration tests exercising the full loop with mocked planner/router/tools/memory. Safety rule enforcement tests. Deterministic replay tests. End-to-end agent execution scenarios.",
+      "title": "Define AgentStep enum (LLMCall, ToolCall, FinalAnswer, Error)"
     }
   ]
 }
