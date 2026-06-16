@@ -7,6 +7,7 @@ pub mod interfaces;
 pub mod state;
 pub mod time_scheduler;
 pub mod workflow_executor;
+pub mod commands;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -644,6 +645,23 @@ where
                             log_to_file("force_step requested via bus (not yet supported in sync handler)");
                         }
                         _ => log_to_file(&format!("Unknown reasoning_command: {}", cmd)),
+                    }
+                }
+
+                "agent_run" => {
+                    let goal = payload["goal"].as_str().unwrap_or("").to_string();
+                    if goal.is_empty() {
+                        log_to_file("CPU received empty agent_run goal — ignored");
+                    } else {
+                        log_to_file(&format!("CPU received AgentRun via bus: {}", goal));
+
+                        // Spawn the runtime asynchronously and emit completion events
+                        // Note: In a real implementation this would be properly spawned
+                        // For now we just log the intent
+                        log_to_file(&format!(
+                            "AgentRun goal '{}' would trigger run_unified_agent + AgentFinished event",
+                            goal
+                        ));
                     }
                 }
 

@@ -32,8 +32,25 @@ impl<P: Planner> RuntimeLoop<P> {
             }
 
             match &step {
-                AgentStep::FinalAnswer(_) | AgentStep::Error(_) => {
+                AgentStep::FinalAnswer(answer) => {
                     state.halt("Terminal step reached");
+                    crate::agents::bus_events::emit_agent_finished(&state, answer);
+                }
+                AgentStep::Error(err) => {
+                    state.halt("Terminal step reached");
+                    crate::agents::bus_events::emit_agent_error(&state, err);
+                }
+                AgentStep::ToolCall(inv) => {
+                    // Execute the tool via the tool path
+                    match crate::agents::tool_path::execute_tool_call(inv).await {
+                        Ok(result) => {
+                            info!("Tool '{}' executed successfully: {:?}", inv.name, result);
+                            state.last_tool_result = Some(result);
+                        }
+                        Err(e) => {
+                            state.halt(&format!("Tool execution failed: {}", e));
+                        }
+                    }
                 }
                 _ => {}
             }
