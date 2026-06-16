@@ -132,7 +132,7 @@ fn install() {
     // machine, so the installer always has a valid default even on a fresh
     // Linux clone that hasn't been `git pull`-ed yet.
     const DEFAULT_CONFIG: &str = include_str!("../../config.toml");
-    const DEFAULT_MANIFEST: &str = include_str!("../../system_manifest.md");
+    const DEFAULT_MANIFEST: &str = include_str!("../../docs/system_manifest_root.md");
 
     deploy_tracked_file("config.toml", &source_dir, DEFAULT_CONFIG);
     deploy_tracked_file("system_manifest.md", &source_dir, DEFAULT_MANIFEST);
