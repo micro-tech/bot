@@ -79,20 +79,20 @@
     {
       "id": 149,
       "title": "LLM Router — Final Integration, Testing & Epic Completion",
-      "status": "in_progress",
+      "status": "done",
       "priority": "high",
       "dependencies": [],
       "details": "Complete the final integration of the LLM Router into the CPU pipeline, run the full test suite, verify all performance budgets, clear all TODOs, and mark the epic as production-ready.",
       "testStrategy": "Full regression suite, performance benchmarks, chaos tests, and production-readiness checklist.",
       "subtasks": [
         { "id": "149.1", "title": "Wire final integration points into CPU pipeline", "status": "done" },
-        { "id": "149.2", "title": "Run complete unit + integration test suite", "status": "in_progress" },
-        { "id": "149.3", "title": "Execute full golden-file regression suite", "status": "pending" },
-        { "id": "149.4", "title": "Validate performance budgets (P99 < 2ms, low allocations)", "status": "pending" },
-        { "id": "149.5", "title": "Run chaos and failure-mode test suite", "status": "pending" },
-        { "id": "149.6", "title": "Clear all TODOs, warnings, and incomplete items", "status": "pending" },
+        { "id": "149.2", "title": "Run complete unit + integration test suite", "status": "done" },
+        { "id": "149.3", "title": "Execute full golden-file regression suite", "status": "done" },
+        { "id": "149.4", "title": "Validate performance budgets (P99 < 2ms, low allocations)", "status": "done" },
+        { "id": "149.5", "title": "Run chaos and failure-mode test suite", "status": "done" },
+        { "id": "149.6", "title": "Clear all TODOs, warnings, and incomplete items", "status": "done" },
         { "id": "149.7", "title": "Finalize production-readiness checklist", "status": "done" },
-        { "id": "149.8", "title": "Mark LLM Router epic complete and update project status", "status": "pending" }
+        { "id": "149.8", "title": "Mark LLM Router epic complete and update project status", "status": "done" }
       ]
     }
   ]
