@@ -1,19 +1,21 @@
-//! Bus event emission for observability.
+//! Bus event types for the Unified Agent Runtime.
 
-use crate::agents::agent_state::AgentState;
-use crate::agents::agent_step::AgentStep;
-use log::info;
+use serde::{Deserialize, Serialize};
 
-pub fn emit_step_event(state: &AgentState, step: &AgentStep) {
-    info!(
-        "BUS_EVENT step={} action={} halted={}",
-        state.step_count,
-        step.label(),
-        state.halted
-    );
-    // Real implementation would publish to the Bus
+/// Event emitted when an agent run completes successfully.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentFinished {
+    pub goal: String,
+    pub result: String,
+    pub steps_taken: u32,
+    pub correlation_id: u64,
 }
 
-pub fn emit_terminal_event(state: &AgentState, reason: &str) {
-    info!("BUS_EVENT terminal reason='{}' steps={}", reason, state.step_count);
+/// Event emitted when an agent run fails or is halted.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentError {
+    pub goal: String,
+    pub error: String,
+    pub steps_taken: u32,
+    pub correlation_id: u64,
 }

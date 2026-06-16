@@ -257,101 +257,41 @@
     },
     {
       "dependencies": [
-        149
+        150
       ],
-      "details": "Create a central, deterministic runtime loop that orchestrates all agent activity. This loop becomes the “brainstem” of the Agent OS, coordinating the planner, router, tool supervisor, memory system, hooks, and CPU.\n\nThe runtime loop should:\n- Initialize AgentState (messages, scratchpad, memory deltas, last tool result, step counter, halted flag)\n- Enter a step-by-step execution cycle\n- On each iteration: run pre-step hooks, invoke Planner, pass through Rule Layer, handle LLM/Tool/Final Answer actions, run post-step hooks, emit bus events, increment step counter\n- Enforce deterministic safety rules (max steps, max tool retries, no hallucinated tools, no invalid JSON, no infinite loops)\n- Integrate with memory (write deltas, update episodic + semantic memory, trigger memory hooks)\n- Terminate cleanly on halt, error, or max steps reached",
-      "id": 150,
+      "details": "Wire the new Unified Agent Runtime Loop into the CPU so it can be triggered from the command line, bus events, and cron jobs.\n\nThree integration paths:\n1. CPU Command: `agent.run \"goal\"` — fastest way to test the runtime from CLI\n2. Bus Event: `AgentRun { goal }` message handler in cpu/bus_handlers.rs\n3. Cron Trigger: autonomous background execution (e.g. every 5s maintain system state)\n\nGoal: make the runtime loop a first-class citizen of the Agent OS event and command system.",
+      "id": 151,
       "priority": "high",
-      "status": "in_progress",
+      "status": "pending",
       "subtasks": [
         {
-          "id": "150.0",
+          "id": "151.1",
           "status": "pending",
-          "title": "Define AgentStep enum (LLMCall, ToolCall, FinalAnswer, Error)"
+          "title": "Add CPU command 'agent.run <goal>' that calls run_unified_agent()"
         },
         {
-          "id": "150.1",
+          "id": "151.2",
           "status": "pending",
-          "title": "Define AgentState struct and initialization logic"
+          "title": "Implement BusEvent::AgentRun handler in cpu/bus_handlers.rs"
         },
         {
-          "id": "150.3.2",
+          "id": "151.3",
           "status": "pending",
-          "title": "Define Planner trait interface"
+          "title": "Add cron job for autonomous runtime execution (e.g. maintain system state)"
         },
         {
-          "id": "150.3.1",
+          "id": "151.4",
           "status": "pending",
-          "title": "Implement Rule Layer validation (safety checks)"
+          "title": "Emit AgentFinished / AgentError bus events on completion"
         },
         {
-          "id": "150.2",
+          "id": "151.5",
           "status": "pending",
-          "title": "Implement core step loop with hook points"
-        },
-        {
-          "id": "150.4",
-          "status": "pending",
-          "title": "Implement LLM action path via Router"
-        },
-        {
-          "id": "150.5",
-          "status": "pending",
-          "title": "Implement Tool action path via Tool Supervisor"
-        },
-        {
-          "id": "150.6",
-          "status": "pending",
-          "title": "Add Final Answer termination handling"
-        },
-        {
-          "id": "150.7",
-          "status": "pending",
-          "title": "Implement safety rules and loop guards"
-        },
-        {
-          "id": "150.8",
-          "status": "pending",
-          "title": "Integrate memory delta writes and hooks"
-        },
-        {
-          "id": "150.9",
-          "status": "pending",
-          "title": "Add clean termination + event emission on bus"
-        },
-        {
-          "id": "150.10",
-          "status": "pending",
-          "title": "Write integration and safety tests"
-        },
-        {
-          "id": "150.11",
-          "status": "pending",
-          "title": "Add Runtime Trace Logging (structured JSON per step)"
-        },
-        {
-          "id": "150.12",
-          "status": "pending",
-          "title": "Integrate pre-step and post-step hooks into the runtime loop"
-        },
-        {
-          "id": "150.13",
-          "status": "pending",
-          "title": "Add RuntimeConfig (max_steps, retries, timeouts, trace settings) loaded from config.toml"
-        },
-        {
-          "id": "150.14",
-          "status": "pending",
-          "title": "Define ToolSupervisor trait for clean abstraction and testability"
-        },
-        {
-          "id": "150.15",
-          "status": "pending",
-          "title": "Wire the runtime loop into src/cpu/ as the main execution entrypoint"
+          "title": "Write tests for command, bus, and cron integration paths"
         }
       ],
-      "testStrategy": "Integration tests exercising the full loop with mocked planner/router/tools/memory. Safety rule enforcement tests. Deterministic replay tests. End-to-end agent execution scenarios.",
-      "title": "Define AgentStep enum (LLMCall, ToolCall, FinalAnswer, Error)"
+      "testStrategy": "CLI smoke test with agent.run, bus message round-trip test, cron job execution test, and verification that all three paths produce correct final answers.",
+      "title": "Wire Unified Runtime Loop into CPU Command, Bus, and Cron"
     }
   ]
 }

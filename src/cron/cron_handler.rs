@@ -12,21 +12,36 @@ fn get_timestamp() -> u64 {
 }
 
 pub async fn start_cron(bus: Arc<Bus>) {
-    let mut ticker = interval(Duration::from_secs(3600)); // Hourly
+    let mut ticker = interval(Duration::from_secs(5)); // every 5 seconds for autonomous mode
 
     loop {
         ticker.tick().await;
 
+        // Autonomous runtime trigger
         let task_msg = Message {
-            to: "ollama".to_string(),
+            to: "cpu".to_string(),
             from: "cron".to_string(),
-            data: "Hourly cron task: check logs, run maintenance".to_string(),
+            data: serde_json::json!({
+                "type": "agent_run",
+                "goal": "maintain system state"
+            }).to_string(),
             timestamp: get_timestamp(),
         };
 
         match bus.publish(task_msg) {
-            Ok(_) => info!("Cron: Hourly maintenance task published"),
-            Err(e) => error!("Cron: Failed to publish task: {}", e),
+            Ok(_) => info!("Cron: Autonomous agent_run triggered (maintain system state)"),
+            Err(e) => error!("Cron: Failed to publish agent_run: {}", e),
+        }
+
+        // Original hourly maintenance (keep both)
+        if Utc::now().hour() % 1 == 0 {
+            let maintenance = Message {
+                to: "ollama".to_string(),
+                from: "cron".to_string(),
+                data: "Hourly cron task: check logs, run maintenance".to_string(),
+                timestamp: get_timestamp(),
+            };
+            let _ = bus.publish(maintenance);
         }
     }
 }

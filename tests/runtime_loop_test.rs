@@ -1,7 +1,7 @@
 //! Integration test for the Unified Agent Runtime Loop.
 
 use bot::agents::agent_state::AgentState;
-use bot::agents::agent_step::{AgentStep, FinalAnswer};
+use bot::agents::agent_step::AgentStep;
 use bot::agents::planner::Planner;
 use bot::agents::rule_layer::RuleLayer;
 use bot::agents::runtime_loop::RuntimeLoop;
