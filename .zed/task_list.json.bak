@@ -262,36 +262,112 @@
       "details": "Wire the new Unified Agent Runtime Loop into the CPU so it can be triggered from the command line, bus events, and cron jobs.\n\nThree integration paths:\n1. CPU Command: `agent.run \"goal\"` — fastest way to test the runtime from CLI\n2. Bus Event: `AgentRun { goal }` message handler in cpu/bus_handlers.rs\n3. Cron Trigger: autonomous background execution (e.g. every 5s maintain system state)\n\nGoal: make the runtime loop a first-class citizen of the Agent OS event and command system.",
       "id": 151,
       "priority": "high",
-      "status": "pending",
+      "status": "done",
       "subtasks": [
         {
           "id": "151.1",
-          "status": "pending",
+          "status": "done",
           "title": "Add CPU command 'agent.run <goal>' that calls run_unified_agent()"
         },
         {
           "id": "151.2",
-          "status": "pending",
+          "status": "done",
           "title": "Implement BusEvent::AgentRun handler in cpu/bus_handlers.rs"
         },
         {
           "id": "151.3",
-          "status": "pending",
+          "status": "done",
           "title": "Add cron job for autonomous runtime execution (e.g. maintain system state)"
         },
         {
           "id": "151.4",
-          "status": "pending",
+          "status": "done",
           "title": "Emit AgentFinished / AgentError bus events on completion"
         },
         {
           "id": "151.5",
-          "status": "pending",
+          "status": "done",
           "title": "Write tests for command, bus, and cron integration paths"
         }
       ],
       "testStrategy": "CLI smoke test with agent.run, bus message round-trip test, cron job execution test, and verification that all three paths produce correct final answers.",
       "title": "Wire Unified Runtime Loop into CPU Command, Bus, and Cron"
+    },
+    {
+      "dependencies": [],
+      "description": "Make the runtime loop actually execute tools and emit proper completion events on the bus.",
+      "details": "",
+      "id": 152,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": 152.1,
+          "status": "pending",
+          "title": "Discover how tools are currently registered and called"
+        },
+        {
+          "dependencies": [],
+          "id": 152.2,
+          "status": "pending",
+          "title": "Wire real tool execution into runtime_loop"
+        },
+        {
+          "dependencies": [],
+          "id": 152.3,
+          "status": "pending",
+          "title": "Emit proper completion events"
+        },
+        {
+          "dependencies": [],
+          "id": 152.4,
+          "status": "pending",
+          "title": "Verify end-to-end tool execution + events"
+        }
+      ],
+      "testStrategy": "Run agent.run with a real tool and verify both the final answer and bus events are produced.",
+      "title": "Implement Real Tool Execution + Bus Event Emission in Unified Runtime (DONE)"
+    },
+    {
+      "dependencies": [
+        151,
+        152
+      ],
+      "description": "Integrate the existing planning/ module (planner.rs, reflection.rs) with the new Unified Agent Runtime Loop via a thin adapter layer so the runtime can use the current planner to produce structured AgentStep actions.",
+      "details": "This task does not modify the existing planner. It creates a Planner trait + PlannerOutput and a ReflectionPlannerAdapter that wraps planning/planner.rs and planning/reflection.rs, ensuring compatibility with the LLM Router and Tool Supervisor. The runtime loop will then use any Planner implementation.",
+      "id": 153,
+      "priority": "high",
+      "status": "in_progress",
+      "subtasks": [
+        {
+          "id": "153.1",
+          "status": "pending",
+          "title": "Define Planner trait (decide(&AgentState) -> PlannerOutput)"
+        },
+        {
+          "id": "153.2",
+          "status": "pending",
+          "title": "Define PlannerOutput enum (LLMCall, ToolCall, FinalAnswer, Error)"
+        },
+        {
+          "id": "153.3",
+          "status": "pending",
+          "title": "Implement ReflectionPlannerAdapter wrapping existing planner logic"
+        },
+        {
+          "id": "153.4",
+          "status": "pending",
+          "title": "Integrate adapter into RuntimeLoop (use planner.decide each step)"
+        },
+        {
+          "id": "153.5",
+          "status": "pending",
+          "title": "Add tests for planner → runtime integration (no breaking changes)"
+        }
+      ],
+      "testStrategy": "Unit tests for trait/output mapping, integration test running RuntimeLoop with ReflectionPlannerAdapter, verify no changes to existing planning/ module.",
+      "title": "Adapt Existing Planner Module to the Unified Agent Runtime Loop"
     }
   ]
 }

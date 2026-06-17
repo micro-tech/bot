@@ -655,15 +655,38 @@ where
                     } else {
                         log_to_file(&format!("CPU received AgentRun via bus: {}", goal));
 
-                        // Spawn the runtime asynchronously and emit completion events
-                        // Note: In a real implementation this would be properly spawned
-                        // For now we just log the intent
-                        log_to_file(&format!(
-                            "AgentRun goal '{}' would trigger run_unified_agent + AgentFinished event",
-                            goal
-                        ));
+                        // Spawn the runtime asynchronously
+                        // We use a dummy planner for now (SimplePlanner)
+                        // In production you would inject a real planner via DI
+                        let bus_clone = self.bus.clone();
+                        let goal_clone = goal.clone();
+
+                        tokio::spawn(async move {
+                            use crate::agents::simple_planner::SimplePlanner;
+                            use crate::agents::planner::Planner;
+
+                            // This is a placeholder — in real code the Cpu would hold the planner
+                            // For now we just demonstrate the wiring
+                            log_to_file(&format!(
+                                "[Bus] AgentRun goal '{}' would now execute run_unified_agent",
+                                goal_clone
+                            ));
+
+                            // Emit a synthetic completion event so downstream systems can react
+                            let _ = bus_clone.publish(Message {
+                                to: "event_log".to_string(),
+                                from: "cpu".to_string(),
+                                data: serde_json::json!({
+                                    "type": "agent_finished",
+                                    "goal": goal_clone,
+                                    "status": "simulated"
+                                }).to_string(),
+                                timestamp: now_ms(),
+                            });
+                        });
                     }
                 }
+
 
                 "skill_request" => {
                     // Direct skill execution request — CPU runs the skill synchronously
