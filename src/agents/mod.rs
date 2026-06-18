@@ -2,6 +2,7 @@ pub mod agent_step;
 pub mod agent_state;
 pub mod planner;
 pub mod planner_output;
+pub mod runtime_trace;
 pub mod rule_layer;
 pub mod runtime_loop;
 pub mod llm_path;

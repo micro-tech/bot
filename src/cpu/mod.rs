@@ -175,7 +175,7 @@ where
         state.messages.push(format!("goal: {}", goal));
 
         let rule_layer = RuleLayer::new(allowed_tools);
-        let runtime = RuntimeLoop::new(planner, rule_layer, max_steps);
+        let mut runtime = RuntimeLoop::new(planner, rule_layer, max_steps);
 
         let final_state = runtime.run(state).await;
 

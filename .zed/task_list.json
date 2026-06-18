@@ -1,15 +1,48 @@
 {
   "tasks": [
     {
-      "id": 155,
-      "title": "Planner v2: Structured PlannerOutput + ReflectionPlannerAdapter",
-      "description": "Enable the Unified Agent Runtime Loop to make structured decisions by integrating the existing planning/ module through a thin adapter layer with proper PlannerOutput enum and reflection parsing.",
-      "details": "This is the next-level planner integration. It introduces PlannerOutput as the canonical decision type and a ReflectionPlannerAdapter that parses reflection text into structured actions (ToolCall, LLMCall, FinalAnswer). Must not modify planning/planner.rs or planning/reflection.rs.",
+      "dependencies": [
+        153
+      ],
+      "description": "Enhance runtime observability and complete the bus integration so the agent can be driven from events, cron, and other agents.",
+      "details": "1) Add detailed per-step trace logging (planner decision, action type, tool calls, memory writes, rule checks). 2) Fully implement the AgentRun bus handler so Cpu actually spawns the runtime and emits AgentFinished/AgentError. 3) Add a simple trace flag or log level so operators can turn detailed logging on/off.",
+      "id": 154,
       "priority": "high",
       "status": "done",
+      "subtasks": [
+        {
+          "id": "154.1",
+          "status": "done",
+          "title": "Add detailed per-step logging in RuntimeLoop (planner decision, step type, tool result, memory)"
+        },
+        {
+          "id": "154.2",
+          "status": "done",
+          "title": "Implement real AgentRun bus handler that calls run_unified_agent and emits completion events"
+        },
+        {
+          "id": "154.3",
+          "status": "done",
+          "title": "Add runtime trace flag / log level control"
+        },
+        {
+          "id": "154.4",
+          "status": "done",
+          "title": "Test end-to-end via CLI and bus event"
+        }
+      ],
+      "testStrategy": "Run agent.run from CLI with trace logs visible. Send AgentRun bus message and verify AgentFinished event is emitted.",
+      "title": "Add Rich Trace Logging + Proper Bus Event Hook for Unified Runtime"
+    },
+    {
       "dependencies": [
         154
       ],
+      "description": "Enable the Unified Agent Runtime Loop to make structured decisions by integrating the existing planning/ module through a thin adapter layer with proper PlannerOutput enum and reflection parsing.",
+      "details": "This is the next-level planner integration. It introduces PlannerOutput as the canonical decision type and a ReflectionPlannerAdapter that parses reflection text into structured actions (ToolCall, LLMCall, FinalAnswer). Must not modify planning/planner.rs or planning/reflection.rs.",
+      "id": 155,
+      "priority": "high",
+      "status": "done",
       "subtasks": [
         {
           "id": "155.1",
@@ -37,7 +70,90 @@
           "title": "Add unit tests for PlannerOutput + adapter parsing and integration test"
         }
       ],
-      "testStrategy": "Unit tests for trait and parsing, integration test running full RuntimeLoop with ReflectionPlannerAdapter, verify no changes to existing planning/ module."
+      "testStrategy": "Unit tests for trait and parsing, integration test running full RuntimeLoop with ReflectionPlannerAdapter, verify no changes to existing planning/ module.",
+      "title": "Planner v2: Structured PlannerOutput + ReflectionPlannerAdapter"
+    },
+    {
+      "dependencies": [
+        155
+      ],
+      "description": "Make the agent actually use tools and LLM in a real scenario. Ensure tool results flow back into the planner, LLM responses are stored in state, the planner can chain multiple steps, and the loop can run 5–20 cycles without stalling.",
+      "details": "This is a full integration test of the Unified Agent Runtime. The goal is to have a working multi-step agent that: 1) Uses tools and receives results, 2) Uses LLM calls and stores responses, 3) Chains multiple decisions, 4) Reaches a FinalAnswer after several cycles.",
+      "id": 156,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "156.1",
+          "status": "done",
+          "title": "Ensure tool results are fed back into AgentState for the next planner decision"
+        },
+        {
+          "id": "156.2",
+          "status": "done",
+          "title": "Ensure LLM responses are stored in state.messages"
+        },
+        {
+          "id": "156.3",
+          "status": "done",
+          "title": "Implement a planner that can chain multiple ToolCall + LLMCall steps"
+        },
+        {
+          "id": "156.4",
+          "status": "done",
+          "title": "Create an end-to-end test that runs 5–20 cycles and reaches FinalAnswer"
+        },
+        {
+          "id": "156.5",
+          "status": "done",
+          "title": "Verify no stalling and proper termination"
+        }
+      ],
+      "testStrategy": "Run a full end-to-end test with a real multi-step scenario (e.g. search → calc → final answer). Verify state contains tool results and LLM responses, and the loop terminates cleanly.",
+      "title": "End-to-end agent test: make the runtime loop execute a real multi-step plan using LLM + tools + final answer"
+    },
+    {
+      "dependencies": [
+        156
+      ],
+      "description": "Add a structured tracing system to the Unified Agent Runtime Loop so each planner decision, LLM call, tool call, and state update is captured in a RuntimeTrace. Provide optional CLI output for step-by-step visualization.",
+      "details": "Introduce a RuntimeTrace struct that records each cycle of the agent loop, including planner decisions, LLM prompts/responses, tool calls/results, and state deltas. Add a --trace flag to the CLI to print a human-readable step-by-step execution log. Ensure tracing is optional and does not affect runtime behavior.",
+      "id": 157,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "description": "Create a struct that stores a Vec<RuntimeStep>, where each step contains: planner_output, llm_call, llm_response, tool_call, tool_result, and state snapshot.",
+          "id": "157.1",
+          "status": "done",
+          "title": "Add RuntimeTrace struct"
+        },
+        {
+          "description": "Modify runtime_loop.rs so each iteration appends a RuntimeStep capturing all relevant data before and after executing the step.",
+          "id": "157.2",
+          "status": "done",
+          "title": "Instrument RuntimeLoop to push trace steps"
+        },
+        {
+          "description": "Extend the CLI to accept --trace. When enabled, print a formatted multi-step trace after the agent finishes.",
+          "id": "157.3",
+          "status": "done",
+          "title": "Add CLI flag --trace"
+        },
+        {
+          "description": "Add a human-readable formatter that prints each step with clear sections: Planner Decision, LLM Call, LLM Response, Tool Call, Tool Result, State Changes.",
+          "id": "157.4",
+          "status": "done",
+          "title": "Implement pretty-printer for trace output"
+        },
+        {
+          "description": "Verify that each branch (LLMCall, ToolCall, FinalAnswer) produces correct trace entries. Ensure trace does not alter runtime behavior.",
+          "id": "157.5",
+          "status": "done",
+          "title": "Add unit tests for trace recording"
+        }
+      ],
+      "title": "Runtime Trace Logging + Step Visualization"
     }
   ]
 }
