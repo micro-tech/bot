@@ -15,5 +15,6 @@ pub mod trace_logging;
 pub mod hooks;
 pub mod runtime_config;
 pub mod tool_supervisor;
+pub mod tool_supervisor_v2;
 pub mod simple_planner;
 pub mod reflection_planner_adapter;

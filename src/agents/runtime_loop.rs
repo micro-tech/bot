@@ -93,29 +93,35 @@ impl<P: Planner> RuntimeLoop<P> {
                     step.tool_name = Some(tool_name.clone());
                     step.tool_args = Some(args_json.clone());
 
-                    // Execute tool via the tool path
-                    let inv = crate::agents::agent_step::ToolInvocation {
-                        name: tool_name,
-                        args: args_json,
-                        correlation_id: state.step_count as u64,
-                    };
-                    match crate::agents::tool_path::execute_tool_call(&inv).await {
-                        Ok(result) => {
+                    // Use ToolSupervisorV2 for validated + retried execution
+                    let supervisor = crate::agents::tool_supervisor_v2::ToolSupervisorV2::default();
+                    let tool_result = supervisor.execute(&tool_name, &args_json).await;
+
+                    match tool_result {
+                        crate::agents::tool_supervisor_v2::ToolResult::Success(value) => {
                             if self.trace {
-                                info!("[Runtime] Tool '{}' executed → {:?}", inv.name, result);
+                                info!("[Runtime] Tool '{}' succeeded → {:?}", tool_name, value);
                             }
-                            state.last_tool_result = Some(result.clone());
+                            state.last_tool_result = Some(value.clone());
                             state.messages.push(format!(
                                 "Tool '{}' returned: {}",
-                                inv.name,
-                                serde_json::to_string(&result).unwrap_or_default()
+                                tool_name,
+                                serde_json::to_string(&value).unwrap_or_default()
                             ));
-                            step.tool_result = Some(result);
+                            step.tool_result = Some(value);
                         }
-                        Err(e) => {
-                            warn!("[Runtime] Tool '{}' failed: {}", inv.name, e);
-                            state.halt(&format!("Tool execution failed: {}", e));
-                            step.error = Some(e.to_string());
+                        crate::agents::tool_supervisor_v2::ToolResult::RetryableError(err) => {
+                            warn!("[Runtime] Tool '{}' retryable error: {}", tool_name, err.message());
+                            state.last_tool_result = Some(serde_json::json!({
+                                "error": err.message(),
+                                "retryable": true
+                            }));
+                            step.error = Some(err.message().to_string());
+                        }
+                        crate::agents::tool_supervisor_v2::ToolResult::FatalError(err) => {
+                            warn!("[Runtime] Tool '{}' fatal error: {}", tool_name, err.message());
+                            state.halt(&format!("Tool failed: {}", err.message()));
+                            step.error = Some(err.message().to_string());
                             step.halted = true;
                             self.runtime_trace.push(step);
                             break;
