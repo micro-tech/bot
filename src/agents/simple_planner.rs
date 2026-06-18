@@ -2,9 +2,9 @@
 //! This is a placeholder until we wire a real LLM planner.
 
 use crate::agents::agent_state::AgentState;
-use crate::agents::agent_step::AgentStep;
-use async_trait::async_trait;
 use crate::agents::planner::Planner;
+use crate::agents::planner_output::PlannerOutput;
+use async_trait::async_trait;
 
 pub struct SimplePlanner {
     pub goal: String,
@@ -18,17 +18,20 @@ impl SimplePlanner {
 
 #[async_trait]
 impl Planner for SimplePlanner {
-    async fn decide(&self, state: &AgentState) -> AgentStep {
+    async fn decide(&self, state: &AgentState) -> PlannerOutput {
         // Very simple logic: after 3 steps, finish
         if state.step_count >= 3 {
-            return AgentStep::FinalAnswer(format!("Completed: {}", self.goal));
+            return PlannerOutput::FinalAnswer {
+                message: format!("Completed: {}", self.goal),
+                reasoning: None,
+            };
         }
 
         // Otherwise do a dummy tool call
-        AgentStep::ToolCall(crate::agents::agent_step::ToolInvocation {
-            name: "noop".to_string(),
-            args: serde_json::json!({ "note": "simple planner step" }),
-            correlation_id: 0,
-        })
+        PlannerOutput::ToolCall {
+            tool_name: "noop".to_string(),
+            args_json: serde_json::json!({ "note": "simple planner step" }),
+            reasoning: None,
+        }
     }
 }
