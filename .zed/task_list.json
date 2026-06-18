@@ -1,407 +1,43 @@
 {
   "tasks": [
     {
-      "dependencies": [],
-      "details": "Deepen the configuration system with strict schema validation, default value handling, environment variable overrides, and comprehensive error reporting.",
-      "id": 145,
-      "priority": "high",
-      "status": "done",
-      "subtasks": [
-        {
-          "id": "145.1",
-          "status": "done",
-          "title": "Define complete RouterConfig struct with all nested sections"
-        },
-        {
-          "id": "145.2",
-          "status": "done",
-          "title": "Implement TOML + JSON parsing with serde and custom deserializers"
-        },
-        {
-          "id": "145.3",
-          "status": "done",
-          "title": "Add field-level and cross-field validation rules"
-        },
-        {
-          "id": "145.4",
-          "status": "done",
-          "title": "Implement default value system with documentation"
-        },
-        {
-          "id": "145.5",
-          "status": "done",
-          "title": "Support environment variable overrides"
-        },
-        {
-          "id": "145.6",
-          "status": "done",
-          "title": "Create comprehensive router.toml example with comments"
-        },
-        {
-          "id": "145.7",
-          "status": "done",
-          "title": "Build hot-reload with atomic swap and validation"
-        },
-        {
-          "id": "145.8",
-          "status": "done",
-          "title": "Write unit, integration, and golden-file config tests"
-        }
-      ],
-      "testStrategy": "Unit tests for parsing, validation, defaulting, and error messages. Golden-file tests for config examples.",
-      "title": "LLM Router — Configuration System Deep Dive & Schema Validation"
-    },
-    {
-      "dependencies": [],
-      "details": "Ensure all router subsystems are correctly wired together with proper dependency injection and no circular dependencies.",
-      "id": 146,
-      "priority": "high",
-      "status": "done",
-      "subtasks": [
-        {
-          "id": "146.1",
-          "status": "done",
-          "title": "Define stable public API surface for all router modules"
-        },
-        {
-          "id": "146.2",
-          "status": "done",
-          "title": "Implement dependency injection for RoutingContext construction"
-        },
-        {
-          "id": "146.3",
-          "status": "done",
-          "title": "Resolve and document all inter-module dependencies"
-        },
-        {
-          "id": "146.4",
-          "status": "done",
-          "title": "Add integration test harness with mock stores"
-        },
-        {
-          "id": "146.5",
-          "status": "done",
-          "title": "Verify deterministic behavior across all module combinations"
-        },
-        {
-          "id": "146.6",
-          "status": "done",
-          "title": "Implement graceful degradation when optional modules are missing"
-        },
-        {
-          "id": "146.7",
-          "status": "done",
-          "title": "Write end-to-end integration tests for the full pipeline"
-        },
-        {
-          "id": "146.8",
-          "status": "done",
-          "title": "Document integration points and extension hooks"
-        }
-      ],
-      "testStrategy": "Integration tests that exercise the full decision pipeline. Dependency graph validation.",
-      "title": "LLM Router — Cross-Module Integration & Dependency Resolution"
-    },
-    {
-      "dependencies": [],
-      "details": "Build a comprehensive debug and explainability system that allows developers and operators to understand exactly why a particular backend was chosen.",
-      "id": 147,
-      "priority": "medium",
-      "status": "done",
-      "subtasks": [
-        {
-          "id": "147.1",
-          "status": "done",
-          "title": "Define DecisionTree, ExplainStep, and VizJSON data structures"
-        },
-        {
-          "id": "147.2",
-          "status": "done",
-          "title": "Implement explain-mode narrative generator"
-        },
-        {
-          "id": "147.3",
-          "status": "done",
-          "title": "Build machine-readable visualization JSON emitter"
-        },
-        {
-          "id": "147.4",
-          "status": "done",
-          "title": "Add router_debug CLI command and API endpoint"
-        },
-        {
-          "id": "147.5",
-          "status": "done",
-          "title": "Implement snapshot capture and replay functionality"
-        },
-        {
-          "id": "147.6",
-          "status": "done",
-          "title": "Create lightweight TUI / interactive inspector"
-        },
-        {
-          "id": "147.7",
-          "status": "done",
-          "title": "Ensure production safety (redaction, zero side effects)"
-        },
-        {
-          "id": "147.8",
-          "status": "done",
-          "title": "Write unit, integration, and golden-file debug tests"
-        }
-      ],
-      "testStrategy": "Unit tests for explain output determinism. Integration tests with live router. Golden-file tests for visualization output.",
-      "title": "LLM Router — Debug, Inspection & Explainability Layer"
-    },
-    {
-      "dependencies": [],
-      "details": "Produce high-quality, comprehensive documentation for the entire LLM Router subsystem.",
-      "id": 148,
-      "priority": "medium",
-      "status": "done",
-      "subtasks": [
-        {
-          "id": "148.1",
-          "status": "done",
-          "title": "Write high-level architecture overview"
-        },
-        {
-          "id": "148.2",
-          "status": "done",
-          "title": "Document each subsystem in detail"
-        },
-        {
-          "id": "148.3",
-          "status": "done",
-          "title": "Create data-flow and decision-flow diagrams (ASCII + Mermaid)"
-        },
-        {
-          "id": "148.4",
-          "status": "done",
-          "title": "Write 'How to Add a New Backend' guide"
-        },
-        {
-          "id": "148.5",
-          "status": "done",
-          "title": "Write 'How to Tune Router Behavior' guide"
-        },
-        {
-          "id": "148.6",
-          "status": "done",
-          "title": "Write 'How to Debug Routing Decisions' guide"
-        },
-        {
-          "id": "148.7",
-          "status": "done",
-          "title": "Add concrete RoutingContext / BackendSelection examples"
-        },
-        {
-          "id": "148.8",
-          "status": "done",
-          "title": "Establish documentation linting and validation pipeline"
-        }
-      ],
-      "testStrategy": "Documentation linting, link checking, example validation, and consistency reviews.",
-      "title": "LLM Router — Documentation, Examples & Developer Onboarding"
-    },
-    {
-      "dependencies": [],
-      "details": "Complete the final integration of the LLM Router into the CPU pipeline, run the full test suite, verify all performance budgets, clear all TODOs, and mark the epic as production-ready.",
-      "id": 149,
-      "priority": "high",
-      "status": "done",
-      "subtasks": [
-        {
-          "id": "149.1",
-          "status": "done",
-          "title": "Wire final integration points into CPU pipeline"
-        },
-        {
-          "id": "149.2",
-          "status": "done",
-          "title": "Run complete unit + integration test suite"
-        },
-        {
-          "id": "149.3",
-          "status": "done",
-          "title": "Execute full golden-file regression suite"
-        },
-        {
-          "id": "149.4",
-          "status": "done",
-          "title": "Validate performance budgets (P99 < 2ms, low allocations)"
-        },
-        {
-          "id": "149.5",
-          "status": "done",
-          "title": "Run chaos and failure-mode test suite"
-        },
-        {
-          "id": "149.6",
-          "status": "done",
-          "title": "Clear all TODOs, warnings, and incomplete items"
-        },
-        {
-          "id": "149.7",
-          "status": "done",
-          "title": "Finalize production-readiness checklist"
-        },
-        {
-          "id": "149.8",
-          "status": "done",
-          "title": "Mark LLM Router epic complete and update project status"
-        }
-      ],
-      "testStrategy": "Full regression suite, performance benchmarks, chaos tests, and production-readiness checklist.",
-      "title": "LLM Router — Final Integration, Testing & Epic Completion"
-    },
-    {
-      "dependencies": [
-        150
-      ],
-      "details": "Wire the new Unified Agent Runtime Loop into the CPU so it can be triggered from the command line, bus events, and cron jobs.\n\nThree integration paths:\n1. CPU Command: `agent.run \"goal\"` — fastest way to test the runtime from CLI\n2. Bus Event: `AgentRun { goal }` message handler in cpu/bus_handlers.rs\n3. Cron Trigger: autonomous background execution (e.g. every 5s maintain system state)\n\nGoal: make the runtime loop a first-class citizen of the Agent OS event and command system.",
-      "id": 151,
-      "priority": "high",
-      "status": "done",
-      "subtasks": [
-        {
-          "id": "151.1",
-          "status": "done",
-          "title": "Add CPU command 'agent.run <goal>' that calls run_unified_agent()"
-        },
-        {
-          "id": "151.2",
-          "status": "done",
-          "title": "Implement BusEvent::AgentRun handler in cpu/bus_handlers.rs"
-        },
-        {
-          "id": "151.3",
-          "status": "done",
-          "title": "Add cron job for autonomous runtime execution (e.g. maintain system state)"
-        },
-        {
-          "id": "151.4",
-          "status": "done",
-          "title": "Emit AgentFinished / AgentError bus events on completion"
-        },
-        {
-          "id": "151.5",
-          "status": "done",
-          "title": "Write tests for command, bus, and cron integration paths"
-        }
-      ],
-      "testStrategy": "CLI smoke test with agent.run, bus message round-trip test, cron job execution test, and verification that all three paths produce correct final answers.",
-      "title": "Wire Unified Runtime Loop into CPU Command, Bus, and Cron"
-    },
-    {
-      "dependencies": [],
-      "description": "Make the runtime loop actually execute tools and emit proper completion events on the bus.",
-      "details": "",
-      "id": 152,
-      "priority": "high",
-      "status": "done",
-      "subtasks": [
-        {
-          "dependencies": [],
-          "id": 152.1,
-          "status": "pending",
-          "title": "Discover how tools are currently registered and called"
-        },
-        {
-          "dependencies": [],
-          "id": 152.2,
-          "status": "pending",
-          "title": "Wire real tool execution into runtime_loop"
-        },
-        {
-          "dependencies": [],
-          "id": 152.3,
-          "status": "pending",
-          "title": "Emit proper completion events"
-        },
-        {
-          "dependencies": [],
-          "id": 152.4,
-          "status": "pending",
-          "title": "Verify end-to-end tool execution + events"
-        }
-      ],
-      "testStrategy": "Run agent.run with a real tool and verify both the final answer and bus events are produced.",
-      "title": "Implement Real Tool Execution + Bus Event Emission in Unified Runtime (DONE)"
-    },
-    {
-      "dependencies": [
-        151,
-        152
-      ],
-      "description": "Integrate the existing planning/ module (planner.rs, reflection.rs) with the new Unified Agent Runtime Loop via a thin adapter layer so the runtime can use the current planner to produce structured AgentStep actions.",
-      "details": "This task does not modify the existing planner. It creates a Planner trait + PlannerOutput and a ReflectionPlannerAdapter that wraps planning/planner.rs and planning/reflection.rs, ensuring compatibility with the LLM Router and Tool Supervisor. The runtime loop will then use any Planner implementation.",
-      "id": 153,
-      "priority": "high",
-      "status": "done",
-      "subtasks": [
-        {
-          "id": "153.1",
-          "status": "done",
-          "title": "Define Planner trait (decide(&AgentState) -> PlannerOutput)"
-        },
-        {
-          "id": "153.2",
-          "status": "done",
-          "title": "Define PlannerOutput enum (LLMCall, ToolCall, FinalAnswer, Error)"
-        },
-        {
-          "id": "153.3",
-          "status": "done",
-          "title": "Implement ReflectionPlannerAdapter wrapping existing planner logic"
-        },
-        {
-          "id": "153.4",
-          "status": "done",
-          "title": "Integrate adapter into RuntimeLoop (use planner.decide each step)"
-        },
-        {
-          "id": "153.5",
-          "status": "done",
-          "title": "Add tests for planner → runtime integration (no breaking changes)"
-        }
-      ],
-      "testStrategy": "Unit tests for trait/output mapping, integration test running RuntimeLoop with ReflectionPlannerAdapter, verify no changes to existing planning/ module.",
-      "title": "Adapt Existing Planner Module to the Unified Agent Runtime Loop"
-    },
-    {
-      "id": 154,
-      "title": "Add Rich Trace Logging + Proper Bus Event Hook for Unified Runtime",
-      "description": "Enhance runtime observability and complete the bus integration so the agent can be driven from events, cron, and other agents.",
-      "details": "1) Add detailed per-step trace logging (planner decision, action type, tool calls, memory writes, rule checks). 2) Fully implement the AgentRun bus handler so Cpu actually spawns the runtime and emits AgentFinished/AgentError. 3) Add a simple trace flag or log level so operators can turn detailed logging on/off.",
+      "id": 155,
+      "title": "Planner v2: Structured PlannerOutput + ReflectionPlannerAdapter",
+      "description": "Enable the Unified Agent Runtime Loop to make structured decisions by integrating the existing planning/ module through a thin adapter layer with proper PlannerOutput enum and reflection parsing.",
+      "details": "This is the next-level planner integration. It introduces PlannerOutput as the canonical decision type and a ReflectionPlannerAdapter that parses reflection text into structured actions (ToolCall, LLMCall, FinalAnswer). Must not modify planning/planner.rs or planning/reflection.rs.",
       "priority": "high",
       "status": "done",
       "dependencies": [
-        153
+        154
       ],
       "subtasks": [
         {
-          "id": "154.1",
+          "id": "155.1",
           "status": "done",
-          "title": "Add detailed per-step logging in RuntimeLoop (planner decision, step type, tool result, memory)"
+          "title": "Add Planner trait with decide(&AgentState) -> PlannerOutput"
         },
         {
-          "id": "154.2",
+          "id": "155.2",
           "status": "done",
-          "title": "Implement real AgentRun bus handler that calls run_unified_agent and emits completion events"
+          "title": "Add PlannerOutput enum (LLMCall, ToolCall, FinalAnswer, Error)"
         },
         {
-          "id": "154.3",
+          "id": "155.3",
           "status": "done",
-          "title": "Add runtime trace flag / log level control"
+          "title": "Implement ReflectionPlannerAdapter with reflection parsing logic"
         },
         {
-          "id": "154.4",
+          "id": "155.4",
           "status": "done",
-          "title": "Test end-to-end via CLI and bus event"
+          "title": "Integrate PlannerOutput handling into RuntimeLoop"
+        },
+        {
+          "id": "155.5",
+          "status": "done",
+          "title": "Add unit tests for PlannerOutput + adapter parsing and integration test"
         }
       ],
-      "testStrategy": "Run agent.run from CLI with trace logs visible. Send AgentRun bus message and verify AgentFinished event is emitted."
+      "testStrategy": "Unit tests for trait and parsing, integration test running full RuntimeLoop with ReflectionPlannerAdapter, verify no changes to existing planning/ module."
     }
   ]
 }

@@ -2,8 +2,8 @@
 //! This is the "brainstem" that orchestrates everything.
 
 use crate::agents::agent_state::AgentState;
-use crate::agents::agent_step::AgentStep;
 use crate::agents::planner::Planner;
+use crate::agents::planner_output::PlannerOutput;
 use crate::agents::rule_layer::RuleLayer;
 use log::{debug, info, warn};
 
@@ -36,45 +36,48 @@ impl<P: Planner> RuntimeLoop<P> {
                 debug!("[Runtime] Step {} — asking planner for next action", state.step_count);
             }
 
-            let step = self.planner.decide(&state).await;
+            // NEW: Planner now returns PlannerOutput (not AgentStep)
+            let decision = self.planner.decide(&state).await;
 
             if self.trace {
-                match &step {
-                    AgentStep::ToolCall(inv) => {
-                        info!("[Runtime] Planner chose ToolCall: {} (args={})",
-                              inv.name, serde_json::to_string(&inv.args).unwrap_or_default());
+                match &decision {
+                    PlannerOutput::ToolCall { tool_name, args_json, .. } => {
+                        info!("[Runtime] Planner chose ToolCall: {} (args={})", tool_name, args_json);
                     }
-                    AgentStep::LLMCall(spec) => {
-                        info!("[Runtime] Planner chose LLMCall (prompt_len={})", spec.prompt.len());
+                    PlannerOutput::LLMCall { prompt, .. } => {
+                        info!("[Runtime] Planner chose LLMCall (prompt_len={})", prompt.len());
                     }
-                    AgentStep::FinalAnswer(answer) => {
-                        info!("[Runtime] Planner chose FinalAnswer: {}", answer);
+                    PlannerOutput::FinalAnswer { message, .. } => {
+                        info!("[Runtime] Planner chose FinalAnswer: {}", message);
                     }
-                    AgentStep::Error(err) => {
-                        warn!("[Runtime] Planner returned Error: {}", err);
+                    PlannerOutput::Error { message } => {
+                        warn!("[Runtime] Planner returned Error: {}", message);
                     }
                 }
             }
 
-            if let Err(e) = self.rule_layer.validate(&step, state.step_count) {
-                warn!("[Runtime] Rule violation at step {}: {}", state.step_count, e);
-                state.halt(&format!("Rule violation: {}", e));
-                break;
-            }
-
-            match &step {
-                AgentStep::FinalAnswer(answer) => {
+            // Convert PlannerOutput into runtime action
+            match decision {
+                PlannerOutput::FinalAnswer { message, .. } => {
                     state.halt("Terminal step reached");
-                    crate::agents::bus_events::emit_agent_finished(&state, answer);
+                    crate::agents::bus_events::emit_agent_finished(&state, &message);
                     info!("[Runtime] Agent finished successfully");
+                    break;
                 }
-                AgentStep::Error(err) => {
+                PlannerOutput::Error { message } => {
                     state.halt("Terminal step reached");
-                    crate::agents::bus_events::emit_agent_error(&state, err);
-                    warn!("[Runtime] Agent halted with error: {}", err);
+                    crate::agents::bus_events::emit_agent_error(&state, &message);
+                    warn!("[Runtime] Agent halted with error: {}", message);
+                    break;
                 }
-                AgentStep::ToolCall(inv) => {
-                    match crate::agents::tool_path::execute_tool_call(inv).await {
+                PlannerOutput::ToolCall { tool_name, args_json, .. } => {
+                    // Execute tool via the tool path
+                    let inv = crate::agents::agent_step::ToolInvocation {
+                        name: tool_name,
+                        args: args_json,
+                        correlation_id: state.step_count as u64,
+                    };
+                    match crate::agents::tool_path::execute_tool_call(&inv).await {
                         Ok(result) => {
                             if self.trace {
                                 info!("[Runtime] Tool '{}' executed → {:?}", inv.name, result);
@@ -84,17 +87,26 @@ impl<P: Planner> RuntimeLoop<P> {
                         Err(e) => {
                             warn!("[Runtime] Tool '{}' failed: {}", inv.name, e);
                             state.halt(&format!("Tool execution failed: {}", e));
+                            break;
                         }
                     }
                 }
-                AgentStep::LLMCall(_) => {
+                PlannerOutput::LLMCall { prompt, .. } => {
                     if self.trace {
-                        debug!("[Runtime] LLMCall step (not yet executed in loop)");
+                        debug!("[Runtime] LLMCall step (prompt_len={})", prompt.len());
                     }
+                    // In a full implementation this would call the LLM path here
                 }
             }
 
-            state.record_step(step.clone());
+            // Record a lightweight step marker
+            state.record_step(crate::agents::agent_step::AgentStep::LLMCall(
+                crate::agents::agent_step::LLMCallSpec {
+                    backend: "planner".into(),
+                    prompt: "planner decision".into(),
+                    correlation_id: state.step_count as u64,
+                },
+            ));
 
             if self.trace {
                 debug!("[Runtime] Step {} recorded", state.step_count);
