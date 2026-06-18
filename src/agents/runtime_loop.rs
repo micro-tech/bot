@@ -5,6 +5,7 @@ use crate::agents::agent_state::AgentState;
 use crate::agents::planner::Planner;
 use crate::agents::planner_output::PlannerOutput;
 use crate::agents::rule_layer::RuleLayer;
+use crate::agents::runtime_trace::{RuntimeStep, RuntimeTrace};
 use log::{debug, info, warn};
 
 pub struct RuntimeLoop<P: Planner> {
@@ -12,11 +13,18 @@ pub struct RuntimeLoop<P: Planner> {
     rule_layer: RuleLayer,
     max_steps: u32,
     trace: bool,
+    pub runtime_trace: RuntimeTrace,   // NEW: structured trace for 157
 }
 
 impl<P: Planner> RuntimeLoop<P> {
     pub fn new(planner: P, rule_layer: RuleLayer, max_steps: u32) -> Self {
-        Self { planner, rule_layer, max_steps, trace: false }
+        Self {
+            planner,
+            rule_layer,
+            max_steps,
+            trace: false,
+            runtime_trace: RuntimeTrace::new(),
+        }
     }
 
     /// Enable or disable detailed per-step trace logging.
@@ -26,7 +34,7 @@ impl<P: Planner> RuntimeLoop<P> {
     }
 
     /// Run one full agent execution cycle.
-    pub async fn run(&self, mut state: AgentState) -> AgentState {
+    pub async fn run(&mut self, mut state: AgentState) -> AgentState {
         info!("[Runtime] Starting agent run (max_steps={})", self.max_steps);
 
         while !state.should_stop(self.max_steps) {
@@ -57,20 +65,34 @@ impl<P: Planner> RuntimeLoop<P> {
             }
 
             // Convert PlannerOutput into runtime action
+            let mut step = RuntimeStep {
+                step_number: state.step_count,
+                planner_output: Some(decision.clone()),
+                ..Default::default()
+            };
+
             match decision {
                 PlannerOutput::FinalAnswer { message, .. } => {
                     state.halt("Terminal step reached");
                     crate::agents::bus_events::emit_agent_finished(&state, &message);
                     info!("[Runtime] Agent finished successfully");
+                    step.halted = true;
+                    self.runtime_trace.push(step);
                     break;
                 }
                 PlannerOutput::Error { message } => {
                     state.halt("Terminal step reached");
                     crate::agents::bus_events::emit_agent_error(&state, &message);
                     warn!("[Runtime] Agent halted with error: {}", message);
+                    step.error = Some(message);
+                    step.halted = true;
+                    self.runtime_trace.push(step);
                     break;
                 }
                 PlannerOutput::ToolCall { tool_name, args_json, .. } => {
+                    step.tool_name = Some(tool_name.clone());
+                    step.tool_args = Some(args_json.clone());
+
                     // Execute tool via the tool path
                     let inv = crate::agents::agent_step::ToolInvocation {
                         name: tool_name,
@@ -82,11 +104,20 @@ impl<P: Planner> RuntimeLoop<P> {
                             if self.trace {
                                 info!("[Runtime] Tool '{}' executed → {:?}", inv.name, result);
                             }
-                            state.last_tool_result = Some(result);
+                            state.last_tool_result = Some(result.clone());
+                            state.messages.push(format!(
+                                "Tool '{}' returned: {}",
+                                inv.name,
+                                serde_json::to_string(&result).unwrap_or_default()
+                            ));
+                            step.tool_result = Some(result);
                         }
                         Err(e) => {
                             warn!("[Runtime] Tool '{}' failed: {}", inv.name, e);
                             state.halt(&format!("Tool execution failed: {}", e));
+                            step.error = Some(e.to_string());
+                            step.halted = true;
+                            self.runtime_trace.push(step);
                             break;
                         }
                     }
@@ -95,9 +126,12 @@ impl<P: Planner> RuntimeLoop<P> {
                     if self.trace {
                         debug!("[Runtime] LLMCall step (prompt_len={})", prompt.len());
                     }
-                    // In a full implementation this would call the LLM path here
+                    state.messages.push(format!("LLM called with prompt: {}", prompt));
+                    step.llm_prompt = Some(prompt);
                 }
             }
+
+            self.runtime_trace.push(step);
 
             // Record a lightweight step marker
             state.record_step(crate::agents::agent_step::AgentStep::LLMCall(
