@@ -38,7 +38,7 @@ chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 async-trait = "0.1"
 rand = "0.10.1"
-uuid = { version = "1.23.2", features = ["v4", "serde"] }
+uuid = { version = "1.23.3", features = ["v4", "serde"] }
 lettre = { version = "0.11.22", features = ["smtp-transport", "native-tls"] }
 imap = "3.0.0-alpha.15"
 native-tls = "0.2"
