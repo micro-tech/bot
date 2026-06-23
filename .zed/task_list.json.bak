@@ -1,69 +1,239 @@
 {
   "tasks": [
     {
-      "id": 154,
-      "title": "Add Rich Trace Logging + Proper Bus Event Hook for Unified Runtime",
+      "dependencies": [
+        153
+      ],
       "description": "Enhance runtime observability and complete the bus integration so the agent can be driven from events, cron, and other agents.",
       "details": "1) Add detailed per-step trace logging (planner decision, action type, tool calls, memory writes, rule checks). 2) Fully implement the AgentRun bus handler so Cpu actually spawns the runtime and emits AgentFinished/AgentError. 3) Add a simple trace flag or log level so operators can turn detailed logging on/off.",
+      "id": 154,
       "priority": "high",
       "status": "done",
-      "dependencies": [153],
       "subtasks": [
-        { "id": "154.1", "status": "done", "title": "Add detailed per-step logging in RuntimeLoop (planner decision, step type, tool result, memory)" },
-        { "id": "154.2", "status": "done", "title": "Implement real AgentRun bus handler that calls run_unified_agent and emits completion events" },
-        { "id": "154.3", "status": "done", "title": "Add runtime trace flag / log level control" },
-        { "id": "154.4", "status": "done", "title": "Test end-to-end via CLI and bus event" }
+        {
+          "id": "154.1",
+          "status": "done",
+          "title": "Add detailed per-step logging in RuntimeLoop (planner decision, step type, tool result, memory)"
+        },
+        {
+          "id": "154.2",
+          "status": "done",
+          "title": "Implement real AgentRun bus handler that calls run_unified_agent and emits completion events"
+        },
+        {
+          "id": "154.3",
+          "status": "done",
+          "title": "Add runtime trace flag / log level control"
+        },
+        {
+          "id": "154.4",
+          "status": "done",
+          "title": "Test end-to-end via CLI and bus event"
+        }
       ],
-      "testStrategy": "Run agent.run from CLI with trace logs visible. Send AgentRun bus message and verify AgentFinished event is emitted."
+      "testStrategy": "Run agent.run from CLI with trace logs visible. Send AgentRun bus message and verify AgentFinished event is emitted.",
+      "title": "Add Rich Trace Logging + Proper Bus Event Hook for Unified Runtime"
     },
     {
-      "id": 155,
-      "title": "Planner v2: Structured PlannerOutput + ReflectionPlannerAdapter",
+      "dependencies": [
+        154
+      ],
       "description": "Enable the Unified Agent Runtime Loop to make structured decisions by integrating the existing planning/ module through a thin adapter layer with proper PlannerOutput enum and reflection parsing.",
       "details": "This is the next-level planner integration. It introduces PlannerOutput as the canonical decision type and a ReflectionPlannerAdapter that parses reflection text into structured actions (ToolCall, LLMCall, FinalAnswer). Must not modify planning/planner.rs or planning/reflection.rs.",
+      "id": 155,
       "priority": "high",
       "status": "done",
-      "dependencies": [154],
       "subtasks": [
-        { "id": "155.1", "status": "done", "title": "Add Planner trait with decide(&AgentState) -> PlannerOutput" },
-        { "id": "155.2", "status": "done", "title": "Add PlannerOutput enum (LLMCall, ToolCall, FinalAnswer, Error)" },
-        { "id": "155.3", "status": "done", "title": "Implement ReflectionPlannerAdapter with reflection parsing logic" },
-        { "id": "155.4", "status": "done", "title": "Integrate PlannerOutput handling into RuntimeLoop" },
-        { "id": "155.5", "status": "done", "title": "Add unit tests for PlannerOutput + adapter parsing and integration test" }
+        {
+          "id": "155.1",
+          "status": "done",
+          "title": "Add Planner trait with decide(&AgentState) -> PlannerOutput"
+        },
+        {
+          "id": "155.2",
+          "status": "done",
+          "title": "Add PlannerOutput enum (LLMCall, ToolCall, FinalAnswer, Error)"
+        },
+        {
+          "id": "155.3",
+          "status": "done",
+          "title": "Implement ReflectionPlannerAdapter with reflection parsing logic"
+        },
+        {
+          "id": "155.4",
+          "status": "done",
+          "title": "Integrate PlannerOutput handling into RuntimeLoop"
+        },
+        {
+          "id": "155.5",
+          "status": "done",
+          "title": "Add unit tests for PlannerOutput + adapter parsing and integration test"
+        }
       ],
-      "testStrategy": "Unit tests for trait and parsing, integration test running full RuntimeLoop with ReflectionPlannerAdapter, verify no changes to existing planning/ module."
+      "testStrategy": "Unit tests for trait and parsing, integration test running full RuntimeLoop with ReflectionPlannerAdapter, verify no changes to existing planning/ module.",
+      "title": "Planner v2: Structured PlannerOutput + ReflectionPlannerAdapter"
     },
     {
-      "id": 156,
-      "title": "End-to-end agent test: make the runtime loop execute a real multi-step plan using LLM + tools + final answer",
+      "dependencies": [
+        155
+      ],
       "description": "Make the agent actually use tools and LLM in a real scenario. Ensure tool results flow back into the planner, LLM responses are stored in state, the planner can chain multiple steps, and the loop can run 5–20 cycles without stalling.",
       "details": "This is a full integration test of the Unified Agent Runtime. The goal is to have a working multi-step agent that: 1) Uses tools and receives results, 2) Uses LLM calls and stores responses, 3) Chains multiple decisions, 4) Reaches a FinalAnswer after several cycles.",
+      "id": 156,
       "priority": "high",
-      "status": "pending",
-      "dependencies": [155],
+      "status": "done",
       "subtasks": [
-        { "id": "156.1", "status": "pending", "title": "Ensure tool results are fed back into AgentState for the next planner decision" },
-        { "id": "156.2", "status": "pending", "title": "Ensure LLM responses are stored in state.messages" },
-        { "id": "156.3", "status": "pending", "title": "Implement a planner that can chain multiple ToolCall + LLMCall steps" },
-        { "id": "156.4", "status": "pending", "title": "Create an end-to-end test that runs 5–20 cycles and reaches FinalAnswer" },
-        { "id": "156.5", "status": "pending", "title": "Verify no stalling and proper termination" }
+        {
+          "id": "156.1",
+          "status": "done",
+          "title": "Ensure tool results are fed back into AgentState for the next planner decision"
+        },
+        {
+          "id": "156.2",
+          "status": "done",
+          "title": "Ensure LLM responses are stored in state.messages"
+        },
+        {
+          "id": "156.3",
+          "status": "done",
+          "title": "Implement a planner that can chain multiple ToolCall + LLMCall steps"
+        },
+        {
+          "id": "156.4",
+          "status": "done",
+          "title": "Create an end-to-end test that runs 5–20 cycles and reaches FinalAnswer"
+        },
+        {
+          "id": "156.5",
+          "status": "done",
+          "title": "Verify no stalling and proper termination"
+        }
       ],
-      "testStrategy": "Run a full end-to-end test with a real multi-step scenario (e.g. search → calc → final answer). Verify state contains tool results and LLM responses, and the loop terminates cleanly."
+      "testStrategy": "Run a full end-to-end test with a real multi-step scenario (e.g. search → calc → final answer). Verify state contains tool results and LLM responses, and the loop terminates cleanly.",
+      "title": "End-to-end agent test: make the runtime loop execute a real multi-step plan using LLM + tools + final answer"
     },
     {
-      "id": 157,
-      "title": "Runtime Trace Logging + Step Visualization",
+      "dependencies": [
+        156
+      ],
       "description": "Add a structured tracing system to the Unified Agent Runtime Loop so each planner decision, LLM call, tool call, and state update is captured in a RuntimeTrace. Provide optional CLI output for step-by-step visualization.",
-      "priority": "high",
-      "status": "todo",
-      "dependencies": [156],
       "details": "Introduce a RuntimeTrace struct that records each cycle of the agent loop, including planner decisions, LLM prompts/responses, tool calls/results, and state deltas. Add a --trace flag to the CLI to print a human-readable step-by-step execution log. Ensure tracing is optional and does not affect runtime behavior.",
+      "id": 157,
+      "priority": "high",
+      "status": "done",
       "subtasks": [
-        { "id": "157.1", "status": "todo", "title": "Add RuntimeTrace struct", "description": "Create a struct that stores a Vec<RuntimeStep>, where each step contains: planner_output, llm_call, llm_response, tool_call, tool_result, and state snapshot." },
-        { "id": "157.2", "status": "todo", "title": "Instrument RuntimeLoop to push trace steps", "description": "Modify runtime_loop.rs so each iteration appends a RuntimeStep capturing all relevant data before and after executing the step." },
-        { "id": "157.3", "status": "todo", "title": "Add CLI flag --trace", "description": "Extend the CLI to accept --trace. When enabled, print a formatted multi-step trace after the agent finishes." },
-        { "id": "157.4", "status": "todo", "title": "Implement pretty-printer for trace output", "description": "Add a human-readable formatter that prints each step with clear sections: Planner Decision, LLM Call, LLM Response, Tool Call, Tool Result, State Changes." },
-        { "id": "157.5", "status": "todo", "title": "Add unit tests for trace recording", "description": "Verify that each branch (LLMCall, ToolCall, FinalAnswer) produces correct trace entries. Ensure trace does not alter runtime behavior." }
+        {
+          "id": "157.1",
+          "status": "done",
+          "title": "Add RuntimeTrace struct"
+        },
+        {
+          "id": "157.2",
+          "status": "done",
+          "title": "Instrument RuntimeLoop to push trace steps"
+        },
+        {
+          "id": "157.3",
+          "status": "done",
+          "title": "Add CLI flag --trace"
+        },
+        {
+          "id": "157.4",
+          "status": "done",
+          "title": "Implement pretty-printer for trace output"
+        },
+        {
+          "id": "157.5",
+          "status": "done",
+          "title": "Add unit tests for trace recording"
+        }
+      ],
+      "title": "Runtime Trace Logging + Step Visualization"
+    },
+    {
+      "id": 158,
+      "title": "Tool Supervisor v2: Validation + Retry + Error Classification",
+      "description": "Upgrade the Tool Supervisor to validate tool arguments, classify tool errors, retry failed calls when appropriate, and provide structured feedback to the planner. This improves reliability and prevents the agent from stalling or hallucinating when tools fail.",
+      "priority": "high",
+      "status": "done",
+      "dependencies": [
+        156
+      ],
+      "details": "Introduce a ToolSupervisorV2 that wraps all tool calls with validation, structured error handling, and retry logic. Add a ToolError enum with categories (InvalidArgs, ExecutionError, NotFound, RateLimit, Unknown). Add a ToolResult enum that includes success, retryable failure, and fatal failure. Integrate this into the runtime loop so PlannerOutput::ToolCall receives normalized results.",
+      "subtasks": [
+        {
+          "id": "158.1",
+          "status": "done",
+          "title": "Add ToolError enum with classification",
+          "description": "Define ToolError { InvalidArgs, ExecutionError, NotFound, RateLimit, Timeout, Unknown }. Include original error message and optional context."
+        },
+        {
+          "id": "158.2",
+          "status": "done",
+          "title": "Add ToolResult enum",
+          "description": "Define ToolResult { Success(Value), RetryableError(ToolError), FatalError(ToolError) }. This becomes the canonical output of all tool calls."
+        },
+        {
+          "id": "158.3",
+          "status": "done",
+          "title": "Implement ToolSupervisorV2",
+          "description": "Wrap all tool calls with argument validation, error classification, and retry logic. Retry up to N times for RetryableError. Return FatalError for non-retryable cases."
+        },
+        {
+          "id": "158.4",
+          "status": "done",
+          "title": "Integrate ToolSupervisorV2 into runtime loop",
+          "description": "Modify runtime_loop.rs so ToolCall steps use ToolSupervisorV2. Push normalized ToolResult into AgentState and RuntimeTrace."
+        },
+        {
+          "id": "158.5",
+          "status": "done",
+          "title": "Add tests for ToolSupervisorV2",
+          "description": "Unit tests for error classification, retry behavior, and integration with RuntimeLoop."
+        }
+      ]
+    },
+    {
+      "id": 159,
+      "title": "Local FastContext-style Repo Explorer subagent",
+      "description": "Introduce a local repo-explorer subagent (FastContext-style) that handles all repository exploration via tools (glob, read, grep) and returns compact evidence (file paths + line ranges) to the main agent.",
+      "priority": "high",
+      "status": "in_progress",
+      "dependencies": [
+        158
+      ],
+      "details": "New module: agent/repo_explorer/. Trait RepoExplorer with explore(&self, query: RepoQuery) -> RepoEvidence. Types: RepoQuery { natural_language, cwd, hints }, RepoEvidence { items: Vec<RepoEvidenceItem> }, RepoEvidenceItem { path, line_start, line_end, summary }. LocalLLMClient with chat(). System prompt restricts explorer to read-only tools. Required tools: tool_glob, tool_read, tool_grep. Explorer decides tool calls; results aggregated into compact evidence. Main agent asks 'Do I need repo context?' and receives compact evidence block instead of raw content.",
+      "subtasks": [
+        {
+          "id": "159.1",
+          "status": "todo",
+          "title": "Create repo_explorer module and types (RepoQuery, RepoEvidence, RepoEvidenceItem)"
+        },
+        {
+          "id": "159.2",
+          "status": "todo",
+          "title": "Implement RepoExplorer trait and LocalLLMClient"
+        },
+        {
+          "id": "159.3",
+          "status": "todo",
+          "title": "Add required tools: tool_glob, tool_read (range), tool_grep"
+        },
+        {
+          "id": "159.4",
+          "status": "todo",
+          "title": "Implement explorer planning + parallel tool execution + evidence aggregation"
+        },
+        {
+          "id": "159.5",
+          "status": "todo",
+          "title": "Integrate with main planner: 'Do I need repo context?' hook + evidence injection"
+        },
+        {
+          "id": "159.6",
+          "status": "todo",
+          "title": "Add fallback when local model unavailable; write tests"
+        }
       ]
     }
   ]

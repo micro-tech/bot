@@ -35,6 +35,9 @@ pub fn execute(name: &str, args: &Value) -> String {
             system_tools::bayes_update(evidence)
         }
         "bayes_reset" => system_tools::bayes_reset(),
+        "repo_glob" => file_tools::repo_glob(args),
+        "repo_read" => file_tools::repo_read(args),
+        "repo_grep" => file_tools::repo_grep(args),
         other => format!(
             "Unknown tool '{}' — not registered. Use list_tools to see available tools.",
             other
@@ -214,6 +217,51 @@ pub fn tool_definitions() -> Value {
                 "name": "bayes_reset",
                 "description": "Reset the Bayesian belief state back to default priors (positive=50%, negative=30%, neutral=20%).",
                 "parameters": { "type": "object", "properties": {}, "required": [] }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "repo_glob",
+                "description": "List files matching a glob pattern inside the repository (read-only). Example: '**/*.rs' or 'src/**/*.toml'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": { "type": "string", "description": "Glob pattern, e.g. '**/*.rs'" }
+                    },
+                    "required": ["pattern"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "repo_read",
+                "description": "Read a file or a specific line range from the repository (read-only). Supports optional start_line and end_line (1-based).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Relative file path" },
+                        "start_line": { "type": "integer", "description": "Optional start line (1-based)" },
+                        "end_line": { "type": "integer", "description": "Optional end line (inclusive)" }
+                    },
+                    "required": ["path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "repo_grep",
+                "description": "Search for a text pattern inside repository files (read-only). Returns matching lines with context.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": { "type": "string", "description": "Text or regex to search for" },
+                        "path": { "type": "string", "description": "Optional directory or file to limit search (default: whole repo)" }
+                    },
+                    "required": ["pattern"]
+                }
             }
         }
     ])
