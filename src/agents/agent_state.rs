@@ -99,7 +99,7 @@ impl AgentState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::agent_step::{AgentStep, FinalAnswer};
+    use crate::agents::agent_step::AgentStep;
 
     #[test]
     fn test_initial_state() {
@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn test_record_step_and_halt() {
         let mut state = AgentState::new();
-        state.record_step(AgentStep::FinalAnswer("done".into()));
+        state.record_step(AgentStep::FinalAnswer("done".to_string()));
         assert_eq!(state.step_count, 1);
         assert!(!state.halted);
 
@@ -125,7 +125,7 @@ mod tests {
     fn test_max_steps_guard() {
         let mut state = AgentState::new();
         for _ in 0..5 {
-            state.record_step(AgentStep::FinalAnswer("x".into()));
+            state.record_step(AgentStep::FinalAnswer("x".to_string()));
         }
         assert!(state.should_stop(5));
         assert!(!state.should_stop(10));

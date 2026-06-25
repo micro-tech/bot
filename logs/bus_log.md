@@ -42,3 +42,18 @@
 [2026-06-11 01:08:10.872] harness -> test_topic: {"seq":2}
 [2026-06-11 01:08:10.873] harness -> test_topic: {"seq":3}
 [2026-06-11 01:08:10.873] harness -> test_topic: {"seq":4}
+[2026-06-23 16:41:54.909] test -> ollama: hello
+[2026-06-23 16:41:54.910] ollama -> web_interface: {"msg":"test error — should not panic","type":"error"}
+[2026-06-23 16:41:54.909] gemini -> web_interface: {"msg":"GEMINI_API_KEY environment variable is not set or empty","type":"error"}
+[2026-06-23 16:41:57.708] test -> ollama: hello
+[2026-06-23 16:41:57.709] gemini -> web_interface: {"msg":"GEMINI_API_KEY environment variable is not set or empty","type":"error"}[2026-06-23 16:41:57.709] ollama -> web_interface: {"msg":"test error — should not panic","type":"error"}
+
+[2026-06-23 16:42:00.300] harness -> test_harness: not valid json {
+[2026-06-23 16:42:00.300] test_harness -> nonexistent: {"type":"ping"}[2026-06-23 16:42:00.300] harness -> test_harness: {"type":"error","msg":"test failure"}[2026-06-23 16:42:00.300] harness -> ollama_local: {"type":"chat_request","prompt":"hello"}[2026-06-23 16:42:00.300] harness -> test_topic: {"seq":0}
+
+
+
+[2026-06-23 16:42:00.310] harness -> test_topic: {"seq":1}
+[2026-06-23 16:42:00.311] harness -> test_topic: {"seq":2}
+[2026-06-23 16:42:00.312] harness -> test_topic: {"seq":3}
+[2026-06-23 16:42:00.313] harness -> test_topic: {"seq":4}
