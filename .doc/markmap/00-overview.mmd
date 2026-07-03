@@ -1,0 +1,46 @@
+# Agent OS - Overview
+
+## Navigation
+- [Overview](00-overview.html)
+- [CLI](01-cli.html)
+- [Agent](02-agent.html)
+- [RAG](03-rag.html)
+- [Memory](04-memory.html)
+- [Tools](05-tools.html)
+- [Engine](06-engine.html)
+- [Router](07-router.html)
+- [Config & Context](08-config-context.html)
+- [MCP & ACP](09-mcp-acp.html)
+- [Safety & Security](10-safety-security.html)
+- [Utils & Display](11-utils-display.html)
+
+## Core Architecture
+- `src/main.rs` — Entry point, spawns async tasks
+- `src/bus/` — Central publish-subscribe message bus
+- `src/cpu/` — Main execution engine (Cpu<L>)
+- `src/io/` — Web server, Ollama, Gemini, terminal, UNIX socket
+
+## Subsystems
+- `src/memory/` — Working + episodic + vector memory
+- `src/skills/` — Pluggable skill registry
+- `src/hooks/` — Phase hooks (pre/post execution)
+- `src/hy_evo/` — Evolutionary workflow engine
+- `src/reasoning/` — Hypothesis → Plan → Execute loop
+- `src/planning/` — Planner implementations
+- `src/agents/` — Unified runtime loop (RuntimeLoop)
+
+## Key Data Flows
+- User input → Web/CLI → Bus → CPU → LLM
+- LLM response → Bus → CPU Forwarder → Web clients
+- Cron → `agent_run` messages → CPU autonomous maintenance
+
+## Entry Points
+- `main()` → `run_bot()`
+- `Cargo.toml` [[bin]] `install` for setup
+
+## Links
+- [CLI](01-cli.html)
+- [Agent](02-agent.html)
+- [Memory](04-memory.html)
+- [Tools](05-tools.html)
+- [Engine](06-engine.html)

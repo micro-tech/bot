@@ -1,0 +1,35 @@
+# CLI Interfaces
+
+## Navigation
+- [Overview](00-overview.html)
+- [CLI](01-cli.html)
+- [Agent](02-agent.html)
+- [RAG](03-rag.html)
+- [Memory](04-memory.html)
+- [Tools](05-tools.html)
+- [Engine](06-engine.html)
+- [Router](07-router.html)
+- [Config & Context](08-config-context.html)
+- [MCP & ACP](09-mcp-acp.html)
+- [Safety & Security](10-safety-security.html)
+- [Utils & Display](11-utils-display.html)
+
+## Components
+- `src/io/web_server/` — Axum HTTP + WebSocket server (port 8443)
+- `src/io/terminal/` — Interactive terminal CLI
+- `src/io/unix_socket.rs` — UNIX domain socket interface
+- `src/bin/installer.rs` — Setup binary
+
+## Responsibilities
+- Accept user input from multiple channels
+- Publish `chat_request` / `user_input` to Bus
+- Subscribe to `web_interface` for LLM output streaming
+
+## Key Files
+- `src/io/web_server/mod.rs`
+- `src/io/web_server/routes.rs`
+- `src/io/terminal/mod.rs`
+
+## Links
+- [Overview](00-overview.html)
+- [Agent](02-agent.html)
