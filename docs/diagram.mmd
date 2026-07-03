@@ -1,0 +1,161 @@
+%% Layer 0: High-Level System View
+flowchart TB
+    subgraph External["External"]
+        User["👤 Users / Clients"]
+        LLM["🧠 Ollama / Gemini"]
+    end
+
+    subgraph Core["Core System"]
+        Bus["Central Bus<br/>pub-sub messaging"]
+        CPU["CPU Executor"]
+    end
+
+    subgraph Subsystems["Subsystems"]
+        Memory["Memory System"]
+        Skills["Skills & Hooks"]
+        HyEvo["HyEvo Engine"]
+        Reasoning["Reasoning Engine"]
+    end
+
+    subgraph Interfaces["Interfaces"]
+        Web["Web Server"]
+        CLI["Terminal / UNIX"]
+    end
+
+    subgraph Services["Services"]
+        Heartbeat["Heartbeat"]
+        Cron["Cron Jobs"]
+        A2A["Agent-to-Agent"]
+    end
+
+    User --> Web
+    User --> CLI
+    Web --> Bus
+    CLI --> CPU
+    Bus <--> CPU
+    CPU --> Memory
+    CPU --> Skills
+    CPU --> HyEvo
+    CPU --> Reasoning
+    CPU <--> LLM
+    Bus <--> Services
+
+    style Bus fill:#f9f,stroke:#333,stroke-width:4px
+    style CPU fill:#bbf,stroke:#33f,stroke-width:2px
+
+---
+
+%% Layer 1: Core Bus & CPU Flow
+flowchart TD
+    Main["main.rs"] -->|init| Bus["Bus (bus/mod.rs)"]
+    Main --> CPU["Cpu (cpu/cpu.rs)"]
+
+    Bus <-->|messages| CPU
+    CPU -->|handle_bus_message| State["AgentState (cpu/state.rs)"]
+
+    subgraph CPU_Modules["CPU Modules"]
+        Executor["executor.rs"]
+        Scheduler["scheduler.rs"]
+        TimeScheduler["time_scheduler.rs"]
+        Interrupts["interrupts.rs"]
+    end
+
+    CPU --> Executor
+    CPU --> Scheduler
+    CPU --> TimeScheduler
+
+    style Bus fill:#f9f,stroke:#333,stroke-width:3px
+    style CPU fill:#bbf,stroke:#33f
+
+---
+
+%% Layer 2: Memory System
+flowchart TB
+    CPU["CPU"] --> MemMgr["MemoryManager<br/>(memory/manager.rs)"]
+
+    MemMgr --> Working["Working Memory<br/>VecDeque (short-term)"]
+    MemMgr --> Episodic["Episodic Memory<br/>(memory/episodic.rs)"]
+    MemMgr --> Vector["Vector Memory<br/>(memory/vector.rs)"]
+
+    Working -->|read/write| CPU
+    Episodic -->|event records| CPU
+    Vector -->|similarity search| CPU
+
+    style MemMgr fill:#9f9,stroke:#3a3
+
+---
+
+%% Layer 3: LLM Integration & Reasoning
+flowchart TD
+    CPU -->|llm_request| Ollama["Ollama Handler<br/>(io/ollama/)"]
+    Ollama -->|API call| ExternalLLM["Ollama / Gemini"]
+    Ollama -->|llm_response| Bus
+
+    CPU --> Reasoning["ReasoningEngine"]
+
+    Reasoning -->|propose| Hypothesis["Hypothesis → Plan → Execute"]
+    Reasoning -->|metrics| Bus
+
+    subgraph LLM_Layer["LLM Layer"]
+        Ollama
+        Gemini["io/llm_gemini/"]
+    end
+
+    style Ollama fill:#9ff,stroke:#66f
+    style Reasoning fill:#ff9,stroke:#f66
+
+---
+
+%% Layer 4: Skills, Hooks & Tools
+flowchart LR
+    CPU --> Skills["SkillRegistry<br/>(skills/mod.rs)"]
+    CPU --> Hooks["HookRegistry<br/>(hooks/mod.rs)"]
+    CPU --> Tools["Tool Dispatcher<br/>(tools/mod.rs)"]
+
+    Skills -->|execute_skill| SkillImpl["SkillInterface impls"]
+    Hooks -->|phase hooks| HookImpl["HookInterface impls"]
+    Tools -->|dispatch| FileTools["file_tools.rs"]
+    Tools --> SystemTools["system_tools.rs"]
+
+    style Skills fill:#fc9,stroke:#c83
+    style Hooks fill:#fc9,stroke:#c83
+
+---
+
+%% Layer 5: HyEvo Evolutionary Engine
+flowchart TB
+    CPU --> HyEvoInt["HyEvoIntegration<br/>(hy_evo/integration.rs)"]
+
+    HyEvoInt --> Engine["HyEvoEngine<br/>(hy_evo/engine.rs)"]
+    Engine --> Genome["Genome / Workflow<br/>(hy_evo/genome.rs)"]
+    Engine --> Workflow["Workflow Nodes<br/>(hy_evo/workflow.rs)"]
+
+    Workflow -->|Skill Node| Skills
+    Workflow -->|LLM Node| Ollama
+    Workflow -->|Code Node| CustomCode
+
+    Engine -->|evolve_once| Reflect["ReflectionLlm<br/>(hy_evo/reflection.rs)"]
+    Reflect -->|LLM feedback| Mutation["mutation.rs"]
+    Reflect --> Crossover["crossover.rs"]
+    Reflect --> Scoring["scoring.rs"]
+
+    style HyEvoInt fill:#ff9,stroke:#f66,stroke-width:2px
+    style Engine fill:#ff9,stroke:#f66
+
+---
+
+%% Layer 6: Interfaces & Background Services
+flowchart TD
+    Bus --> Web["Web Server<br/>(io/web_server/)"]
+    Bus --> Term["Terminal CLI<br/>(io/terminal/)"]
+    Bus --> Unix["UNIX Socket<br/>(io/unix_socket.rs)"]
+
+    Web -->|HTTPS + WS| Clients["Browser Clients"]
+
+    Bus --> Heartbeat["TimeScheduler<br/>(cpu/time_scheduler.rs)"]
+    Bus --> Cron["Cron Handler<br/>(cron/cron_handler.rs)"]
+    Bus --> A2A["A2A Handler<br/>(a2a/a2a_handler.rs)"]
+    Bus --> MCP["MCP Handler<br/>(mcp/mcp_handler.rs)"]
+
+    style Web fill:#9f9,stroke:#3a3
+    style Heartbeat fill:#f99,stroke:#933

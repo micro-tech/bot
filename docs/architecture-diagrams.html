@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent OS - Architecture Diagrams</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
+        
+        :root {
+            --primary: #6366f1;
+        }
+        
+        body {
+            font-family: 'Inter', system_ui, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: #1e2937;
+            padding: 2rem 0;
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+        
+        h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.25rem;
+            font-weight: 600;
+            margin: 0;
+            color: #f8fafc;
+        }
+        
+        .subtitle {
+            color: #94a3b8;
+            margin-top: 0.5rem;
+            font-size: 1.1rem;
+        }
+        
+        .nav {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .nav a {
+            background: #334155;
+            color: #cbd5e1;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        
+        .nav a:hover {
+            background: #475569;
+            color: #f1f5f9;
+        }
+        
+        .diagram-section {
+            background: #1e2937;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+            border: 1px solid #334155;
+        }
+        
+        .diagram-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #334155;
+        }
+        
+        .diagram-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #f1f5f9;
+            margin: 0;
+        }
+        
+        .layer-badge {
+            background: #6366f1;
+            color: white;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-weight: 500;
+        }
+        
+        .mermaid {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 1.5rem;
+            overflow-x: auto;
+        }
+        
+        .description {
+            color: #94a3b8;
+            font-size: 0.95rem;
+            margin-top: 1rem;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: #64748b;
+            font-size: 0.875rem;
+        }
+        
+        .mermaid-container {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>Agent OS</h1>
+            <p class="subtitle">Layered Architecture Diagrams</p>
+            
+            <div class="nav">
+                <a href="#layer0">Layer 0 - Overview</a>
+                <a href="#layer1">Layer 1 - Bus &amp; CPU</a>
+                <a href="#layer2">Layer 2 - Memory</a>
+                <a href="#layer3">Layer 3 - LLM &amp; Reasoning</a>
+                <a href="#layer4">Layer 4 - Skills &amp; Tools</a>
+                <a href="#layer5">Layer 5 - HyEvo</a>
+                <a href="#layer6">Layer 6 - Interfaces</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- Layer 0 -->
+        <div id="layer0" class="diagram-section">
+            <div class="diagram-header">
+                <h2 class="diagram-title">Layer 0: High-Level System View</h2>
+                <span class="layer-badge">Start Here</span>
+            </div>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TB
+    subgraph External["External"]
+        User["👤 Users / Clients"]
+        LLM["🧠 Ollama / Gemini"]
+    end
+
+    subgraph Core["Core System"]
+        Bus["Central Bus<br/>pub-sub messaging"]
+        CPU["CPU Executor"]
+    end
+
+    subgraph Subsystems["Subsystems"]
+        Memory["Memory System"]
+        Skills["Skills &amp; Hooks"]
+        HyEvo["HyEvo Engine"]
+        Reasoning["Reasoning Engine"]
+    end
+
+    subgraph Interfaces["Interfaces"]
+        Web["Web Server"]
+        CLI["Terminal / UNIX"]
+    end
+
+    subgraph Services["Services"]
+        Heartbeat["Heartbeat"]
+        Cron["Cron Jobs"]
+        A2A["Agent-to-Agent"]
+    end
+
+    User --> Web
+    User --> CLI
+    Web --> Bus
+    CLI --> CPU
+    Bus <--> CPU
+    CPU --> Memory
+    CPU --> Skills
+    CPU --> HyEvo
+    CPU --> Reasoning
+    CPU <--> LLM
+    Bus <--> Services
+
+    style Bus fill:#f9f,stroke:#333,stroke-width:4px
+    style CPU fill:#bbf,stroke:#33f,stroke-width:2px
+                </pre>
+            </div>
+            <p class="description">This is the highest level view of the entire Agent OS system.</p>
+        </div>
+
+        <!-- Layer 1 -->
+        <div id="layer1" class="diagram-section">
+            <div class="diagram-header">
+                <h2 class="diagram-title">Layer 1: Core Bus &amp; CPU Flow</h2>
+                <span class="layer-badge">Core</span>
+            </div>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    Main["main.rs"] -->|init| Bus["Bus (bus/mod.rs)"]
+    Main --> CPU["Cpu (cpu/cpu.rs)"]
+
+    Bus <-->|messages| CPU
+    CPU -->|handle_bus_message| State["AgentState (cpu/state.rs)"]
+
+    subgraph CPU_Modules["CPU Modules"]
+        Executor["executor.rs"]
+        Scheduler["scheduler.rs"]
+        TimeScheduler["time_scheduler.rs"]
+        Interrupts["interrupts.rs"]
+    end
+
+    CPU --> Executor
+    CPU --> Scheduler
+    CPU --> TimeScheduler
+
+    style Bus fill:#f9f,stroke:#333,stroke-width:3px
+    style CPU fill:#bbf,stroke:#33f
+                </pre>
+            </div>
+        </div>
+
+        <!-- Layer 2 -->
+        <div id="layer2" class="diagram-section">
+            <div class="diagram-header">
+                <h2 class="diagram-title">Layer 2: Memory System</h2>
+            </div>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TB
+    CPU["CPU"] --> MemMgr["MemoryManager<br/>(memory/manager.rs)"]
+
+    MemMgr --> Working["Working Memory<br/>VecDeque (short-term)"]
+    MemMgr --> Episodic["Episodic Memory<br/>(memory/episodic.rs)"]
+    MemMgr --> Vector["Vector Memory<br/>(memory/vector.rs)"]
+
+    Working -->|read/write| CPU
+    Episodic -->|event records| CPU
+    Vector -->|similarity search| CPU
+
+    style MemMgr fill:#9f9,stroke:#3a3
+                </pre>
+            </div>
+        </div>
+
+        <!-- Layer 3 -->
+        <div id="layer3" class="diagram-section">
+            <div class="diagram-header">
+                <h2 class="diagram-title">Layer 3: LLM Integration &amp; Reasoning</h2>
+            </div>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    CPU -->|llm_request| Ollama["Ollama Handler<br/>(io/ollama/)"]
+    Ollama -->|API call| ExternalLLM["Ollama / Gemini"]
+    Ollama -->|llm_response| Bus
+
+    CPU --> Reasoning["ReasoningEngine"]
+
+    Reasoning -->|propose| Hypothesis["Hypothesis → Plan → Execute"]
+    Reasoning -->|metrics| Bus
+
+    subgraph LLM_Layer["LLM Layer"]
+        Ollama
+        Gemini["io/llm_gemini/"]
+    end
+
+    style Ollama fill:#9ff,stroke:#66f
+    style Reasoning fill:#ff9,stroke:#f66
+                </pre>
+            </div>
+        </div>
+
+        <!-- Layer 4 -->
+        <div id="layer4" class="diagram-section">
+            <div class="diagram-header">
+                <h2 class="diagram-title">Layer 4: Skills, Hooks &amp; Tools</h2>
+            </div>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart LR
+    CPU --> Skills["SkillRegistry<br/>(skills/mod.rs)"]
+    CPU --> Hooks["HookRegistry<br/>(hooks/mod.rs)"]
+    CPU --> Tools["Tool Dispatcher<br/>(tools/mod.rs)"]
+
+    Skills -->|execute_skill| SkillImpl["SkillInterface impls"]
+    Hooks -->|phase hooks| HookImpl["HookInterface impls"]
+    Tools -->|dispatch| FileTools["file_tools.rs"]
+    Tools --> SystemTools["system_tools.rs"]
+
+    style Skills fill:#fc9,stroke:#c83
+    style Hooks fill:#fc9,stroke:#c83
+                </pre>
+            </div>
+        </div>
+
+        <!-- Layer 5 -->
+        <div id="layer5" class="diagram-section">
+            <div class="diagram-header">
+                <h2 class="diagram-title">Layer 5: HyEvo Evolutionary Engine</h2>
+                <span class="layer-badge">Deepest</span>
+            </div>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TB
+    CPU --> HyEvoInt["HyEvoIntegration<br/>(hy_evo/integration.rs)"]
+
+    HyEvoInt --> Engine["HyEvoEngine<br/>(hy_evo/engine.rs)"]
+    Engine --> Genome["Genome / Workflow<br/>(hy_evo/genome.rs)"]
+    Engine --> Workflow["Workflow Nodes<br/>(hy_evo/workflow.rs)"]
+
+    Workflow -->|Skill Node| Skills
+    Workflow -->|LLM Node| Ollama
+    Workflow -->|Code Node| CustomCode
+
+    Engine -->|evolve_once| Reflect["ReflectionLlm<br/>(hy_evo/reflection.rs)"]
+    Reflect -->|LLM feedback| Mutation["mutation.rs"]
+    Reflect --> Crossover["crossover.rs"]
+    Reflect --> Scoring["scoring.rs"]
+
+    style HyEvoInt fill:#ff9,stroke:#f66,stroke-width:2px
+    style Engine fill:#ff9,stroke:#f66
+                </pre>
+            </div>
+        </div>
+
+        <!-- Layer 6 -->
+        <div id="layer6" class="diagram-section">
+            <div class="diagram-header">
+                <h2 class="diagram-title">Layer 6: Interfaces &amp; Background Services</h2>
+            </div>
+            <div class="mermaid-container">
+                <pre class="mermaid">
+flowchart TD
+    Bus --> Web["Web Server<br/>(io/web_server/)"]
+    Bus --> Term["Terminal CLI<br/>(io/terminal/)"]
+    Bus --> Unix["UNIX Socket<br/>(io/unix_socket.rs)"]
+
+    Web -->|HTTPS + WS| Clients["Browser Clients"]
+
+    Bus --> Heartbeat["TimeScheduler<br/>(cpu/time_scheduler.rs)"]
+    Bus --> Cron["Cron Handler<br/>(cron/cron_handler.rs)"]
+    Bus --> A2A["A2A Handler<br/>(a2a/a2a_handler.rs)"]
+    Bus --> MCP["MCP Handler<br/>(mcp/mcp_handler.rs)"]
+
+    style Web fill:#9f9,stroke:#3a3
+    style Heartbeat fill:#f99,stroke:#933
+                </pre>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="footer">
+        <p>Agent OS Architecture • Generated from <code>docs/diagram.mmd</code></p>
+        <p>Tip: Click and drag to pan • Scroll to zoom</p>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose',
+            flowchart: {
+                curve: 'basis'
+            }
+        });
+        
+        // Re-render on window resize for better responsiveness
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                mermaid.run();
+            }, 300);
+        });
+    </script>
+</body>
+</html>

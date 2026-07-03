@@ -1,0 +1,30 @@
+# Router & LLM Routing
+
+## Navigation
+- [Overview](00-overview.html)
+- [CLI](01-cli.html)
+- [Agent](02-agent.html)
+- [RAG](03-rag.html)
+- [Memory](04-memory.html)
+- [Tools](05-tools.html)
+- [Engine](06-engine.html)
+- [Router](07-router.html)
+- [Config & Context](08-config-context.html)
+- [MCP & ACP](09-mcp-acp.html)
+- [Safety & Security](10-safety-security.html)
+- [Utils & Display](11-utils-display.html)
+
+## Components
+- `src/router/` — Routing logic and backend selection
+- `src/io/ollama/` — Ollama LLM handler
+- `src/io/llm_gemini/` — Gemini LLM handler
+
+## Responsibilities
+- Route `chat_request` to appropriate LLM backend
+- Normalize responses into `llm_response` messages
+- Support multiple backends (Ollama, Gemini, future Grok)
+
+## Links
+- [Overview](00-overview.html)
+- [Engine](06-engine.html)
+- [Config & Context](08-config-context.html)
