@@ -15,28 +15,117 @@
 - [Utils & Display](11-utils-display.html)
 
 ## Core Architecture
-- `src/main.rs` — Entry point, spawns async tasks
-- `src/bus/` — Central publish-subscribe message bus
-- `src/cpu/` — Main execution engine (Cpu<L>)
-- `src/io/` — Web server, Ollama, Gemini, terminal, UNIX socket
+- `src/main.rs` — Entry point, spawns async tasks and bus listeners
+- `src/bus/` — Central publish-subscribe message bus (std::sync::mpsc router thread)
+- `src/cpu/` — Main execution engine + reasoning coordinator
+- `src/io/` — Web server (Axum + WebSocket), Ollama handlers, Gemini handler, terminal, UNIX socket
 
 ## Subsystems
-- `src/memory/` — Working + episodic + vector memory
+- `src/memory/` — Working + episodic + vector memory + beliefs
 - `src/skills/` — Pluggable skill registry
 - `src/hooks/` — Phase hooks (pre/post execution)
 - `src/hy_evo/` — Evolutionary workflow engine
-- `src/reasoning/` — Hypothesis → Plan → Execute loop
+- `src/reasoning/` — Hypothesis → Plan → Execute loop (ReasoningEngine)
 - `src/planning/` — Planner implementations
-- `src/agents/` — Unified runtime loop (RuntimeLoop)
+- `src/agents/` — Unified runtime loop (`RuntimeLoop`)
+- `src/tools/` — Tool dispatcher + file/system/email tools
 
-## Key Data Flows
-- User input → Web/CLI → Bus → CPU → LLM
-- LLM response → Bus → CPU Forwarder → Web clients
-- Cron → `agent_run` messages → CPU autonomous maintenance
+---
+
+## Key Data Flows (Detailed)
+
+### 1. Web UI (Primary I/O Path)
+
+**Inbound (User → System):**
+```
+WebSocket (web_interface)
+  └── "chat" message
+        ├── Extract prompt + llm target
+        ├── Write to logs/chat_log.md
+        └── Publish to Bus:
+              to: "ollama_<name>" or "gemini"
+              data: { "type": "chat_request", "prompt": "...", "correlation_id": ... }
+```
+
+**Outbound (System → User):**
+```
+LLM Handler (ollama/gemini)
+  └── After successful response
+        └── Publish to "cpu":
+              { "type": "llm_response", "msg": "...", "correlation_id": ... }
+
+CPU Response Forwarder (main.rs)
+  └── Subscribed to "cpu"
+        └── On "llm_response"
+              └── Transform + Publish to "web_interface":
+                    { "type": "llm_output", "from": "...", "msg": "..." }
+
+WebSocket Handler (handle_ws)
+  └── Blocking thread subscribes to "web_interface"
+        └── Forwards via tokio broadcast channel
+              └── WebSocket clients receive JSON
+```
+
+**Special Cases:**
+- Slash commands (`/status`, `/tools`, etc.) handled directly in `web_server/mod.rs` → tool execution → publish response
+- Config/Manifest save handled locally, then echoed back via bus
+
+### 2. LLM Backend Paths
+
+**Ollama (per-backend listener in main.rs):**
+```
+Bus topic: "ollama_<backend_name>"
+  └── handle_ollama_message()
+        ├── Health check (/api/tags)
+        ├── Model validation
+        ├── Tool-calling loop (call_ollama_tools)
+        │     └── Executes tools via crate::tools::execute()
+        └── On success: publish("cpu", llm_response)
+```
+
+**Gemini:**
+```
+Bus topic: "gemini"
+  └── handle_gemini_bus_message()
+        └── On success: publish("cpu", llm_response)
+```
+
+### 3. CPU Involvement
+
+- Currently **light** in `main.rs` (mostly the forwarder)
+- `Cpu::handle_bus_message()` handles:
+  - `user_input`, `chat_request` (records in memory)
+  - `llm_response` → `handle_llm_response()` → publish to web_interface
+  - `reasoning_command`, `agent_run`, `skill_request`
+- Future: `run_unified_agent()` for full agent loops
+
+### 4. Other I/O Paths (Under-represented)
+
+- **Terminal** (`src/io/terminal/`) — Interactive CLI (not yet wired to bus in main.rs)
+- **UNIX Socket** (`src/io/unix_socket.rs`) — Local IPC
+- **Cron / Heartbeat** — Publishes `agent_run` messages for autonomous behavior
+- **Direct skill execution** — Via `skill_request` bus messages
+
+### 5. Logging & Observability
+
+- `logs/chat_log.md` — All user + LLM messages
+- `logs/bus_log.md` — Every bus publish
+- `logs/error_log.md` — Errors
+- `logs/hartbeat_log.md` — Heartbeat events
+
+---
 
 ## Entry Points
 - `main()` → `run_bot()`
 - `Cargo.toml` [[bin]] `install` for setup
+- Web UI served at `https://localhost:8443` (TLS by default)
+
+## Current State & Gaps
+
+- WebSocket ↔ Bus round-trip is the most mature path
+- Terminal and UNIX socket I/O are under-connected
+- CPU is currently more of a coordinator than a central router
+- Full agent runtime (`RuntimeLoop`) is available but not yet the default execution path
 
 ## Links
 - [CLI](01-cli.html)
@@ -44,3 +133,4 @@
 - [Memory](04-memory.html)
 - [Tools](05-tools.html)
 - [Engine](06-engine.html)
+- [Router](07-router.html)
