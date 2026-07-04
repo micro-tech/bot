@@ -14,7 +14,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "🔨 Building Markmap diagrams..." -ForegroundColor Cyan
+Write-Host "Building Markmap diagrams..." -ForegroundColor Cyan
 
 if (-not (Test-Path $SourceDir)) {
     Write-Warning "Source directory not found: $SourceDir"
@@ -42,7 +42,7 @@ foreach ($file in $mmdFiles) {
     $htmlName = [System.IO.Path]::ChangeExtension($file.Name, ".html")
     $htmlPath = Join-Path $OutputDir $htmlName
 
-    Write-Host "  Processing $($file.Name) → $htmlName" -ForegroundColor Gray
+    Write-Host "  Processing $($file.Name) -> $htmlName" -ForegroundColor Gray
 
     if ($markmapCmd) {
         & $markmapCmd $file.FullName -o $htmlPath --no-open 2>$null
@@ -56,4 +56,4 @@ foreach ($file in $mmdFiles) {
     }
 }
 
-Write-Host "✅ Markmap build complete. Output: $OutputDir" -ForegroundColor Green
+Write-Host "Markmap build complete. Output: $OutputDir" -ForegroundColor Green

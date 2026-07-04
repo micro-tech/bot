@@ -1,4 +1,4 @@
-# CLI Interfaces
+# CLI Interfaces & Web I/O
 
 ## Navigation
 - [Overview](00-overview.html)
@@ -14,22 +14,122 @@
 - [Safety & Security](10-safety-security.html)
 - [Utils & Display](11-utils-display.html)
 
-## Components
-- `src/io/web_server/` — Axum HTTP + WebSocket server (port 8443)
-- `src/io/terminal/` — Interactive terminal CLI
-- `src/io/unix_socket.rs` — UNIX domain socket interface
-- `src/bin/installer.rs` — Setup binary
+---
 
-## Responsibilities
-- Accept user input from multiple channels
-- Publish `chat_request` / `user_input` to Bus
-- Subscribe to `web_interface` for LLM output streaming
+## Primary Interface: Web UI (WebSocket + HTTPS)
 
-## Key Files
-- `src/io/web_server/mod.rs`
-- `src/io/web_server/routes.rs`
-- `src/io/terminal/mod.rs`
+### Architecture
+- `src/io/web_server/mod.rs` — Axum router + WebSocket handler
+- TLS enabled by default (self-signed certs generated on first run)
+- Port configurable via `config.toml` `[web] port` (default 8443)
+
+### Full Data Flow (Web ↔ System)
+
+**1. Connection Setup (Client Connects)**
+```
+WebSocket upgrade at /ws
+  └── handle_ws()
+        ├── Send current config (type: "config")
+        ├── Send system_manifest.md (type: "manifest")
+        ├── Send available backends list (type: "backends")
+        └── Start two background tasks:
+              - recv_task: broadcast channel → WebSocket
+              - bus_forward_task: bus "web_interface" → broadcast channel
+```
+
+**2. Inbound: User Message → LLM**
+```
+Client sends JSON:
+  {
+    "type": "chat",
+    "msg": "Hello",
+    "llm": "server"          // or "gemini", or empty (uses first Ollama)
+  }
+
+WebSocket handler:
+  ├── Write to logs/chat_log.md
+  ├── Determine bus destination:
+  │     "gemini" → topic "gemini"
+  │     else     → topic "ollama_<llm>"
+  └── Publish Message:
+        to:   "ollama_server" / "gemini"
+        from: "web_interface"
+        data: { "type": "chat_request", "prompt": "...", "correlation_id": ... }
+```
+
+**3. LLM Processing**
+```
+Ollama/Gemini listener receives chat_request
+  └── Calls LLM with tool support
+        └── On final answer: publish("cpu", llm_response)
+```
+
+**4. Outbound: LLM Response → Client**
+```
+CPU Response Forwarder (main.rs)
+  └── Subscribed to "cpu"
+        └── Detects "llm_response"
+              └── Publishes to "web_interface":
+                    { "type": "llm_output", "from": "server", "msg": "..." }
+
+Bus forwarder thread (web_server)
+  └── Subscribed to "web_interface"
+        └── Pushes into tokio broadcast channel
+
+WebSocket client receives:
+  { "type": "llm_output", "from": "server", "data": "..." }
+```
+
+### Special Message Types Handled in WebSocket
+
+| Type              | Direction     | Purpose                                      |
+|-------------------|---------------|----------------------------------------------|
+| `chat`            | Client → Bot  | Normal user message                          |
+| `chat_request`    | Internal      | Sent to LLM listeners                        |
+| `llm_response`    | LLM → CPU     | Raw LLM answer                               |
+| `llm_output`      | CPU → Web     | Final formatted reply for UI                 |
+| `user_msg`        | Bot → Client  | Echo of user's own message                   |
+| `config_save`     | Client → Bot  | Save new config.toml                         |
+| `manifest_save`   | Client → Bot  | Save system_manifest.md                      |
+| `slash_cmd`       | Client → Bot  | Execute /status, /tools, /bayes etc.         |
+| `ollama_response` | Internal      | Tool or skill results                        |
+| `error` / `warning` | Bot → Client | Health or retry messages                   |
+
+### Log Endpoints (HTTP GET/POST)
+- `/logs/chat`          — View `logs/chat_log.md`
+- `/logs/chat/clear`    — Truncate chat log
+- `/logs/error`         — View error log
+- `/logs/bus`           — View bus transaction log
+- `/logs/hartbeat`      — View heartbeat log
+
+---
+
+## Secondary Interfaces (Under-connected)
+
+### Terminal CLI
+- `src/io/terminal/` — Interactive REPL
+- Currently **not wired** into the main bus in `main.rs`
+- Would publish `chat_request` / `user_input` the same way the WebSocket does
+
+### UNIX Domain Socket
+- `src/io/unix_socket.rs`
+- Local IPC for other processes on the same machine
+- Not yet integrated into the main listener loop
+
+### Cron / Autonomous Triggers
+- Heartbeat and cron jobs publish `agent_run` messages
+- These are consumed by the CPU or future `RuntimeLoop`
+
+---
+
+## Current Gaps in CLI/Web Layer
+
+1. Terminal and UNIX socket are not subscribed to the bus at startup
+2. No streaming responses yet (all LLM calls are non-streaming)
+3. No authentication / multi-user support on the WebSocket
+4. Web UI is the only fully functional input path today
 
 ## Links
 - [Overview](00-overview.html)
-- [Agent](02-agent.html)
+- [Engine](06-engine.html)
+- [Tools](05-tools.html)
