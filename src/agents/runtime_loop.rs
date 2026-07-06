@@ -61,6 +61,9 @@ impl<P: Planner> RuntimeLoop<P> {
                     PlannerOutput::Error { message } => {
                         warn!("[Runtime] Planner returned Error: {}", message);
                     }
+                    PlannerOutput::Replan { new_goal_focus, .. } => {
+                        info!("[Runtime] Planner chose Replan: focus on '{}'", new_goal_focus);
+                    }
                 }
             }
 
@@ -88,6 +91,24 @@ impl<P: Planner> RuntimeLoop<P> {
                     step.halted = true;
                     self.runtime_trace.push(step);
                     break;
+                }
+                PlannerOutput::Replan { new_goal_focus, reasoning } => {
+                    // Reflection suggested a better path — update state and continue
+                    if self.trace {
+                        info!("[Runtime] Reflection triggered REPLAN → focus: {}", new_goal_focus);
+                    }
+                    state.messages.push(format!(
+                        "Reflection: replan with focus '{}' — {}",
+                        new_goal_focus,
+                        reasoning.as_deref().unwrap_or("no reasoning provided")
+                    ));
+                    step.planner_output = Some(PlannerOutput::Replan {
+                        new_goal_focus: new_goal_focus.clone(),
+                        reasoning: reasoning.clone(),
+                    });
+                    // Push the step and continue to next iteration (reflection-driven replan)
+                    self.runtime_trace.push(step);
+                    continue;
                 }
                 PlannerOutput::ToolCall { tool_name, args_json, .. } => {
                     step.tool_name = Some(tool_name.clone());

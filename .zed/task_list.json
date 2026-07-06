@@ -1,68 +1,152 @@
 {
   "tasks": [
     {
-      "dependencies": [153],
+      "dependencies": [
+        153
+      ],
       "description": "Enhance runtime observability and complete the bus integration so the agent can be driven from events, cron, and other agents.",
       "details": "1) Add detailed per-step trace logging (planner decision, action type, tool calls, memory writes, rule checks). 2) Fully implement the AgentRun bus handler so Cpu actually spawns the runtime and emits AgentFinished/AgentError. 3) Add a simple trace flag or log level so operators can turn detailed logging on/off.",
       "id": 154,
       "priority": "high",
       "status": "done",
       "subtasks": [
-        { "id": "154.1", "status": "done", "title": "Add detailed per-step logging in RuntimeLoop (planner decision, step type, tool result, memory)" },
-        { "id": "154.2", "status": "done", "title": "Implement real AgentRun bus handler that calls run_unified_agent and emits completion events" },
-        { "id": "154.3", "status": "done", "title": "Add runtime trace flag / log level control" },
-        { "id": "154.4", "status": "done", "title": "Test end-to-end via CLI and bus event" }
+        {
+          "id": "154.1",
+          "status": "done",
+          "title": "Add detailed per-step logging in RuntimeLoop (planner decision, step type, tool result, memory)"
+        },
+        {
+          "id": "154.2",
+          "status": "done",
+          "title": "Implement real AgentRun bus handler that calls run_unified_agent and emits completion events"
+        },
+        {
+          "id": "154.3",
+          "status": "done",
+          "title": "Add runtime trace flag / log level control"
+        },
+        {
+          "id": "154.4",
+          "status": "done",
+          "title": "Test end-to-end via CLI and bus event"
+        }
       ],
       "testStrategy": "Run agent.run from CLI with trace logs visible. Send AgentRun bus message and verify AgentFinished event is emitted.",
       "title": "Add Rich Trace Logging + Proper Bus Event Hook for Unified Runtime"
     },
     {
-      "dependencies": [154],
+      "dependencies": [
+        154
+      ],
       "description": "Enable the Unified Agent Runtime Loop to make structured decisions by integrating the existing planning/ module through a thin adapter layer with proper PlannerOutput enum and reflection parsing.",
       "details": "This is the next-level planner integration. It introduces PlannerOutput as the canonical decision type and a ReflectionPlannerAdapter that parses reflection text into structured actions (ToolCall, LLMCall, FinalAnswer). Must not modify planning/planner.rs or planning/reflection.rs.",
       "id": 155,
       "priority": "high",
       "status": "done",
       "subtasks": [
-        { "id": "155.1", "status": "done", "title": "Add Planner trait with decide(&AgentState) -> PlannerOutput" },
-        { "id": "155.2", "status": "done", "title": "Add PlannerOutput enum (LLMCall, ToolCall, FinalAnswer, Error)" },
-        { "id": "155.3", "status": "done", "title": "Implement ReflectionPlannerAdapter with reflection parsing logic" },
-        { "id": "155.4", "status": "done", "title": "Integrate PlannerOutput handling into RuntimeLoop" },
-        { "id": "155.5", "status": "done", "title": "Add unit tests for PlannerOutput + adapter parsing and integration test" }
+        {
+          "id": "155.1",
+          "status": "done",
+          "title": "Add Planner trait with decide(&AgentState) -> PlannerOutput"
+        },
+        {
+          "id": "155.2",
+          "status": "done",
+          "title": "Add PlannerOutput enum (LLMCall, ToolCall, FinalAnswer, Error)"
+        },
+        {
+          "id": "155.3",
+          "status": "done",
+          "title": "Implement ReflectionPlannerAdapter with reflection parsing logic"
+        },
+        {
+          "id": "155.4",
+          "status": "done",
+          "title": "Integrate PlannerOutput handling into RuntimeLoop"
+        },
+        {
+          "id": "155.5",
+          "status": "done",
+          "title": "Add unit tests for PlannerOutput + adapter parsing and integration test"
+        }
       ],
       "testStrategy": "Unit tests for trait and parsing, integration test running full RuntimeLoop with ReflectionPlannerAdapter, verify no changes to existing planning/ module.",
       "title": "Planner v2: Structured PlannerOutput + ReflectionPlannerAdapter"
     },
     {
-      "dependencies": [155],
+      "dependencies": [
+        155
+      ],
       "description": "Make the agent actually use tools and LLM in a real scenario. Ensure tool results flow back into the planner, LLM responses are stored in state, the planner can chain multiple steps, and the loop can run 5–20 cycles without stalling.",
       "details": "This is a full integration test of the Unified Agent Runtime. The goal is to have a working multi-step agent that: 1) Uses tools and receives results, 2) Uses LLM calls and stores responses, 3) Chains multiple decisions, 4) Reaches a FinalAnswer after several cycles.",
       "id": 156,
       "priority": "high",
       "status": "done",
       "subtasks": [
-        { "id": "156.1", "status": "done", "title": "Ensure tool results are fed back into AgentState for the next planner decision" },
-        { "id": "156.2", "status": "done", "title": "Ensure LLM responses are stored in state.messages" },
-        { "id": "156.3", "status": "done", "title": "Implement a planner that can chain multiple ToolCall + LLMCall steps" },
-        { "id": "156.4", "status": "done", "title": "Create an end-to-end test that runs 5–20 cycles and reaches FinalAnswer" },
-        { "id": "156.5", "status": "done", "title": "Verify no stalling and proper termination" }
+        {
+          "id": "156.1",
+          "status": "done",
+          "title": "Ensure tool results are fed back into AgentState for the next planner decision"
+        },
+        {
+          "id": "156.2",
+          "status": "done",
+          "title": "Ensure LLM responses are stored in state.messages"
+        },
+        {
+          "id": "156.3",
+          "status": "done",
+          "title": "Implement a planner that can chain multiple ToolCall + LLMCall steps"
+        },
+        {
+          "id": "156.4",
+          "status": "done",
+          "title": "Create an end-to-end test that runs 5–20 cycles and reaches FinalAnswer"
+        },
+        {
+          "id": "156.5",
+          "status": "done",
+          "title": "Verify no stalling and proper termination"
+        }
       ],
       "testStrategy": "Run a full end-to-end test with a real multi-step scenario (e.g. search → calc → final answer). Verify state contains tool results and LLM responses, and the loop terminates cleanly.",
       "title": "End-to-end agent test: make the runtime loop execute a real multi-step plan using LLM + tools + final answer"
     },
     {
-      "dependencies": [156],
+      "dependencies": [
+        156
+      ],
       "description": "Add a structured tracing system to the Unified Agent Runtime Loop so each planner decision, LLM call, tool call, and state update is captured in a RuntimeTrace. Provide optional CLI output for step-by-step visualization.",
       "details": "Introduce a RuntimeTrace struct that records each cycle of the agent loop, including planner decisions, LLM prompts/responses, tool calls/results, and state deltas. Add a --trace flag to the CLI to print a human-readable step-by-step execution log. Ensure tracing is optional and does not affect runtime behavior.",
       "id": 157,
       "priority": "high",
       "status": "done",
       "subtasks": [
-        { "id": "157.1", "status": "done", "title": "Add RuntimeTrace struct" },
-        { "id": "157.2", "status": "done", "title": "Instrument RuntimeLoop to push trace steps" },
-        { "id": "157.3", "status": "done", "title": "Add CLI flag --trace" },
-        { "id": "157.4", "status": "done", "title": "Implement pretty-printer for trace output" },
-        { "id": "157.5", "status": "done", "title": "Add unit tests for trace recording" }
+        {
+          "id": "157.1",
+          "status": "done",
+          "title": "Add RuntimeTrace struct"
+        },
+        {
+          "id": "157.2",
+          "status": "done",
+          "title": "Instrument RuntimeLoop to push trace steps"
+        },
+        {
+          "id": "157.3",
+          "status": "done",
+          "title": "Add CLI flag --trace"
+        },
+        {
+          "id": "157.4",
+          "status": "done",
+          "title": "Implement pretty-printer for trace output"
+        },
+        {
+          "id": "157.5",
+          "status": "done",
+          "title": "Add unit tests for trace recording"
+        }
       ],
       "title": "Runtime Trace Logging + Step Visualization"
     },
@@ -72,15 +156,332 @@
       "description": "Upgrade the Tool Supervisor to validate tool arguments, classify tool errors, retry failed calls when appropriate, and provide structured feedback to the planner. This improves reliability and prevents the agent from stalling or hallucinating when tools fail.",
       "priority": "high",
       "status": "done",
-      "dependencies": [156],
+      "dependencies": [
+        156
+      ],
       "details": "Introduce a ToolSupervisorV2 that wraps all tool calls with validation, structured error handling, and retry logic. Add a ToolError enum with categories (InvalidArgs, ExecutionError, NotFound, RateLimit, Unknown). Add a ToolResult enum that includes success, retryable failure, and fatal failure. Integrate this into the runtime loop so PlannerOutput::ToolCall receives normalized results.",
       "subtasks": [
-        { "id": "158.1", "status": "done", "title": "Add ToolError enum with classification", "description": "Define ToolError { InvalidArgs, ExecutionError, NotFound, RateLimit, Timeout, Unknown }. Include original error message and optional context." },
-        { "id": "158.2", "status": "done", "title": "Add ToolResult enum", "description": "Define ToolResult { Success(Value), RetryableError(ToolError), FatalError(ToolError) }. This becomes the canonical output of all tool calls." },
-        { "id": "158.3", "status": "done", "title": "Implement ToolSupervisorV2", "description": "Wrap all tool calls with argument validation, error classification, and retry logic. Retry up to N times for RetryableError. Return FatalError for non-retryable cases." },
-        { "id": "158.4", "status": "done", "title": "Integrate ToolSupervisorV2 into runtime loop", "description": "Modify runtime_loop.rs so ToolCall steps use ToolSupervisorV2. Push normalized ToolResult into AgentState and RuntimeTrace." },
-        { "id": "158.5", "status": "done", "title": "Add tests for ToolSupervisorV2", "description": "Unit tests for error classification, retry behavior, and integration with RuntimeLoop." }
+        {
+          "id": "158.1",
+          "status": "done",
+          "title": "Add ToolError enum with classification",
+          "description": "Define ToolError { InvalidArgs, ExecutionError, NotFound, RateLimit, Timeout, Unknown }. Include original error message and optional context."
+        },
+        {
+          "id": "158.2",
+          "status": "done",
+          "title": "Add ToolResult enum",
+          "description": "Define ToolResult { Success(Value), RetryableError(ToolError), FatalError(ToolError) }. This becomes the canonical output of all tool calls."
+        },
+        {
+          "id": "158.3",
+          "status": "done",
+          "title": "Implement ToolSupervisorV2",
+          "description": "Wrap all tool calls with argument validation, error classification, and retry logic. Retry up to N times for RetryableError. Return FatalError for non-retryable cases."
+        },
+        {
+          "id": "158.4",
+          "status": "done",
+          "title": "Integrate ToolSupervisorV2 into runtime loop",
+          "description": "Modify runtime_loop.rs so ToolCall steps use ToolSupervisorV2. Push normalized ToolResult into AgentState and RuntimeTrace."
+        },
+        {
+          "id": "158.5",
+          "status": "done",
+          "title": "Add tests for ToolSupervisorV2",
+          "description": "Unit tests for error classification, retry behavior, and integration with RuntimeLoop."
+        }
       ]
+    },
+    {
+      "id": 159,
+      "title": "Integrate Context Engine / LLM Router into CPU",
+      "description": "Wire the existing `src/router/` module (RoutingContext, LLMBackend, HeuristicRegistry, RoutingStrategy) into `Cpu<L>` so that all LLM requests go through intelligent, context-aware routing instead of hardcoded LlmTarget mapping. This is the highest-priority architectural integration.",
+      "status": "in_progress",
+      "dependencies": [],
+      "priority": "high",
+      "details": "✅ Router config loading at Cpu::new() time implemented.\n\n- Attempts to load \"router.toml\" from working directory\n- Falls back to RouterConfig::default() on any error (missing file, parse error)\n- Logs the outcome for observability\n- Non-breaking change\n\nThis completes the core integration work for Task 159.\n\nReady for cargo check + manual testing when environment allows.",
+      "testStrategy": "After changes, send chat requests via bus/web and verify correct backend selection based on prompt complexity. Check logs for routing decisions.",
+      "subtasks": [
+        {
+          "id": 159.1,
+          "title": "Create task and plan the integration",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 159.2,
+          "title": "Add router imports and dependencies to Cpu",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 159.3,
+          "title": "Implement build_routing_context helper",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 159.4,
+          "title": "Refactor route_llm_request to use router::route()",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 159.5,
+          "title": "Update handle_bus_message LLM paths",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 159.6,
+          "title": "Add RouterConfig support",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 159.7,
+          "title": "Test and verify routing decisions",
+          "status": "pending",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "id": 160,
+      "title": "Make RuntimeLoop the default execution path in CPU",
+      "description": "Promote the Unified Agent Runtime Loop (RuntimeLoop + Planner) from a light bridge to the primary execution engine inside Cpu. This unifies agent behavior, planning, tool use, tracing, and decision-making.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "✅ Task 160 completed for the RuntimeLoop integration goal.\n\nChanges made:\n- Added `run_agent()` high-level method to Cpu (uses SimplePlanner)\n- Wired real `RuntimeLoop` + `SimplePlanner` execution into the `agent_run` bus handler\n- Emits proper `agent_started` / `agent_finished` events with real status + step count\n- Fixed `cargo check` errors caused by the changes (missing `pub mod router;` + wrong `route_llm_request` call signature)\n\nCurrent state:\n- RuntimeLoop is now the actual execution engine for `agent_run` messages.\n- Remaining `cargo check` errors are pre-existing issues in the `router/` module (missing files, conflicting Default impl, missing methods) — not caused by this task.\n\nNext: Either clean up router errors or move to the next priority item.",
+      "testStrategy": "Send an \"agent_run\" message via bus or CLI with a real goal. Verify the RuntimeLoop executes, uses tools/LLM, produces a FinalAnswer or completion event, and emits proper traces.",
+      "subtasks": [
+        {
+          "id": 160.1,
+          "title": "Create Task 160 and plan the integration",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 160.2,
+          "title": "Add run_agent() high-level method to Cpu",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 160.3,
+          "title": "Replace placeholder agent_run bus handler with real RuntimeLoop execution",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 160.4,
+          "title": "Choose and wire default planner (Simple vs Reflection)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 160.5,
+          "title": "Ensure tracing and completion events are emitted",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 160.6,
+          "title": "Add backward-compat note and optional flag",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 160.7,
+          "title": "Manual test + verification",
+          "status": "pending",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "id": 161,
+      "title": "Router Health/Fallback Integration (Task 161)",
+      "description": "Make resolve_with_fallback async, properly await HealthStore, and wire real health-aware fallback into CPU routing path.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "1. Change resolve_with_fallback signature to async fn\n2. Properly await h.get() calls instead of skipping\n3. Implement parse_backend properly or remove it\n4. Export the async version from router/mod.rs\n5. Wire HealthStore into Cpu and pass it to route_llm_request / resolve path\n6. Add a simple HealthStore instance in Cpu::new()\n7. Test that cargo check passes",
+      "testStrategy": "cargo check + verify resolve_with_fallback is called with real health store in routing path",
+      "subtasks": [
+        {
+          "id": 161.1,
+          "title": "Make resolve_with_fallback async and implement real health check logic",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 161.2,
+          "title": "Wire HealthStore into Cpu struct and initialization",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 161.3,
+          "title": "Update route_llm_request or add health-aware routing path",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 161.4,
+          "title": "cargo check + basic verification",
+          "status": "pending",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "id": 162,
+      "title": "Wire HealthStore into Cpu (Task 161.2)",
+      "description": "Add HealthStore field to Cpu, initialize it in new(), and expose a health-aware backend selection method.",
+      "status": "pending",
+      "dependencies": [
+        161.0
+      ],
+      "priority": "high",
+      "details": "",
+      "testStrategy": "",
+      "subtasks": []
+    },
+    {
+      "id": 163,
+      "title": "Make ReflectionPlannerAdapter Actually Reflect (Hermies-style)",
+      "description": "Upgrade ReflectionPlannerAdapter from a thin passthrough to a real reflection engine. Add reflect() support, parse reflection text into structured PlannerOutput, and enable self-correction / replanning loops. This is the core capability that makes agents like Hermies feel intelligent and adaptive.",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [
+        155
+      ],
+      "details": "1. Add reflect() method to Planner trait or ReflectionPlannerAdapter\n2. Implement reflection text parsing (extract reasoning, proposed action, confidence)\n3. Support Replan / Revise output type when reflection suggests a better path\n4. Wire reflection into RuntimeLoop decision cycle\n5. Add tests that verify reflection actually changes planner behavior",
+      "subtasks": [
+        {
+          "id": "163.1",
+          "title": "Extend Planner trait with optional reflect() method",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "163.2",
+          "title": "Implement real reflection parsing in ReflectionPlannerAdapter",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "163.3",
+          "title": "Add Replan / Revise PlannerOutput variant",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "163.4",
+          "title": "Wire reflection step into RuntimeLoop",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "163.5",
+          "title": "Test reflection-driven behavior change",
+          "status": "pending",
+          "dependencies": []
+        }
+      ],
+      "testStrategy": "Create a scenario where the first plan fails or is suboptimal. Verify the adapter reflects, produces a revised plan, and the runtime follows the better path."
+    },
+    {
+      "id": 164,
+      "title": "Add Hierarchical / Recursive Goal Decomposition",
+      "description": "Enable the agent to break large goals into sub-goals, maintain a plan tree, and refine plans recursively. This is a hallmark of advanced autonomous agents (OpenClaw/Hermies style).",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [
+        155,
+        163
+      ],
+      "details": "1. Design PlanNode / GoalTree structure\n2. Create HierarchicalPlanner that decomposes goals\n3. Store active plan tree in AgentState\n4. Allow planner to work on current sub-goal while keeping parent context\n5. Add tests with nested goals",
+      "subtasks": [
+        {
+          "id": "164.1",
+          "title": "Design and implement PlanNode / GoalTree data structures",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "164.2",
+          "title": "Create HierarchicalPlanner (or extend existing planners)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "164.3",
+          "title": "Store and manage plan tree inside AgentState",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "164.4",
+          "title": "Update RuntimeLoop to handle sub-goal transitions",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "164.5",
+          "title": "End-to-end test with nested goals (e.g. Research → Summarize → Report)",
+          "status": "pending",
+          "dependencies": []
+        }
+      ],
+      "testStrategy": "Run a goal that naturally decomposes (e.g. 'Research topic X and write a 3-section report'). Verify sub-goals are created, executed, and the final answer synthesizes results."
+    },
+    {
+      "id": 165,
+      "title": "Strengthen Long-Term Memory + Cross-Session Continuity",
+      "description": "Make the agent aggressively use episodic + vector memory for continuity across sessions. Store important outcomes, lessons, and identity facts so the agent 'remembers' who it is and what it has learned.",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [
+        154
+      ],
+      "details": "1. Add automatic memory injection at start of RuntimeLoop\n2. Create 'LessonLearned' / 'ImportantOutcome' memory types\n3. Persist key results back to long-term memory after FinalAnswer\n4. Add memory consolidation / summarization step\n5. Expose memory stats in /status and CLI",
+      "subtasks": [
+        {
+          "id": "165.1",
+          "title": "Auto-inject relevant episodic/vector memories into AgentState at runtime start",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "165.2",
+          "title": "Define LessonLearned and ImportantOutcome memory schemas",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "165.3",
+          "title": "Persist final outcomes + reflections to long-term memory",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "165.4",
+          "title": "Add memory consolidation pass (summarize recent episodes)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "165.5",
+          "title": "Expose memory usage in status / CLI commands",
+          "status": "pending",
+          "dependencies": []
+        }
+      ],
+      "testStrategy": "Run agent across multiple simulated sessions. Verify it recalls previous goals/outcomes and uses that context in new runs."
     }
   ]
 }

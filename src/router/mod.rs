@@ -5,7 +5,7 @@ pub mod context;
 pub mod fallback;
 pub mod health;
 pub mod integration;
-pub mod override_mod;
+pub mod user_override;
 pub mod route;
 pub mod schedule;
 pub mod strategy;
@@ -16,3 +16,6 @@ pub use config::{RouterConfig, ConfigManager, ComplexityConfig, ScheduleConfig, 
 pub use strategy::{RoutingStrategy, DefaultStrategy};
 pub use fallback::{BackendSelection, resolve_with_fallback};
 pub use route::route;
+pub use user_override::{OverrideStore, OverrideCommand, OverrideTier};
+pub use health::HealthStore;
+pub use telemetry::TelemetryCollector;

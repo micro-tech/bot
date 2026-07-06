@@ -20,4 +20,9 @@ pub enum PlannerOutput {
     Error {
         message: String,
     },
+    /// Reflection suggested a different approach — replan with updated reasoning
+    Replan {
+        new_goal_focus: String,
+        reasoning: Option<String>,
+    },
 }
