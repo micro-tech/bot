@@ -17,7 +17,7 @@
 ## Core Architecture
 - `src/main.rs` — Entry point, spawns async tasks and bus listeners
 - `src/bus/` — Central publish-subscribe message bus (std::sync::mpsc router thread)
-- `src/cpu/` — Main execution engine + reasoning coordinator
+- `src/cpu/` — Main execution engine + reasoning coordinator + Unified Runtime host
 - `src/io/` — Web server (Axum + WebSocket), Ollama handlers, Gemini handler, terminal, UNIX socket
 
 ## Subsystems
@@ -26,10 +26,10 @@
 - `src/hooks/` — Phase hooks (pre/post execution)
 - `src/hy_evo/` — Evolutionary workflow engine
 - `src/reasoning/` — Hypothesis → Plan → Execute loop (ReasoningEngine)
-- `src/planning/` — Planner implementations
-- `src/agents/` — Unified runtime loop (`RuntimeLoop`)
+- `src/planning/` — Planner trait + implementations
+- `src/agents/` — Unified Agent Runtime (`RuntimeLoop`, `SimplePlanner`, `ReflectionPlannerAdapter`)
 - `src/tools/` — Tool dispatcher + file/system/email tools
-- `src/router/` — LLM routing engine + context-aware backend selection
+- `src/router/` — Context Engine / LLM Router (complexity scoring, schedule, fallback, health-aware routing)
 
 ---
 
@@ -91,9 +91,9 @@ Bus topic: "gemini"
         └── On success: publish("cpu", llm_response)
 ```
 
-### 3. CPU Router & Coordination
+### 3. CPU Router & Coordination (Current State)
 
-The **CPU** (`src/cpu/`) functions as the central **router and coordinator**:
+The **CPU** (`src/cpu/`) is the central **router, coordinator, and Unified Runtime host**:
 
 - **`Cpu<L>` struct** — Generic over LLM interface; holds:
   - `state: AgentState`
@@ -103,31 +103,35 @@ The **CPU** (`src/cpu/`) functions as the central **router and coordinator**:
   - `bus: Arc<Bus>`
   - `hyevo: HyEvoIntegration<L>`
   - `reasoning: Option<ReasoningEngine>`
+  - `router_config: RouterConfig` (loaded at startup from `router.toml`)
 
 - **Message Routing (`handle_bus_message`)**:
-  - `user_input` / `chat_request` → records in working memory
+  - `user_input` / `chat_request` → records in working memory → `route_llm_request()` (Context Engine)
   - `llm_response` → `handle_llm_response()` → forwards to `web_interface`
-  - `reasoning_command`, `agent_run`, `skill_request` → dispatched to appropriate handlers
+  - `reasoning_command` → pause/resume/reset reasoning engine
+  - `agent_run` → **spawns real `RuntimeLoop` + `SimplePlanner`** (Task 160)
+  - `skill_request` → dispatched to appropriate handlers
   - `heartbeat` → triggers `handle_heartbeat()` (manifest routines + HyEvo cycles)
 
-- **LLM Routing (`route_llm_request`)**:
-  - Maps `LlmTarget` (OllamaLocal, OllamaLan, Gemini, Grok) → bus topic
-  - Publishes structured `llm_request` messages
+- **LLM Routing via Context Engine** (`route_llm_request`):
+  - Builds `RoutingContext` (prompt, token count, code presence, timestamp)
+  - Calls `router::route()` for intelligent backend selection
+  - Supports: `LocalOllama`, `LanOllama`, `Gemini`, `Grok`, `Fallback`
+  - Publishes structured `chat_request` messages with `routed_via` metadata
 
-- **Execution Engine**:
-  - `execute_instruction()` — runs `Instruction` variants (RunSkill, CallLlm, PlanNextSteps, etc.)
-  - `run_unified_agent()` — launches `RuntimeLoop` with planner + rule layer
-  - `run_hyevo_cycle()` — evolutionary workflow execution via `CpuExecutorImpl`
+- **Execution Engine** (Unified Runtime — Task 160):
+  - `run_agent(goal, max_steps)` — high-level convenience (uses `SimplePlanner`)
+  - `run_unified_agent<P>(goal, planner, allowed_tools, max_steps)` — generic entry point
+  - `handle_bus_message("agent_run")` → real async `RuntimeLoop` execution + `agent_started`/`agent_finished` events
+  - `commands::handle_agent_run` — CLI `agent.run` entry point
 
 - **Reasoning & Maintenance**:
-  - `start_reasoning()`, `run_reasoning_cycle()`, `reasoning_metrics()`
+  - `start_reasoning()`, `run_reasoning_cycle()`, `reasoning_metrics()`, `reasoning_health_check()`
   - `nightly_maintenance()`, `self_repair()`, `evolve_manifest()`
-
-**Future Role**: Transition from lightweight forwarder to full central reasoning router.
 
 ### 4. Context Engine & LLM Router (`src/router/`)
 
-The **Context Engine** provides intelligent, context-aware routing decisions:
+The **Context Engine** provides intelligent, context-aware routing decisions (fully integrated as of Task 159):
 
 - **`RoutingContext`** (`context.rs`):
   ```rust
@@ -148,13 +152,7 @@ The **Context Engine** provides intelligent, context-aware routing decisions:
 
 - **Complexity Scoring Engine** (`complexity.rs`):
   - `HeuristicRegistry` with pluggable `Heuristic` trait
-  - Built-in heuristics:
-    - `TokenCountHeuristic`
-    - `CodeDensityHeuristic`
-    - `ReasoningKeywordsHeuristic`
-    - `MathSymbolsHeuristic`
-    - `MultiStepHeuristic`
-    - `StructuralDepthHeuristic`
+  - Built-in heuristics: `TokenCountHeuristic`, `CodeDensityHeuristic`, `ReasoningKeywordsHeuristic`, `MathSymbolsHeuristic`, `MultiStepHeuristic`, `StructuralDepthHeuristic`
   - `score_prompt()` → weighted aggregate score (0.0–1.0)
 
 - **Routing Strategy** (`strategy.rs` + `route.rs`):
@@ -163,18 +161,41 @@ The **Context Engine** provides intelligent, context-aware routing decisions:
     - Complexity score thresholds
     - Schedule-based rules (`check_schedule`)
     - Profile-based selection (`select_from_profile`)
-    - Health & telemetry signals
+    - Health & telemetry signals (future)
 
-- **Fallback & Config**:
-  - `resolve_with_fallback()`
-  - `RouterConfig` (complexity thresholds, load balancing, schedules)
+- **Fallback, Health & Config**:
+  - `resolve_with_fallback()`, `HealthStore`, `TelemetryCollector`
+  - `RouterConfig` (complexity thresholds, load balancing, schedules, hot-reload via `ConfigManager`)
+  - `user_override` module for per-user backend pinning
 
-**Integration Points**:
-- CPU calls into router before emitting `llm_request`
-- Web UI / agents can attach `RoutingContext` or `user_override`
-- Telemetry & health data flow back into context for adaptive routing
+- **Integration Points**:
+  - CPU calls `router::route()` before emitting every `llm_request`
+  - Web UI / agents can attach `RoutingContext` or `user_override`
+  - Telemetry & health data flow back into context for adaptive routing
 
-### 5. Skill Registry (`src/skills/`)
+### 5. Unified Agent Runtime (`src/agents/`)
+
+The **Unified Agent Runtime** is now the **primary execution engine** (Task 160 complete):
+
+- **`RuntimeLoop`** — Core loop that executes planner decisions until `FinalAnswer` or max steps
+- **`Planner` trait** — `decide(&AgentState) -> PlannerOutput`
+- **`PlannerOutput` enum** — `LLMCall`, `ToolCall`, `FinalAnswer`, `Error`
+- **`SimplePlanner`** — Default planner (goal-driven, tool-aware)
+- **`ReflectionPlannerAdapter`** — Parses reflection text into structured `PlannerOutput`
+- **`AgentState`** (unified) — Messages, tool results, last planner output, trace
+- **`RuleLayer`** — Tool allow-list + safety rules
+- **`RuntimeTrace`** — Step-by-step execution recording (planner decision, LLM call, tool result, memory write)
+
+**Execution Flow:**
+```
+agent_run message / CLI
+  └── Cpu::run_agent() or handle_bus_message("agent_run")
+        └── RuntimeLoop::new(SimplePlanner, RuleLayer, max_steps)
+              └── run(state) → loops until FinalAnswer or error
+                    └── Emits agent_started / agent_finished events
+```
+
+### 6. Skill Registry (`src/skills/`)
 
 The **Skill Registry** provides a pluggable, discoverable interface for agent capabilities:
 
@@ -189,15 +210,11 @@ The **Skill Registry** provides a pluggable, discoverable interface for agent ca
   - Tool bridges: `read_log`, `write_note`, `read_note`, `list_notes`, `send_email`, `read_email`, `check_inbox`, `system_status`, `list_tools`
   - Belief tools: `get_beliefs`, `set_belief`
 
-- **HyEvo Integration**:
+- **HyEvo + Runtime Integration**:
   - Implements `SkillInterface` trait (async `call`)
   - Used by `CpuExecutorImpl` and `RuntimeLoop` for workflow execution
 
-- **Design Notes**:
-  - Most skills delegate to `crate::tools::execute()` for shared implementation
-  - Sandbox / marketplace modules exist for future dynamic loading & safety
-
-### 6. Unified Memory Manager (`src/memory/`)
+### 7. Unified Memory Manager (`src/memory/`)
 
 The **MemoryManager** is the single source of truth for all memory types:
 
@@ -206,82 +223,49 @@ The **MemoryManager** is the single source of truth for all memory types:
   - `vector: VectorMemory` — semantic fact storage + retrieval (RAG)
   - `episodic: EpisodicMemory` — timestamped event log (bounded)
   - `beliefs: HashMap<String, Value>` — persistent key-value beliefs
-  - High-level methods:
-    - `record_user_message(text)` — writes to working + episodic
-    - `search_facts(query, k)` — vector similarity search
-    - `set_belief(key, value)` / `get_belief(key)` / `get_all_beliefs()`
-    - `visualize_beliefs()` — generates Mermaid graph of beliefs
-  - Implements `MemoryInterface` (delegates to working memory)
+  - High-level methods: `record_user_message()`, `search_facts()`, `set_belief()`, `get_all_beliefs()`, `visualize_beliefs()`
 
 - **`MemoryHandle`** (working memory):
   - `context: VecDeque<String>` with configurable `max_len`
-  - `drain_oldest_chunk(n)` — for summarization pipelines
-  - `push_summary(summary)` — prepends "Summary: ..."
-  - `get_recent_entries(n)` — most recent first
-  - `update_belief()` helper
+  - `drain_oldest_chunk(n)`, `push_summary()`, `get_recent_entries(n)`
 
-- **`EpisodicMemory`**:
-  - Stores `Episode { id, event, timestamp }`
-  - `record(event)` — appends with auto-increment ID, enforces max_len
-  - `recent(n)` — returns latest N episodes
-
-- **`VectorMemory`** (RAG):
-  - Stores `Fact { id, text, embedding: Vec<f32> }` (dummy 384-dim)
-  - `add_fact(text)` — generates embedding + stores
-  - `search(query, top_k)` — cosine similarity ranking
-  - Placeholder embedding (`dummy_embed`) ready for real model integration
+- **`EpisodicMemory`** & **`VectorMemory`** (RAG) — unchanged from previous design
 
 - **Usage in CPU**:
   - Injected into `Cpu<L>` at construction
-  - Used in `enhance_prompt_with_memory()`, `handle_bus_message()`, reasoning loops
-  - Beliefs exposed via tools (`get_beliefs`, `set_belief`)
+  - Used in `enhance_prompt_with_memory()`, `handle_bus_message()`, reasoning loops, and `RuntimeLoop`
 
-### 7. Logging / Audit Bus
+### 8. Logging / Audit Bus
 
 Every message that flows through the system is automatically audited.
 
 - **Central Bus Logging** (`src/bus/mod.rs`):
   - `Bus::publish()` always calls `log_transaction()`
   - Every message is appended to `logs/bus_log.md` with timestamp, `from → to`, and truncated payload
-  - Router thread also prints undelivered message warnings
 
 - **Per-Component Logging**:
-  - `utils::log_to_file()` — universal helper used in 100+ locations (CPU, Ollama, interrupts, scheduler, reasoning, agents, etc.)
-  - Writes to multiple rotating logs: `chat_log.md`, `error_log.md`, `hartbeat_log.md`
+  - `utils::log_to_file()` — universal helper used in 100+ locations
+  - Writes to: `chat_log.md`, `error_log.md`, `hartbeat_log.md`
 
-- **Structured Trace Logging** (`src/agents/trace_logging.rs`):
-  - `log_trace(state, step)` emits JSON per agent step (timestamp, action, memory_writes, halted)
-  - Used by `RuntimeLoop` when trace mode is enabled
+- **Structured Trace Logging** (`src/agents/trace_logging.rs` + `runtime_trace.rs`):
+  - `RuntimeTrace` records each cycle (planner decision, LLM prompt/response, tool call/result, state deltas)
+  - `--trace` CLI flag enables pretty-printed step-by-step output
 
 - **Reasoning Observability** (`src/reasoning/engine.rs` + `observability.rs`):
   - `ReasoningObserver::log_event()` records phase transitions, hypothesis proposals, plan commits, corrections
-  - Uses `tracing` crate + correlation IDs for distributed tracing
-  - `reasoning_summary()` / `reasoning_trace()` expose redacted + detailed views
-
-- **Audit Stub** (`src/utils/audit.rs`):
-  - `audit_log(event)` placeholder for future policy/compliance events
+  - Uses `tracing` crate + correlation IDs
 
 - **Web UI Access**:
   - `GET /logs/bus` serves the live `bus_log.md` content
 
-**Purpose**: Complete message-level audit trail + structured execution traces for debugging, replay, and compliance.
-
-### 8. Arbitration Layer
+### 9. Arbitration Layer
 
 The **Arbitration Layer** decides *which* capability to invoke when the request is ambiguous.
 
-- **Skill Arbitration** (`Cpu::arbitrate_skill` in `src/cpu/mod.rs`):
-  ```rust
-  pub async fn arbitrate_skill(&self, task: &str) -> String
-  ```
+- **Skill Arbitration** (`Cpu::arbitrate_skill`):
   - Triggered when `RunSkill { name: "auto", args }` is executed
   - Sends a prompt to the LLM: *"Available skills: ... Task: ... Choose the most appropriate skill name"*
   - Returns the chosen skill name (falls back to `"noop"` on failure)
-
-- **Integration Points**:
-  - Called inside `execute_instruction(Instruction::RunSkill)`
-  - Also referenced in `handle_bus_message` for `skill_request` handling
-  - ReasoningEngine design doc explicitly lists *"skill arbitration"* as a core responsibility
 
 - **Current State**:
   - Very lightweight (hardcoded skill list + single LLM call)
@@ -292,22 +276,20 @@ The **Arbitration Layer** decides *which* capability to invoke when the request 
   - Multi-criteria decision (cost, latency, capability match, safety)
   - Integration with `router/` complexity scoring for end-to-end routing + arbitration
 
-**Goal**: Allow the agent to say *"do the right thing for this task"* instead of requiring the exact skill name.
-
-### 9. Other I/O Paths (Under-represented)
+### 10. Other I/O Paths
 
 - **Terminal** (`src/io/terminal/`) — Interactive CLI (not yet wired to bus in main.rs)
 - **UNIX Socket** (`src/io/unix_socket.rs`) — Local IPC
 - **Cron / Heartbeat** — Publishes `agent_run` messages for autonomous behavior
 - **Direct skill execution** — Via `skill_request` bus messages
 
-### 10. Logging & Observability
+### 11. Logging & Observability
 
 - `logs/chat_log.md` — All user + LLM messages
 - `logs/bus_log.md` — Every bus publish (central audit trail)
 - `logs/error_log.md` — Errors
 - `logs/hartbeat_log.md` — Heartbeat events
-- Structured JSON traces from `agents/trace_logging.rs`
+- Structured JSON traces from `agents/runtime_trace.rs`
 - Reasoning correlation IDs and phase events via `ReasoningObserver`
 
 ---
@@ -316,16 +298,30 @@ The **Arbitration Layer** decides *which* capability to invoke when the request 
 - `main()` → `run_bot()`
 - `Cargo.toml` [[bin]] `install` for setup
 - Web UI served at `https://localhost:8443` (TLS by default)
+- CLI: `agent.run <goal> [--trace]`
 
-## Current State & Gaps
+## Current State & Gaps (as of Task 160 completion)
 
+**Completed / Mature:**
 - WebSocket ↔ Bus round-trip is the most mature path
+- Router / Context Engine fully implemented and wired into CPU (`route_llm_request`)
+- Unified Agent Runtime (`RuntimeLoop` + `SimplePlanner`) is now the **default execution engine** (Task 160)
+- `run_agent()`, `run_unified_agent()`, and `agent_run` bus handler all use real `RuntimeLoop`
+- Router config hot-reload + startup loading implemented
+- Comprehensive logging/audit bus + structured tracing (`RuntimeTrace`)
+- Skill Registry and MemoryManager fully functional and wired into HyEvo/CPU/RuntimeLoop
+
+**In Progress / Partial:**
 - Terminal and UNIX socket I/O are under-connected
-- CPU is currently more of a coordinator than a central router
-- Full agent runtime (`RuntimeLoop`) is available but not yet the default execution path
-- Context Engine / Router is implemented but not yet deeply integrated into the main CPU path
-- Skill Registry and MemoryManager are fully functional and wired into HyEvo/CPU
-- Logging/audit bus provides excellent message-level visibility; arbitration layer is present but rudimentary (LLM-based skill picker only)
+- Health-aware fallback in router (`HealthStore`) is stubbed (needs async integration)
+- Schedule/profile system in router needs unification with `RouterConfig`
+- Arbitration layer is rudimentary (LLM-based skill picker only)
+
+**Future / Not Yet Started:**
+- Full `ReflectionPlannerAdapter` integration into default runtime path
+- Deep telemetry + health feedback loop into router
+- Policy engine for arbitration
+- Marketplace / dynamic skill loading
 
 ## Links
 - [CLI](01-cli.html)

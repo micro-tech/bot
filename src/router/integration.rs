@@ -1,13 +1,13 @@
 // router/integration.rs - Full Integration & Testing (Task 135)
-use crate::router::{
-    route, LLMBackend, RoutingContext, RouterConfig,
+use super::{
+    LLMBackend, RoutingContext,
     resolve_with_fallback, BackendSelection,
     ConfigManager, OverrideStore, OverrideCommand, OverrideTier,
     HealthStore, TelemetryCollector,
 };
 
 /// Main integration point for CPU pipeline
-pub fn decide_backend_with_full_context(
+pub async fn decide_backend_with_full_context(
     prompt: &str,
     token_estimate: usize,
     has_code: bool,
@@ -16,7 +16,7 @@ pub fn decide_backend_with_full_context(
     override_store: &OverrideStore,
     health_store: Option<&HealthStore>,
 ) -> BackendSelection {
-    let config = config_manager.get_blocking(); // or await in real async context
+    let config = config_manager.get().await;
 
     let mut ctx = RoutingContext {
         prompt: prompt.to_string(),
@@ -34,8 +34,8 @@ pub fn decide_backend_with_full_context(
         return BackendSelection::new(backend.clone(), "user override");
     }
 
-    // Run full routing + fallback logic
-    resolve_with_fallback(&ctx, &config, health_store)
+    // Run full routing + fallback logic (async)
+    resolve_with_fallback(&ctx, &config, health_store).await
 }
 
 /// Integration test helper
@@ -45,7 +45,7 @@ mod tests {
 
     #[test]
     fn test_basic_routing() {
-        let config = RouterConfig::default();
+        let config = super::super::RouterConfig::default();
         let ctx = RoutingContext {
             prompt: "Write a complex Rust program".into(),
             token_estimate: 1200,
@@ -57,12 +57,12 @@ mod tests {
             health: None,
         };
 
-        let backend = route(&ctx, &config);
+        let backend = super::super::route(&ctx, &config);
         assert!(matches!(backend, LLMBackend::LocalOllama | LLMBackend::Grok));
     }
 
-    #[test]
-    fn test_user_override_takes_precedence() {
+    #[tokio::test]
+    async fn test_user_override_takes_precedence() {
         let mut overrides = OverrideStore::new();
         overrides.apply(OverrideCommand {
             user_id: "alice".into(),
@@ -79,7 +79,7 @@ mod tests {
             &ConfigManager::new("config/router.toml"),
             &overrides,
             None,
-        );
+        ).await;
 
         assert_eq!(selection.chosen, LLMBackend::Grok);
         assert!(selection.reason.contains("override"));

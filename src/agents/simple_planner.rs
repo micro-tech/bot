@@ -34,4 +34,17 @@ impl Planner for SimplePlanner {
             reasoning: None,
         }
     }
+
+    /// SimplePlanner provides a basic reflection that can trigger replanning
+    /// in the ReflectionPlannerAdapter.
+    async fn reflect(&self, state: &AgentState) -> Option<String> {
+        if state.step_count >= 2 {
+            Some(format!(
+                "After {} steps the current approach may not be optimal. Consider a better approach or different focus.",
+                state.step_count
+            ))
+        } else {
+            None
+        }
+    }
 }

@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="X-UA-Compatible" content="ie=edge" />
+<title>Markmap</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+}
+html {
+  font-family: ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+#mindmap {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+.markmap-dark {
+  background: #27272a;
+  color: white;
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/markmap-toolbar@0.18.12/dist/style.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/default.min.css">
+</head>
+<body>
+<svg id="mindmap"></svg>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script><script src="https://cdn.jsdelivr.net/npm/markmap-view@0.18.12/dist/browser/index.js"></script><script src="https://cdn.jsdelivr.net/npm/markmap-toolbar@0.18.12/dist/index.js"></script><script>((r) => {
+          setTimeout(r);
+        })(() => {
+  const { markmap, mm } = window;
+  const toolbar = new markmap.Toolbar();
+  toolbar.attach(mm);
+  const el = toolbar.render();
+  el.setAttribute("style", "position:absolute;bottom:20px;right:20px");
+  document.body.append(el);
+})</script><script>((getMarkmap, getOptions, root2, jsonOptions) => {
+              const markmap = getMarkmap();
+              window.mm = markmap.Markmap.create(
+                "svg#mindmap",
+                (getOptions || markmap.deriveOptions)(jsonOptions),
+                root2
+              );
+              if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+                document.documentElement.classList.add("markmap-dark");
+              }
+            })(() => window.markmap,null,{"content":"Agent OS - Layered Architecture Diagrams","children":[{"content":"Layer 0: High-Level System View (Start Here)","children":[{"content":"<pre data-lines=\"9,54\"><code class=\"language-mermaid\">flowchart TB\n    subgraph External[&quot;External&quot;]\n        User[&quot;&#x1f464; Users / Clients&quot;]\n        LLM[&quot;&#x1f9e0; Ollama / Gemini&quot;]\n    end\n\n    subgraph Core[&quot;Core System&quot;]\n        Bus[&quot;Central Bus&lt;br/&gt;pub-sub messaging&quot;]\n        CPU[&quot;CPU Executor&quot;]\n    end\n\n    subgraph Subsystems[&quot;Subsystems&quot;]\n        Memory[&quot;Memory System&quot;]\n        Skills[&quot;Skills &amp; Hooks&quot;]\n        HyEvo[&quot;HyEvo Engine&quot;]\n        Reasoning[&quot;Reasoning Engine&quot;]\n    end\n\n    subgraph Interfaces[&quot;Interfaces&quot;]\n        Web[&quot;Web Server&quot;]\n        CLI[&quot;Terminal / UNIX&quot;]\n    end\n\n    subgraph Services[&quot;Services&quot;]\n        Heartbeat[&quot;Heartbeat&quot;]\n        Cron[&quot;Cron Jobs&quot;]\n        A2A[&quot;Agent-to-Agent&quot;]\n    end\n\n    User --&gt; Web\n    User --&gt; CLI\n    Web --&gt; Bus\n    CLI --&gt; CPU\n    Bus &lt;--&gt; CPU\n    CPU --&gt; Memory\n    CPU --&gt; Skills\n    CPU --&gt; HyEvo\n    CPU --&gt; Reasoning\n    CPU &lt;--&gt; LLM\n    Bus &lt;--&gt; Services\n\n    style Bus fill:#f9f,stroke:#333,stroke-width:4px\n    style CPU fill:#bbf,stroke:#33f,stroke-width:2px\n</code></pre>","children":[],"payload":{"tag":"pre","lines":"9,54"}}],"payload":{"tag":"h2","lines":"7,8"}},{"content":"Layer 1: Core Bus &amp; CPU Flow","children":[{"content":"<pre data-lines=\"63,85\"><code class=\"language-mermaid\">flowchart TD\n    Main[&quot;main.rs&quot;] --&gt;|init| Bus[&quot;Bus (bus/mod.rs)&quot;]\n    Main --&gt; CPU[&quot;Cpu (cpu/cpu.rs)&quot;]\n\n    Bus &lt;--&gt;|messages| CPU\n    CPU --&gt;|handle_bus_message| State[&quot;AgentState (cpu/state.rs)&quot;]\n\n    subgraph CPU_Modules[&quot;CPU Modules&quot;]\n        Executor[&quot;executor.rs&quot;]\n        Scheduler[&quot;scheduler.rs&quot;]\n        TimeScheduler[&quot;time_scheduler.rs&quot;]\n        Interrupts[&quot;interrupts.rs&quot;]\n    end\n\n    CPU --&gt; Executor\n    CPU --&gt; Scheduler\n    CPU --&gt; TimeScheduler\n\n    style Bus fill:#f9f,stroke:#333,stroke-width:3px\n    style CPU fill:#bbf,stroke:#33f\n</code></pre>","children":[],"payload":{"tag":"pre","lines":"63,85"}}],"payload":{"tag":"h2","lines":"61,62"}},{"content":"Layer 2: Memory System","children":[{"content":"<pre data-lines=\"98,112\"><code class=\"language-mermaid\">flowchart TB\n    CPU[&quot;CPU&quot;] --&gt; MemMgr[&quot;MemoryManager&lt;br/&gt;(memory/manager.rs)&quot;]\n\n    MemMgr --&gt; Working[&quot;Working Memory&lt;br/&gt;VecDeque (short-term)&quot;]\n    MemMgr --&gt; Episodic[&quot;Episodic Memory&lt;br/&gt;(memory/episodic.rs)&quot;]\n    MemMgr --&gt; Vector[&quot;Vector Memory&lt;br/&gt;(memory/vector.rs)&quot;]\n\n    Working --&gt;|read/write| CPU\n    Episodic --&gt;|event records| CPU\n    Vector --&gt;|similarity search| CPU\n\n    style MemMgr fill:#9f9,stroke:#3a3\n</code></pre>","children":[],"payload":{"tag":"pre","lines":"98,112"}}],"payload":{"tag":"h2","lines":"96,97"}},{"content":"Layer 3: LLM Integration &amp; Reasoning","children":[{"content":"<pre data-lines=\"123,142\"><code class=\"language-mermaid\">flowchart TD\n    CPU --&gt;|llm_request| Ollama[&quot;Ollama Handler&lt;br/&gt;(io/ollama/)&quot;]\n    Ollama --&gt;|API call| ExternalLLM[&quot;Ollama / Gemini&quot;]\n    Ollama --&gt;|llm_response| Bus\n\n    CPU --&gt; Reasoning[&quot;ReasoningEngine&lt;br/&gt;(cpu/reasoning.rs?)&quot;]\n\n    Reasoning --&gt;|propose| Hypothesis[&quot;Hypothesis &#x2192; Plan &#x2192; Execute&quot;]\n    Reasoning --&gt;|metrics| Bus\n\n    subgraph LLM_Layer[&quot;LLM Layer&quot;]\n        Ollama\n        Gemini[&quot;io/llm_gemini/&quot;]\n    end\n\n    style Ollama fill:#9ff,stroke:#66f\n    style Reasoning fill:#ff9,stroke:#f66\n</code></pre>","children":[],"payload":{"tag":"pre","lines":"123,142"}}],"payload":{"tag":"h2","lines":"121,122"}},{"content":"Layer 4: Skills, Hooks &amp; Tools","children":[{"content":"<pre data-lines=\"152,166\"><code class=\"language-mermaid\">flowchart LR\n    CPU --&gt; Skills[&quot;SkillRegistry&lt;br/&gt;(skills/mod.rs)&quot;]\n    CPU --&gt; Hooks[&quot;HookRegistry&lt;br/&gt;(hooks/mod.rs)&quot;]\n    CPU --&gt; Tools[&quot;Tool Dispatcher&lt;br/&gt;(tools/mod.rs)&quot;]\n\n    Skills --&gt;|execute_skill| SkillImpl[&quot;SkillInterface impls&quot;]\n    Hooks --&gt;|phase hooks| HookImpl[&quot;HookInterface impls&quot;]\n    Tools --&gt;|dispatch| FileTools[&quot;file_tools.rs&quot;]\n    Tools --&gt; SystemTools[&quot;system_tools.rs&quot;]\n\n    style Skills fill:#fc9,stroke:#c83\n    style Hooks fill:#fc9,stroke:#c83\n</code></pre>","children":[],"payload":{"tag":"pre","lines":"152,166"}}],"payload":{"tag":"h2","lines":"150,151"}},{"content":"Layer 5: HyEvo Evolutionary Engine (Deepest Layer)","children":[{"content":"<pre data-lines=\"179,199\"><code class=\"language-mermaid\">flowchart TB\n    CPU --&gt; HyEvoInt[&quot;HyEvoIntegration&lt;br/&gt;(hy_evo/integration.rs)&quot;]\n\n    HyEvoInt --&gt; Engine[&quot;HyEvoEngine&lt;br/&gt;(hy_evo/engine.rs)&quot;]\n    Engine --&gt; Genome[&quot;Genome / Workflow&lt;br/&gt;(hy_evo/genome.rs)&quot;]\n    Engine --&gt; Workflow[&quot;Workflow Nodes&lt;br/&gt;(hy_evo/workflow.rs)&quot;]\n\n    Workflow --&gt;|Skill Node| Skills\n    Workflow --&gt;|LLM Node| Ollama\n    Workflow --&gt;|Code Node| CustomCode\n\n    Engine --&gt;|evolve_once| Reflect[&quot;ReflectionLlm&lt;br/&gt;(hy_evo/reflection.rs)&quot;]\n    Reflect --&gt;|LLM feedback| Mutation[&quot;mutation.rs&quot;]\n    Reflect --&gt; Crossover[&quot;crossover.rs&quot;]\n    Reflect --&gt; Scoring[&quot;scoring.rs&quot;]\n\n    style HyEvoInt fill:#ff9,stroke:#f66,stroke-width:2px\n    style Engine fill:#ff9,stroke:#f66\n</code></pre>","children":[],"payload":{"tag":"pre","lines":"179,199"}}],"payload":{"tag":"h2","lines":"177,178"}},{"content":"Layer 6: Interfaces &amp; Background Services","children":[{"content":"<pre data-lines=\"215,231\"><code class=\"language-mermaid\">flowchart TD\n    Bus --&gt; Web[&quot;Web Server&lt;br/&gt;(io/web_server/)&quot;]\n    Bus --&gt; Term[&quot;Terminal CLI&lt;br/&gt;(io/terminal/)&quot;]\n    Bus --&gt; Unix[&quot;UNIX Socket&lt;br/&gt;(io/unix_socket.rs)&quot;]\n\n    Web --&gt;|HTTPS + WS| Clients[&quot;Browser Clients&quot;]\n\n    Bus --&gt; Heartbeat[&quot;TimeScheduler&lt;br/&gt;(cpu/time_scheduler.rs)&quot;]\n    Bus --&gt; Cron[&quot;Cron Handler&lt;br/&gt;(cron/cron_handler.rs)&quot;]\n    Bus --&gt; A2A[&quot;A2A Handler&lt;br/&gt;(a2a/a2a_handler.rs)&quot;]\n    Bus --&gt; MCP[&quot;MCP Handler&lt;br/&gt;(mcp/mcp_handler.rs)&quot;]\n\n    style Web fill:#9f9,stroke:#3a3\n    style Heartbeat fill:#f99,stroke:#933\n</code></pre>","children":[],"payload":{"tag":"pre","lines":"215,231"}}],"payload":{"tag":"h2","lines":"213,214"}},{"content":"How to Navigate","children":[{"content":"<table data-lines=\"244,253\">\n<thead data-lines=\"244,245\">\n<tr data-lines=\"244,245\">\n<th>Layer</th>\n<th>Focus</th>\n<th>Start File</th>\n</tr>\n</thead>\n<tbody data-lines=\"246,253\">\n<tr data-lines=\"246,247\">\n<td>0</td>\n<td>Big picture</td>\n<td><code>src/main.rs</code></td>\n</tr>\n<tr data-lines=\"247,248\">\n<td>1</td>\n<td>Messaging &amp; Execution</td>\n<td><code>src/bus/mod.rs</code>, <code>src/cpu/cpu.rs</code></td>\n</tr>\n<tr data-lines=\"248,249\">\n<td>2</td>\n<td>Memory</td>\n<td><code>src/memory/manager.rs</code></td>\n</tr>\n<tr data-lines=\"249,250\">\n<td>3</td>\n<td>LLM &amp; Reasoning</td>\n<td><code>src/io/ollama/</code>, Reasoning engine</td>\n</tr>\n<tr data-lines=\"250,251\">\n<td>4</td>\n<td>Extensibility</td>\n<td><code>src/skills/</code>, <code>src/hooks/</code>, <code>src/tools/</code></td>\n</tr>\n<tr data-lines=\"251,252\">\n<td>5</td>\n<td>Evolution</td>\n<td><code>src/hy_evo/</code> (deepest)</td>\n</tr>\n<tr data-lines=\"252,253\">\n<td>6</td>\n<td>I/O &amp; Services</td>\n<td><code>src/io/</code>, <code>src/cron/</code>, <code>src/a2a/</code></td>\n</tr>\n</tbody>\n</table>","children":[],"payload":{"tag":"table","lines":"244,253"}}],"payload":{"tag":"h2","lines":"242,243"}}],"payload":{"tag":"h1","lines":"0,1"}},null)</script>
+</body>
+</html>

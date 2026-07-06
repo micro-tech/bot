@@ -49,6 +49,14 @@ impl EpisodicMemory {
         let start = len.saturating_sub(n);
         self.episodes[start..].to_vec()
     }
+
+    /// Alias used by memory_continuity for ergonomic access.
+    pub fn get_recent(&self, n: usize) -> Vec<String> {
+        self.recent(n)
+            .into_iter()
+            .map(|e| e.event)
+            .collect()
+    }
 }
 
 #[cfg(test)]
