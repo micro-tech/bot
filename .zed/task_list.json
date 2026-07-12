@@ -235,6 +235,50 @@
           "title": "Add fallback when local model unavailable; write tests"
         }
       ]
+    },
+    {
+      "id": 160,
+      "title": "Restructure .grok folder for rules + diagrams",
+      "description": "Move agents.md into .grok/rules/, create diagrams folder, clean docs/ for user-facing content only, and create hybrid Mermaid diagrams.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Completed: Rules updated in .grok/rules/agents.md, hybrid mermaid created, docs/ cleaned (builder docs moved to .grok/docs/), .grok/README.md added.",
+      "testStrategy": "Verify folder structure and that first mermaid file renders correctly.",
+      "subtasks": []
+    },
+    {
+      "id": 161,
+      "title": "Create focused mermaid diagrams + build.rs auto-update",
+      "description": "Create additional focused mermaid diagrams and integrate auto-generation via build.rs or a dedicated tool.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Completed: 4 focused mermaid diagrams created + build.rs enhanced with diagram freshness warning system. Generator stub added in .grok/tools/.",
+      "testStrategy": "Verify new diagrams exist and build.rs triggers regeneration logic",
+      "subtasks": []
+    },
+    {
+      "id": 162,
+      "title": "Create Master System Overview Mermaid (full app coverage)",
+      "description": "Build a comprehensive master mermaid diagram that captures the entire application structure and flows. Also propose bot name ideas.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Master system overview mermaid created with full app coverage.",
+      "testStrategy": "",
+      "subtasks": []
+    },
+    {
+      "id": 163,
+      "title": "Rename project from bot → Helix",
+      "description": "Systematically rename the project across Cargo.toml, source, docs, paths, and diagrams.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "",
+      "testStrategy": "",
+      "subtasks": []
     }
   ]
 }

@@ -24,22 +24,22 @@ mod agents;
 
 #[tokio::main]
 async fn main() {
-    run_bot().await;
+    run_helix().await;
 }
 
-async fn run_bot() {
+async fn run_helix() {
     // Ensure required directories exist very early (prevents panics)
     let _ = std::fs::create_dir_all("logs");
-    let _ = std::fs::create_dir_all("/etc/bot/logs");
-    let _ = std::fs::create_dir_all("/etc/bot");
+    let _ = std::fs::create_dir_all("/etc/helix/logs");
+    let _ = std::fs::create_dir_all("/etc/helix");
 
-    println!("Bot is running...");
+    println!("Helix is running...");
 
     // Try multiple locations for config.toml
     let config_paths = [
         "config.toml",
-        "/etc/bot/config.toml",
-        "/usr/local/etc/bot/config.toml",
+        "/etc/helix/config.toml",
+        "/usr/local/etc/helix/config.toml",
     ];
 
     let config_str = config_paths
