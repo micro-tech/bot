@@ -198,43 +198,76 @@
       "title": "Local FastContext-style Repo Explorer subagent",
       "description": "Introduce a local repo-explorer subagent (FastContext-style) that handles all repository exploration via tools (glob, read, grep) and returns compact evidence (file paths + line ranges) to the main agent.",
       "priority": "high",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         158
       ],
-      "details": "New module: agent/repo_explorer/. Trait RepoExplorer with explore(&self, query: RepoQuery) -> RepoEvidence. Types: RepoQuery { natural_language, cwd, hints }, RepoEvidence { items: Vec<RepoEvidenceItem> }, RepoEvidenceItem { path, line_start, line_end, summary }. LocalLLMClient with chat(). System prompt restricts explorer to read-only tools. Required tools: tool_glob, tool_read, tool_grep. Explorer decides tool calls; results aggregated into compact evidence. Main agent asks 'Do I need repo context?' and receives compact evidence block instead of raw content.",
+      "details": "Implementation started: created src/agents/repo_explorer/ with types + stub explorer. Next: add required tools (glob/read/grep) then wire into explorer.",
       "subtasks": [
         {
           "id": "159.1",
-          "status": "todo",
+          "status": "done",
           "title": "Create repo_explorer module and types (RepoQuery, RepoEvidence, RepoEvidenceItem)"
         },
         {
           "id": "159.2",
-          "status": "todo",
+          "status": "done",
           "title": "Implement RepoExplorer trait and LocalLLMClient"
         },
         {
           "id": "159.3",
-          "status": "todo",
+          "status": "done",
           "title": "Add required tools: tool_glob, tool_read (range), tool_grep"
         },
         {
           "id": "159.4",
-          "status": "todo",
+          "status": "done",
           "title": "Implement explorer planning + parallel tool execution + evidence aggregation"
         },
         {
           "id": "159.5",
-          "status": "todo",
+          "status": "done",
           "title": "Integrate with main planner: 'Do I need repo context?' hook + evidence injection"
         },
         {
           "id": "159.6",
-          "status": "todo",
+          "status": "done",
           "title": "Add fallback when local model unavailable; write tests"
         }
       ]
+    },
+    {
+      "id": 160,
+      "title": "Restructure .grok folder for rules + diagrams",
+      "description": "Move agents.md into .grok/rules/, create diagrams folder, clean docs/ for user-facing content only, and create hybrid Mermaid diagrams.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Completed: Rules updated in .grok/rules/agents.md, hybrid mermaid created, docs/ cleaned (builder docs moved to .grok/docs/), .grok/README.md added.",
+      "testStrategy": "Verify folder structure and that first mermaid file renders correctly.",
+      "subtasks": []
+    },
+    {
+      "id": 161,
+      "title": "Create focused mermaid diagrams + build.rs auto-update",
+      "description": "Create additional focused mermaid diagrams and integrate auto-generation via build.rs or a dedicated tool.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Completed: 4 focused mermaid diagrams created + build.rs enhanced with diagram freshness warning system. Generator stub added in .grok/tools/.",
+      "testStrategy": "Verify new diagrams exist and build.rs triggers regeneration logic",
+      "subtasks": []
+    },
+    {
+      "id": 162,
+      "title": "Create Master System Overview Mermaid (full app coverage)",
+      "description": "Build a comprehensive master mermaid diagram that captures the entire application structure and flows. Also propose bot name ideas.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Master system overview mermaid created with full app coverage.",
+      "testStrategy": "",
+      "subtasks": []
     }
   ]
 }

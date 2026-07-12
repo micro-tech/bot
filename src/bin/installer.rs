@@ -22,11 +22,11 @@ fn main() {
 
 /// Walk up the directory tree looking for the project root.
 /// A directory qualifies when it has `Cargo.toml` AND either
-/// `config.toml` or `target/release/bot`.
+/// `config.toml` or `target/release/helix`.
 fn get_source_dir() -> PathBuf {
     fn is_project_root(p: &Path) -> bool {
         p.join("Cargo.toml").exists()
-            && (p.join("config.toml").exists() || p.join("target/release/bot").exists())
+            && (p.join("config.toml").exists() || p.join("target/release/helix").exists())
     }
 
     // 1. Walk up from CWD.
@@ -98,10 +98,10 @@ fn install() {
     }
 
     // The bot binary must exist before we do anything else.
-    let bot_binary = source_dir.join("target/release/bot");
+    let bot_binary = source_dir.join("target/release/helix");
     if !bot_binary.exists() {
         eprintln!(
-            "ERROR: target/release/bot not found in {}",
+            "ERROR: target/release/helix not found in {}",
             source_dir.display()
         );
         eprintln!("Build the project first, then re-run:");
@@ -112,20 +112,20 @@ fn install() {
     // Stop / remove old service; never touch existing config files.
     let _ = Command::new("systemctl").args(["stop", "bot"]).status();
     let _ = Command::new("systemctl").args(["disable", "bot"]).status();
-    let _ = fs::remove_file("/etc/systemd/system/bot.service");
-    let _ = fs::remove_file("/usr/local/bin/bot");
+    let _ = fs::remove_file("/etc/systemd/system/helix.service");
+    let _ = fs::remove_file("/usr/local/bin/helix");
 
     // Deploy the bot binary.
-    fs::copy(&bot_binary, "/usr/local/bin/bot").expect("Failed to copy bot binary");
-    println!("Copied bot binary -> /usr/local/bin/bot");
+    fs::copy(&bot_binary, "/usr/local/bin/helix").expect("Failed to copy bot binary");
+    println!("Copied bot binary -> /usr/local/bin/helix");
 
     // Create runtime directories and fix ownership so `cobble` can always
     // read/write both locations (FileZilla uploads included).
-    for dir in ["/home/cobble/bot", "/etc/bot"] {
+    for dir in ["/home/cobble/helix", "/etc/helix"] {
         fs::create_dir_all(dir).unwrap_or_else(|e| eprintln!("WARNING: mkdir {}: {}", dir, e));
     }
-    set_ownership("/home/cobble/bot", "cobble", "cobble");
-    set_ownership("/etc/bot", "cobble", "cobble");
+    set_ownership("/home/cobble/helix", "cobble", "cobble");
+    set_ownership("/etc/helix", "cobble", "cobble");
 
     // ── Tracked config files — embedded at compile time as fallback ─────────
     // include_str! bakes the file into the binary when compiled on the dev
@@ -157,7 +157,7 @@ fn install() {
             "# OLLAMA_KEEP_ALIVE_SECS=240\n",
         );
         safe_write_to_both(".env", template.as_bytes());
-        println!("  !! Edit /home/cobble/bot/.env — add your real API keys before starting.");
+        println!("  !! Edit /home/cobble/helix/.env — add your real API keys before starting.");
     }
 
     // ── TLS certificates — generate self-signed when absent ────────────────
@@ -172,11 +172,11 @@ fn install() {
     }
 
     // ── Log files — always reset on install ────────────────────────────────
-    for dir in ["/home/cobble/bot/logs", "/etc/bot/logs"] {
+    for dir in ["/home/cobble/helix/logs", "/etc/helix/logs"] {
         fs::create_dir_all(dir).ok();
     }
-    set_ownership("/home/cobble/bot/logs", "cobble", "cobble");
-    set_ownership("/etc/bot/logs", "cobble", "cobble");
+    set_ownership("/home/cobble/helix/logs", "cobble", "cobble");
+    set_ownership("/etc/helix/logs", "cobble", "cobble");
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -194,8 +194,8 @@ fn install() {
         "hartbeat_log.md",
     ] {
         // Logs intentionally overwritten on every install.
-        let primary = format!("/home/cobble/bot/logs/{}", filename);
-        let secondary = format!("/etc/bot/logs/{}", filename);
+        let primary = format!("/home/cobble/helix/logs/{}", filename);
+        let secondary = format!("/etc/helix/logs/{}", filename);
         if let Err(e) = fs::write(&primary, &log_header) {
             eprintln!("WARNING: could not write {}: {}", primary, e);
         }
@@ -207,20 +207,20 @@ fn install() {
 
     // ── systemd service ─────────────────────────────────────────────────────
     let service = r#"[Unit]
-Description=AgentOS Bot Service
+Description=Helix Agent Service
 After=network.target
 
 [Service]
-EnvironmentFile=/home/cobble/bot/.env
-ExecStart=/usr/local/bin/bot
-WorkingDirectory=/home/cobble/bot
+EnvironmentFile=/home/cobble/helix/.env
+ExecStart=/usr/local/bin/helix
+WorkingDirectory=/home/cobble/helix
 Restart=always
 User=cobble
 
 [Install]
 WantedBy=multi-user.target
 "#;
-    if let Err(e) = fs::write("/etc/systemd/system/bot.service", service) {
+    if let Err(e) = fs::write("/etc/systemd/system/helix.service", service) {
         eprintln!("WARNING: could not write service file: {}", e);
     } else {
         println!("Created systemd service file");
@@ -238,7 +238,7 @@ WantedBy=multi-user.target
 // File helpers  — NO pre-delete; overwrite in place
 // ---------------------------------------------------------------------------
 
-/// Copy `src` to /home/cobble/bot/<name> and /etc/bot/<name>.
+/// Copy `src` to /home/cobble/helix/<name> and /etc/helix/<name>.
 /// Does NOT delete the destination first — overwrites in place.
 /// Skips iterations where src and dest resolve to the same path to avoid
 /// the truncation-before-read problem on Linux (fs::copy(x, x) empties x).
@@ -246,7 +246,7 @@ fn safe_copy_to_both(name: &str, src: &Path) {
     // Resolve src once so we can compare canonicalized paths.
     let src_canonical = src.canonicalize().ok();
 
-    for dest_dir in ["/home/cobble/bot", "/etc/bot"] {
+    for dest_dir in ["/home/cobble/helix", "/etc/helix"] {
         let dest = Path::new(dest_dir).join(name);
 
         // Skip if source and destination are the same file.
@@ -269,10 +269,10 @@ fn safe_copy_to_both(name: &str, src: &Path) {
     }
 }
 
-/// Write `data` to /home/cobble/bot/<name> and /etc/bot/<name>.
+/// Write `data` to /home/cobble/helix/<name> and /etc/helix/<name>.
 /// Does NOT delete the destination first — overwrites in place.
 fn safe_write_to_both(name: &str, data: &[u8]) {
-    for dest_dir in ["/home/cobble/bot", "/etc/bot"] {
+    for dest_dir in ["/home/cobble/helix", "/etc/helix"] {
         let dest = Path::new(dest_dir).join(name);
         match fs::write(&dest, data) {
             Ok(_) => println!("Wrote {} -> {}", name, dest.display()),
@@ -292,7 +292,7 @@ fn deploy_tracked_file(name: &str, source_dir: &Path, embedded: &str) {
         println!("{} — deploying embedded default", name);
         safe_write_to_both(name, embedded.as_bytes());
         println!(
-            "  !! Review /home/cobble/bot/{} and update any environment-specific settings.",
+            "  !! Review /home/cobble/helix/{} and update any environment-specific settings.",
             name
         );
     }
@@ -367,9 +367,9 @@ fn uninstall() {
     println!("=== Uninstalling AgentOS bot ===");
     let _ = Command::new("systemctl").args(["stop", "bot"]).status();
     let _ = Command::new("systemctl").args(["disable", "bot"]).status();
-    let _ = fs::remove_file("/etc/systemd/system/bot.service");
-    let _ = fs::remove_file("/usr/local/bin/bot");
-    // Config and logs in /home/cobble/bot and /etc/bot are intentionally kept.
+    let _ = fs::remove_file("/etc/systemd/system/helix.service");
+    let _ = fs::remove_file("/usr/local/bin/helix");
+    // Config and logs in /home/cobble/helix and /etc/helix are intentionally kept.
     let _ = Command::new("systemctl").arg("daemon-reload").status();
     println!("Bot uninstalled. Config and logs preserved.");
 }
@@ -382,18 +382,18 @@ fn verify_installation() {
     println!("\n=== Verifying installation ===");
     let mut all_good = true;
 
-    check_path("/usr/local/bin/bot", true, &mut all_good);
+    check_path("/usr/local/bin/helix", true, &mut all_good);
 
     // Tracked config files — required.
     for f in ["config.toml", "system_manifest.md"] {
-        check_path(&format!("/home/cobble/bot/{}", f), true, &mut all_good);
-        check_path(&format!("/etc/bot/{}", f), true, &mut all_good);
+        check_path(&format!("/home/cobble/helix/{}", f), true, &mut all_good);
+        check_path(&format!("/etc/helix/{}", f), true, &mut all_good);
     }
 
     // User-edited files — present but may contain placeholder values.
     for f in [".env", "cert.pem", "key.pem"] {
-        let primary = format!("/home/cobble/bot/{}", f);
-        let secondary = format!("/etc/bot/{}", f);
+        let primary = format!("/home/cobble/helix/{}", f);
+        let secondary = format!("/etc/helix/{}", f);
         print_check(&primary, Path::new(&primary).exists());
         print_check(&secondary, Path::new(&secondary).exists());
     }
@@ -406,11 +406,11 @@ fn verify_installation() {
         "hartbeat_log.md",
     ] {
         check_path(
-            &format!("/home/cobble/bot/logs/{}", filename),
+            &format!("/home/cobble/helix/logs/{}", filename),
             true,
             &mut all_good,
         );
-        check_path(&format!("/etc/bot/logs/{}", filename), true, &mut all_good);
+        check_path(&format!("/etc/helix/logs/{}", filename), true, &mut all_good);
     }
 
     if all_good {
