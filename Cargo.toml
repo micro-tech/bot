@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 log = "0.4"
-env_logger = "0.11.10"
+env_logger = "0.11.11"
 #serenity = { git = "https://github.com/serenity-rs/serenity", branch = "current", features = ["full"] }
 
 
@@ -53,5 +53,5 @@ sqlx = { version = "0.9.0", features = [
 sha2 = "0.11.0"
 
 [[bin]]
-name = "install"
+name = "installer"
 path = "src/bin/installer.rs"
