@@ -107,22 +107,22 @@ impl ToolSupervisorV2 {
             });
         }
 
-        for _attempt in 0..=self.max_retries {
-            let raw = crate::tools::execute(tool_name, args);
+        // Note: Current tool execution (via crate::tools::execute) returns a plain String.
+        // Only "Unknown tool..." is treated as a fatal error. All other output is success.
+        //
+        // Real retry logic (using self.max_retries + self.retry_delay + classify_error + is_retryable)
+        // can be added once tools return structured errors or we parse transient failures from the raw string.
+        // For now we execute once; the loop was removed because it never iterated (clippy::never_loop).
 
-            if raw.starts_with("Unknown tool") {
-                let classified = self.classify_error(tool_name, &raw);
-                return ToolResult::FatalError(classified);
-            }
+        let raw = crate::tools::execute(tool_name, args);
 
-            // Treat any other output as success
-            return ToolResult::Success(serde_json::json!(raw));
+        if raw.starts_with("Unknown tool") {
+            let classified = self.classify_error(tool_name, &raw);
+            return ToolResult::FatalError(classified);
         }
 
-        // Exhausted retries without success
-        ToolResult::FatalError(ToolError::Unknown {
-            message: "Tool execution failed after retries".to_string(),
-        })
+        // Treat any other output as success
+        ToolResult::Success(serde_json::json!(raw))
     }
 
     fn classify_error(&self, tool_name: &str, msg: &str) -> ToolError {

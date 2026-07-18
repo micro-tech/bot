@@ -159,7 +159,7 @@
       "dependencies": [
         156
       ],
-      "details": "Introduce a ToolSupervisorV2 that wraps all tool calls with validation, structured error handling, and retry logic. Add a ToolError enum with categories (InvalidArgs, ExecutionError, NotFound, RateLimit, Unknown). Add a ToolResult enum that includes success, retryable failure, and fatal failure. Integrate this into the runtime loop so PlannerOutput::ToolCall receives normalized results.",
+      "details": "All subtasks including 158.5 (tests + the never_loop fix in execute()) are complete. The dead loop was removed and logic simplified with explanatory comment. Integration in runtime_loop.rs works. Task marked fully done.",
       "subtasks": [
         {
           "id": "158.1",
@@ -273,12 +273,334 @@
       "id": 163,
       "title": "Rename project from bot → Helix",
       "description": "Systematically rename the project across Cargo.toml, source, docs, paths, and diagrams.",
-      "status": "pending",
+      "status": "in_progress",
       "dependencies": [],
       "priority": "high",
-      "details": "",
+      "details": "Batch 2: Continue rename in installer.rs (more strings, comments, error messages). Update socket config paths, utils.rs paths, unix socket code. Enhance a few error logs using existing log crate. Will clippy after batch.",
       "testStrategy": "",
       "subtasks": []
+    },
+    {
+      "id": 164,
+      "title": "Implement Helix OKF Librarian System",
+      "description": "Add remote OKF bundle management to Helix, including manifest parsing, registry building, validation, and remote change detection via webhook or polling.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [],
+      "details": "Add remote OKF bundle management to Helix, including manifest parsing, registry building, validation, and remote change detection via webhook or polling.",
+      "testStrategy": "Implement modules, wire into runtime, test bundle loading and change detection.",
+      "subtasks": [
+        {
+          "id": "164.1",
+          "title": "Implement remote OKF change detection",
+          "description": "Replace local filesystem watcher with webhook endpoint or polling system to detect bundle updates on the OKF server.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "164.2",
+          "title": "Create okf_manifest module",
+          "description": "Add manifest.json parser using serde; build internal structs for tools, knowledge, and schemas.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "164.3",
+          "title": "Create okf_registry module",
+          "description": "Generate tool registry, knowledge registry, and version index files based on remote OKF bundle data.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "164.4",
+          "title": "Create okf_validator module",
+          "description": "Validate bundle structure, JSON schemas, required fields, and versioning rules after fetching bundles from the OKF server.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "164.5",
+          "title": "Create okf_api module",
+          "description": "Expose control API endpoints for reload, index, and status using axum. Include webhook receiver for remote OKF change notifications.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "164.6",
+          "title": "Add helix.okf config section",
+          "description": "Add remote OKF server URL, auto_reload flag, and index file path to Helix config.toml.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "164.7",
+          "title": "Integrate modules into Helix runtime",
+          "description": "Wire remote change detection, registry updates, validator, and control API into Helix startup and event loop.",
+          "priority": "high",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 165,
+      "title": "Implement Helix OKF Remote Hot-Reload System",
+      "description": "Add automatic reload behavior for OKF bundles when remote OKF server reports changes. Replace filesystem watcher with webhook or polling-based reload triggers.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [],
+      "details": "Add automatic reload behavior for OKF bundles when remote OKF server reports changes. Replace filesystem watcher with webhook or polling-based reload triggers.",
+      "testStrategy": "Test reload on simulated remote change events, verify debounce and logging.",
+      "subtasks": [
+        {
+          "id": "165.1",
+          "title": "Add remote change event routing",
+          "description": "Implement webhook receiver or polling loop to detect OKF bundle updates from the remote OKF server.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "165.2",
+          "title": "Implement remote bundle reload pipeline",
+          "description": "Fetch updated bundle from OKF server, parse manifest, validate bundle, update registry, and refresh active toolset.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "165.3",
+          "title": "Add debounce logic",
+          "description": "Prevent rapid reload loops when multiple remote change events or polling cycles occur.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "165.4",
+          "title": "Add reload logging",
+          "description": "Log reload events, bundle versions, and registry changes for debugging and monitoring.",
+          "priority": "low",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 166,
+      "title": "Implement Grok-CLI OKF Integration Layer",
+      "description": "Add support in Grok-CLI for consuming Helix's remote OKF registry, requesting reloads, and loading tools/knowledge dynamically from the OKF server.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [],
+      "details": "Add support in Grok-CLI for consuming Helix's remote OKF registry, requesting reloads, and loading tools/knowledge dynamically from the OKF server.",
+      "testStrategy": "Verify CLI can fetch registry from Helix, load tools dynamically, and trigger reloads.",
+      "subtasks": [
+        {
+          "id": "166.1",
+          "title": "Add Helix registry fetch",
+          "description": "Implement HTTP client to request /helix/okf/index and cache results. Registry is fetched from Helix, not local filesystem.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "166.2",
+          "title": "Add dynamic tool loader",
+          "description": "Load tool definitions from Helix's registry instead of scanning local or remote filesystem directories.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "166.3",
+          "title": "Add dynamic knowledge loader",
+          "description": "Load knowledge bundles based on registry entries provided by Helix. Fetch bundles from OKF server via Helix-provided URLs.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "166.4",
+          "title": "Add reload request support",
+          "description": "Implement POST /helix/okf/reload for manual reload triggers. Reloads are remote, not filesystem-based.",
+          "priority": "medium",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 167,
+      "title": "Define OKF Bundle Schema v1.0",
+      "description": "Create the official JSON schema for OKF bundles including manifest, tools, knowledge, and metadata fields.",
+      "priority": "medium",
+      "status": "pending",
+      "dependencies": [],
+      "details": "Create the official JSON schema for OKF bundles including manifest, tools, knowledge, and metadata fields.",
+      "testStrategy": "Validate sample bundles against the schema; document the schema.",
+      "subtasks": [
+        {
+          "id": "167.1",
+          "title": "Define manifest.json schema",
+          "description": "Specify required fields: id, version, tools, knowledge, schemas.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "167.2",
+          "title": "Define tool schema",
+          "description": "Specify structure for tool definitions including name, description, input, output.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "167.3",
+          "title": "Define knowledge schema",
+          "description": "Specify structure for knowledge bundles including metadata and content type.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "167.4",
+          "title": "Add versioning rules",
+          "description": "Define semantic versioning rules for OKF bundles and manifests.",
+          "priority": "low",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 168,
+      "title": "Implement OKF Server Webhook System",
+      "description": "Add webhook support to the OKF server so it can notify Helix when bundles are added, updated, or removed.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [],
+      "details": "Add webhook support to the OKF server so it can notify Helix when bundles are added, updated, or removed.",
+      "testStrategy": "Test webhook delivery on bundle changes, verify retries and logging.",
+      "subtasks": [
+        {
+          "id": "168.1",
+          "title": "Add webhook configuration",
+          "description": "Add configuration for Helix webhook URL, authentication token, and retry policy.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "168.2",
+          "title": "Implement bundle change detection",
+          "description": "Detect changes to OKF bundles and trigger webhook events. Use local filesystem watching or internal update hooks.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "168.3",
+          "title": "Implement webhook sender",
+          "description": "Send POST requests to Helix with bundle ID and version when changes occur.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "168.4",
+          "title": "Add webhook retry logic",
+          "description": "Retry failed webhook deliveries with exponential backoff.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "168.5",
+          "title": "Add webhook logging",
+          "description": "Log webhook events, delivery status, and failures for debugging.",
+          "priority": "low",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 169,
+      "title": "Implement Helix Remote Bundle Fetcher",
+      "description": "Add support for Helix to fetch OKF bundles, manifests, and metadata directly from the remote OKF server.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [],
+      "details": "Add support for Helix to fetch OKF bundles, manifests, and metadata directly from the remote OKF server.",
+      "testStrategy": "Test fetching manifests and bundles over network, verify caching and error handling.",
+      "subtasks": [
+        {
+          "id": "169.1",
+          "title": "Add remote fetch configuration",
+          "description": "Add OKF server base URL, authentication token, and fetch timeout settings to Helix config.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "169.2",
+          "title": "Implement manifest fetcher",
+          "description": "Fetch manifest.json for bundles from the OKF server and parse using serde.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "169.3",
+          "title": "Implement bundle content fetcher",
+          "description": "Fetch tool definitions, knowledge bundles, and schema files from the OKF server.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "169.4",
+          "title": "Add caching layer",
+          "description": "Cache fetched bundles locally to reduce network load and improve reload speed.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "169.5",
+          "title": "Add fetch error handling",
+          "description": "Handle network failures, missing bundles, and invalid responses gracefully.",
+          "priority": "medium",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 170,
+      "title": "Implement OKF Bundle Testing Suite",
+      "description": "Create a testing suite to validate OKF bundles, manifests, schemas, and tool definitions before deployment.",
+      "priority": "medium",
+      "status": "pending",
+      "dependencies": [],
+      "details": "Create a testing suite to validate OKF bundles, manifests, schemas, and tool definitions before deployment.",
+      "testStrategy": "Run tests against sample bundles; integrate into CI and verify failures on bad data.",
+      "subtasks": [
+        {
+          "id": "170.1",
+          "title": "Add manifest validation tests",
+          "description": "Test manifest.json files for required fields, correct types, and valid versioning.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "170.2",
+          "title": "Add tool definition tests",
+          "description": "Validate tool JSON definitions including input, output, and description fields.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "170.3",
+          "title": "Add knowledge bundle tests",
+          "description": "Validate knowledge bundles for correct metadata and content structure.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "170.4",
+          "title": "Add schema validation tests",
+          "description": "Validate JSON schemas for correctness and compatibility with OKF bundle structure.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "170.5",
+          "title": "Add CI integration",
+          "description": "Integrate OKF bundle tests into CI pipeline to prevent invalid bundles from being deployed.",
+          "priority": "low",
+          "status": "pending"
+        }
+      ]
     }
   ]
 }

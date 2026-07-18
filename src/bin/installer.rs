@@ -71,7 +71,7 @@ fn get_source_dir() -> PathBuf {
 
 fn install() {
     println!(
-        "=== Installing AgentOS bot (built {}) ===",
+        "=== Installing Helix (built {}) ===",
         env!("BUILD_TIMESTAMP")
     );
 
@@ -97,9 +97,9 @@ fn install() {
         }
     }
 
-    // The bot binary must exist before we do anything else.
-    let bot_binary = source_dir.join("target/release/helix");
-    if !bot_binary.exists() {
+    // The helix binary must exist before we do anything else.
+    let helix_binary = source_dir.join("target/release/helix");
+    if !helix_binary.exists() {
         eprintln!(
             "ERROR: target/release/helix not found in {}",
             source_dir.display()
@@ -110,14 +110,14 @@ fn install() {
     }
 
     // Stop / remove old service; never touch existing config files.
-    let _ = Command::new("systemctl").args(["stop", "bot"]).status();
-    let _ = Command::new("systemctl").args(["disable", "bot"]).status();
+    let _ = Command::new("systemctl").args(["stop", "helix"]).status();
+    let _ = Command::new("systemctl").args(["disable", "helix"]).status();
     let _ = fs::remove_file("/etc/systemd/system/helix.service");
     let _ = fs::remove_file("/usr/local/bin/helix");
 
-    // Deploy the bot binary.
-    fs::copy(&bot_binary, "/usr/local/bin/helix").expect("Failed to copy bot binary");
-    println!("Copied bot binary -> /usr/local/bin/helix");
+    // Deploy the helix binary.
+    fs::copy(&helix_binary, "/usr/local/bin/helix").expect("Failed to copy helix binary");
+    println!("Copied Helix binary -> /usr/local/bin/helix");
 
     // Create runtime directories and fix ownership so `cobble` can always
     // read/write both locations (FileZilla uploads included).
@@ -144,7 +144,7 @@ fn install() {
     } else {
         println!("No .env in source — writing template");
         let template = concat!(
-            "# AgentOS environment variables\n",
+            "# Helix environment variables\n",
             "# Fill in real values before starting the service.\n",
             "\n",
             "GEMINI_API_KEY=your_gemini_api_key_here\n",
@@ -227,8 +227,8 @@ WantedBy=multi-user.target
     }
 
     let _ = Command::new("systemctl").arg("daemon-reload").status();
-    let _ = Command::new("systemctl").args(["enable", "bot"]).status();
-    let _ = Command::new("systemctl").args(["start", "bot"]).status();
+    let _ = Command::new("systemctl").args(["enable", "helix"]).status();
+    let _ = Command::new("systemctl").args(["start", "helix"]).status();
 
     verify_installation();
     println!("\nInstallation complete!");
@@ -313,8 +313,8 @@ fn set_ownership(path: &str, user: &str, group: &str) {
 // ---------------------------------------------------------------------------
 
 fn generate_self_signed_certs(source_dir: &Path) {
-    let tmp_cert = "/tmp/bot_cert.pem";
-    let tmp_key = "/tmp/bot_key.pem";
+    let tmp_cert = "/tmp/helix_cert.pem";
+    let tmp_key = "/tmp/helix_key.pem";
 
     let status = Command::new("openssl")
         .args([
@@ -364,14 +364,14 @@ fn generate_self_signed_certs(source_dir: &Path) {
 // ---------------------------------------------------------------------------
 
 fn uninstall() {
-    println!("=== Uninstalling AgentOS bot ===");
-    let _ = Command::new("systemctl").args(["stop", "bot"]).status();
-    let _ = Command::new("systemctl").args(["disable", "bot"]).status();
+    println!("=== Uninstalling Helix ===");
+    let _ = Command::new("systemctl").args(["stop", "helix"]).status();
+    let _ = Command::new("systemctl").args(["disable", "helix"]).status();
     let _ = fs::remove_file("/etc/systemd/system/helix.service");
     let _ = fs::remove_file("/usr/local/bin/helix");
     // Config and logs in /home/cobble/helix and /etc/helix are intentionally kept.
     let _ = Command::new("systemctl").arg("daemon-reload").status();
-    println!("Bot uninstalled. Config and logs preserved.");
+    println!("Helix uninstalled. Config and logs preserved.");
 }
 
 // ---------------------------------------------------------------------------
