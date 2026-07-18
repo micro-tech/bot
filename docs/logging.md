@@ -1,6 +1,6 @@
 # Logging System
 
-Agent OS uses a human-readable Markdown logging system.
+Helix uses a human-readable Markdown logging system.
 
 ## Log Files
 | File | Purpose |
@@ -16,8 +16,8 @@ Agent OS uses a human-readable Markdown logging system.
 ```
 
 ## Cross-Platform
-- Windows: `%APPDATA%\bot\logs\error_log.md`
-- Linux/macOS: `~/.bot/logs/error_log.md`
+- Windows: `%APPDATA%\helix\logs\error_log.md`
+- Linux/macOS: `~/.helix/logs/error_log.md`
 
 ## Related Code
 - `src/utils.rs` (`log_to_file`)

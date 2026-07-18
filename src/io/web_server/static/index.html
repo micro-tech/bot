@@ -105,6 +105,12 @@
                 >v2026-06-10-v2.3.0</span
             >
         </h1>
+        <p style="margin: -10px 0 15px 0; color:#00d4ff; font-size: 0.9em;">
+            Helix AI Agent — Full control over reasoning, tools &amp; memory
+        </p>
+        <div style="font-size:0.75em; color:#666; margin-bottom:10px;">
+            Connected to Helix Core • Reasoning • Tools • Memory
+        </div>
 
         <div id="tabs">
             <button class="tab-button active" onclick="showTab('chat')">
@@ -119,16 +125,17 @@
         <!-- CHAT TAB -->
         <div id="chat-tab" class="tab-content active">
             <div id="llm-selector" style="margin-bottom: 12px">
-                <span>LLM: </span>
+                <span style="color:#00d4ff; font-weight:bold;">Helix LLM:</span>
                 <span id="llm-buttons"></span>
             </div>
             <input
                 type="text"
                 id="chat-input"
-                placeholder="Type message..."
+                placeholder="Message Helix..."
                 onkeypress="if (event.key === 'Enter') sendChat();"
             />
             <button id="chat-send" onclick="sendChat()">Send</button>
+            <div style="margin: 8px 0 4px; font-size: 0.85em; color: #00d4ff;">Helix Response:</div>
             <div id="chat-messages"></div>
         </div>
 

@@ -1,5 +1,5 @@
 //! Plugin system for CLI (Task 118)
-//! Discovers executables in ~/.bot/plugins/
+//! Discovers executables in ~/.helix/plugins/
 
 use crate::utils::log_to_file;
 use std::fs;

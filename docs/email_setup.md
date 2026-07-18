@@ -4,7 +4,7 @@
 > **Repository:** https://github.com/microtech/grok-cli  
 > Last updated: 2026-04-12
 
-This guide covers configuring the bot's email tools for real send (`send_email`)
+This guide covers configuring Helix's email tools for real send (`send_email`)
 and read (`read_email`, `check_inbox`) capability.
 
 All credentials go in your `.env` file in the project root — **never commit
@@ -14,7 +14,7 @@ this file to git**.
 
 ## Quick Start
 
-Add the following to `.env` and restart the bot:
+Add the following to `.env` and restart Helix:
 
 ```
 # ── SMTP (outbound) ───────────────────────────────────────────────────────────
@@ -34,15 +34,15 @@ IMAP_PASSWORD=your-16-char-app-password
 Then test from the chat box:
 
 ```
-/status          — confirms the bot is running
+/status          — confirms Helix is running
 /tools           — lists all available tools including email
 ```
 
-Ask the bot:
+Ask Helix:
 
 ```
 check my inbox
-send an email to me@example.com with subject Test and body Hello from bot
+send an email to me@example.com with subject Test and body Hello from Helix
 ```
 
 ---
@@ -153,7 +153,7 @@ Use `SMTP_PORT=465` if your server requires direct TLS instead of STARTTLS.
 | `465` | SSL/TLS  | Older servers, some self-hosted setups |
 | `25`  | Plain    | Server-to-server only — blocked by most ISPs |
 
-The bot automatically selects STARTTLS for port 587 and direct TLS for port 465.
+Helix automatically selects STARTTLS for port 587 and direct TLS for port 465.
 
 ---
 
@@ -184,7 +184,7 @@ SMTP send uses pure-Rust TLS (`rustls`) and has no extra system dependencies.
 | `IMAP_USER` | For reading | — | IMAP login username |
 | `IMAP_PASSWORD` | For reading | — | IMAP password or app password |
 
-All variables are optional at compile time — the bot starts without them and
+All variables are optional at compile time — Helix starts without them and
 returns a configuration hint when an email tool is invoked without the relevant
 variables set.
 
@@ -212,7 +212,7 @@ SMTP, and re-send manually.
 
 ### 1 — Check SMTP from the chat UI
 
-Ask the bot:
+Ask Helix:
 ```
 send a test email to your-address@example.com with subject SMTP Test and body It works
 ```
@@ -224,7 +224,7 @@ Expected success response:
 
 ### 2 — Check IMAP from the chat UI
 
-Ask the bot:
+Ask Helix:
 ```
 check my inbox
 ```
@@ -307,7 +307,7 @@ Expected output should show `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASSWORD`.
   `git rm --cached .env` if it was ever committed.
 
 - Use **App Passwords** rather than your main account password wherever
-  possible.  If the bot server is compromised, you can revoke the app password
+  possible.  If the Helix server is compromised, you can revoke the app password
   without changing your main password.
 
 - The SMTP connection uses **rustls** (pure-Rust TLS) — no OpenSSL required for
@@ -315,4 +315,4 @@ Expected output should show `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASSWORD`.
   compatibility with IMAP servers.
 
 - Credentials are read from environment variables at runtime — they are never
-  logged or written to disk by the bot itself.
+  logged or written to disk by Helix itself.

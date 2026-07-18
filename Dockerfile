@@ -10,9 +10,9 @@ WORKDIR /app
 # Install minimal runtime deps
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/bot /usr/local/bin/bot
-COPY config.toml /etc/bot/config.toml
+COPY --from=builder /app/target/release/helix /usr/local/bin/helix
+COPY config.toml /etc/helix/config.toml
 
 EXPOSE 8443
 
-CMD ["bot"]
+CMD ["helix"]

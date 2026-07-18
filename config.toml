@@ -1,5 +1,5 @@
-[bot]
-name = "Bot"
+[helix]
+name = "Helix"
 
 # --- MULTIPLE OLLAMA INSTANCES ---
 [[ollama]]
@@ -35,7 +35,7 @@ interval_seconds = 300
 # They can also be set via .env to avoid recompiling.
 #
 # OLLAMA_PRELOAD=true
-#   Send a dummy request at bot startup to pre-warm the model.
+#   Send a dummy request at Helix startup to pre-warm the model.
 #   Eliminates the cold-start delay on the first real user query.
 #   Set to "false" to skip (e.g. during development to speed up restarts).
 #

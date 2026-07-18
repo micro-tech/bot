@@ -1,6 +1,6 @@
-# Agent OS
+# Helix
 
-**Agent OS** is a modular Rust-based framework that acts as an "operating system" for AI agents, primarily powered by local LLMs (Ollama).
+**Helix** is a modular Rust-based AI agent framework that acts as an "operating system" for intelligent agents, primarily powered by local LLMs (Ollama).
 
 It provides a central bus, execution engine, memory system, plugin architecture, and multiple interfaces (terminal, web, UNIX socket).
 
@@ -42,8 +42,8 @@ It provides a central bus, execution engine, memory system, plugin architecture,
 ## Quick Start
 
 ```bash
-git clone https://github.com/yourusername/bot.git
-cd bot
+git clone https://github.com/yourusername/helix.git
+cd helix
 cargo build --release
 cargo run
 ```
@@ -103,4 +103,4 @@ Custom Non-Commercial License. See [LICENSE](LICENSE).
 
 ---
 
-**Built with Rust + Tokio + Ollama**
+**Built with Rust + Tokio + Ollama • Helix AI Agent**

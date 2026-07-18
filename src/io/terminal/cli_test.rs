@@ -1,4 +1,4 @@
-// Tests for Terminal Handler in Agent OS
+// Tests for Terminal Handler in Helix
 // This file contains tests for the functions in cli.rs to ensure proper handling of terminal interface interactions.
 
 #[cfg(test)]
