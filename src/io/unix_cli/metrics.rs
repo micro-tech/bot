@@ -7,9 +7,9 @@ use serde_json::json;
 
 fn expand_path() -> String {
     if let Ok(home) = std::env::var("HOME") {
-        format!("{}/.bot/metrics.json", home)
+        format!("{}/.helix/metrics.json", home)
     } else if let Ok(userprofile) = std::env::var("USERPROFILE") {
-        format!("{}/.bot/metrics.json", userprofile)
+        format!("{}/.helix/metrics.json", userprofile)
     } else {
         "metrics.json".to_string()
     }

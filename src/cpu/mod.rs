@@ -614,10 +614,10 @@ where
                 }
 
                 "ollama_response" | "llm_output" => {
-                    // Record bot replies in working memory too
+                    // Record replies in working memory too
                     let reply = payload["msg"].as_str().unwrap_or("").to_string();
                     if !reply.is_empty() {
-                        let llm = payload["llm"].as_str().unwrap_or("bot");
+                        let llm = payload["llm"].as_str().unwrap_or("helix");
                         let _ = self.memory.working.write(
                             "context",
                             serde_json::Value::String(format!(

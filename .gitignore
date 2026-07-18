@@ -57,7 +57,7 @@ Thumbs.db
 .\certs
 certs/
 cert/
-H:\GitHub\bot\certs
+H:\GitHub\helix\certs
 
 # TLS Certificates (do not commit private keys)
 *.pem

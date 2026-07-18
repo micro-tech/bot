@@ -1,4 +1,4 @@
-//! Bot crate library root (for integration tests & reuse)
+//! Helix crate library root (for integration tests & reuse)
 //! Re-exports the main public modules.
 
 pub mod bus;

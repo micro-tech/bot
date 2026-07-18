@@ -37,14 +37,14 @@ struct AppState {
 
 #[derive(Deserialize)]
 struct Config {
-    bot: BotConfig,
+    helix: HelixConfig,
     ollama: Vec<OllamaConfig>,
     web: WebConfig,
     heartbeat: HeartbeatConfig,
 }
 
 #[derive(Deserialize)]
-struct BotConfig {
+struct HelixConfig {
     name: String,
 }
 
@@ -87,8 +87,8 @@ pub async fn start_web_server(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Parse config (with defaults)
     let parsed_cfg: Config = toml::from_str(&config_str).unwrap_or_else(|_| Config {
-        bot: BotConfig {
-            name: "Bot".to_string(),
+        helix: HelixConfig {
+            name: "Helix".to_string(),
         },
         ollama: vec![],
         web: WebConfig {
@@ -196,7 +196,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     if !Path::new(manifest_path).exists() {
         fs::write(
             manifest_path,
-            "# System Manifest\n\nWelcome to the bot system.\n\nEdit this file to configure behaviour.\n",
+            "# System Manifest\n\nWelcome to the Helix system.\n\nEdit this file to configure behaviour.\n",
         )
         .ok();
     }
@@ -401,7 +401,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                                 let success_msg = json!({
                                         "type": "config_status",
                                         "status": "success",
-                                        "msg": "Config saved successfully. Restart the bot to apply changes."
+                                        "msg": "Config saved successfully. Restart Helix to apply changes."
                                     })
                                     .to_string();
                                 let bus_msg = Message {

@@ -282,8 +282,8 @@
                 if (msg.type === "user_msg") {
                     sender = msg.from || "You";
                 } else {
-                    // LLM response — use the backend name if available
-                    sender = msg.from || "Helix";
+                    // LLM / Helix response — always brand AI replies as Helix
+                    sender = "Helix";
                 }
 
                 // Text may be in msg.data or msg.msg

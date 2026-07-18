@@ -1,6 +1,6 @@
 //! Documentation updates (Task 90)
 pub const CLI_DOC: &str = r#"
-Bot CLI Commands:
+Helix CLI Commands:
   help, ping, status
   ask, chat
   upload, download

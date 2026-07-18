@@ -39,4 +39,4 @@ impl BayesianHook {
     }
 }
 
-// Register in bot hooks system (call from main/bus)
+// Register in Helix hooks system (call from main/bus)

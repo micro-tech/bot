@@ -8,8 +8,8 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Returns a cross-platform path for the error log.
-/// Windows: %APPDATA%\bot\logs\error_log.md
-/// Linux/macOS: ~/.bot/logs/error_log.md
+/// Windows: %APPDATA%\helix\logs\error_log.md
+/// Linux/macOS: ~/.helix/logs/error_log.md
 fn error_log_path() -> PathBuf {
     let base = if cfg!(windows) {
         std::env::var("APPDATA")
@@ -17,12 +17,12 @@ fn error_log_path() -> PathBuf {
             .unwrap_or_else(|_| PathBuf::from("."))
     } else {
         std::env::var("HOME")
-            .map(|h| PathBuf::from(h).join(".bot"))
-            .unwrap_or_else(|_| PathBuf::from(".bot"))
+            .map(|h| PathBuf::from(h).join(".helix"))
+            .unwrap_or_else(|_| PathBuf::from(".helix"))
     };
 
     let log_dir = if cfg!(windows) {
-        base.join("bot").join("logs")
+        base.join("helix").join("logs")
     } else {
         base.join("logs")
     };

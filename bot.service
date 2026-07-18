@@ -1,12 +1,12 @@
 [Unit]
-Description=AgentOS Bot Service
+Description=Helix Agent Service
 After=network.target
 
 [Service]
 Type=simple
-User=bot
-WorkingDirectory=/opt/bot
-ExecStart=/usr/local/bin/bot
+User=helix
+WorkingDirectory=/opt/helix
+ExecStart=/usr/local/bin/helix
 Restart=always
 RestartSec=5
 Environment=RUST_LOG=info
