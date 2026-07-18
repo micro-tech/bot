@@ -1,4 +1,4 @@
-//! Gemini LLM handler for Agent OS
+//! Gemini LLM handler for Helix
 //!
 //! Provides an async, bus-integrated handler for Google Gemini API calls.
 //! Built for reliability on unstable connections (e.g. Starlink) with

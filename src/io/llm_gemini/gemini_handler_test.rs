@@ -1,4 +1,4 @@
-// Tests for Gemini Handler in Agent OS
+// Tests for Gemini Handler in Helix
 // This file contains tests for the functions in gemini_handler.rs to ensure proper handling of Gemini API calls.
 
 #[cfg(test)]

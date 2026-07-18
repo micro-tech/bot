@@ -1,5 +1,5 @@
 # .cargo/config.toml
-# Cargo configuration for the bot project.
+# Cargo configuration for the Helix project.
 # Optimised for unreliable satellite (Starlink) connections.
 
 # ── Network retries ───────────────────────────────────────────────────────────

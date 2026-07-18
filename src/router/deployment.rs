@@ -24,14 +24,14 @@
 /// ## 2. Systemd Service
 /// ```ini
 /// [Unit]
-/// Description=Grok Bot with LLM Router
+/// Description=Helix AI Agent with LLM Router
 /// After=network.target
 ///
 /// [Service]
-/// ExecStart=/usr/local/bin/bot --config /etc/bot/router.toml
+/// ExecStart=/usr/local/bin/helix --config /etc/helix/router.toml
 /// Restart=always
-/// User=bot
-/// Group=botctl
+/// User=helix
+/// Group=helixctl
 ///
 /// [Install]
 /// WantedBy=multi-user.target
