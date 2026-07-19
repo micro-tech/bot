@@ -42,3 +42,6 @@
 [2026-06-11 01:08:10.872] harness -> test_topic: {"seq":2}
 [2026-06-11 01:08:10.873] harness -> test_topic: {"seq":3}
 [2026-06-11 01:08:10.873] harness -> test_topic: {"seq":4}
+[2026-07-19 00:27:17.228] test -> ollama: hello
+[2026-07-19 00:27:17.229] ollama -> web_interface: {"msg":"test error — should not panic","type":"error"}[2026-07-19 00:27:17.229] gemini -> web_interface: {"msg":"GEMINI_API_KEY environment variable is not set or empty","type":"error"}
+

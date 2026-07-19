@@ -39,8 +39,14 @@ anyhow = "1.0"
 async-trait = "0.1"
 rand = "0.10.2"
 uuid = { version = "1.23.4", features = ["v4", "serde"] }
-lettre = { version = "0.11.22", features = ["smtp-transport", "native-tls"] }
-imap = "3.0.0-alpha.15"
+# Use rustls-tls instead of native-tls to avoid pulling in openssl-sys on Windows
+# (native-tls can trigger openssl builds in some configurations on certain setups).
+lettre = { version = "0.11.22", features = ["smtp-transport", "rustls-tls"] }
+
+# IMAP for email tools. We avoid "default" features if possible to reduce openssl pull.
+# If imap still pulls openssl on your system, you may need to set OPENSSL_NO_VENDOR=1
+# (see .cargo/config.toml below).
+imap = { version = "3.0.0-alpha.15", default-features = false, features = ["rustls-tls"] }
 native-tls = "0.2"
 pulldown-cmark = "0.13.4"
 similar = "3.1.1"
@@ -51,6 +57,27 @@ sqlx = { version = "0.9.0", features = [
     "json",
 ] }
 sha2 = "0.11.0"
+
+# === SSH / Remote Project Scanner support (Task 171) ===
+# Optional because ssh2 -> libssh2-sys -> openssl-sys tends to trigger a full
+# OpenSSL source build on Windows (requires Perl + build tools).
+# 
+# To enable remote SSH scanning (Dell 630 -> Main PC):
+#   cargo build --features ssh
+#
+# Then ensure OpenSSL is available:
+#   - Windows: Install OpenSSL (e.g. from https://slproweb.com/products/Win32OpenSSL.html)
+#              and set OPENSSL_DIR=C:\Program Files\OpenSSL-Win64
+#   - Or use vcpkg: vcpkg install openssl:x64-windows
+#   - Linux/macOS: usually works out of the box via pkg-config
+#
+# Do NOT use vendored-openssl unless you have Perl installed.
+ssh2 = { version = "0.9", optional = true }
+
+[features]
+default = []
+# Enable real SSH remote scanning (pulls ssh2 + libssh2-sys + openssl-sys)
+ssh = ["dep:ssh2"]
 
 [[bin]]
 name = "installer"
