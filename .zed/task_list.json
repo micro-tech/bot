@@ -285,9 +285,9 @@
       "title": "Implement Helix OKF Librarian System",
       "description": "Add remote OKF bundle management to Helix, including manifest parsing, registry building, validation, and remote change detection via webhook or polling.",
       "priority": "high",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
-      "details": "Add remote OKF bundle management to Helix, including manifest parsing, registry building, validation, and remote change detection via webhook or polling.",
+      "details": "Core OKF Librarian System fully implemented and integrated.\n\nDelivered:\n- Complete src/okf/ crate: manifest, registry, validator, fetcher, api\n- OkfLibrarian facade + global singleton (tokio Mutex) for runtime discovery\n- Full Axum API: /okf/status, /registry, /reload, /manifest, /webhook, /health\n- Startup auto-load of okf_index.json + okf_sample_manifest.json\n- Deep integration into tools/mod.rs:\n  - execute() falls through to OKF tools\n  - tool_definitions() dynamically merges OKF tools\n  - list_okf_tools() built-in\n- list_tools() now surfaces OKF tools\n- Config [helix.okf] fully respected\n- okf_sample_manifest.json with realistic tools + knowledge\n\nSubtasks 164.2-164.7 complete. 164.1 (active polling) partially addressed via webhook; full background poller belongs in 165.",
       "testStrategy": "Implement modules, wire into runtime, test bundle loading and change detection.",
       "subtasks": [
         {

@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://helix.okf/schema/bundle/v1.0",
+  "title": "OKF Bundle Manifest v1.0",
+  "description": "Official JSON Schema for Open Knowledge Format (OKF) bundles used by Helix. Defines the structure for remote tool, knowledge, and schema distribution.",
+  "type": "object",
+  "required": ["id", "version"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique bundle identifier (e.g. 'helix-core-tools-v1', 'my-org-agents-v2')",
+      "minLength": 1,
+      "pattern": "^[a-z0-9_-]+$"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the bundle",
+      "pattern": "^(v)?\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable name of the bundle"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "Optional description of what this bundle provides"
+    },
+    "generated_at": {
+      "type": ["string", "null"],
+      "description": "ISO 8601 timestamp when the manifest was generated"
+    },
+    "tools": {
+      "type": "array",
+      "description": "List of tool definitions provided by this bundle",
+      "items": {
+        "$ref": "#/$defs/OkfToolEntry"
+      }
+    },
+    "knowledge": {
+      "type": "array",
+      "description": "List of knowledge documents or references",
+      "items": {
+        "$ref": "#/$defs/OkfKnowledgeEntry"
+      }
+    },
+    "schemas": {
+      "type": "array",
+      "description": "JSON Schema definitions exported by the bundle",
+      "items": {
+        "$ref": "#/$defs/OkfSchemaEntry"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Arbitrary metadata (author, license, tags, etc.)",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "OkfToolEntry": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique tool name (used for invocation)",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what the tool does"
+        },
+        "input_schema": {
+          "type": ["object", "null"],
+          "description": "JSON Schema describing the expected input parameters"
+        },
+        "output_schema": {
+          "type": ["object", "null"],
+          "description": "JSON Schema describing the expected output"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional categorization tags"
+        },
+        "implementation": {
+          "type": ["string", "null"],
+          "description": "Hint for how the tool is implemented (e.g. 'rust', 'python', 'remote-http', 'wasm')"
+        }
+      },
+      "additionalProperties": false
+    },
+    "OkfKnowledgeEntry": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the knowledge item",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title"
+        },
+        "content_type": {
+          "type": "string",
+          "description": "MIME or format type (e.g. 'markdown', 'json', 'text', 'yaml')"
+        },
+        "content": {
+          "type": ["string", "null"],
+          "description": "Inline content (if small)"
+        },
+        "url": {
+          "type": ["string", "null"],
+          "description": "URL to fetch full content (if not inline)"
+        },
+        "version": {
+          "type": ["string", "null"],
+          "description": "Version of this knowledge document"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "OkfSchemaEntry": {
+      "type": "object",
+      "required": ["id", "schema"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this schema"
+        },
+        "title": {
+          "type": ["string", "null"],
+          "description": "Optional human title for the schema"
+        },
+        "schema": {
+          "type": "object",
+          "description": "The actual JSON Schema object"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

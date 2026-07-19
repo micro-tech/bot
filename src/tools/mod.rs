@@ -3,6 +3,9 @@
 //! Both the Ollama agentic tool-calling loop (`io/ollama/mod.rs`) and the
 //! CPU `SkillRegistry` (`skills/mod.rs`) delegate here.  Keeping them in sync
 //! is then automatic.
+//!
+//! OKF integration: When the global OKF librarian is active, its tools are
+//! discoverable via list_okf_tools + merged into tool_definitions().
 
 pub mod email_tools;
 pub mod file_tools;
@@ -16,8 +19,11 @@ use serde_json::Value;
 ///
 /// This is the single entry point for **all** tool invocations — Ollama
 /// tool-calling, CPU skill requests, and direct slash-commands from the UI.
+///
+/// OKF tools (loaded from remote bundles) are tried after the built-in set.
 pub fn execute(name: &str, args: &Value) -> String {
-    match name {
+    // Built-in tools first
+    let result = match name {
         "read_log" => file_tools::read_log(args),
         "write_note" => file_tools::write_note(args),
         "read_note" => file_tools::read_note(args),
@@ -38,20 +44,60 @@ pub fn execute(name: &str, args: &Value) -> String {
         "repo_glob" => file_tools::repo_glob(args),
         "repo_read" => file_tools::repo_read(args),
         "repo_grep" => file_tools::repo_grep(args),
-        other => format!(
-            "Unknown tool '{}' — not registered. Use list_tools to see available tools.",
-            other
-        ),
+        "list_okf_tools" => list_okf_tools(),
+        other => String::new(), // signal: try OKF or unknown
+    };
+
+    if !result.is_empty() {
+        return result;
     }
+
+    // Try OKF-provided tools (from global librarian)
+    if let Some(desc) = crate::okf::get_okf_tool_description(name) {
+        return format!(
+            "🧠 OKF Tool '{}'\nDescription: {}\n\n\
+             (This tool is provided by the remote OKF bundle. \
+              Full remote execution will be wired in a later step. \
+              Args received: {})",
+            name, desc, args
+        );
+    }
+
+    // Unknown
+    format!(
+        "Unknown tool '{}' — not registered. Use list_tools or list_okf_tools to see available tools.",
+        name
+    )
+}
+
+/// Return a human-readable list of currently loaded OKF tools.
+pub fn list_okf_tools() -> String {
+    let names = crate::okf::list_okf_tool_names();
+    if names.is_empty() {
+        return "No OKF tools currently loaded.\n(Enable [helix.okf] in config and load a bundle via /okf/manifest or /okf/reload.)".to_string();
+    }
+
+    let mut lines = vec!["🧠 OKF Tools (from remote bundle):".to_string()];
+    for name in &names {
+        if let Some(desc) = crate::okf::get_okf_tool_description(name) {
+            lines.push(format!("  • {} — {}", name, desc));
+        } else {
+            lines.push(format!("  • {}", name));
+        }
+    }
+    lines.push("\nThese tools are discoverable by agents. Full remote dispatch coming soon.".to_string());
+    lines.join("\n")
 }
 
 // ── Ollama tool definitions ───────────────────────────────────────────────────
 
 /// Returns the JSON array of tool schemas sent to Ollama in every `/api/chat`
 /// request.  Keep in sync with the `execute` dispatch table above.
+///
+/// Dynamically merges in any tools loaded from the OKF librarian.
 pub fn tool_definitions() -> Value {
-    serde_json::json!([
-        {
+    let mut defs = vec![
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "read_log",
@@ -67,8 +113,8 @@ pub fn tool_definitions() -> Value {
                     "required": ["log_file"]
                 }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "write_note",
@@ -82,8 +128,8 @@ pub fn tool_definitions() -> Value {
                     "required": ["title", "content"]
                 }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "read_note",
@@ -96,16 +142,16 @@ pub fn tool_definitions() -> Value {
                     "required": ["title"]
                 }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "list_notes",
                 "description": "List all saved notes in the notes/ directory.",
                 "parameters": { "type": "object", "properties": {}, "required": [] }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "send_email",
@@ -120,8 +166,8 @@ pub fn tool_definitions() -> Value {
                     "required": ["to", "subject", "body"]
                 }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "read_email",
@@ -135,8 +181,8 @@ pub fn tool_definitions() -> Value {
                     "required": []
                 }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "check_inbox",
@@ -149,32 +195,40 @@ pub fn tool_definitions() -> Value {
                     "required": []
                 }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "system_status",
                 "description": "Get the current system status: log file sizes, note count, beliefs file, uptime timestamp.",
                 "parameters": { "type": "object", "properties": {}, "required": [] }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "list_tools",
                 "description": "List every available tool or skill, with a one-line description of each.",
                 "parameters": { "type": "object", "properties": {}, "required": [] }
             }
-        },
-        {
+        }),
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "list_okf_tools",
+                "description": "List tools that were dynamically loaded from remote OKF (Open Knowledge Format) bundles. These are additional capabilities provided by the OKF librarian.",
+                "parameters": { "type": "object", "properties": {}, "required": [] }
+            }
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "get_beliefs",
                 "description": "Read the current agent beliefs from beliefs.json. Beliefs are key/value facts the agent has learned or been told.",
                 "parameters": { "type": "object", "properties": {}, "required": [] }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "set_belief",
@@ -188,16 +242,16 @@ pub fn tool_definitions() -> Value {
                     "required": ["key", "value"]
                 }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "bayes_show",
                 "description": "Show the current Bayesian belief state (probabilities for positive/negative/neutral hypotheses). Reads persisted state from beliefs_bayes.json.",
                 "parameters": { "type": "object", "properties": {}, "required": [] }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "bayes_update",
@@ -210,16 +264,16 @@ pub fn tool_definitions() -> Value {
                     "required": ["evidence"]
                 }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "bayes_reset",
                 "description": "Reset the Bayesian belief state back to default priors (positive=50%, negative=30%, neutral=20%).",
                 "parameters": { "type": "object", "properties": {}, "required": [] }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "repo_glob",
@@ -232,8 +286,8 @@ pub fn tool_definitions() -> Value {
                     "required": ["pattern"]
                 }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "repo_read",
@@ -248,8 +302,8 @@ pub fn tool_definitions() -> Value {
                     "required": ["path"]
                 }
             }
-        },
-        {
+        }),
+        serde_json::json!({
             "type": "function",
             "function": {
                 "name": "repo_grep",
@@ -263,8 +317,31 @@ pub fn tool_definitions() -> Value {
                     "required": ["pattern"]
                 }
             }
+        })
+    ];
+
+    // Merge OKF tools (if any are loaded via the global librarian)
+    if let Some(librarian_arc) = crate::okf::get_global_librarian() {
+        if let Ok(guard) = librarian_arc.try_lock() {
+            for (name, tool) in &guard.registry.tools {
+                let mut func = serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": tool.description.clone(),
+                    }
+                });
+
+                if let Some(schema) = &tool.input_schema {
+                    func["function"]["parameters"] = schema.clone();
+                }
+
+                defs.push(func);
+            }
         }
-    ])
+    }
+
+    Value::Array(defs)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

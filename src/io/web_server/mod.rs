@@ -1,4 +1,6 @@
 use crate::bus::{Bus, Message};
+use crate::config::okf::OkfConfig;
+use crate::okf::{OkfLibrarian, api as okf_api};
 use axum::{
     Router,
     extract::{
@@ -127,6 +129,56 @@ pub async fn start_web_server(
     }));
     let backends_json = serde_json::to_string(&backend_list).unwrap_or_else(|_| "[]".to_string());
 
+    // ── OKF Librarian setup (MUST happen BEFORE moving config_str into AppState) ──
+    // We always mount the routes; handlers gracefully handle disabled state.
+    let okf_enabled = toml::from_str::<toml::Value>(&config_str)
+        .ok()
+        .and_then(|v| v.get("helix")?.get("okf")?.get("enabled")?.as_bool())
+        .unwrap_or(false);
+
+    let okf_state: okf_api::OkfState = if okf_enabled {
+        let okf_cfg = OkfConfig::load_from_toml(&config_str);
+        let mut librarian = OkfLibrarian::new(okf_cfg);
+
+        // Try to load from index file on startup if it exists
+        let _ = librarian.reload_from_index_file();
+
+        // Optionally load sample manifest in dev if registry is empty
+        if librarian.registry.tool_count() == 0 {
+            if let Ok(sample) = std::fs::read_to_string("okf_sample_manifest.json") {
+                let _ = librarian.load_manifest_from_json(&sample);
+            }
+        }
+
+        std::sync::Arc::new(tokio::sync::Mutex::new(librarian))
+    } else {
+        let disabled_cfg = OkfConfig::default();
+        std::sync::Arc::new(tokio::sync::Mutex::new(OkfLibrarian::new(disabled_cfg)))
+    };
+
+    // Make the librarian available globally to tools, agents, CPU, and Ollama
+    crate::okf::set_global_librarian(okf_state.clone());
+
+    // Start background remote change detection poller (164.1 + 165)
+    // Only when OKF is enabled in config. The poller respects auto_reload.
+    if okf_enabled {
+        let _poller = crate::okf::start_okf_poller();
+        if _poller.is_some() {
+            info!("[OKF] Background change-detection poller started");
+        }
+    }
+
+    let okf_router = Router::new()
+        .route("/okf/status", get(okf_api::okf_status))
+        .route("/okf/registry", get(okf_api::okf_registry))
+        .route("/okf/reload", post(okf_api::okf_reload))
+        .route("/okf/reload/force", post(okf_api::okf_force_reload))
+        .route("/okf/manifest", post(okf_api::okf_push_manifest))
+        .route("/okf/webhook", post(okf_api::okf_webhook))
+        .route("/okf/health", get(okf_api::okf_health))
+        .route("/okf/schema", get(okf_api::okf_schema))
+        .with_state(okf_state);
+
     let state = AppState {
         bus,
         msg_tx: broadcast::channel(100).0,
@@ -134,8 +186,8 @@ pub async fn start_web_server(
         backends_json,
     };
 
-    // Build Axum router
-    let app = Router::new()
+    // Build Axum router for main app
+    let main_app = Router::new()
         .route("/", get(serve_index))
         .route("/ws", get(ws_handler))
         .route("/logs/chat", get(serve_chat_log))
@@ -144,7 +196,11 @@ pub async fn start_web_server(
         .route("/logs/error/clear", post(clear_error_log))
         .route("/logs/bus", get(serve_bus_log))
         .route("/logs/hartbeat", get(serve_hartbeat_log))
-        .with_state(state)
+        .with_state(state);
+
+    // Merge OKF routes (they have their own state) with main app
+    let app = main_app
+        .merge(okf_router)
         .layer(CorsLayer::permissive());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
