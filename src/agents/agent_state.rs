@@ -99,7 +99,7 @@ impl AgentState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::agent_step::{AgentStep, FinalAnswer};
+    use crate::agents::agent_step::AgentStep;
 
     #[test]
     fn test_initial_state() {
