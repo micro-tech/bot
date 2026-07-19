@@ -1,0 +1,64 @@
+{
+  "id": "helix-core-v1",
+  "version": "1.0.0",
+  "name": "Helix Core Tools",
+  "description": "Core tools and knowledge for the Helix agent system",
+  "generated_at": "2025-04-05T12:00:00Z",
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read contents of a file from the filesystem",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        },
+        "required": ["path"]
+      },
+      "tags": ["filesystem", "core"]
+    },
+    {
+      "name": "write_file",
+      "description": "Write content to a file",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "content": { "type": "string" }
+        },
+        "required": ["path", "content"]
+      },
+      "tags": ["filesystem", "core"]
+    },
+    {
+      "name": "list_directory",
+      "description": "List files and directories",
+      "tags": ["filesystem"]
+    }
+  ],
+  "knowledge": [
+    {
+      "id": "system-principles",
+      "title": "Helix System Principles",
+      "content_type": "markdown",
+      "content": "# Helix Principles\n\n- Be helpful\n- Be truthful\n- Self-correct when possible"
+    }
+  ],
+  "schemas": [
+    {
+      "id": "tool_call",
+      "title": "Standard Tool Call",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "tool": { "type": "string" },
+          "args": { "type": "object" }
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "author": "Helix Team",
+    "license": "MIT"
+  }
+}

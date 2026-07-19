@@ -159,7 +159,7 @@
       "dependencies": [
         156
       ],
-      "details": "Introduce a ToolSupervisorV2 that wraps all tool calls with validation, structured error handling, and retry logic. Add a ToolError enum with categories (InvalidArgs, ExecutionError, NotFound, RateLimit, Unknown). Add a ToolResult enum that includes success, retryable failure, and fatal failure. Integrate this into the runtime loop so PlannerOutput::ToolCall receives normalized results.",
+      "details": "All subtasks including 158.5 (tests + the never_loop fix in execute()) are complete. The dead loop was removed and logic simplified with explanatory comment. Integration in runtime_loop.rs works. Task marked fully done.",
       "subtasks": [
         {
           "id": "158.1",

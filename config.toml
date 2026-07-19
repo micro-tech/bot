@@ -59,3 +59,16 @@ default_goal = "Improve agent reliability, safety, and self-correction"
 cycle_interval_ticks = 20
 metrics_interval_ticks = 40
 health_check_interval_ticks = 100
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helix OKF (Open Knowledge Format) Librarian System
+# Task #164
+# ─────────────────────────────────────────────────────────────────────────────
+[helix.okf]
+enabled = false                 # Master switch (set to true to activate)
+server_url = "http://localhost:8080"
+auto_reload = true
+index_file = "okf_index.json"
+poll_interval_secs = 60
+request_timeout_secs = 30
+# auth_token = "optional-token-here"   # Uncomment if your OKF server requires auth

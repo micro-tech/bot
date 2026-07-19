@@ -21,6 +21,7 @@ mod bayesian;
 mod planning;
 mod reasoning;
 mod agents;
+mod okf;
 
 #[tokio::main]
 async fn main() {

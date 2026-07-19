@@ -15,6 +15,7 @@ pub mod planning;
 pub mod reasoning;
 pub mod bayesian;
 pub mod agents;
+pub mod okf;
 
 // Re-export commonly used types
 pub use bus::{Bus, Message};
