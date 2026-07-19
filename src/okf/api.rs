@@ -9,8 +9,7 @@ use axum::{
 };
 use serde_json::json;
 
-use crate::config::okf::OkfConfig;
-use crate::okf::{OkfLibrarian, OkfRegistry};
+use crate::okf::OkfLibrarian;
 
 /// Shared state for OKF routes.
 /// We use a Mutex because loading/reloading mutates the librarian.

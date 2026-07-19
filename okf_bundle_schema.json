@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://helix.okf/schema/bundle/v1.0",
   "title": "OKF Bundle Manifest v1.0",
-  "description": "Official JSON Schema for Open Knowledge Format (OKF) bundles used by Helix. Defines the structure for remote tool, knowledge, and schema distribution.",
+  "description": "Official JSON Schema for Open Knowledge Format (OKF) bundles used by Helix. Designed for cross-machine knowledge sharing, especially file change tracking and auto-generated Mermaid diagrams.",
   "type": "object",
   "required": ["id", "version"],
   "properties": {
     "id": {
       "type": "string",
-      "description": "Unique bundle identifier (e.g. 'helix-core-tools-v1', 'my-org-agents-v2')",
+      "description": "Unique bundle identifier (e.g. 'helix-core-tools-v1', 'project-maps-desktop', 'okf-diagrams-v2')",
       "minLength": 1,
       "pattern": "^[a-z0-9_-]+$"
     },
@@ -38,7 +38,7 @@
     },
     "knowledge": {
       "type": "array",
-      "description": "List of knowledge documents or references",
+      "description": "List of knowledge documents. Supports Mermaid diagrams, file snapshots, directory trees, and change logs for cross-machine project mapping.",
       "items": {
         "$ref": "#/$defs/OkfKnowledgeEntry"
       }
@@ -52,7 +52,13 @@
     },
     "metadata": {
       "type": "object",
-      "description": "Arbitrary metadata (author, license, tags, etc.)",
+      "description": "Bundle-level metadata. Recommended for multi-machine setups.",
+      "properties": {
+        "source_machine": { "type": "string", "description": "Name or ID of the machine that generated this bundle (e.g. 'desktop-pc', 'laptop', 'proxmox-dell630')" },
+        "author": { "type": "string" },
+        "license": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      },
       "additionalProperties": true
     }
   },
@@ -96,8 +102,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the knowledge item",
-          "minLength": 1
+          "description": "Unique identifier for the knowledge item (e.g. 'project-structure-2025-04-05', 'file-changes-desktop')"
         },
         "title": {
           "type": "string",
@@ -105,15 +110,27 @@
         },
         "content_type": {
           "type": "string",
-          "description": "MIME or format type (e.g. 'markdown', 'json', 'text', 'yaml')"
+          "description": "MIME or format type. Special support for diagrams and file tracking.",
+          "enum": [
+            "markdown",
+            "json",
+            "text",
+            "yaml",
+            "mermaid",
+            "diagram",
+            "file-tree",
+            "directory-snapshot",
+            "file-change-log",
+            "project-map"
+          ]
         },
         "content": {
           "type": ["string", "null"],
-          "description": "Inline content (if small)"
+          "description": "Inline content. For Mermaid: put the full ```mermaid ... ``` block here."
         },
         "url": {
           "type": ["string", "null"],
-          "description": "URL to fetch full content (if not inline)"
+          "description": "URL to fetch full content (if not inline). Useful when OKF server hosts large diagrams."
         },
         "version": {
           "type": ["string", "null"],
@@ -121,6 +138,15 @@
         },
         "metadata": {
           "type": "object",
+          "description": "Per-knowledge metadata. Critical for cross-machine file change tracking.",
+          "properties": {
+            "source_machine": { "type": "string", "description": "Machine that detected the change (e.g. 'desktop-pc')" },
+            "detected_at": { "type": "string", "description": "ISO timestamp of file change or scan" },
+            "diagram_type": { "type": "string", "description": "Type of diagram: 'project-structure', 'file-changes', 'data-flow', 'hybrid'" },
+            "base_path": { "type": "string", "description": "Root directory that was scanned" },
+            "changed_files": { "type": "array", "items": { "type": "string" } },
+            "mermaid_theme": { "type": "string" }
+          },
           "additionalProperties": true
         }
       },

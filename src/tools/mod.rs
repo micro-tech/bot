@@ -44,6 +44,9 @@ pub fn execute(name: &str, args: &Value) -> String {
         "repo_glob" => file_tools::repo_glob(args),
         "repo_read" => file_tools::repo_read(args),
         "repo_grep" => file_tools::repo_grep(args),
+        "scan_directory" => file_tools::scan_directory(args),
+        "generate_mermaid_project_map" => file_tools::generate_mermaid_project_map(args),
+        "generate_okf_project_map_knowledge" => file_tools::generate_okf_project_map_knowledge(args),
         "list_okf_tools" => list_okf_tools(),
         other => String::new(), // signal: try OKF or unknown
     };
@@ -315,6 +318,56 @@ pub fn tool_definitions() -> Value {
                         "path": { "type": "string", "description": "Optional directory or file to limit search (default: whole repo)" }
                     },
                     "required": ["pattern"]
+                }
+            }
+        }),
+        // === OKF / Cross-machine Project Mapping (for building Mermaid maps from file changes) ===
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "scan_directory",
+                "description": "Recursively scan a directory tree and return a structured JSON snapshot. Use this to feed project structure into Mermaid diagram generation or OKF knowledge bundles. Supports cross-machine file change tracking.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Base directory to scan (e.g. '.', 'src', 'C:/Users/you/projects')" },
+                        "max_depth": { "type": "integer", "description": "Maximum recursion depth (default 4)" },
+                        "include_hidden": { "type": "boolean", "description": "Include dotfiles and hidden dirs (default false)" }
+                    },
+                    "required": ["path"]
+                }
+            }
+        }),
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "generate_mermaid_project_map",
+                "description": "Scan a directory and generate a Mermaid diagram (graph TD) plus a full OKF-ready knowledge payload. Perfect for sending project maps and file change visualizations to a central OKF server (e.g. on Proxmox Dell 630). Includes source_machine and timestamp.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Directory to map (e.g. '.', 'src', your project root)" },
+                        "title": { "type": "string", "description": "Diagram title (default: 'Project Structure')" },
+                        "max_depth": { "type": "integer", "description": "Recursion depth (default 3)" },
+                        "diagram_style": { "type": "string", "description": "tree | changes | hybrid (default 'tree')" }
+                    },
+                    "required": ["path"]
+                }
+            }
+        }),
+        serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "generate_okf_project_map_knowledge",
+                "description": "High-level helper: produces a complete OKF knowledge entry (with content_type=mermaid + rich metadata) ready to POST to your central OKF server. Use this when you want to push file-change diagrams from this machine to the Proxmox OKF host.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string" },
+                        "title": { "type": "string" },
+                        "max_depth": { "type": "integer" }
+                    },
+                    "required": ["path"]
                 }
             }
         })
