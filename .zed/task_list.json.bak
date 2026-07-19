@@ -273,10 +273,10 @@
       "id": 163,
       "title": "Rename project from bot → Helix",
       "description": "Systematically rename the project across Cargo.toml, source, docs, paths, and diagrams.",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "priority": "high",
-      "details": "Batch 2: Continue rename in installer.rs (more strings, comments, error messages). Update socket config paths, utils.rs paths, unix socket code. Enhance a few error logs using existing log crate. Will clippy after batch.",
+      "details": "Rebranding completed across source, configs, docs, diagrams, service files, and key references. \"bot\" references systematically replaced with \"Helix\" (or \"helix\"). Legacy files preserved with notes. Task 163 fully complete.",
       "testStrategy": "",
       "subtasks": []
     },
@@ -285,9 +285,9 @@
       "title": "Implement Helix OKF Librarian System",
       "description": "Add remote OKF bundle management to Helix, including manifest parsing, registry building, validation, and remote change detection via webhook or polling.",
       "priority": "high",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
-      "details": "Add remote OKF bundle management to Helix, including manifest parsing, registry building, validation, and remote change detection via webhook or polling.",
+      "details": "Core OKF Librarian System fully implemented and integrated.\n\nDelivered:\n- Complete src/okf/ crate: manifest, registry, validator, fetcher, api\n- OkfLibrarian facade + global singleton (tokio Mutex) for runtime discovery\n- Full Axum API: /okf/status, /registry, /reload, /manifest, /webhook, /health\n- Startup auto-load of okf_index.json + okf_sample_manifest.json\n- Deep integration into tools/mod.rs:\n  - execute() falls through to OKF tools\n  - tool_definitions() dynamically merges OKF tools\n  - list_okf_tools() built-in\n- list_tools() now surfaces OKF tools\n- Config [helix.okf] fully respected\n- okf_sample_manifest.json with realistic tools + knowledge\n\nSubtasks 164.2-164.7 complete. 164.1 (active polling) partially addressed via webhook; full background poller belongs in 165.",
       "testStrategy": "Implement modules, wire into runtime, test bundle loading and change detection.",
       "subtasks": [
         {
@@ -346,9 +346,9 @@
       "title": "Implement Helix OKF Remote Hot-Reload System",
       "description": "Add automatic reload behavior for OKF bundles when remote OKF server reports changes. Replace filesystem watcher with webhook or polling-based reload triggers.",
       "priority": "high",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
-      "details": "Add automatic reload behavior for OKF bundles when remote OKF server reports changes. Replace filesystem watcher with webhook or polling-based reload triggers.",
+      "details": "Core remote hot-reload system for OKF bundles is fully implemented and integrated.\n\nDelivered in this pass + prior work:\n- `hot_reload_from_remote()` with ETag-based change detection (NOT_MODIFIED handling)\n- `start_okf_poller()` background task with debounce (20s) and configurable poll_interval\n- Rich logging for reloads, no-change, and errors\n- `/okf/reload` and `/okf/reload/force` endpoints\n- Webhook receiver (`/okf/webhook`) that can trigger reload when auto_reload=true\n- `force_reload_from_remote()` (clears ETag)\n- Reload counters, last_reload_ms, last_reload_error tracking\n- Poller started automatically in web_server when OKF enabled\n- Already wired into OkfLibrarian and global singleton\n\nTask 165 requirements (webhook/polling, reload pipeline, debounce, logging) are satisfied.",
       "testStrategy": "Test reload on simulated remote change events, verify debounce and logging.",
       "subtasks": [
         {
@@ -386,9 +386,9 @@
       "title": "Implement Grok-CLI OKF Integration Layer",
       "description": "Add support in Grok-CLI for consuming Helix's remote OKF registry, requesting reloads, and loading tools/knowledge dynamically from the OKF server.",
       "priority": "high",
-      "status": "pending",
+      "status": "in_progress",
       "dependencies": [],
-      "details": "Add support in Grok-CLI for consuming Helix's remote OKF registry, requesting reloads, and loading tools/knowledge dynamically from the OKF server.",
+      "details": "Starting implementation of Grok-CLI OKF integration. Adding HTTP client support to fetch from Helix's /okf/registry, dynamic tool loading from OKF, and reload triggers. This will be integrated into the tools system and CLI where appropriate.",
       "testStrategy": "Verify CLI can fetch registry from Helix, load tools dynamically, and trigger reloads.",
       "subtasks": [
         {
@@ -423,12 +423,12 @@
     },
     {
       "id": 167,
-      "title": "Define OKF Bundle Schema v1.0",
+      "title": "Define OKF Bundle Schema v1.0 + Mermaid/File-Change support",
       "description": "Create the official JSON schema for OKF bundles including manifest, tools, knowledge, and metadata fields.",
       "priority": "medium",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
-      "details": "Create the official JSON schema for OKF bundles including manifest, tools, knowledge, and metadata fields.",
+      "details": "Schema v1.0 enhanced with explicit support for mermaid/project-map/file-tree knowledge types + cross-machine metadata (source_machine, detected_at, diagram_type, base_path, changed_files). New tools added: scan_directory, generate_mermaid_project_map, generate_okf_project_map_knowledge. These directly enable scanning local files/changes → building Mermaid diagrams → packaging as OKF knowledge ready for central server (Dell 630 / Proxmox).",
       "testStrategy": "Validate sample bundles against the schema; document the schema.",
       "subtasks": [
         {
@@ -436,28 +436,28 @@
           "title": "Define manifest.json schema",
           "description": "Specify required fields: id, version, tools, knowledge, schemas.",
           "priority": "high",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "167.2",
           "title": "Define tool schema",
           "description": "Specify structure for tool definitions including name, description, input, output.",
           "priority": "medium",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "167.3",
           "title": "Define knowledge schema",
           "description": "Specify structure for knowledge bundles including metadata and content type.",
           "priority": "medium",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "167.4",
           "title": "Add versioning rules",
           "description": "Define semantic versioning rules for OKF bundles and manifests.",
           "priority": "low",
-          "status": "pending"
+          "status": "done"
         }
       ]
     },
@@ -599,6 +599,192 @@
           "description": "Integrate OKF bundle tests into CI pipeline to prevent invalid bundles from being deployed.",
           "priority": "low",
           "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 171,
+      "title": "Project Scanner Module for cross-machine directory scanning",
+      "description": "Create a configurable \"project scanner\" that can scan directories on the local machine and (future) remote machines (e.g. main PC from Dell 630 over network). Must support a programmable list of projects + per-PC settings in config. Outputs structured trees suitable for Markmap / Mermaid / OKF bundles.",
+      "status": "pending",
+      "dependencies": [
+        167.0
+      ],
+      "priority": "high",
+      "details": "1. Add config section (e.g. [helix.project_scanner] or [[helix.projects]]).\n2. Support list of projects with name, path (local or remote), include/exclude globs, max_depth.\n3. Implement scanner that walks directories (extend or use scan_directory tool).\n4. Add remote scan capability stub (via SSH or HTTP agent later).\n5. Output rich JSON + summary metadata (source_machine, timestamp).\n6. Integrate with OKF knowledge generation.\n7. Add CLI command or tool: scan_projects.\nTest: Scan a small project tree and produce usable output for markmap generator.",
+      "testStrategy": "Scan a real project directory with includes/excludes. Verify output contains expected structure, file counts, and metadata. Later test with simulated remote IP.",
+      "subtasks": [
+        {
+          "id": 171.1,
+          "title": "Design and add [helix.project_scanner] + [[projects]] config schema",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 171.2,
+          "title": "Implement core ProjectScanner module (walk + filters + metadata)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 171.3,
+          "title": "Add structured output types (ProjectTree, ProjectScanResult)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 171.4,
+          "title": "Expose as tool (scan_projects) and wire into list_tools",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 171.5,
+          "title": "Add remote scan stub + network config placeholders",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 171.6,
+          "title": "Unit + integration tests for scanner",
+          "status": "pending",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "id": 172,
+      "title": "Markmap Generator Module (structure + notes → Markmap Markdown)",
+      "description": "Create a module that converts directory structure (from Project Scanner) + optional notes into Markmap-compatible Markdown format for mindmaps. Research showed no direct Rust crate on crates.io for Markmap generation (it's primarily a JS ecosystem tool: markmap-lib). We will implement a pure Markdown generator that produces valid Markmap syntax.",
+      "status": "pending",
+      "dependencies": [
+        171.0,
+        167.0
+      ],
+      "priority": "high",
+      "details": "1. Research / confirm Markmap Markdown syntax (## Title, - item, indentation for hierarchy).\n2. Implement MarkmapGenerator that takes ProjectTree (or similar) and produces .mm.md or raw markdown.\n3. Support enriching with notes / descriptions from OKF knowledge or .md files.\n4. Add optional metadata header (source, generated_at, project).\n5. Expose as tool: generate_markmap.\n6. Output should be consumable by the Bundle Builder.\n7. Later: consider calling JS markmap via process or web service if richer rendering needed.\nTest: Feed a scanned project and produce valid markmap markdown that renders in markmap.app or VSCode Markmap extension.",
+      "testStrategy": "Generate markmap from a real project scan. Verify syntax is valid and hierarchy is preserved. Manual test in markmap viewer.",
+      "subtasks": [
+        {
+          "id": 172.1,
+          "title": "Document Markmap Markdown format and implement generator",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 172.2,
+          "title": "Integrate with ProjectScanner output (ProjectTree → Markmap)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 172.3,
+          "title": "Support injecting notes / descriptions into map nodes",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 172.4,
+          "title": "Add generate_markmap tool + registration",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 172.5,
+          "title": "Add tests and example output",
+          "status": "pending",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "id": 173,
+      "title": "OKF Bundle Builder Module (auto-generate bundles)",
+      "description": "Create an automatic OKF Bundle Builder that assembles project scans, markmaps, mermaid diagrams, and metadata into valid OKF bundle manifests + knowledge entries. This is the core automation layer for turning local/remote scans into shareable OKF knowledge.",
+      "status": "pending",
+      "dependencies": [
+        171.0,
+        172.0,
+        167.0
+      ],
+      "priority": "high",
+      "details": "1. Define BundleBuilder struct that collects:\n   - Tools (optional)\n   - Knowledge entries (file-trees, markmaps, mermaid, change logs, etc.)\n   - Metadata (source_machine, version, generated_at)\n2. Implement logic to package scanner output + markmap output into OkfKnowledgeEntry with correct content_type.\n3. Support multiple projects in one bundle or separate bundles.\n4. Auto-increment or manage semantic versions.\n5. Write bundle to disk (manifest.json + knowledge files) or return in-memory.\n6. Integrate with existing OkfBundleManifest / validator.\n7. Add CLI / tool: build_okf_bundle.\nTest: End-to-end from scan \\to markmap \\to bundle that passes validator.",
+      "testStrategy": "Build a complete bundle from a scanned project + generated markmap. Validate the resulting manifest against the schema and load it via OkfLibrarian.",
+      "subtasks": [
+        {
+          "id": 173.1,
+          "title": "Design BundleBuilder API and data flow",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 173.2,
+          "title": "Implement assembly of knowledge entries from scanner + markmap + mermaid",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 173.3,
+          "title": "Add version management and bundle metadata",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 173.4,
+          "title": "Write bundle to OKF format (manifest + embedded or external knowledge)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 173.5,
+          "title": "Expose build_okf_bundle tool and integration tests",
+          "status": "pending",
+          "dependencies": []
+        }
+      ]
+    },
+    {
+      "id": 174,
+      "title": "Remote Uploader Module for OKF Bundles",
+      "description": "Implement a module that POSTs generated OKF bundles (manifest + knowledge) to the central OKF server (e.g. on Dell 630 / Proxmox). Supports authentication, retries, and ETag / versioning awareness.",
+      "status": "pending",
+      "dependencies": [
+        173.0,
+        169.0
+      ],
+      "priority": "high",
+      "details": "1. Use existing OkfFetcher or new HttpUploader (reqwest).\n2. Endpoints to support: POST /okf/bundles/{id} or /upload.\n3. Handle bundle payload (JSON manifest + base64 or multipart for large knowledge).\n4. Add config for server_url, auth_token, retry policy.\n5. Support dry-run and force-upload.\n6. Return upload result with new version / ETag.\n7. Integrate after Bundle Builder (auto-upload option).\n8. Add tool: upload_okf_bundle.\nTest: Upload a test bundle to a running OKF server and verify it appears in registry.",
+      "testStrategy": "Manual + automated test uploading a small bundle to localhost OKF server. Verify server receives it and Helix can later fetch it.",
+      "subtasks": [
+        {
+          "id": 174.1,
+          "title": "Create RemoteUploader with POST logic and auth",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 174.2,
+          "title": "Support bundle serialization (manifest + knowledge payload)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 174.3,
+          "title": "Add retry, error handling, and progress logging",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 174.4,
+          "title": "Add upload_okf_bundle tool + config integration",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 174.5,
+          "title": "End-to-end upload test from BundleBuilder",
+          "status": "pending",
+          "dependencies": []
         }
       ]
     }

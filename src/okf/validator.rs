@@ -97,11 +97,34 @@ impl OkfValidator {
 
         // Knowledge validation
         let mut seen_knowledge = std::collections::HashSet::new();
+        let allowed_content_types = [
+            "", "markdown", "json", "text", "yaml",
+            "mermaid", "diagram", "file-tree", "directory-snapshot",
+            "file-change-log", "project-map"
+        ];
+
         for (i, k) in manifest.knowledge.iter().enumerate() {
             if k.id.trim().is_empty() {
                 result.add_error(&format!("Knowledge entry #{} has empty id", i));
             } else if !seen_knowledge.insert(&k.id) {
                 result.add_error(&format!("Duplicate knowledge id: '{}'", k.id));
+            }
+
+            if !k.content_type.is_empty() && !allowed_content_types.contains(&k.content_type.as_str()) {
+                result.add_warning(&format!(
+                    "Knowledge '{}' uses non-standard content_type '{}'. Consider using 'mermaid', 'file-tree', 'project-map', etc.",
+                    k.id, k.content_type
+                ));
+            }
+
+            // Special validation for diagram types
+            if matches!(k.content_type.as_str(), "mermaid" | "diagram" | "project-map") {
+                if k.content.as_ref().map_or(true, |c| c.trim().is_empty()) && k.url.is_none() {
+                    result.add_warning(&format!(
+                        "Diagram knowledge '{}' has no inline content and no url. It should contain Mermaid source or a link.",
+                        k.id
+                    ));
+                }
             }
         }
 
