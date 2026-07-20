@@ -9,11 +9,90 @@ use std::process::Command;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Privilege escalation (critical fix for server installs)
+    // If we're not root, re-execute ourselves under sudo.
+    // This prompts the user ONCE for the sudo password instead of
+    // triggering repeated Polkit dialogs for every systemctl call.
+    // ─────────────────────────────────────────────────────────────────────
+    if !is_root() {
+        println!("Not running as root — requesting sudo privileges...");
+        println!("  (You should only be prompted for your password once.)\n");
+
+        let exe = env::current_exe()
+            .expect("could not determine installer path");
+
+        let status = Command::new("sudo")
+            .arg(&exe)
+            .args(&args[1..])           // forward any --uninstall etc.
+            .status()
+            .expect("failed to execute installer via sudo");
+
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
     if args.len() > 1 && args[1] == "--uninstall" {
         uninstall();
     } else {
         install();
     }
+}
+
+// ---------------------------------------------------------------------------
+// Privilege helpers (critical on Linux to avoid Polkit hangs)
+// ---------------------------------------------------------------------------
+
+/// Returns true if the current process is running as root (uid 0).
+/// Uses the `id -u` command so we don't need extra crates.
+fn is_root() -> bool {
+    Command::new("id")
+        .arg("-u")
+        .output()
+        .ok()
+        .and_then(|out| {
+            String::from_utf8(out.stdout)
+                .ok()
+                .map(|s| s.trim() == "0")
+        })
+        .unwrap_or(false)
+}
+
+/// Run a systemctl command.
+/// 
+/// main() already re-execs under sudo if we weren't root, so we are root here.
+/// We keep the wrapper for logging + future-proofing.
+fn run_systemctl(args: &[&str]) -> Result<std::process::ExitStatus, String> {
+    let mut cmd = Command::new("systemctl");
+    cmd.args(args);
+    cmd.status().map_err(|e| format!("failed to execute systemctl: {}", e))
+}
+
+/// Convenience wrapper that prints what it's doing.
+fn systemctl(args: &[&str]) {
+    println!("→ systemctl {}", args.join(" "));
+    match run_systemctl(args) {
+        Ok(status) if status.success() => {}
+        Ok(status) => eprintln!("   (systemctl {} exited with status {})", args.join(" "), status),
+        Err(e) => eprintln!("   WARNING: {}", e),
+    }
+}
+
+/// Returns the default systemd unit content (used when no helix.service is present in source).
+fn create_default_service() -> String {
+    r#"[Unit]
+Description=Helix Agent Service
+After=network.target
+
+[Service]
+EnvironmentFile=/home/cobble/helix/.env
+ExecStart=/usr/local/bin/helix
+WorkingDirectory=/home/cobble/helix
+Restart=always
+User=cobble
+
+[Install]
+WantedBy=multi-user.target
+"#.to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -109,9 +188,10 @@ fn install() {
         std::process::exit(1);
     }
 
-    // Stop / remove old service; never touch existing config files.
-    let _ = Command::new("systemctl").args(["stop", "helix"]).status();
-    let _ = Command::new("systemctl").args(["disable", "helix"]).status();
+    // Stop / remove old service using our privilege-aware helper.
+    // This avoids the repeated Polkit "Authentication is required" prompts + timeouts.
+    systemctl(&["stop", "helix"]);
+    systemctl(&["disable", "helix"]);
     let _ = fs::remove_file("/etc/systemd/system/helix.service");
     let _ = fs::remove_file("/usr/local/bin/helix");
 
@@ -206,29 +286,30 @@ fn install() {
     }
 
     // ── systemd service ─────────────────────────────────────────────────────
-    let service = r#"[Unit]
-Description=Helix Agent Service
-After=network.target
+    // Prefer the service file from the source tree if present (more up-to-date).
+    let service_src = source_dir.join("helix.service");
+    let service_content = if service_src.exists() {
+        match fs::read_to_string(&service_src) {
+            Ok(s) => {
+                println!("Using helix.service from source tree");
+                s
+            }
+            Err(_) => create_default_service(),
+        }
+    } else {
+        println!("Using built-in default service definition");
+        create_default_service()
+    };
 
-[Service]
-EnvironmentFile=/home/cobble/helix/.env
-ExecStart=/usr/local/bin/helix
-WorkingDirectory=/home/cobble/helix
-Restart=always
-User=cobble
-
-[Install]
-WantedBy=multi-user.target
-"#;
-    if let Err(e) = fs::write("/etc/systemd/system/helix.service", service) {
+    if let Err(e) = fs::write("/etc/systemd/system/helix.service", &service_content) {
         eprintln!("WARNING: could not write service file: {}", e);
     } else {
-        println!("Created systemd service file");
+        println!("Created /etc/systemd/system/helix.service");
     }
 
-    let _ = Command::new("systemctl").arg("daemon-reload").status();
-    let _ = Command::new("systemctl").args(["enable", "helix"]).status();
-    let _ = Command::new("systemctl").args(["start", "helix"]).status();
+    systemctl(&["daemon-reload"]);
+    systemctl(&["enable", "helix"]);
+    systemctl(&["start", "helix"]);
 
     verify_installation();
     println!("\nInstallation complete!");
@@ -365,12 +446,17 @@ fn generate_self_signed_certs(source_dir: &Path) {
 
 fn uninstall() {
     println!("=== Uninstalling Helix ===");
-    let _ = Command::new("systemctl").args(["stop", "helix"]).status();
-    let _ = Command::new("systemctl").args(["disable", "helix"]).status();
+
+    // Use privilege-aware helper (we are already root because of the early sudo re-exec).
+    systemctl(&["stop", "helix"]);
+    systemctl(&["disable", "helix"]);
+
     let _ = fs::remove_file("/etc/systemd/system/helix.service");
     let _ = fs::remove_file("/usr/local/bin/helix");
+
     // Config and logs in /home/cobble/helix and /etc/helix are intentionally kept.
-    let _ = Command::new("systemctl").arg("daemon-reload").status();
+    systemctl(&["daemon-reload"]);
+
     println!("Helix uninstalled. Config and logs preserved.");
 }
 
