@@ -25,17 +25,16 @@ mod okf;
 
 #[tokio::main]
 async fn main() {
-    run_helix().await;
-}
-
-async fn run_helix() {
-    // ── Fix for rustls 0.23+ CryptoProvider conflict ─────────────────────────
-    // lettre + imap pull in their own rustls (often with aws-lc-rs).
-    // We must explicitly install 'ring' globally before any TLS code runs.
+    // Permanently fix rustls CryptoProvider (ring) at the absolute earliest point.
+    // This resolves conflicts caused by lettre + imap pulling in aws-lc-rs.
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install global rustls crypto provider (ring)");
 
+    run_helix().await;
+}
+
+async fn run_helix() {
     // Ensure required directories exist very early (prevents panics)
     let _ = std::fs::create_dir_all("logs");
     let _ = std::fs::create_dir_all("/etc/helix/logs");
