@@ -604,51 +604,45 @@
     },
     {
       "id": 171,
-      "title": "Project Scanner Module for cross-machine directory scanning",
-      "description": "Create a configurable \"project scanner\" that can scan directories on the local machine and (future) remote machines (e.g. main PC from Dell 630 over network). Must support a programmable list of projects + per-PC settings in config. Outputs structured trees suitable for Markmap / Mermaid / OKF bundles.",
+      "title": "Project Scanner Module – Remote scan of Main PC from Dell 630 (Dell 630 scans Main PC over LAN)",
+      "description": "Create a configurable \"project scanner\" that runs on the Dell 630 (Helix agent + OKF server in separate Proxmox VMs) and remotely scans the Main PC (where coding/development happens) over the local network. Must support a programmable list of projects + per-PC and per-project settings in config. Outputs structured trees suitable for Mermaid (primary) / OKF bundles. Note: User clarified possible confusion between Markmap and Mermaid — primary focus is Mermaid diagrams (already supported in schema from task 167).",
       "status": "pending",
       "dependencies": [
-        167.0
+        167
       ],
       "priority": "high",
-      "details": "1. Add config section (e.g. [helix.project_scanner] or [[helix.projects]]).\n2. Support list of projects with name, path (local or remote), include/exclude globs, max_depth.\n3. Implement scanner that walks directories (extend or use scan_directory tool).\n4. Add remote scan capability stub (via SSH or HTTP agent later).\n5. Output rich JSON + summary metadata (source_machine, timestamp).\n6. Integrate with OKF knowledge generation.\n7. Add CLI command or tool: scan_projects.\nTest: Scan a small project tree and produce usable output for markmap generator.",
-      "testStrategy": "Scan a real project directory with includes/excludes. Verify output contains expected structure, file counts, and metadata. Later test with simulated remote IP.",
+      "details": "Corrected architecture from user:\n- Helix agent lives on Dell 630 (Proxmox VM)\n- OKF server also on Dell 630 (separate Proxmox VM)\n- Main PC is the target machine where actual coding occurs\n- ALL scanning is remote over local network (Dell 630 → Main PC)\n\nKey requirements:\n1. Add config section [helix.project_scanner] + [[helix.projects]] array in config.toml.\n2. Per-project settings: name, target_machine (\"main-pc\"), remote_path, protocol (smb | ssh | http | local), include/exclude globs, max_depth.\n3. Per-PC settings block for hosts, auth methods, credentials placeholders.\n4. Core scanner capable of local walks today + remote access (start with mounted SMB share or stub for SSH/file-server).\n5. Rich output metadata: source_machine=\"main-pc\", scanned_from=\"dell630\", timestamp, file counts, etc.\n6. Reuse/extend existing scan_directory + generate_mermaid_project_map from task 167.\n7. Expose as tool: scan_projects (and scan_remote_project).\n8. Output must be directly usable for OKF knowledge entries (content_type \"file-tree\" or \"project-map\").\n\nRemote access strategy options:\n- SMB/CIFS share mounted on Dell 630 pointing to Main PC\n- SSH from Dell 630 to Main PC\n- Small dedicated file-server or agent running on Main PC that Helix calls\n\nMermaid priority: Generate Mermaid file-tree / project-map diagrams (not Markmap for now, unless user confirms otherwise).",
+      "testStrategy": "Configure a project in config pointing at a network path (or local mount for dev). Run scanner from Dell 630 context and verify output contains correct source_machine/scanned_from metadata + usable tree for Mermaid generation. Test include/exclude and depth limits.",
       "subtasks": [
         {
-          "id": 171.1,
+          "id": "171.1",
           "title": "Design and add [helix.project_scanner] + [[projects]] config schema",
-          "status": "pending",
-          "dependencies": []
+          "status": "pending"
         },
         {
-          "id": 171.2,
+          "id": "171.2",
           "title": "Implement core ProjectScanner module (walk + filters + metadata)",
-          "status": "pending",
-          "dependencies": []
+          "status": "pending"
         },
         {
-          "id": 171.3,
-          "title": "Add structured output types (ProjectTree, ProjectScanResult)",
-          "status": "pending",
-          "dependencies": []
+          "id": "171.3",
+          "title": "Add structured output types (ProjectTree, ProjectScanResult) with cross-machine fields",
+          "status": "pending"
         },
         {
-          "id": 171.4,
-          "title": "Expose as tool (scan_projects) and wire into list_tools",
-          "status": "pending",
-          "dependencies": []
+          "id": "171.4",
+          "title": "Expose as tool (scan_projects / scan_remote_project) and wire into list_tools + OKF",
+          "status": "pending"
         },
         {
-          "id": 171.5,
-          "title": "Add remote scan stub + network config placeholders",
-          "status": "pending",
-          "dependencies": []
+          "id": "171.5",
+          "title": "Add remote scan stub + network config placeholders (SMB/SSH/http)",
+          "status": "pending"
         },
         {
-          "id": 171.6,
-          "title": "Unit + integration tests for scanner",
-          "status": "pending",
-          "dependencies": []
+          "id": "171.6",
+          "title": "Unit + integration tests + example config for Main PC scanning",
+          "status": "pending"
         }
       ]
     },
@@ -656,44 +650,39 @@
       "id": 172,
       "title": "Markmap Generator Module (structure + notes → Markmap Markdown)",
       "description": "Create a module that converts directory structure (from Project Scanner) + optional notes into Markmap-compatible Markdown format for mindmaps. Research showed no direct Rust crate on crates.io for Markmap generation (it's primarily a JS ecosystem tool: markmap-lib). We will implement a pure Markdown generator that produces valid Markmap syntax.",
+      "priority": "high",
       "status": "pending",
       "dependencies": [
-        171.0,
-        167.0
+        171,
+        167
       ],
-      "priority": "high",
       "details": "1. Research / confirm Markmap Markdown syntax (## Title, - item, indentation for hierarchy).\n2. Implement MarkmapGenerator that takes ProjectTree (or similar) and produces .mm.md or raw markdown.\n3. Support enriching with notes / descriptions from OKF knowledge or .md files.\n4. Add optional metadata header (source, generated_at, project).\n5. Expose as tool: generate_markmap.\n6. Output should be consumable by the Bundle Builder.\n7. Later: consider calling JS markmap via process or web service if richer rendering needed.\nTest: Feed a scanned project and produce valid markmap markdown that renders in markmap.app or VSCode Markmap extension.",
       "testStrategy": "Generate markmap from a real project scan. Verify syntax is valid and hierarchy is preserved. Manual test in markmap viewer.",
       "subtasks": [
         {
-          "id": 172.1,
-          "title": "Document Markmap Markdown format and implement generator",
+          "id": "172.1",
           "status": "pending",
-          "dependencies": []
+          "title": "Document Markmap Markdown format and implement generator"
         },
         {
-          "id": 172.2,
-          "title": "Integrate with ProjectScanner output (ProjectTree → Markmap)",
+          "id": "172.2",
           "status": "pending",
-          "dependencies": []
+          "title": "Integrate with ProjectScanner output (ProjectTree → Markmap)"
         },
         {
-          "id": 172.3,
-          "title": "Support injecting notes / descriptions into map nodes",
+          "id": "172.3",
           "status": "pending",
-          "dependencies": []
+          "title": "Support injecting notes / descriptions into map nodes"
         },
         {
-          "id": 172.4,
-          "title": "Add generate_markmap tool + registration",
+          "id": "172.4",
           "status": "pending",
-          "dependencies": []
+          "title": "Add generate_markmap tool + registration"
         },
         {
-          "id": 172.5,
-          "title": "Add tests and example output",
+          "id": "172.5",
           "status": "pending",
-          "dependencies": []
+          "title": "Add tests and example output"
         }
       ]
     },
@@ -701,45 +690,40 @@
       "id": 173,
       "title": "OKF Bundle Builder Module (auto-generate bundles)",
       "description": "Create an automatic OKF Bundle Builder that assembles project scans, markmaps, mermaid diagrams, and metadata into valid OKF bundle manifests + knowledge entries. This is the core automation layer for turning local/remote scans into shareable OKF knowledge.",
+      "priority": "high",
       "status": "pending",
       "dependencies": [
-        171.0,
-        172.0,
-        167.0
+        171,
+        172,
+        167
       ],
-      "priority": "high",
-      "details": "1. Define BundleBuilder struct that collects:\n   - Tools (optional)\n   - Knowledge entries (file-trees, markmaps, mermaid, change logs, etc.)\n   - Metadata (source_machine, version, generated_at)\n2. Implement logic to package scanner output + markmap output into OkfKnowledgeEntry with correct content_type.\n3. Support multiple projects in one bundle or separate bundles.\n4. Auto-increment or manage semantic versions.\n5. Write bundle to disk (manifest.json + knowledge files) or return in-memory.\n6. Integrate with existing OkfBundleManifest / validator.\n7. Add CLI / tool: build_okf_bundle.\nTest: End-to-end from scan \\to markmap \\to bundle that passes validator.",
+      "details": "1. Define BundleBuilder struct that collects:\n   - Tools (optional)\n   - Knowledge entries (file-trees, markmaps, mermaid, change logs, etc.)\n   - Metadata (source_machine, version, generated_at)\n2. Implement logic to package scanner output + markmap output into OkfKnowledgeEntry with correct content_type.\n3. Support multiple projects in one bundle or separate bundles.\n4. Auto-increment or manage semantic versions.\n5. Write bundle to disk (manifest.json + knowledge files) or return in-memory.\n6. Integrate with existing OkfBundleManifest / validator.\n7. Add CLI / tool: build_okf_bundle.\nTest: End-to-end from scan → markmap → bundle that passes validator.",
       "testStrategy": "Build a complete bundle from a scanned project + generated markmap. Validate the resulting manifest against the schema and load it via OkfLibrarian.",
       "subtasks": [
         {
-          "id": 173.1,
-          "title": "Design BundleBuilder API and data flow",
+          "id": "173.1",
           "status": "pending",
-          "dependencies": []
+          "title": "Design BundleBuilder API and data flow"
         },
         {
-          "id": 173.2,
-          "title": "Implement assembly of knowledge entries from scanner + markmap + mermaid",
+          "id": "173.2",
           "status": "pending",
-          "dependencies": []
+          "title": "Implement assembly of knowledge entries from scanner + markmap + mermaid"
         },
         {
-          "id": 173.3,
-          "title": "Add version management and bundle metadata",
+          "id": "173.3",
           "status": "pending",
-          "dependencies": []
+          "title": "Add version management and bundle metadata"
         },
         {
-          "id": 173.4,
-          "title": "Write bundle to OKF format (manifest + embedded or external knowledge)",
+          "id": "173.4",
           "status": "pending",
-          "dependencies": []
+          "title": "Write bundle to OKF format (manifest + embedded or external knowledge)"
         },
         {
-          "id": 173.5,
-          "title": "Expose build_okf_bundle tool and integration tests",
+          "id": "173.5",
           "status": "pending",
-          "dependencies": []
+          "title": "Expose build_okf_bundle tool and integration tests"
         }
       ]
     },
@@ -747,44 +731,79 @@
       "id": 174,
       "title": "Remote Uploader Module for OKF Bundles",
       "description": "Implement a module that POSTs generated OKF bundles (manifest + knowledge) to the central OKF server (e.g. on Dell 630 / Proxmox). Supports authentication, retries, and ETag / versioning awareness.",
+      "priority": "high",
       "status": "pending",
       "dependencies": [
-        173.0,
-        169.0
+        173,
+        169
       ],
-      "priority": "high",
       "details": "1. Use existing OkfFetcher or new HttpUploader (reqwest).\n2. Endpoints to support: POST /okf/bundles/{id} or /upload.\n3. Handle bundle payload (JSON manifest + base64 or multipart for large knowledge).\n4. Add config for server_url, auth_token, retry policy.\n5. Support dry-run and force-upload.\n6. Return upload result with new version / ETag.\n7. Integrate after Bundle Builder (auto-upload option).\n8. Add tool: upload_okf_bundle.\nTest: Upload a test bundle to a running OKF server and verify it appears in registry.",
       "testStrategy": "Manual + automated test uploading a small bundle to localhost OKF server. Verify server receives it and Helix can later fetch it.",
       "subtasks": [
         {
-          "id": 174.1,
-          "title": "Create RemoteUploader with POST logic and auth",
+          "id": "174.1",
           "status": "pending",
-          "dependencies": []
+          "title": "Create RemoteUploader with POST logic and auth"
         },
         {
-          "id": 174.2,
-          "title": "Support bundle serialization (manifest + knowledge payload)",
+          "id": "174.2",
           "status": "pending",
-          "dependencies": []
+          "title": "Support bundle serialization (manifest + knowledge payload)"
         },
         {
-          "id": 174.3,
-          "title": "Add retry, error handling, and progress logging",
+          "id": "174.3",
           "status": "pending",
-          "dependencies": []
+          "title": "Add retry, error handling, and progress logging"
         },
         {
-          "id": 174.4,
-          "title": "Add upload_okf_bundle tool + config integration",
+          "id": "174.4",
           "status": "pending",
-          "dependencies": []
+          "title": "Add upload_okf_bundle tool + config integration"
         },
         {
-          "id": 174.5,
-          "title": "End-to-end upload test from BundleBuilder",
+          "id": "174.5",
           "status": "pending",
-          "dependencies": []
+          "title": "End-to-end upload test from BundleBuilder"
+        }
+      ]
+    },
+    {
+      "id": 175,
+      "title": "OKF Bundle Indexer (registry + version updater)",
+      "description": "Create a Bundle Indexer that, after a bundle is built or uploaded, updates the local OKF registry, index file, and version tracking. Works together with hot-reload and poller so newly built bundles become immediately available.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [
+        173,
+        165
+      ],
+      "details": "1. Implement indexer that:\n   - Reads newly built bundle\n   - Updates OkfRegistry\n   - Writes okf_index.json\n   - Increments / records version\n2. Support both local build and post-upload indexing.\n3. Hook into hot-reload or provide explicit index_bundle() method.\n4. Emit events or logs for the poller / agents.\n5. Add tool: index_okf_bundle or auto-index after build.\n6. Ensure compatibility with existing OkfLibrarian and validator.\nTest: After building a bundle, indexer updates the live registry so list_okf_tools / try_execute_okf_tool sees new knowledge.",
+      "testStrategy": "Build a bundle → run indexer → verify registry now contains the new knowledge/tools and summary reflects the update.",
+      "subtasks": [
+        {
+          "id": "175.1",
+          "status": "pending",
+          "title": "Implement core BundleIndexer logic (update registry + write index)"
+        },
+        {
+          "id": "175.2",
+          "status": "pending",
+          "title": "Version tracking and conflict resolution"
+        },
+        {
+          "id": "175.3",
+          "status": "pending",
+          "title": "Integrate with BundleBuilder (post-build indexing)"
+        },
+        {
+          "id": "175.4",
+          "status": "pending",
+          "title": "Add index_okf_bundle tool and CLI hook"
+        },
+        {
+          "id": "175.5",
+          "status": "pending",
+          "title": "Ensure poller / hot-reload respects indexed bundles"
         }
       ]
     }
