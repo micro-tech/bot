@@ -1,4 +1,4 @@
-/// AgentOS Installer
+/// Helix/OS Installer
 /// Authors: john mcconnell john.microtech@gmail.com
 /// Repository: https://github.com/micro-tech/grok-cli
 use std::env;
@@ -19,12 +19,11 @@ fn main() {
         println!("Not running as root — requesting sudo privileges...");
         println!("  (You should only be prompted for your password once.)\n");
 
-        let exe = env::current_exe()
-            .expect("could not determine installer path");
+        let exe = env::current_exe().expect("could not determine installer path");
 
         let status = Command::new("sudo")
             .arg(&exe)
-            .args(&args[1..])           // forward any --uninstall etc.
+            .args(&args[1..]) // forward any --uninstall etc.
             .status()
             .expect("failed to execute installer via sudo");
 
@@ -49,22 +48,19 @@ fn is_root() -> bool {
         .arg("-u")
         .output()
         .ok()
-        .and_then(|out| {
-            String::from_utf8(out.stdout)
-                .ok()
-                .map(|s| s.trim() == "0")
-        })
+        .and_then(|out| String::from_utf8(out.stdout).ok().map(|s| s.trim() == "0"))
         .unwrap_or(false)
 }
 
 /// Run a systemctl command.
-/// 
+///
 /// main() already re-execs under sudo if we weren't root, so we are root here.
 /// We keep the wrapper for logging + future-proofing.
 fn run_systemctl(args: &[&str]) -> Result<std::process::ExitStatus, String> {
     let mut cmd = Command::new("systemctl");
     cmd.args(args);
-    cmd.status().map_err(|e| format!("failed to execute systemctl: {}", e))
+    cmd.status()
+        .map_err(|e| format!("failed to execute systemctl: {}", e))
 }
 
 /// Convenience wrapper that prints what it's doing.
@@ -72,7 +68,11 @@ fn systemctl(args: &[&str]) {
     println!("→ systemctl {}", args.join(" "));
     match run_systemctl(args) {
         Ok(status) if status.success() => {}
-        Ok(status) => eprintln!("   (systemctl {} exited with status {})", args.join(" "), status),
+        Ok(status) => eprintln!(
+            "   (systemctl {} exited with status {})",
+            args.join(" "),
+            status
+        ),
         Err(e) => eprintln!("   WARNING: {}", e),
     }
 }
@@ -92,7 +92,8 @@ User=cobble
 
 [Install]
 WantedBy=multi-user.target
-"#.to_string()
+"#
+    .to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -496,7 +497,11 @@ fn verify_installation() {
             true,
             &mut all_good,
         );
-        check_path(&format!("/etc/helix/logs/{}", filename), true, &mut all_good);
+        check_path(
+            &format!("/etc/helix/logs/{}", filename),
+            true,
+            &mut all_good,
+        );
     }
 
     if all_good {
