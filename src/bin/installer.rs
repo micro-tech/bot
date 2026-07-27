@@ -63,6 +63,34 @@ fn run_systemctl(args: &[&str]) -> Result<std::process::ExitStatus, String> {
         .map_err(|e| format!("failed to execute systemctl: {}", e))
 }
 
+// ---------------------------------------------------------------------------
+// Dynamic user / directory helpers (the #1 reason services fail after rename)
+// ---------------------------------------------------------------------------
+
+/// Returns the non-root user the service should run as.
+/// Preference order: SUDO_USER (best when run via sudo) → $USER → fallback "helix".
+fn get_runtime_user() -> String {
+    if let Ok(u) = std::env::var("SUDO_USER") {
+        if !u.is_empty() && u != "root" {
+            return u;
+        }
+    }
+    std::env::var("USER")
+        .or_else(|_| std::env::var("LOGNAME"))
+        .unwrap_or_else(|_| "helix".to_string())
+}
+
+/// Returns the primary WorkingDirectory for the service.
+/// - Dedicated "helix" user → /opt/helix (clean server layout, matches helix.service)
+/// - Normal user (e.g. cobble) → /home/<user>/helix
+fn get_primary_runtime_dir(user: &str) -> String {
+    if user == "helix" || user == "root" {
+        "/opt/helix".to_string()
+    } else {
+        format!("/home/{}/helix", user)
+    }
+}
+
 /// Convenience wrapper that prints what it's doing.
 fn systemctl(args: &[&str]) {
     println!("→ systemctl {}", args.join(" "));
@@ -78,22 +106,43 @@ fn systemctl(args: &[&str]) {
 }
 
 /// Returns the default systemd unit content (used when no helix.service is present in source).
+/// This is a modern, reasonably portable default.
+/// We try to use the actual user who invoked the installer (via SUDO_USER)
+/// and a conventional layout.
 fn create_default_service() -> String {
-    r#"[Unit]
+    let user = std::env::var("SUDO_USER")
+        .ok()
+        .filter(|s| !s.is_empty() && s != "root")
+        .unwrap_or_else(|| "helix".to_string());
+
+    let home = if user == "helix" {
+        "/opt/helix".to_string()
+    } else {
+        format!("/home/{}/helix", user)
+    };
+
+    format!(
+        r#"[Unit]
 Description=Helix Agent Service
 After=network.target
 
 [Service]
-EnvironmentFile=/home/cobble/helix/.env
+Type=simple
+User={user}
+WorkingDirectory={home}
 ExecStart=/usr/local/bin/helix
-WorkingDirectory=/home/cobble/helix
 Restart=always
-User=cobble
+RestartSec=5
+Environment=RUST_LOG=info
+# Uncomment the next line if you prefer an EnvironmentFile instead of inline vars
+# EnvironmentFile={home}/.env
 
 [Install]
 WantedBy=multi-user.target
-"#
-    .to_string()
+"#,
+        user = user,
+        home = home
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -200,13 +249,23 @@ fn install() {
     fs::copy(&helix_binary, "/usr/local/bin/helix").expect("Failed to copy helix binary");
     println!("Copied Helix binary -> /usr/local/bin/helix");
 
-    // Create runtime directories and fix ownership so `cobble` can always
-    // read/write both locations (FileZilla uploads included).
-    for dir in ["/home/cobble/helix", "/etc/helix"] {
+    // Determine the runtime user and primary directory dynamically.
+    // This is the biggest source of "installer ran but service won't start"
+    // after the bot → helix rename + moving to different servers.
+    let runtime_user = get_runtime_user();
+    let primary_runtime_dir = get_primary_runtime_dir(&runtime_user);
+
+    println!("Runtime user        : {}", runtime_user);
+    println!("Primary runtime dir : {}", primary_runtime_dir);
+
+    // Create runtime directories.
+    // Dual layout kept for compatibility (/primary + /etc/helix).
+    // The actual WorkingDirectory is controlled by helix.service.
+    for dir in [&primary_runtime_dir, "/etc/helix"] {
         fs::create_dir_all(dir).unwrap_or_else(|e| eprintln!("WARNING: mkdir {}: {}", dir, e));
     }
-    set_ownership("/home/cobble/helix", "cobble", "cobble");
-    set_ownership("/etc/helix", "cobble", "cobble");
+    set_ownership(&primary_runtime_dir, &runtime_user, &runtime_user);
+    set_ownership("/etc/helix", &runtime_user, &runtime_user);
 
     // ── Tracked config files — embedded at compile time as fallback ─────────
     // include_str! bakes the file into the binary when compiled on the dev
@@ -221,7 +280,7 @@ fn install() {
     // ── .env — git-ignored, create template when absent ────────────────────
     let env_src = source_dir.join(".env");
     if env_src.exists() {
-        safe_copy_to_both(".env", &env_src);
+        safe_copy_to_both(".env", &env_src, &primary_runtime_dir);
     } else {
         println!("No .env in source — writing template");
         let template = concat!(
@@ -238,26 +297,29 @@ fn install() {
             "# OLLAMA_KEEP_ALIVE_SECS=240\n",
         );
         safe_write_to_both(".env", template.as_bytes());
-        println!("  !! Edit /home/cobble/helix/.env — add your real API keys before starting.");
+        println!("  !! Edit {}/.env — add your real API keys before starting.", primary_runtime_dir);
     }
 
     // ── TLS certificates — generate self-signed when absent ────────────────
     let cert_src = source_dir.join("cert.pem");
     let key_src = source_dir.join("key.pem");
     if cert_src.exists() && key_src.exists() {
-        safe_copy_to_both("cert.pem", &cert_src);
-        safe_copy_to_both("key.pem", &key_src);
+        safe_copy_to_both("cert.pem", &cert_src, &primary_runtime_dir);
+        safe_copy_to_both("key.pem", &key_src, &primary_runtime_dir);
     } else {
         println!("TLS certs not found in source — generating self-signed cert...");
         generate_self_signed_certs(&source_dir);
     }
 
     // ── Log files — always reset on install ────────────────────────────────
-    for dir in ["/home/cobble/helix/logs", "/etc/helix/logs"] {
+    let log_primary_dir = format!("{}/logs", primary_runtime_dir);
+    let log_secondary_dir = "/etc/helix/logs".to_string();
+
+    for dir in [&log_primary_dir, &log_secondary_dir] {
         fs::create_dir_all(dir).ok();
     }
-    set_ownership("/home/cobble/helix/logs", "cobble", "cobble");
-    set_ownership("/etc/helix/logs", "cobble", "cobble");
+    set_ownership(&log_primary_dir, &runtime_user, &runtime_user);
+    set_ownership(&log_secondary_dir, &runtime_user, &runtime_user);
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -274,16 +336,15 @@ fn install() {
         "bus_log.md",
         "hartbeat_log.md",
     ] {
-        // Logs intentionally overwritten on every install.
-        let primary = format!("/home/cobble/helix/logs/{}", filename);
-        let secondary = format!("/etc/helix/logs/{}", filename);
-        if let Err(e) = fs::write(&primary, &log_header) {
-            eprintln!("WARNING: could not write {}: {}", primary, e);
+        let primary_log = format!("{}/{}", log_primary_dir, filename);
+        let secondary_log = format!("{}/{}", log_secondary_dir, filename);
+        if let Err(e) = fs::write(&primary_log, &log_header) {
+            eprintln!("WARNING: could not write {}: {}", primary_log, e);
         }
-        if let Err(e) = fs::write(&secondary, &log_header) {
-            eprintln!("WARNING: could not write {}: {}", secondary, e);
+        if let Err(e) = fs::write(&secondary_log, &log_header) {
+            eprintln!("WARNING: could not write {}: {}", secondary_log, e);
         }
-        println!("Created log: {}", primary);
+        println!("Created log: {}", primary_log);
     }
 
     // ── systemd service ─────────────────────────────────────────────────────
@@ -320,18 +381,14 @@ fn install() {
 // File helpers  — NO pre-delete; overwrite in place
 // ---------------------------------------------------------------------------
 
-/// Copy `src` to /home/cobble/helix/<name> and /etc/helix/<name>.
+/// Copy `src` to <primary_runtime_dir>/<name> and /etc/helix/<name>.
 /// Does NOT delete the destination first — overwrites in place.
-/// Skips iterations where src and dest resolve to the same path to avoid
-/// the truncation-before-read problem on Linux (fs::copy(x, x) empties x).
-fn safe_copy_to_both(name: &str, src: &Path) {
-    // Resolve src once so we can compare canonicalized paths.
+fn safe_copy_to_both(name: &str, src: &Path, primary_runtime_dir: &str) {
     let src_canonical = src.canonicalize().ok();
 
-    for dest_dir in ["/home/cobble/helix", "/etc/helix"] {
+    for dest_dir in [primary_runtime_dir, "/etc/helix"] {
         let dest = Path::new(dest_dir).join(name);
 
-        // Skip if source and destination are the same file.
         if let Some(ref sc) = src_canonical {
             if dest.canonicalize().ok().as_ref() == Some(sc) {
                 println!("Skipped {} (already in place at {})", name, dest.display());

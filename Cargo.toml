@@ -44,7 +44,9 @@ uuid = { version = "1.24.0", features = ["v4", "serde"] }
 # Use rustls-tls instead of native-tls to avoid pulling in openssl-sys on Windows
 # (native-tls can trigger openssl builds in some configurations on certain setups).
 # Force ring backend to avoid aws-lc-rs conflict with our explicit rustls::ring provider
-lettre = { version = "0.11.6", default-features = false, features = ["smtp-transport", "rustls-tls"] }
+# builder feature is required for Message, Mailbox, ContentType etc.
+# We keep default-features = false + explicit ring via runtime install to avoid aws-lc-rs conflict.
+lettre = { version = "0.11.6", default-features = false, features = ["builder", "smtp-transport", "rustls-tls"] }
 
 # IMAP for email tools. We avoid "default" features if possible to reduce openssl pull.
 # If imap still pulls openssl on your system, you may need to set OPENSSL_NO_VENDOR=1
