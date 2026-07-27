@@ -81,8 +81,8 @@ fn get_runtime_user() -> String {
 }
 
 /// Returns the primary WorkingDirectory for the service.
-/// - Dedicated "helix" user → /opt/helix (clean server layout, matches helix.service)
-/// - Normal user (e.g. cobble) → /home/<user>/helix
+/// - Dedicated "helix" user → /opt/helix (clean server layout)
+/// - Normal user → /home/<user>/helix
 fn get_primary_runtime_dir(user: &str) -> String {
     if user == "helix" || user == "root" {
         "/opt/helix".to_string()
@@ -106,20 +106,9 @@ fn systemctl(args: &[&str]) {
 }
 
 /// Returns the default systemd unit content (used when no helix.service is present in source).
-/// This is a modern, reasonably portable default.
-/// We try to use the actual user who invoked the installer (via SUDO_USER)
-/// and a conventional layout.
 fn create_default_service() -> String {
-    let user = std::env::var("SUDO_USER")
-        .ok()
-        .filter(|s| !s.is_empty() && s != "root")
-        .unwrap_or_else(|| "helix".to_string());
-
-    let home = if user == "helix" {
-        "/opt/helix".to_string()
-    } else {
-        format!("/home/{}/helix", user)
-    };
+    let user = get_runtime_user();
+    let home = get_primary_runtime_dir(&user);
 
     format!(
         r#"[Unit]
@@ -274,8 +263,8 @@ fn install() {
     const DEFAULT_CONFIG: &str = include_str!("../../config.toml");
     const DEFAULT_MANIFEST: &str = include_str!("../../.grok/docs/system_manifest_root.md");
 
-    deploy_tracked_file("config.toml", &source_dir, DEFAULT_CONFIG);
-    deploy_tracked_file("system_manifest.md", &source_dir, DEFAULT_MANIFEST);
+    deploy_tracked_file("config.toml", &source_dir, DEFAULT_CONFIG, &primary_runtime_dir);
+    deploy_tracked_file("system_manifest.md", &source_dir, DEFAULT_MANIFEST, &primary_runtime_dir);
 
     // ── .env — git-ignored, create template when absent ────────────────────
     let env_src = source_dir.join(".env");
@@ -296,7 +285,7 @@ fn install() {
             "# OLLAMA_PRELOAD=true\n",
             "# OLLAMA_KEEP_ALIVE_SECS=240\n",
         );
-        safe_write_to_both(".env", template.as_bytes());
+        safe_write_to_both(".env", template.as_bytes(), &primary_runtime_dir);
         println!("  !! Edit {}/.env — add your real API keys before starting.", primary_runtime_dir);
     }
 
@@ -308,7 +297,7 @@ fn install() {
         safe_copy_to_both("key.pem", &key_src, &primary_runtime_dir);
     } else {
         println!("TLS certs not found in source — generating self-signed cert...");
-        generate_self_signed_certs(&source_dir);
+        generate_self_signed_certs(&source_dir, &primary_runtime_dir);
     }
 
     // ── Log files — always reset on install ────────────────────────────────
@@ -373,7 +362,7 @@ fn install() {
     systemctl(&["enable", "helix"]);
     systemctl(&["start", "helix"]);
 
-    verify_installation();
+    verify_installation(&primary_runtime_dir);
     println!("\nInstallation complete!");
 }
 
@@ -408,10 +397,10 @@ fn safe_copy_to_both(name: &str, src: &Path, primary_runtime_dir: &str) {
     }
 }
 
-/// Write `data` to /home/cobble/helix/<name> and /etc/helix/<name>.
+/// Write `data` to <primary>/<name> and /etc/helix/<name>.
 /// Does NOT delete the destination first — overwrites in place.
-fn safe_write_to_both(name: &str, data: &[u8]) {
-    for dest_dir in ["/home/cobble/helix", "/etc/helix"] {
+fn safe_write_to_both(name: &str, data: &[u8], primary_runtime_dir: &str) {
+    for dest_dir in [primary_runtime_dir, "/etc/helix"] {
         let dest = Path::new(dest_dir).join(name);
         match fs::write(&dest, data) {
             Ok(_) => println!("Wrote {} -> {}", name, dest.display()),
@@ -423,22 +412,22 @@ fn safe_write_to_both(name: &str, data: &[u8]) {
 /// Deploy a tracked config file.
 /// Uses the live copy from `source_dir` if present; otherwise writes the
 /// content embedded in the binary at compile time.
-fn deploy_tracked_file(name: &str, source_dir: &Path, embedded: &str) {
+fn deploy_tracked_file(name: &str, source_dir: &Path, embedded: &str, primary_runtime_dir: &str) {
     let src = source_dir.join(name);
     if src.exists() {
-        safe_copy_to_both(name, &src);
+        safe_copy_to_both(name, &src, primary_runtime_dir);
     } else {
         println!("{} — deploying embedded default", name);
-        safe_write_to_both(name, embedded.as_bytes());
+        safe_write_to_both(name, embedded.as_bytes(), primary_runtime_dir);
         println!(
-            "  !! Review /home/cobble/helix/{} and update any environment-specific settings.",
-            name
+            "  !! Review {}/{} and update any environment-specific settings.",
+            primary_runtime_dir, name
         );
     }
 }
 
 /// Run `chown <user>:<group> <path>` so that the runtime user can write files
-/// there directly (e.g. via FileZilla SFTP as `cobble`).
+/// there directly (e.g. via SFTP).
 fn set_ownership(path: &str, user: &str, group: &str) {
     let owner = format!("{}:{}", user, group);
     match Command::new("chown").args(["-R", &owner, path]).status() {
@@ -451,7 +440,7 @@ fn set_ownership(path: &str, user: &str, group: &str) {
 // TLS
 // ---------------------------------------------------------------------------
 
-fn generate_self_signed_certs(source_dir: &Path) {
+fn generate_self_signed_certs(source_dir: &Path, primary_runtime_dir: &str) {
     let tmp_cert = "/tmp/helix_cert.pem";
     let tmp_key = "/tmp/helix_key.pem";
 
@@ -475,8 +464,8 @@ fn generate_self_signed_certs(source_dir: &Path) {
 
     match status {
         Ok(s) if s.success() => {
-            safe_copy_to_both("cert.pem", Path::new(tmp_cert));
-            safe_copy_to_both("key.pem", Path::new(tmp_key));
+            safe_copy_to_both("cert.pem", Path::new(tmp_cert), primary_runtime_dir);
+            safe_copy_to_both("key.pem", Path::new(tmp_key), primary_runtime_dir);
             // Save back so future installs can copy instead of regenerating.
             let _ = fs::copy(tmp_cert, source_dir.join("cert.pem"));
             let _ = fs::copy(tmp_key, source_dir.join("key.pem"));
@@ -492,8 +481,8 @@ fn generate_self_signed_certs(source_dir: &Path) {
             eprintln!("      -days 3650 -nodes -subj '/CN=localhost'");
             eprintln!("  Then re-run the installer.");
             let placeholder = b"# Placeholder - replace with a real TLS certificate\n";
-            safe_write_to_both("cert.pem", placeholder);
-            safe_write_to_both("key.pem", placeholder);
+            safe_write_to_both("cert.pem", placeholder, primary_runtime_dir);
+            safe_write_to_both("key.pem", placeholder, primary_runtime_dir);
         }
     }
 }
@@ -512,7 +501,7 @@ fn uninstall() {
     let _ = fs::remove_file("/etc/systemd/system/helix.service");
     let _ = fs::remove_file("/usr/local/bin/helix");
 
-    // Config and logs in /home/cobble/helix and /etc/helix are intentionally kept.
+    // Config and logs are intentionally kept (in the primary dir chosen by helix.service).
     systemctl(&["daemon-reload"]);
 
     println!("Helix uninstalled. Config and logs preserved.");
@@ -522,7 +511,7 @@ fn uninstall() {
 // Verification
 // ---------------------------------------------------------------------------
 
-fn verify_installation() {
+fn verify_installation(primary_runtime_dir: &str) {
     println!("\n=== Verifying installation ===");
     let mut all_good = true;
 
@@ -530,13 +519,13 @@ fn verify_installation() {
 
     // Tracked config files — required.
     for f in ["config.toml", "system_manifest.md"] {
-        check_path(&format!("/home/cobble/helix/{}", f), true, &mut all_good);
+        check_path(&format!("{}/{}", primary_runtime_dir, f), true, &mut all_good);
         check_path(&format!("/etc/helix/{}", f), true, &mut all_good);
     }
 
     // User-edited files — present but may contain placeholder values.
     for f in [".env", "cert.pem", "key.pem"] {
-        let primary = format!("/home/cobble/helix/{}", f);
+        let primary = format!("{}/{}", primary_runtime_dir, f);
         let secondary = format!("/etc/helix/{}", f);
         print_check(&primary, Path::new(&primary).exists());
         print_check(&secondary, Path::new(&secondary).exists());
@@ -550,7 +539,7 @@ fn verify_installation() {
         "hartbeat_log.md",
     ] {
         check_path(
-            &format!("/home/cobble/helix/logs/{}", filename),
+            &format!("{}/logs/{}", primary_runtime_dir, filename),
             true,
             &mut all_good,
         );
