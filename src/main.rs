@@ -25,6 +25,9 @@ mod okf;
 
 #[tokio::main]
 async fn main() {
+    // Load .env early (for GEMINI_API_KEY etc.)
+    let _ = dotenv::dotenv();
+
     // Permanently fix rustls CryptoProvider (ring) at the absolute earliest point.
     // This resolves conflicts caused by lettre + imap pulling in aws-lc-rs.
     rustls::crypto::ring::default_provider()
@@ -136,21 +139,31 @@ async fn run_helix() {
     for (name, url, model) in ollama_backends.clone() {
         let bus_clone = bus.clone();
         let backend_name = name.clone();
+        let backend_url = url.clone();
+        let backend_model = model.clone();
 
         tokio::spawn(async move {
             let topic = format!("ollama_{}", backend_name);
             let rx = bus_clone.subscribe(&topic);
 
-            println!("Ollama listener started for {}", topic);
+            println!("Ollama listener started for {}  url={}  model={}", topic, backend_url, backend_model);
+
+            // One-time startup health probe (very useful for diagnosis)
+            if crate::io::ollama::check_ollama_health(&backend_url).await {
+                println!("[{}] startup health probe: OK", topic);
+            } else {
+                println!("[{}] startup health probe: FAILED (Ollama not reachable at this URL)", topic);
+            }
 
             while let Ok(msg) = rx.recv() {
                 // Only handle chat requests
                 if msg.data.contains("\"type\":\"chat_request\"") {
+                    println!("[{}] received chat_request", topic);
                     let _ = crate::io::ollama::handle_ollama_message(
                         msg,
                         &bus_clone,
-                        &url,
-                        &model,
+                        &backend_url,
+                        &backend_model,
                         &backend_name,
                     )
                     .await;

@@ -235,6 +235,7 @@ pub async fn handle_ollama_message(
     let client = build_client();
 
     // ── 1. health check ───────────────────────────────────────────────────────
+    println!("[ollama_{}] starting health check on {}", backend_name, base_url);
     if !check_ollama_health(base_url).await {
         let err = format!(
             "Ollama is not reachable at '{}' — request dropped",
@@ -244,13 +245,16 @@ pub async fn handle_ollama_message(
         publish_error(bus, &err);
         return None;
     }
+    println!("[ollama_{}] health check PASSED", backend_name);
 
     // ── 2. model validation ───────────────────────────────────────────────────
     // Do this BEFORE the retry loop — a missing model always returns 404 and
     // retrying it is pointless.  We give the user a precise, actionable error.
+    println!("[ollama_{}] checking model '{}' exists...", backend_name, model);
     match check_model_exists(base_url, model).await {
         Ok(true) => {
             info!("Model '{}' is available in Ollama ✅", model);
+            println!("[ollama_{}] model '{}' exists ✅", backend_name, model);
         }
         Ok(false) => {
             // Fetch the list again to include it in the error message.
@@ -281,6 +285,7 @@ pub async fn handle_ollama_message(
                 "Could not verify model availability ({}). Proceeding — may get a 404.",
                 e
             );
+            println!("[ollama_{}] model check error (proceeding anyway): {}", backend_name, e);
         }
     }
 
@@ -345,6 +350,7 @@ pub async fn handle_ollama_message(
                     "Ollama attempt {}/{} failed: {}",
                     attempt, MAX_RETRIES, last_err
                 );
+                println!("[ollama_{}] attempt {}/{} FAILED: {}", backend_name, attempt, MAX_RETRIES, last_err);
 
                 // A 404 "model not found" will never succeed — abort immediately
                 // rather than exhausting all retry attempts uselessly.
