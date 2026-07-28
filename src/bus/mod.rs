@@ -51,7 +51,9 @@ impl Bus {
                 }
                 if !delivered {
                     // Optional: log undelivered messages
-                    eprintln!("[Bus] No subscriber for destination: {}", message.to);
+                    eprintln!("[Bus] ⚠️ NO SUBSCRIBER for destination: '{}' (from='{}')", message.to, message.from);
+                    println!("[Bus] ⚠️ NO SUBSCRIBER for destination: '{}' (from='{}' data preview: {})",
+                        message.to, message.from, &message.data[..message.data.len().min(120)]);
                 }
             }
             println!("[Bus] Router thread exited");

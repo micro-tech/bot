@@ -57,6 +57,14 @@ async fn run_helix() {
         .find_map(|path| fs::read_to_string(path).ok())
         .unwrap_or_default();
 
+    let config_path_used = config_paths
+        .iter()
+        .find(|p| fs::read_to_string(p).is_ok())
+        .map(|s| s.as_str())
+        .unwrap_or("none");
+
+    println!("Using config file: {}", config_path_used);
+
     if config_str.is_empty() {
         eprintln!("Warning: Could not find config.toml in any standard location.");
     }
@@ -82,6 +90,14 @@ async fn run_helix() {
             Some((name, url, model))
         })
         .collect();
+
+    println!("=== Parsed Ollama backends ({} total) ===", ollama_backends.len());
+    for (i, (name, url, model)) in ollama_backends.iter().enumerate() {
+        println!("  [{}] name='{}' url='{}' model='{}'", i, name, url, model);
+    }
+    if ollama_backends.is_empty() {
+        println!("WARNING: No [[ollama]] entries found in config!");
+    }
 
     // ── CPU response forwarder (handles llm_response → web_interface) ────────
     {
@@ -146,7 +162,8 @@ async fn run_helix() {
             let topic = format!("ollama_{}", backend_name);
             let rx = bus_clone.subscribe(&topic);
 
-            println!("Ollama listener started for {}  url={}  model={}", topic, backend_url, backend_model);
+            println!("✅ Ollama listener SUBSCRIBED for topic='{}'  url={}  model={}", topic, backend_url, backend_model);
+            println!("   (waiting for messages on this bus topic...)");
 
             // One-time startup health probe (very useful for diagnosis)
             if crate::io::ollama::check_ollama_health(&backend_url).await {
@@ -158,7 +175,8 @@ async fn run_helix() {
             while let Ok(msg) = rx.recv() {
                 // Only handle chat requests
                 if msg.data.contains("\"type\":\"chat_request\"") {
-                    println!("[{}] received chat_request", topic);
+                    println!("[{}] RECEIVED chat_request from {}", topic, msg.from);
+                    println!("[{}] data preview: {}", topic, &msg.data[..msg.data.len().min(150)]);
                     let _ = crate::io::ollama::handle_ollama_message(
                         msg,
                         &bus_clone,

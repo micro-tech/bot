@@ -409,6 +409,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
 
                         let llm = json_val["llm"].as_str().unwrap_or("").to_string();
                         info!("Chat request received | llm='{}' | msg='{}'", llm, chat_msg);
+                        println!("[WEB] Chat received: llm='{}'  msg='{}'", llm, &chat_msg[..chat_msg.len().min(80)]);
 
                         let bus_dest = if llm == "gemini" {
                             "gemini".to_string()
@@ -422,6 +423,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             format!("ollama_{}", llm)
                         };
 
+                        println!("[WEB] Routing to bus_dest='{}'  (llm was '{}')", bus_dest, llm);
                         info!("Routing chat to bus destination: {}", bus_dest);
 
                         let correlation_id = get_timestamp();
