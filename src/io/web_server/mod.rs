@@ -338,9 +338,9 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                     let from = inner["llm"].as_str().unwrap_or(&msg.from).to_string();
                     json!({ "type": "ollama_response", "from": from, "data": text }).to_string()
                 }
-                // Well-formed UI messages — forward as-is
+                // Well-formed UI messages — forward as-is (including errors so they are visible)
                 "user_msg" | "config" | "manifest" | "config_status" | "manifest_status"
-                | "log" => msg.data.clone(),
+                | "log" | "error" | "warning" | "tool_call" => msg.data.clone(),
                 _ => {
                     // Unknown — wrap so nothing is silently dropped
                     json!({
@@ -423,10 +423,14 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             format!("ollama_{}", llm)
                         };
 
-                        println!("[WEB] Routing to bus_dest='{}'  (llm was '{}')", bus_dest, llm);
-                        info!("Routing chat to bus destination: {}", bus_dest);
-
                         let correlation_id = get_timestamp();
+
+                        println!("[WEB] === SENDING BUS MESSAGE ===");
+                        println!("[WEB]   to: {}", bus_dest);
+                        println!("[WEB]   from: web_interface");
+                        println!("[WEB]   type: chat_request");
+                        println!("[WEB]   prompt preview: {}", &chat_msg[..chat_msg.len().min(100)]);
+
                         let bus_msg = Message {
                             to: bus_dest,
                             from: "web_interface".to_string(),
@@ -438,7 +442,12 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             .to_string(),
                             timestamp: correlation_id,
                         };
+                        println!("[WEB] Publishing bus message now...");
                         let _ = state.bus.publish(bus_msg);
+
+                        println!("[WEB] Routing to bus_dest='{}'  (llm was '{}')", bus_dest, llm);
+                        info!("Routing chat to bus destination: {}", bus_dest);
+                        println!("[WEB] Bus publish done for correlation_id={}", correlation_id);
 
                         // Echo user message back to UI
                         let echo_msg = json!({

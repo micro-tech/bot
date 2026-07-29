@@ -238,7 +238,12 @@ pub async fn handle_ollama_message(
     println!("[ollama_{}] starting health check on {}", backend_name, base_url);
     if !check_ollama_health(base_url).await {
         let err = format!(
-            "Ollama is not reachable at '{}' — request dropped",
+            "Ollama is not reachable at '{}'.\n\
+             Common causes:\n\
+             • Ollama not running on that machine\n\
+             • Firewall blocking the port\n\
+             • Ollama bound only to 127.0.0.1 (default). Fix: set OLLAMA_HOST=0.0.0.0 before starting Ollama, or use `ollama serve --host 0.0.0.0`\n\
+             • Wrong IP in config.toml for this backend",
             base_url
         );
         error!("{}", err);
@@ -329,6 +334,7 @@ pub async fn handle_ollama_message(
                 };
 
                 // Publish to CPU (single source of truth for responses)
+                println!("[ollama_{}] ✅ SUCCESS from Ollama, publishing llm_response to 'cpu' ({} chars)", backend_name, response.len());
                 if let Err(e) = bus.publish(response_msg.clone()) {
                     let error_msg = format!("Ollama {} failed to publish LLM response: {}", backend_name, e);
                     log_to_file(&error_msg);

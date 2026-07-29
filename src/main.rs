@@ -60,7 +60,7 @@ async fn run_helix() {
     let config_path_used = config_paths
         .iter()
         .find(|p| fs::read_to_string(p).is_ok())
-        .map(|s| s.as_str())
+        .copied()
         .unwrap_or("none");
 
     println!("Using config file: {}", config_path_used);
@@ -107,11 +107,13 @@ async fn run_helix() {
             println!("CPU response forwarder started (subscribed to 'cpu')");
 
             while let Ok(msg) = rx.recv() {
+                println!("[CPU-Forwarder] received message to cpu | from='{}' data_preview='{}'", msg.from, &msg.data[..msg.data.len().min(120)]);
                 if msg.data.contains("\"type\":\"llm_response\"") {
                     let payload: serde_json::Value =
                         serde_json::from_str(&msg.data).unwrap_or_default();
                     let text = payload["msg"].as_str().unwrap_or("").to_string();
                     if text.is_empty() {
+                        println!("[CPU-Forwarder] llm_response but empty msg, skipping");
                         continue;
                     }
 
@@ -145,7 +147,7 @@ async fn run_helix() {
                     }
 
                     let _ = bus_clone.publish(ui_msg);
-                    println!("[CPU-Forwarder] Forwarded LLM response from {} to web_interface", display_from);
+                    println!("[CPU-Forwarder] ✅ Forwarded LLM response from {} ({} chars) to web_interface", display_from, text.len());
                 }
             }
         });
@@ -165,6 +167,15 @@ async fn run_helix() {
             println!("✅ Ollama listener SUBSCRIBED for topic='{}'  url={}  model={}", topic, backend_url, backend_model);
             println!("   (waiting for messages on this bus topic...)");
 
+            // Startup health probe with extra visibility for desktop
+            let health_ok = crate::io::ollama::check_ollama_health(&backend_url).await;
+            if health_ok {
+                println!("[{}] startup health probe: OK ✅", topic);
+            } else {
+                println!("[{}] startup health probe: FAILED ❌  (Ollama not reachable at {})", topic, backend_url);
+                println!("    → Desktop/remote Ollama usually needs: OLLAMA_HOST=0.0.0.0 ollama serve");
+            }
+
             // One-time startup health probe (very useful for diagnosis)
             if crate::io::ollama::check_ollama_health(&backend_url).await {
                 println!("[{}] startup health probe: OK", topic);
@@ -173,10 +184,12 @@ async fn run_helix() {
             }
 
             while let Ok(msg) = rx.recv() {
+                println!("[{}] 📥 RECEIVED message from='{}'  preview='{}'", 
+                    topic, msg.from, &msg.data[..msg.data.len().min(160)]);
+                
                 // Only handle chat requests
                 if msg.data.contains("\"type\":\"chat_request\"") {
-                    println!("[{}] RECEIVED chat_request from {}", topic, msg.from);
-                    println!("[{}] data preview: {}", topic, &msg.data[..msg.data.len().min(150)]);
+                    println!("[{}] ✅ Processing chat_request...", topic);
                     let _ = crate::io::ollama::handle_ollama_message(
                         msg,
                         &bus_clone,
@@ -185,6 +198,8 @@ async fn run_helix() {
                         &backend_name,
                     )
                     .await;
+                } else {
+                    println!("[{}] (ignoring non-chat message)", topic);
                 }
             }
         });
