@@ -237,7 +237,9 @@
                 } else if (
                     msg.type === "user_msg" ||
                     msg.type === "ollama_response" ||
-                    msg.type === "llm_output"
+                    msg.type === "llm_output" ||
+                    msg.type === "error" ||
+                    msg.type === "warning"
                 ) {
                     appendChat(msg);
                 }
@@ -286,20 +288,39 @@
 
                 // Determine sender label
                 let sender;
+                let isError = false;
                 if (msg.type === "user_msg") {
                     sender = msg.from || "You";
+                } else if (msg.type === "error") {
+                    sender = "❌ Error";
+                    isError = true;
+                } else if (msg.type === "warning") {
+                    sender = "⚠️ Warning";
                 } else {
-                    // LLM / Helix response — always brand AI replies as Helix
-                    sender = "Helix";
+                    // Use the actual from (e.g. "server", "desktop", "gemini") when available
+                    sender = msg.from || "Helix";
                 }
 
                 // Text may be in msg.data or msg.msg
-                const text = msg.data || msg.msg || "";
+                let text = msg.data || msg.msg || "";
                 if (!text) return;
 
+                // If the payload was a stringified JSON, try to extract msg field
+                if (typeof text === "string" && text.trim().startsWith("{")) {
+                    try {
+                        const parsed = JSON.parse(text);
+                        if (parsed.msg) text = parsed.msg;
+                        else if (parsed.data) text = parsed.data;
+                    } catch (e) {}
+                }
+
                 const p = document.createElement("div");
-                p.className = "message";
+                p.className = "message" + (isError ? " error-msg" : "");
                 p.innerHTML = `<span class="sender">${sender}:</span> ${text}`;
+                if (isError) {
+                    p.style.color = "#ff6b6b";
+                    p.style.fontWeight = "500";
+                }
                 div.appendChild(p);
                 div.scrollTop = div.scrollHeight;
             }
