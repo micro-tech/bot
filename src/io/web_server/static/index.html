@@ -301,22 +301,65 @@
                     sender = msg.from || "Helix";
                 }
 
-                // Text may be in msg.data or msg.msg
-                let text = msg.data || msg.msg || "";
-                if (!text) return;
+                // === VERY ROBUST TEXT EXTRACTION ===
+                // This prevents "[object Object]" no matter what shape the server sends.
+                function extractText(v) {
+                    if (v == null) return "";
+                    if (typeof v === "string") return v;
+                    if (typeof v === "number" || typeof v === "boolean") return String(v);
+                    if (Array.isArray(v)) {
+                        return v.map(extractText).filter(Boolean).join(" ");
+                    }
+                    if (typeof v === "object") {
+                        // Try the most common places first
+                        const keys = ["msg", "data", "text", "content", "response", "answer", "result", "output"];
+                        for (const k of keys) {
+                            if (v[k] != null) {
+                                const t = extractText(v[k]);
+                                if (t) return t;
+                            }
+                        }
+                        // Try any string property that looks like a sentence
+                        for (const k in v) {
+                            const t = extractText(v[k]);
+                            if (t && t.length > 3) return t;
+                        }
+                        return JSON.stringify(v);
+                    }
+                    return String(v);
+                }
 
-                // If the payload was a stringified JSON, try to extract msg field
+                let text = extractText(msg.data ?? msg.msg ?? msg.text ?? msg);
+
+                if (!text || text.trim() === "") return;
+
+                // If what we got is a JSON string, try to unwrap it one level
                 if (typeof text === "string" && text.trim().startsWith("{")) {
                     try {
                         const parsed = JSON.parse(text);
-                        if (parsed.msg) text = parsed.msg;
-                        else if (parsed.data) text = parsed.data;
+                        const unwrapped = extractText(parsed);
+                        if (unwrapped && unwrapped !== text) text = unwrapped;
                     } catch (e) {}
+                }
+
+                // Absolute final guard — NEVER let an object reach the DOM as [object Object]
+                if (typeof text !== "string") {
+                    try { text = JSON.stringify(text); } catch(e) { text = String(text); }
+                }
+                if (!text || text === "[object Object]" || text === "{}" || text.trim() === "") {
+                    text = "(no readable text received from server)";
                 }
 
                 const p = document.createElement("div");
                 p.className = "message" + (isError ? " error-msg" : "");
-                p.innerHTML = `<span class="sender">${sender}:</span> ${text}`;
+                // Use textContent on a span to guarantee we never get [object Object]
+                const senderSpan = document.createElement("span");
+                senderSpan.className = "sender";
+                senderSpan.textContent = sender + ": ";
+                const textSpan = document.createElement("span");
+                textSpan.textContent = text;
+                p.appendChild(senderSpan);
+                p.appendChild(textSpan);
                 if (isError) {
                     p.style.color = "#ff6b6b";
                     p.style.fontWeight = "500";

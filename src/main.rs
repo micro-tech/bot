@@ -102,6 +102,12 @@ async fn run_helix() {
     // ── CPU response forwarder (handles llm_response → web_interface) ────────
     {
         let bus_clone = bus.clone();
+        // Load logging paths (fall back to defaults)
+        let chat_log_path: String = toml::from_str::<toml::Value>(&config_str)
+            .ok()
+            .and_then(|v| v.get("logging")?.get("chat_log")?.as_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| "logs/chat_log.md".to_string());
+
         tokio::spawn(async move {
             let rx = bus_clone.subscribe("cpu");
             println!("CPU response forwarder started (subscribed to 'cpu')");
@@ -111,9 +117,18 @@ async fn run_helix() {
                 if msg.data.contains("\"type\":\"llm_response\"") {
                     let payload: serde_json::Value =
                         serde_json::from_str(&msg.data).unwrap_or_default();
-                    let text = payload["msg"].as_str().unwrap_or("").to_string();
+
+                    // Robust extraction: try msg, data, content, etc.
+                    let text = payload["msg"]
+                        .as_str()
+                        .or_else(|| payload["data"].as_str())
+                        .or_else(|| payload["content"].as_str())
+                        .or_else(|| payload["text"].as_str())
+                        .unwrap_or("")
+                        .to_string();
+
                     if text.is_empty() {
-                        println!("[CPU-Forwarder] llm_response but empty msg, skipping");
+                        println!("[CPU-Forwarder] llm_response but no text, skipping");
                         continue;
                     }
 
@@ -130,17 +145,17 @@ async fn run_helix() {
                         from: display_from.clone(),
                         data: serde_json::json!({
                             "type": "llm_output",
-                            "msg": text
+                            "data": text
                         })
                         .to_string(),
                         timestamp: crate::utils::now_ms(),
                     };
 
-                    // Write to chat log
+                    // Write to chat log (use configured path)
                     if let Ok(mut f) = std::fs::OpenOptions::new()
                         .create(true)
                         .append(true)
-                        .open("logs/chat_log.md")
+                        .open(&chat_log_path)
                     {
                         use std::io::Write;
                         let _ = writeln!(f, "[{}] {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), display_from, text);
