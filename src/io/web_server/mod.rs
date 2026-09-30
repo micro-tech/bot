@@ -33,6 +33,7 @@ struct AppState {
     msg_tx: broadcast::Sender<String>,
     config_str: String,
     backends_json: String, // JSON array of {id, label, kind}
+    logging: LoggingConfig,
 }
 
 // ── Config structs ────────────────────────────────────────────────────────────
@@ -43,6 +44,8 @@ struct Config {
     ollama: Vec<OllamaConfig>,
     web: WebConfig,
     heartbeat: HeartbeatConfig,
+    #[serde(default)]
+    logging: LoggingConfig,
 }
 
 #[derive(Deserialize)]
@@ -80,6 +83,34 @@ struct HeartbeatConfig {
     interval_seconds: u64,
 }
 
+#[derive(Deserialize, Clone)]
+struct LoggingConfig {
+    #[serde(default = "default_chat_log")]
+    chat_log: String,
+    #[serde(default = "default_error_log")]
+    error_log: String,
+    #[serde(default = "default_bus_log")]
+    bus_log: String,
+    #[serde(default = "default_hartbeat_log")]
+    hartbeat_log: String,
+}
+
+fn default_chat_log() -> String { "logs/chat_log.md".to_string() }
+fn default_error_log() -> String { "logs/error_log.md".to_string() }
+fn default_bus_log() -> String { "logs/bus_log.md".to_string() }
+fn default_hartbeat_log() -> String { "logs/hartbeat_log.md".to_string() }
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            chat_log: default_chat_log(),
+            error_log: default_error_log(),
+            bus_log: default_bus_log(),
+            hartbeat_log: default_hartbeat_log(),
+        }
+    }
+}
+
 // ── Server entry-point ────────────────────────────────────────────────────────
 
 pub async fn start_web_server(
@@ -102,6 +133,7 @@ pub async fn start_web_server(
         heartbeat: HeartbeatConfig {
             interval_seconds: 300,
         },
+        logging: LoggingConfig::default(),
     });
 
     let tls_enabled = parsed_cfg.web.tls_enabled;
@@ -184,6 +216,7 @@ pub async fn start_web_server(
         msg_tx: broadcast::channel(100).0,
         config_str,
         backends_json,
+        logging: parsed_cfg.logging.clone(),
     };
 
     // Build Axum router for main app
@@ -324,14 +357,44 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
 
             let out = match msg_type {
                 "llm_output" | "llm_response" => {
-                    let text = inner["msg"].as_str().unwrap_or("").to_string();
+                    // Ultra-defensive extraction: always end up with a plain string
+                    let mut text = String::new();
+                    for key in ["msg", "data", "content", "text", "response"] {
+                        if let Some(s) = inner[key].as_str() {
+                            text = s.to_string();
+                            break;
+                        } else if let Some(v) = inner.get(key) {
+                            if v.is_string() {
+                                text = v.as_str().unwrap_or("").to_string();
+                                break;
+                            } else if v.is_object() {
+                                // drill one level
+                                if let Some(s) = v["msg"].as_str().or_else(|| v["data"].as_str()).or_else(|| v["content"].as_str()) {
+                                    text = s.to_string();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if text.is_empty() {
+                        // last resort: if the whole inner is just a string or has a top-level value
+                        if let Some(s) = inner.as_str() {
+                            text = s.to_string();
+                        }
+                    }
                     if text.is_empty() {
                         continue;
                     }
                     json!({ "type": "llm_output", "from": msg.from, "data": text }).to_string()
                 }
                 "ollama_response" => {
-                    let text = inner["msg"].as_str().unwrap_or("").to_string();
+                    let mut text = String::new();
+                    for key in ["msg", "data", "content", "text", "response"] {
+                        if let Some(s) = inner[key].as_str() {
+                            text = s.to_string();
+                            break;
+                        }
+                    }
                     if text.is_empty() {
                         continue;
                     }
@@ -392,11 +455,12 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             continue;
                         }
 
-                        // Write to chat log
+                        // Write to chat log (respect config)
+                        let chat_log_path = &state.logging.chat_log;
                         if let Ok(mut f) = std::fs::OpenOptions::new()
                             .create(true)
                             .append(true)
-                            .open("logs/chat_log.md")
+                            .open(chat_log_path)
                         {
                             use std::io::Write;
                             let _ = writeln!(
@@ -431,8 +495,10 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         println!("[WEB]   type: chat_request");
                         println!("[WEB]   prompt preview: {}", &chat_msg[..chat_msg.len().min(100)]);
 
+                        println!("[WEB]   to: {}", bus_dest);
+
                         let bus_msg = Message {
-                            to: bus_dest,
+                            to: bus_dest.clone(),
                             from: "web_interface".to_string(),
                             data: json!({
                                 "type": "chat_request",
@@ -609,8 +675,8 @@ async fn serve_index() -> Html<String> {
 
 // ── Log file handlers ────────────────────────────────────────────────────────
 
-async fn serve_chat_log() -> impl IntoResponse {
-    let path = "logs/chat_log.md";
+async fn serve_chat_log(State(state): State<AppState>) -> impl IntoResponse {
+    let path = &state.logging.chat_log;
     if !std::path::Path::new(path).exists() {
         let _ = std::fs::write(path, "[INIT] Chat log created\n");
     }
@@ -622,26 +688,26 @@ async fn serve_chat_log() -> impl IntoResponse {
     ))
 }
 
-async fn clear_chat_log() -> impl IntoResponse {
+async fn clear_chat_log(State(state): State<AppState>) -> impl IntoResponse {
     let init_line = format!(
         "[INIT] Chat log cleared via web UI at {}\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
     );
-    let _ = fs::write("logs/chat_log.md", init_line);
+    let _ = fs::write(&state.logging.chat_log, init_line);
     Html("<span style='color:#69f0ae'>Chat log cleared.</span>")
 }
 
-async fn clear_error_log() -> impl IntoResponse {
+async fn clear_error_log(State(state): State<AppState>) -> impl IntoResponse {
     let init_line = format!(
         "[INIT] Error log cleared via web UI at {}\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
     );
-    let _ = fs::write("logs/error_log.md", init_line);
+    let _ = fs::write(&state.logging.error_log, init_line);
     Html("<span style='color:#69f0ae'>Error log cleared.</span>")
 }
 
-async fn serve_error_log() -> impl IntoResponse {
-    let path = "logs/error_log.md";
+async fn serve_error_log(State(state): State<AppState>) -> impl IntoResponse {
+    let path = &state.logging.error_log;
     if !std::path::Path::new(path).exists() {
         let _ = std::fs::write(path, "[INIT] Error log created\n");
     }
@@ -653,8 +719,8 @@ async fn serve_error_log() -> impl IntoResponse {
     ))
 }
 
-async fn serve_bus_log() -> impl IntoResponse {
-    let content = fs::read_to_string("logs/bus_log.md")
+async fn serve_bus_log(State(state): State<AppState>) -> impl IntoResponse {
+    let content = fs::read_to_string(&state.logging.bus_log)
         .unwrap_or_else(|_| "bus_log.md not found or empty".to_string());
     Html(format!(
         "<pre style='white-space:pre-wrap;'>{}</pre>",
@@ -662,8 +728,8 @@ async fn serve_bus_log() -> impl IntoResponse {
     ))
 }
 
-async fn serve_hartbeat_log() -> impl IntoResponse {
-    let content = fs::read_to_string("logs/hartbeat_log.md")
+async fn serve_hartbeat_log(State(state): State<AppState>) -> impl IntoResponse {
+    let content = fs::read_to_string(&state.logging.hartbeat_log)
         .unwrap_or_else(|_| "hartbeat_log.md not found or empty".to_string());
     Html(format!(
         "<pre style='white-space:pre-wrap;'>{}</pre>",
