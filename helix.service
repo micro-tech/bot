@@ -4,9 +4,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=helix
-WorkingDirectory=/opt/helix
+User=cobble
+WorkingDirectory=/home/cobble/helix
 ExecStart=/usr/local/bin/helix
+EnvironmentFile=/home/cobble/helix/.env
 Restart=always
 RestartSec=5
 Environment=RUST_LOG=info
