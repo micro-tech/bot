@@ -19,3 +19,5 @@ pub mod tool_supervisor_v2;
 pub mod simple_planner;
 pub mod reflection_planner_adapter;
 pub mod repo_explorer;
+pub mod plan_tree;
+pub mod memory_continuity;

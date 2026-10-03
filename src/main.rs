@@ -23,6 +23,7 @@ mod reasoning;
 mod agents;
 mod okf;
 mod mcp_client;
+mod router;
 
 #[tokio::main]
 async fn main() {
@@ -200,9 +201,9 @@ async fn run_helix() {
             }
 
             while let Ok(msg) = rx.recv() {
-                println!("[{}] 📥 RECEIVED message from='{}'  preview='{}'", 
+                println!("[{}] 📥 RECEIVED message from='{}'  preview='{}'",
                     topic, msg.from, &msg.data[..msg.data.len().min(160)]);
-                
+
                 // Only handle chat requests
                 if msg.data.contains("\"type\":\"chat_request\"") {
                     println!("[{}] ✅ Processing chat_request...", topic);

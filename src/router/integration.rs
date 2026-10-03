@@ -1,9 +1,9 @@
 // router/integration.rs - Full Integration & Testing (Task 135)
 use super::{
-    LLMBackend, RoutingContext,
+    RoutingContext,
     resolve_with_fallback, BackendSelection,
-    ConfigManager, OverrideStore, OverrideCommand, OverrideTier,
-    HealthStore, TelemetryCollector,
+    ConfigManager, OverrideStore,
+    HealthStore,
 };
 
 /// Main integration point for CPU pipeline
@@ -18,7 +18,7 @@ pub async fn decide_backend_with_full_context(
 ) -> BackendSelection {
     let config = config_manager.get().await;
 
-    let mut ctx = RoutingContext {
+    let ctx = RoutingContext {
         prompt: prompt.to_string(),
         token_estimate,
         has_code,
