@@ -12,7 +12,7 @@ use crate::agents::agent_state::AgentState;
 use crate::memory::MemoryManager;
 use log::info;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+
 
 /// A lesson the agent learned from a previous run.
 /// Stored in episodic memory and surfaced during future runs.

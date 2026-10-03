@@ -142,7 +142,7 @@ impl OkfFetcher {
 
         match self.client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => Ok(true),
-            Ok(resp) => Ok(false),
+            Ok(_resp) => Ok(false),
             Err(_) => Ok(false),
         }
     }

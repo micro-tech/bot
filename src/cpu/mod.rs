@@ -580,7 +580,7 @@ where
     // -------------------------------------------------------------------------
 
     /// Build a RoutingContext from a prompt for intelligent backend selection.
-    fn build_routing_context(&self, prompt: &str, correlation_id: u64) -> RoutingContext {
+    fn build_routing_context(&self, prompt: &str, _correlation_id: u64) -> RoutingContext {
         let token_estimate = prompt.split_whitespace().count();
         let has_code = prompt.contains("```") || prompt.contains("fn ") || prompt.contains("struct ");
 
@@ -913,7 +913,7 @@ where
             }
 
             Instruction::CallLlm {
-                target,
+                target: _,
                 prompt,
                 correlation_id,
             } => {
