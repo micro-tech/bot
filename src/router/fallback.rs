@@ -23,8 +23,9 @@ impl BackendSelection {
     }
 }
 
-/// Main fallback resolver — respects override precedence and health
-pub fn resolve_with_fallback(
+/// Main fallback resolver — respects override precedence and health.
+/// This version is async so it can properly await HealthStore lookups.
+pub async fn resolve_with_fallback(
     ctx: &RoutingContext,
     config: &RouterConfig,
     health: Option<&crate::router::health::HealthStore>,
@@ -34,15 +35,15 @@ pub fn resolve_with_fallback(
     // 1. User override takes absolute precedence (already handled in route())
     let primary = crate::router::route(ctx, config);
 
-    // 2. Check health of primary choice
+    // 2. Check health of primary choice (async)
     if let Some(h) = health {
-        if let Some(status) = h.get(&format!("{:?}", primary)) {
+        let primary_name = format!("{:?}", primary).to_lowercase();
+        if let Some(status) = h.get(&primary_name).await {
             if !status.reachable || status.degraded {
                 attempted.push((primary.clone(), "primary degraded/unreachable".into()));
 
-                // Try fallback chain from config
                 for fb_name in &config.fallback_chain {
-                    if let Some(fb_status) = h.get(fb_name) {
+                    if let Some(fb_status) = h.get(fb_name).await {
                         if fb_status.reachable && !fb_status.degraded {
                             return BackendSelection {
                                 chosen: parse_backend(fb_name),
@@ -55,7 +56,6 @@ pub fn resolve_with_fallback(
                     }
                 }
 
-                // Final fallback
                 return BackendSelection {
                     chosen: LLMBackend::Fallback,
                     fallbacks_attempted: attempted,
@@ -79,8 +79,8 @@ pub fn resolve_with_fallback(
 
 fn parse_backend(name: &str) -> LLMBackend {
     match name.to_lowercase().as_str() {
-        "localollama" | "ollama" => LLMBackend::LocalOllama,
-        "lanollama" => LLMBackend::LanOllama,
+        "localollama" | "ollama" | "local_ollama" => LLMBackend::LocalOllama,
+        "lanollama" | "lan_ollama" | "ollama_server" => LLMBackend::LanOllama,
         "gemini" => LLMBackend::Gemini,
         "grok" => LLMBackend::Grok,
         _ => LLMBackend::Fallback,

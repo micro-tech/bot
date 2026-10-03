@@ -7,6 +7,7 @@
 //! - Logging is mandatory on every state transition.
 
 use crate::agents::agent_step::AgentStep;
+use crate::agents::plan_tree::GoalTree;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -35,6 +36,9 @@ pub struct AgentState {
 
     /// Bounded history of recent steps (for debugging / replay)
     pub recent_steps: VecDeque<AgentStep>,
+
+    /// Hierarchical goal / plan tree (enables recursive decomposition)
+    pub goal_tree: Option<GoalTree>,
 }
 
 impl Default for AgentState {
@@ -54,7 +58,21 @@ impl AgentState {
             halted: false,
             last_error: None,
             recent_steps: VecDeque::with_capacity(32),
+            goal_tree: None,
         }
+    }
+
+    /// Initialize a hierarchical goal tree for this run.
+    pub fn init_goal_tree(&mut self, top_level_goal: impl Into<String>) {
+        self.goal_tree = Some(GoalTree::new(top_level_goal));
+    }
+
+    /// Get mutable access to the goal tree (creates one if missing).
+    pub fn goal_tree_mut(&mut self) -> &mut GoalTree {
+        if self.goal_tree.is_none() {
+            self.goal_tree = Some(GoalTree::default());
+        }
+        self.goal_tree.as_mut().unwrap()
     }
 
     /// Record a new step and increment the counter.
@@ -112,7 +130,7 @@ mod tests {
     #[test]
     fn test_record_step_and_halt() {
         let mut state = AgentState::new();
-        state.record_step(AgentStep::FinalAnswer("done".into()));
+        state.record_step(AgentStep::FinalAnswer("done".to_string()));
         assert_eq!(state.step_count, 1);
         assert!(!state.halted);
 
@@ -125,7 +143,7 @@ mod tests {
     fn test_max_steps_guard() {
         let mut state = AgentState::new();
         for _ in 0..5 {
-            state.record_step(AgentStep::FinalAnswer("x".into()));
+            state.record_step(AgentStep::FinalAnswer("x".to_string()));
         }
         assert!(state.should_stop(5));
         assert!(!state.should_stop(10));

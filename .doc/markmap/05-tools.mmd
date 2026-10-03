@@ -1,0 +1,31 @@
+# Tools System
+
+## Navigation
+- [Overview](00-overview.html)
+- [CLI](01-cli.html)
+- [Agent](02-agent.html)
+- [RAG](03-rag.html)
+- [Memory](04-memory.html)
+- [Tools](05-tools.html)
+- [Engine](06-engine.html)
+- [Router](07-router.html)
+- [Config & Context](08-config-context.html)
+- [MCP & ACP](09-mcp-acp.html)
+- [Safety & Security](10-safety-security.html)
+- [Utils & Display](11-utils-display.html)
+
+## Components
+- `src/tools/mod.rs` — Tool dispatcher + `tool_definitions()`
+- `src/tools/file_tools.rs` — read/write/log/note operations
+- `src/tools/system_tools.rs` — status, beliefs, bayes tools
+- `src/tools/email_tools.rs` — send/read/check_inbox
+
+## Usage
+- Called by Ollama tool-calling loop
+- Called by CPU skill requests
+- Schemas sent in every `/api/chat`
+
+## Links
+- [Overview](00-overview.html)
+- [Agent](02-agent.html)
+- [Memory](04-memory.html)

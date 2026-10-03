@@ -11,7 +11,7 @@ async fn test_end_to_end_runtime_with_trace() {
     let rules = RuleLayer::new(vec!["noop".into()]);
     
     // Enable trace logging
-    let runtime = RuntimeLoop::new(planner, rules, 5).with_trace(true);
+    let mut runtime = RuntimeLoop::new(planner, rules, 5).with_trace(true);
 
     let state = AgentState::new();
     let final_state = runtime.run(state).await;

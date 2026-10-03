@@ -6,12 +6,12 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use log::{info, warn, error};
-use notify::{Watcher, RecursiveMode, watcher, DebouncedEvent};
+use log::{info, warn};
+use notify::{Watcher, RecursiveMode, RecommendedWatcher, Event};
 use std::time::Duration;
 use std::env;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RouterConfig {
     pub complexity: ComplexityConfig,
     pub schedule: ScheduleConfig,
@@ -22,7 +22,7 @@ pub struct RouterConfig {
     pub hot_reload: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplexityConfig {
     pub token_weight: f32,
     pub code_weight: f32,
@@ -33,12 +33,12 @@ pub struct ComplexityConfig {
     pub global_threshold: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScheduleConfig {
     pub windows: Vec<TimeWindow>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeWindow {
     pub start_hour: u32,
     pub end_hour: u32,
@@ -46,21 +46,21 @@ pub struct TimeWindow {
     pub days: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadThresholds {
     pub gpu_max: f32,
     pub vram_max: f32,
     pub rtt_max_ms: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthThresholds {
     pub error_rate_max: f32,
     pub latency_max_ms: u32,
     pub unreachable_seconds: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoutingProfile {
     pub complexity_threshold: f32,
     pub preferred_backends: Vec<String>,
@@ -104,21 +104,26 @@ impl ConfigManager {
         let config_arc = self.config.clone();
 
         std::thread::spawn(move || {
-            let (tx, rx) = std::sync::mpsc::channel();
-            let mut watcher = watcher(tx, Duration::from_secs(2)).unwrap();
-            watcher.watch(&path, RecursiveMode::NonRecursive).ok();
-
-            for event in rx {
-                if let DebouncedEvent::Write(_) = event {
-                    if let Some(new_cfg) = Self::load_from_file(&path) {
-                        let mut guard = config_arc.blocking_write();
-                        *guard = new_cfg;
-                        info!("Router config hot-reloaded from {:?}", path);
-                    } else {
-                        warn!("Failed to reload config from {:?}", path);
+            let watch_path = path.clone();
+            let watch_path_for_watch = watch_path.clone();
+            let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
+                if let Ok(event) = res {
+                    if matches!(event.kind, notify::EventKind::Modify(_)) {
+                        if let Some(new_cfg) = Self::load_from_file(&watch_path) {
+                            let mut guard = config_arc.blocking_write();
+                            *guard = new_cfg;
+                            info!("Router config hot-reloaded from {:?}", watch_path);
+                        } else {
+                            warn!("Failed to reload config from {:?}", watch_path);
+                        }
                     }
                 }
-            }
+            }).unwrap();
+
+            watcher.watch(&watch_path_for_watch, RecursiveMode::NonRecursive).ok();
+
+            // Keep thread alive to receive events (block forever)
+            std::thread::park();
         });
     }
 
