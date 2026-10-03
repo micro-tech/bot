@@ -21,7 +21,7 @@ const RETRY_DELAY_MS: u64 = 2_000;
 
 // ── Gemini API endpoint ───────────────────────────────────────────────────────
 
-const GEMINI_MODEL_DEFAULT: &str = "gemini-2.0-flash";
+const GEMINI_MODEL_DEFAULT: &str = "gemini-3.6-flash";
 const GEMINI_URL_BASE: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
