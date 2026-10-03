@@ -76,6 +76,12 @@ pub fn execute(name: &str, args: &Value) -> String {
         return result;
     }
 
+    // MCP tools (external Model Context Protocol servers, e.g. google-mcp).
+    // Silent no-op when [mcp] is disabled; falls through otherwise.
+    if let Some(mcp_result) = crate::mcp_client::try_execute(name, args) {
+        return mcp_result;
+    }
+
     // Try OKF-provided tools (from global librarian)
     if let Some(desc) = crate::okf::get_okf_tool_description(name) {
         return format!(
@@ -458,6 +464,10 @@ pub fn tool_definitions() -> Value {
             }
         }
     }
+
+    // Merge MCP tools (external Model Context Protocol servers).
+    // Empty — and therefore a no-op — unless [mcp] is enabled in config.toml.
+    defs.extend(crate::mcp_client::tool_definitions());
 
     Value::Array(defs)
 }
