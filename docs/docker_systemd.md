@@ -2,21 +2,21 @@
 
 ## Files Created
 - `Dockerfile` — multi-stage Rust build → minimal Debian image
-- `bot.service` — systemd unit file for production deployment
+- `helix.service` — systemd unit file for production deployment
 
 ## Usage
 
 ### Docker
 ```bash
-docker build -t bot .
-docker run -p 8443:8443 bot
+docker build -t helix .
+docker run -p 8443:8443 helix
 ```
 
 ### Systemd
 ```bash
-sudo cp bot.service /etc/systemd/system/
+sudo cp helix.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now bot
+sudo systemctl enable --now helix
 ```
 
 ## Status

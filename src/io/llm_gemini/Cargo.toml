@@ -1,12 +1,12 @@
 [package]
-name = "agentos_io_llm_gemini"
+name = "helix_io_llm_gemini"
 version = "0.1.0"
 edition = "2021"
-Authors = ["AgentOS Team"]
-description = "Gemini LLM Handler for Agent OS IO - Placeholder for future Gemini API integration"
+authors = ["John McConnell <john.microtech@gmail.com>"]
+description = "Gemini LLM Handler for Helix IO - Placeholder for future Gemini API integration"
 
 [lib]
-name = "agentos_io_llm_gemini"
+name = "helix_io_llm_gemini"
 path = "gemini_handler.rs"
 
 [dependencies]

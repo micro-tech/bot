@@ -1,4 +1,6 @@
 use crate::bus::{Bus, Message};
+use crate::config::okf::OkfConfig;
+use crate::okf::{OkfLibrarian, api as okf_api};
 use axum::{
     Router,
     extract::{
@@ -31,20 +33,23 @@ struct AppState {
     msg_tx: broadcast::Sender<String>,
     config_str: String,
     backends_json: String, // JSON array of {id, label, kind}
+    logging: LoggingConfig,
 }
 
 // ── Config structs ────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
 struct Config {
-    bot: BotConfig,
+    helix: HelixConfig,
     ollama: Vec<OllamaConfig>,
     web: WebConfig,
     heartbeat: HeartbeatConfig,
+    #[serde(default)]
+    logging: LoggingConfig,
 }
 
 #[derive(Deserialize)]
-struct BotConfig {
+struct HelixConfig {
     name: String,
 }
 
@@ -78,6 +83,34 @@ struct HeartbeatConfig {
     interval_seconds: u64,
 }
 
+#[derive(Deserialize, Clone)]
+struct LoggingConfig {
+    #[serde(default = "default_chat_log")]
+    chat_log: String,
+    #[serde(default = "default_error_log")]
+    error_log: String,
+    #[serde(default = "default_bus_log")]
+    bus_log: String,
+    #[serde(default = "default_hartbeat_log")]
+    hartbeat_log: String,
+}
+
+fn default_chat_log() -> String { "logs/chat_log.md".to_string() }
+fn default_error_log() -> String { "logs/error_log.md".to_string() }
+fn default_bus_log() -> String { "logs/bus_log.md".to_string() }
+fn default_hartbeat_log() -> String { "logs/hartbeat_log.md".to_string() }
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            chat_log: default_chat_log(),
+            error_log: default_error_log(),
+            bus_log: default_bus_log(),
+            hartbeat_log: default_hartbeat_log(),
+        }
+    }
+}
+
 // ── Server entry-point ────────────────────────────────────────────────────────
 
 pub async fn start_web_server(
@@ -87,8 +120,8 @@ pub async fn start_web_server(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Parse config (with defaults)
     let parsed_cfg: Config = toml::from_str(&config_str).unwrap_or_else(|_| Config {
-        bot: BotConfig {
-            name: "Bot".to_string(),
+        helix: HelixConfig {
+            name: "Helix".to_string(),
         },
         ollama: vec![],
         web: WebConfig {
@@ -100,6 +133,7 @@ pub async fn start_web_server(
         heartbeat: HeartbeatConfig {
             interval_seconds: 300,
         },
+        logging: LoggingConfig::default(),
     });
 
     let tls_enabled = parsed_cfg.web.tls_enabled;
@@ -127,15 +161,66 @@ pub async fn start_web_server(
     }));
     let backends_json = serde_json::to_string(&backend_list).unwrap_or_else(|_| "[]".to_string());
 
+    // ── OKF Librarian setup (MUST happen BEFORE moving config_str into AppState) ──
+    // We always mount the routes; handlers gracefully handle disabled state.
+    let okf_enabled = toml::from_str::<toml::Value>(&config_str)
+        .ok()
+        .and_then(|v| v.get("helix")?.get("okf")?.get("enabled")?.as_bool())
+        .unwrap_or(false);
+
+    let okf_state: okf_api::OkfState = if okf_enabled {
+        let okf_cfg = OkfConfig::load_from_toml(&config_str);
+        let mut librarian = OkfLibrarian::new(okf_cfg);
+
+        // Try to load from index file on startup if it exists
+        let _ = librarian.reload_from_index_file();
+
+        // Optionally load sample manifest in dev if registry is empty
+        if librarian.registry.tool_count() == 0 {
+            if let Ok(sample) = std::fs::read_to_string("okf_sample_manifest.json") {
+                let _ = librarian.load_manifest_from_json(&sample);
+            }
+        }
+
+        std::sync::Arc::new(tokio::sync::Mutex::new(librarian))
+    } else {
+        let disabled_cfg = OkfConfig::default();
+        std::sync::Arc::new(tokio::sync::Mutex::new(OkfLibrarian::new(disabled_cfg)))
+    };
+
+    // Make the librarian available globally to tools, agents, CPU, and Ollama
+    crate::okf::set_global_librarian(okf_state.clone());
+
+    // Start background remote change detection poller (164.1 + 165)
+    // Only when OKF is enabled in config. The poller respects auto_reload.
+    if okf_enabled {
+        let _poller = crate::okf::start_okf_poller();
+        if _poller.is_some() {
+            info!("[OKF] Background change-detection poller started");
+        }
+    }
+
+    let okf_router = Router::new()
+        .route("/okf/status", get(okf_api::okf_status))
+        .route("/okf/registry", get(okf_api::okf_registry))
+        .route("/okf/reload", post(okf_api::okf_reload))
+        .route("/okf/reload/force", post(okf_api::okf_force_reload))
+        .route("/okf/manifest", post(okf_api::okf_push_manifest))
+        .route("/okf/webhook", post(okf_api::okf_webhook))
+        .route("/okf/health", get(okf_api::okf_health))
+        .route("/okf/schema", get(okf_api::okf_schema))
+        .with_state(okf_state);
+
     let state = AppState {
         bus,
         msg_tx: broadcast::channel(100).0,
         config_str,
         backends_json,
+        logging: parsed_cfg.logging.clone(),
     };
 
-    // Build Axum router
-    let app = Router::new()
+    // Build Axum router for main app
+    let main_app = Router::new()
         .route("/", get(serve_index))
         .route("/ws", get(ws_handler))
         .route("/logs/chat", get(serve_chat_log))
@@ -144,7 +229,11 @@ pub async fn start_web_server(
         .route("/logs/error/clear", post(clear_error_log))
         .route("/logs/bus", get(serve_bus_log))
         .route("/logs/hartbeat", get(serve_hartbeat_log))
-        .with_state(state)
+        .with_state(state);
+
+    // Merge OKF routes (they have their own state) with main app
+    let app = main_app
+        .merge(okf_router)
         .layer(CorsLayer::permissive());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -196,7 +285,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     if !Path::new(manifest_path).exists() {
         fs::write(
             manifest_path,
-            "# System Manifest\n\nWelcome to the bot system.\n\nEdit this file to configure behaviour.\n",
+            "# System Manifest\n\nWelcome to the Helix system.\n\nEdit this file to configure behaviour.\n",
         )
         .ok();
     }
@@ -268,23 +357,53 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
 
             let out = match msg_type {
                 "llm_output" | "llm_response" => {
-                    let text = inner["msg"].as_str().unwrap_or("").to_string();
+                    // Ultra-defensive extraction: always end up with a plain string
+                    let mut text = String::new();
+                    for key in ["msg", "data", "content", "text", "response"] {
+                        if let Some(s) = inner[key].as_str() {
+                            text = s.to_string();
+                            break;
+                        } else if let Some(v) = inner.get(key) {
+                            if v.is_string() {
+                                text = v.as_str().unwrap_or("").to_string();
+                                break;
+                            } else if v.is_object() {
+                                // drill one level
+                                if let Some(s) = v["msg"].as_str().or_else(|| v["data"].as_str()).or_else(|| v["content"].as_str()) {
+                                    text = s.to_string();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if text.is_empty() {
+                        // last resort: if the whole inner is just a string or has a top-level value
+                        if let Some(s) = inner.as_str() {
+                            text = s.to_string();
+                        }
+                    }
                     if text.is_empty() {
                         continue;
                     }
                     json!({ "type": "llm_output", "from": msg.from, "data": text }).to_string()
                 }
                 "ollama_response" => {
-                    let text = inner["msg"].as_str().unwrap_or("").to_string();
+                    let mut text = String::new();
+                    for key in ["msg", "data", "content", "text", "response"] {
+                        if let Some(s) = inner[key].as_str() {
+                            text = s.to_string();
+                            break;
+                        }
+                    }
                     if text.is_empty() {
                         continue;
                     }
                     let from = inner["llm"].as_str().unwrap_or(&msg.from).to_string();
                     json!({ "type": "ollama_response", "from": from, "data": text }).to_string()
                 }
-                // Well-formed UI messages — forward as-is
+                // Well-formed UI messages — forward as-is (including errors so they are visible)
                 "user_msg" | "config" | "manifest" | "config_status" | "manifest_status"
-                | "log" => msg.data.clone(),
+                | "log" | "error" | "warning" | "tool_call" => msg.data.clone(),
                 _ => {
                     // Unknown — wrap so nothing is silently dropped
                     json!({
@@ -336,11 +455,12 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             continue;
                         }
 
-                        // Write to chat log
+                        // Write to chat log (respect config)
+                        let chat_log_path = &state.logging.chat_log;
                         if let Ok(mut f) = std::fs::OpenOptions::new()
                             .create(true)
                             .append(true)
-                            .open("logs/chat_log.md")
+                            .open(chat_log_path)
                         {
                             use std::io::Write;
                             let _ = writeln!(
@@ -353,6 +473,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
 
                         let llm = json_val["llm"].as_str().unwrap_or("").to_string();
                         info!("Chat request received | llm='{}' | msg='{}'", llm, chat_msg);
+                        println!("[WEB] Chat received: llm='{}'  msg='{}'", llm, &chat_msg[..chat_msg.len().min(80)]);
 
                         let bus_dest = if llm == "gemini" {
                             "gemini".to_string()
@@ -366,11 +487,18 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             format!("ollama_{}", llm)
                         };
 
-                        info!("Routing chat to bus destination: {}", bus_dest);
-
                         let correlation_id = get_timestamp();
+
+                        println!("[WEB] === SENDING BUS MESSAGE ===");
+                        println!("[WEB]   to: {}", bus_dest);
+                        println!("[WEB]   from: web_interface");
+                        println!("[WEB]   type: chat_request");
+                        println!("[WEB]   prompt preview: {}", &chat_msg[..chat_msg.len().min(100)]);
+
+                        println!("[WEB]   to: {}", bus_dest);
+
                         let bus_msg = Message {
-                            to: bus_dest,
+                            to: bus_dest.clone(),
                             from: "web_interface".to_string(),
                             data: json!({
                                 "type": "chat_request",
@@ -380,7 +508,12 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             .to_string(),
                             timestamp: correlation_id,
                         };
+                        println!("[WEB] Publishing bus message now...");
                         let _ = state.bus.publish(bus_msg);
+
+                        println!("[WEB] Routing to bus_dest='{}'  (llm was '{}')", bus_dest, llm);
+                        info!("Routing chat to bus destination: {}", bus_dest);
+                        println!("[WEB] Bus publish done for correlation_id={}", correlation_id);
 
                         // Echo user message back to UI
                         let echo_msg = json!({
@@ -401,7 +534,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                                 let success_msg = json!({
                                         "type": "config_status",
                                         "status": "success",
-                                        "msg": "Config saved successfully. Restart the bot to apply changes."
+                                        "msg": "Config saved successfully. Restart Helix to apply changes."
                                     })
                                     .to_string();
                                 let bus_msg = Message {
@@ -542,8 +675,8 @@ async fn serve_index() -> Html<String> {
 
 // ── Log file handlers ────────────────────────────────────────────────────────
 
-async fn serve_chat_log() -> impl IntoResponse {
-    let path = "logs/chat_log.md";
+async fn serve_chat_log(State(state): State<AppState>) -> impl IntoResponse {
+    let path = &state.logging.chat_log;
     if !std::path::Path::new(path).exists() {
         let _ = std::fs::write(path, "[INIT] Chat log created\n");
     }
@@ -555,26 +688,26 @@ async fn serve_chat_log() -> impl IntoResponse {
     ))
 }
 
-async fn clear_chat_log() -> impl IntoResponse {
+async fn clear_chat_log(State(state): State<AppState>) -> impl IntoResponse {
     let init_line = format!(
         "[INIT] Chat log cleared via web UI at {}\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
     );
-    let _ = fs::write("logs/chat_log.md", init_line);
+    let _ = fs::write(&state.logging.chat_log, init_line);
     Html("<span style='color:#69f0ae'>Chat log cleared.</span>")
 }
 
-async fn clear_error_log() -> impl IntoResponse {
+async fn clear_error_log(State(state): State<AppState>) -> impl IntoResponse {
     let init_line = format!(
         "[INIT] Error log cleared via web UI at {}\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
     );
-    let _ = fs::write("logs/error_log.md", init_line);
+    let _ = fs::write(&state.logging.error_log, init_line);
     Html("<span style='color:#69f0ae'>Error log cleared.</span>")
 }
 
-async fn serve_error_log() -> impl IntoResponse {
-    let path = "logs/error_log.md";
+async fn serve_error_log(State(state): State<AppState>) -> impl IntoResponse {
+    let path = &state.logging.error_log;
     if !std::path::Path::new(path).exists() {
         let _ = std::fs::write(path, "[INIT] Error log created\n");
     }
@@ -586,8 +719,8 @@ async fn serve_error_log() -> impl IntoResponse {
     ))
 }
 
-async fn serve_bus_log() -> impl IntoResponse {
-    let content = fs::read_to_string("logs/bus_log.md")
+async fn serve_bus_log(State(state): State<AppState>) -> impl IntoResponse {
+    let content = fs::read_to_string(&state.logging.bus_log)
         .unwrap_or_else(|_| "bus_log.md not found or empty".to_string());
     Html(format!(
         "<pre style='white-space:pre-wrap;'>{}</pre>",
@@ -595,8 +728,8 @@ async fn serve_bus_log() -> impl IntoResponse {
     ))
 }
 
-async fn serve_hartbeat_log() -> impl IntoResponse {
-    let content = fs::read_to_string("logs/hartbeat_log.md")
+async fn serve_hartbeat_log(State(state): State<AppState>) -> impl IntoResponse {
+    let content = fs::read_to_string(&state.logging.hartbeat_log)
         .unwrap_or_else(|_| "hartbeat_log.md not found or empty".to_string());
     Html(format!(
         "<pre style='white-space:pre-wrap;'>{}</pre>",

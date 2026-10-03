@@ -1,4 +1,4 @@
-//! Gemini LLM handler for Agent OS
+//! Gemini LLM handler for Helix
 //!
 //! Provides an async, bus-integrated handler for Google Gemini API calls.
 //! Built for reliability on unstable connections (e.g. Starlink) with
@@ -21,15 +21,28 @@ const RETRY_DELAY_MS: u64 = 2_000;
 
 // ── Gemini API endpoint ───────────────────────────────────────────────────────
 
-const GEMINI_MODEL_DEFAULT: &str = "gemini-2.0-flash";
+const GEMINI_MODEL_DEFAULT: &str = "gemini-3.6-flash";
 const GEMINI_URL_BASE: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 fn build_client() -> Client {
+    // reqwest is compiled with `rustls-tls-manual-roots-no-provider`, which means
+    // NO root CAs are trusted by default.  Without loading a CA bundle every
+    // HTTPS TLS handshake fails (and reqwest mis-reports it as a connection/DNS
+    // error because `is_connect()` covers all connection-phase failures).
+    // We load Mozilla's webpki bundle so Google's certificate chain verifies.
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+    let tls_cfg = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+
     Client::builder()
         .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
         .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+        .use_preconfigured_tls(tls_cfg)
         .build()
         .expect("Failed to build Gemini reqwest client")
 }
@@ -185,9 +198,29 @@ async fn call_gemini(
             if e.is_timeout() {
                 format!("request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, e).into()
             } else if e.is_connect() {
-                format!("connection refused / DNS failure: {}", e).into()
+                // reqwest's is_connect() fires for TCP refused, DNS failures AND TLS
+                // certificate errors — all occurring in the connection phase.
+                // Inspect the error text so the user sees a precise diagnosis
+                // instead of a generic "DNS failure" when it is actually a TLS error.
+                let detail = e.to_string().to_lowercase();
+                if detail.contains("certificate")
+                    || detail.contains("unknownissuer")
+                    || detail.contains("invalidcertificate")
+                    || detail.contains("handshake")
+                    || detail.contains("tls")
+                    || detail.contains("ssl")
+                {
+                    format!("TLS/certificate error: {}", e).into()
+                } else if detail.contains("dns")
+                    || detail.contains("resolve")
+                    || detail.contains("lookup")
+                {
+                    format!("DNS resolution failed: {}", e).into()
+                } else {
+                    format!("connection refused / network error: {}", e).into()
+                }
             } else {
-                format!("HTTP error: {}", e).into()
+                format!("network error: {}", e).into()
             }
         },
     )?;

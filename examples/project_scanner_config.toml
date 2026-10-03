@@ -1,0 +1,36 @@
+# Example config for Project Scanner (Task 171)
+# Place or merge into your main config.toml on the Dell 630
+
+[helix.project_scanner]
+enabled = true
+default_max_depth = 5
+scanned_from = "dell630"
+default_protocol = "ssh"   # Preferred for remote Main PC scans over LAN
+
+# Per-machine connection details (future use for real SSH)
+[helix.project_scanner.machines.main-pc]
+host = "main-pc.local"   # or IP
+port = 22
+user = "youruser"
+ssh_key_path = "~/.ssh/id_ed25519"
+auth_method = "key"
+
+[[helix.projects]]
+name = "helix"
+target_machine = "main-pc"
+remote_path = "/home/youruser/code/helix"   # path on the Main PC
+protocol = "ssh"
+max_depth = 6
+include_globs = ["**/*.rs", "**/*.toml", "**/*.md", "Cargo.*"]
+exclude_globs = ["target/**", ".git/**", "node_modules/**"]
+description = "Core Helix agent codebase (scanned remotely from Dell 630)"
+
+[[helix.projects]]
+name = "docs"
+target_machine = "main-pc"
+remote_path = "/home/youruser/docs"
+protocol = "ssh"
+max_depth = 3
+description = "Documentation and diagrams"
+
+# You can add more projects...

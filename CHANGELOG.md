@@ -179,7 +179,7 @@ task number (85 instead of 90).
 Standalone keepalive module added to the Ollama IO sub-system:
 
 - **`preload_model(base_url, model)`** — async fn that sends a dummy
-  `POST /api/generate` (empty prompt, `num_predict: 0`, `stream: false`) at bot
+  `POST /api/generate` (empty prompt, `num_predict: 0`, `stream: false`) at Helix
   startup to force Ollama to load the model into GPU/CPU memory before the first
   real user query, eliminating cold-start latency.
 
@@ -194,7 +194,7 @@ Standalone keepalive module added to the Ollama IO sub-system:
 - **Network resilience (Starlink policy)**: every HTTP call is wrapped in
   `tokio::time::timeout` and retried up to 3 times with exponential-backoff
   delays (2 s → 4 s → 8 s, capped at 30 s).  Failures are warnings only —
-  the bot never crashes on keepalive errors.
+  Helix never crashes on keepalive errors.
 
 - **10 unit tests** covering config-flag defaults, custom values, garbage input
   fallback, unreachable-host resilience, and zero-interval noop.
@@ -409,7 +409,7 @@ unknown-tool handling, schema shape, and no-panic guarantees for all tools.
   - `WS_URL` uses `location.hostname` instead of hardcoded `localhost` so the UI
     works from any host on the LAN.
   - Smooth scroll on new chat messages and log entries.
-  - Chat messages show sender class (`you`, `bot`, `error-msg`, `warning-msg`) for
+  - Chat messages show sender class (`you`, `helix`, `error-msg`, `warning-msg`) for
     colour-coded display.
 
 ---

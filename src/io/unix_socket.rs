@@ -116,7 +116,7 @@ fn version_info() -> Value {
     json!({
         "status": "ok",
         "cli_version": env!("CARGO_PKG_VERSION"),
-        "bot_version": env!("CARGO_PKG_VERSION"),
+        "helix_version": env!("CARGO_PKG_VERSION"),
         "protocol": "1.0",
         "build_time": option_env!("VERGEN_BUILD_TIMESTAMP").unwrap_or("unknown")
     })
@@ -312,7 +312,7 @@ async fn handle_client(mut stream: tokio::net::UnixStream, bus: Bus, start_time:
     let mut lines = BufReader::new(reader).lines();
 
     // Welcome banner
-    let welcome = json!({"type": "welcome", "msg": "Bot CLI connected. Type 'help' for commands."});
+    let welcome = json!({"type": "welcome", "msg": "Helix CLI connected. Type 'help' for commands."});
     writer.write_all((welcome.to_string() + "\n").as_bytes()).await?;
 
     while let Some(line) = lines.next_line().await? {

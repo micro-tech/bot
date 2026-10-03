@@ -1,4 +1,4 @@
-// Terminal Handler for Agent OS
+// Terminal Handler for Helix
 // This module handles interactions with the command-line interface.
 
 use crate::bus::{Bus, Message};

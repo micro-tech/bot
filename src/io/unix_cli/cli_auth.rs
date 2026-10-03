@@ -2,7 +2,7 @@
 use std::fs;
 use std::path::Path;
 
-const TOKEN_PATH: &str = "/etc/bot/token";
+const TOKEN_PATH: &str = "/etc/helix/token";
 
 pub fn authenticate(token: &str) -> bool {
     // If no token file exists, allow all (dev mode)

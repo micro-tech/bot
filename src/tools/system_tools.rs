@@ -61,7 +61,7 @@ pub fn system_status() -> String {
 // ── list_tools ────────────────────────────────────────────────────────────────
 
 pub fn list_tools() -> String {
-    "🛠️  Available tools & skills:\n\
+    let mut out = "🛠️  Available tools & skills:\n\
      \n\
      File tools:\n\
        • read_log(log_file)               Read the tail of a log file from logs/\n\
@@ -77,6 +77,7 @@ pub fn list_tools() -> String {
      System:\n\
        • system_status()                  Log sizes, note/belief counts\n\
        • list_tools()                     This list\n\
+       • list_okf_tools()                 List tools loaded from remote OKF bundles\n\
      \n\
      Memory / beliefs:\n\
        • get_beliefs()                    Read all beliefs from beliefs.json\n\
@@ -85,10 +86,32 @@ pub fn list_tools() -> String {
      Bayesian reasoning:\n\
        • bayes_show()                     Show current Bayesian belief state\n\
      \n\
+     OKF (Open Knowledge Format):\n\
+       • list_okf_tools()                 Discover dynamically loaded remote tools\n\
+       • (OKF tools appear here when [helix.okf] enabled and a bundle is loaded)\n"
+        .to_string();
+
+    // Append currently loaded OKF tools if any
+    let okf_names = crate::okf::list_okf_tool_names();
+    if !okf_names.is_empty() {
+        out.push_str("\n     Currently loaded OKF tools:\n");
+        for name in &okf_names {
+            if let Some(desc) = crate::okf::get_okf_tool_description(name) {
+                out.push_str(&format!("       • {} — {}\n", name, desc));
+            } else {
+                out.push_str(&format!("       • {}\n", name));
+            }
+        }
+    }
+
+    out.push_str(
+        "\n\
      Slash commands in chat (type directly):\n\
        /status   /tools   /notes   /beliefs   /log [file]   /help\n\
-       /note <title>   /set <key>=<value>   /bayes [show|status|update <ev>]"
-        .to_string()
+       /note <title>   /set <key>=<value>   /bayes [show|status|update <ev>]",
+    );
+
+    out
 }
 
 // ── bayes_show ───────────────────────────────────────────────────────────────

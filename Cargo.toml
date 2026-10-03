@@ -1,46 +1,66 @@
 [package]
-name = "bot"
-version = "1.0.0"
+name = "helix"
+version = "1.0.1-pre"
 edition = "2024"
-# build = "build.rs"   # commented out — no build.rs exists in root
+rust-version = "1.99"
 
 [dependencies]
 log = "0.4"
 env_logger = "0.11.11"
-# serenity = { git = "https://github.com/serenity-rs/serenity", branch = "current", features = ["full"] }
+#serenity = { git = "https://github.com/serenity-rs/serenity", branch = "current", features = ["full"] }
 
-tokio = { version = "1.52.3", features = [
+
+tokio = { version = "1.53.1", features = [
     "macros",
     "rt-multi-thread",
     "time",
     "net",
     "sync",
+    "process",
 ] }
 axum = { version = "0.8.9", features = ["ws"] }
+axum-server = { version = "0.8.0", default-features = false, features = ["tls-rustls-no-provider"] }
 hyper = { version = "1", features = ["http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
-tokio-rustls = "0.26"
-rustls = "0.23"
+tokio-rustls = { version = "0.26", features = ["ring"] }
+rustls = { version = "0.23", features = ["ring"] }
 rustls-pemfile = "2"
 rcgen = "0.14.8"
 tower = "0.5"
 futures-util = { version = "0.3", features = ["sink"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "1.1.2"
+toml = "1.1.3"
 dotenv = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-reqwest = { version = "0.13.4", features = ["json", "blocking", "rustls"] }
-axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
+#reqwest = { version = "0.12", features = ["json", "blocking", "rustls-tls"] }
+
+reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls-manual-roots-no-provider"] }
 tower-http = { version = "0.7.0", features = ["cors"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 async-trait = "0.1"
 rand = "0.10.2"
-uuid = { version = "1.23.4", features = ["v4", "serde"] }
-lettre = { version = "0.11.22", features = ["smtp-transport", "native-tls"] }
-imap = "3.0.0-alpha.15"
+uuid = { version = "1.24.0", features = ["v4", "serde"] }
+# Use rustls-tls instead of native-tls to avoid pulling in openssl-sys on Windows
+# (native-tls can trigger openssl builds in some configurations on certain setups).
+# Force ring backend to avoid aws-lc-rs conflict with our explicit rustls::ring provider
+# builder feature is required for Message, Mailbox, ContentType etc.
+# We keep default-features = false + explicit ring via runtime install to avoid aws-lc-rs conflict.
+
+# Mozilla's CA bundle — required by reqwest when using rustls-tls-manual-roots-no-provider.
+# Without this every HTTPS connection fails at TLS handshake (empty trust store).
+webpki-roots = "1"
+
+lettre = { version = "0.11.6", default-features = false, features = ["builder", "smtp-transport", "rustls-tls"] }
+
+# IMAP for email tools. We avoid "default" features if possible to reduce openssl pull.
+# If imap still pulls openssl on your system, you may need to set OPENSSL_NO_VENDOR=1
+# (see .cargo/config.toml below).
+imap = { version = "3.0.0-alpha.15", default-features = false, features = ["rustls-tls"] }
+
+
 native-tls = "0.2"
 pulldown-cmark = "0.13.4"
 similar = "3.1.1"
@@ -51,10 +71,34 @@ sqlx = { version = "0.9.0", features = [
     "json",
 ] }
 sha2 = "0.11.0"
-regex = "1"
-notify = "6"
-futures = "0.3"
+
+# === MCP (Model Context Protocol) client support ===
+# Lets Helix spawn external MCP servers (e.g. the standalone google-mcp
+# Gmail/Calendar server) as subprocesses over stdio and expose their tools.
+# Pinned to the same rmcp version the google-mcp server was built with.
+rmcp = { version = "3.5.0", features = ["transport-child-process", "client"] }
+
+# === SSH / Remote Project Scanner support (Task 171) ===
+# Optional because ssh2 -> libssh2-sys -> openssl-sys tends to trigger a full
+# OpenSSL source build on Windows (requires Perl + build tools).
+#
+# To enable remote SSH scanning (Dell 630 -> Main PC):
+#   cargo build --features ssh
+#
+# Then ensure OpenSSL is available:
+#   - Windows: Install OpenSSL (e.g. from https://slproweb.com/products/Win32OpenSSL.html)
+#              and set OPENSSL_DIR=C:\Program Files\OpenSSL-Win64
+#   - Or use vcpkg: vcpkg install openssl:x64-windows
+#   - Linux/macOS: usually works out of the box via pkg-config
+#
+# Do NOT use vendored-openssl unless you have Perl installed.
+ssh2 = { version = "0.9", optional = true }
+
+[features]
+default = []
+# Enable real SSH remote scanning (pulls ssh2 + libssh2-sys + openssl-sys)
+ssh = ["dep:ssh2"]
 
 [[bin]]
-name = "install"
+name = "installer"
 path = "src/bin/installer.rs"

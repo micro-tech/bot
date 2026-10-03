@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://helix.okf/schema/bundle/v1.0",
+  "title": "OKF Bundle Manifest v1.0",
+  "description": "Official JSON Schema for Open Knowledge Format (OKF) bundles used by Helix. Designed for cross-machine knowledge sharing, especially file change tracking and auto-generated Mermaid diagrams.",
+  "type": "object",
+  "required": ["id", "version"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique bundle identifier (e.g. 'helix-core-tools-v1', 'project-maps-desktop', 'okf-diagrams-v2')",
+      "minLength": 1,
+      "pattern": "^[a-z0-9_-]+$"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the bundle",
+      "pattern": "^(v)?\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable name of the bundle"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "Optional description of what this bundle provides"
+    },
+    "generated_at": {
+      "type": ["string", "null"],
+      "description": "ISO 8601 timestamp when the manifest was generated"
+    },
+    "tools": {
+      "type": "array",
+      "description": "List of tool definitions provided by this bundle",
+      "items": {
+        "$ref": "#/$defs/OkfToolEntry"
+      }
+    },
+    "knowledge": {
+      "type": "array",
+      "description": "List of knowledge documents. Supports Mermaid diagrams, file snapshots, directory trees, and change logs for cross-machine project mapping.",
+      "items": {
+        "$ref": "#/$defs/OkfKnowledgeEntry"
+      }
+    },
+    "schemas": {
+      "type": "array",
+      "description": "JSON Schema definitions exported by the bundle",
+      "items": {
+        "$ref": "#/$defs/OkfSchemaEntry"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Bundle-level metadata. Recommended for multi-machine setups.",
+      "properties": {
+        "source_machine": { "type": "string", "description": "Name or ID of the machine that generated this bundle (e.g. 'desktop-pc', 'laptop', 'proxmox-dell630')" },
+        "author": { "type": "string" },
+        "license": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "OkfToolEntry": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique tool name (used for invocation)",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what the tool does"
+        },
+        "input_schema": {
+          "type": ["object", "null"],
+          "description": "JSON Schema describing the expected input parameters"
+        },
+        "output_schema": {
+          "type": ["object", "null"],
+          "description": "JSON Schema describing the expected output"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional categorization tags"
+        },
+        "implementation": {
+          "type": ["string", "null"],
+          "description": "Hint for how the tool is implemented (e.g. 'rust', 'python', 'remote-http', 'wasm')"
+        }
+      },
+      "additionalProperties": false
+    },
+    "OkfKnowledgeEntry": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the knowledge item (e.g. 'project-structure-2025-04-05', 'file-changes-desktop')"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title"
+        },
+        "content_type": {
+          "type": "string",
+          "description": "MIME or format type. Special support for diagrams and file tracking.",
+          "enum": [
+            "markdown",
+            "json",
+            "text",
+            "yaml",
+            "mermaid",
+            "diagram",
+            "file-tree",
+            "directory-snapshot",
+            "file-change-log",
+            "project-map"
+          ]
+        },
+        "content": {
+          "type": ["string", "null"],
+          "description": "Inline content. For Mermaid: put the full ```mermaid ... ``` block here."
+        },
+        "url": {
+          "type": ["string", "null"],
+          "description": "URL to fetch full content (if not inline). Useful when OKF server hosts large diagrams."
+        },
+        "version": {
+          "type": ["string", "null"],
+          "description": "Version of this knowledge document"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Per-knowledge metadata. Critical for cross-machine file change tracking.",
+          "properties": {
+            "source_machine": { "type": "string", "description": "Machine that detected the change (e.g. 'desktop-pc')" },
+            "detected_at": { "type": "string", "description": "ISO timestamp of file change or scan" },
+            "diagram_type": { "type": "string", "description": "Type of diagram: 'project-structure', 'file-changes', 'data-flow', 'hybrid'" },
+            "base_path": { "type": "string", "description": "Root directory that was scanned" },
+            "changed_files": { "type": "array", "items": { "type": "string" } },
+            "mermaid_theme": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "OkfSchemaEntry": {
+      "type": "object",
+      "required": ["id", "schema"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this schema"
+        },
+        "title": {
+          "type": ["string", "null"],
+          "description": "Optional human title for the schema"
+        },
+        "schema": {
+          "type": "object",
+          "description": "The actual JSON Schema object"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

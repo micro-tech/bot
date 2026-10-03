@@ -1,4 +1,4 @@
-// Tests for Web Server Handler in Agent OS
+// Tests for Web Server Handler in Helix
 // This file contains tests for the functions in web_server.rs to ensure proper handling of web interface updates.
 
 #[cfg(test)]
