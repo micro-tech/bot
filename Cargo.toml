@@ -15,6 +15,7 @@ tokio = { version = "1.53.1", features = [
     "time",
     "net",
     "sync",
+    "process",
 ] }
 axum = { version = "0.8.9", features = ["ws"] }
 axum-server = { version = "0.8.0", default-features = false, features = ["tls-rustls-no-provider"] }
@@ -69,6 +70,12 @@ sqlx = { version = "0.9.0", features = [
     "json",
 ] }
 sha2 = "0.11.0"
+
+# === MCP (Model Context Protocol) client support ===
+# Lets Helix spawn external MCP servers (e.g. the standalone google-mcp
+# Gmail/Calendar server) as subprocesses over stdio and expose their tools.
+# Pinned to the same rmcp version the google-mcp server was built with.
+rmcp = { version = "3.5.0", features = ["transport-child-process", "client"] }
 
 # === SSH / Remote Project Scanner support (Task 171) ===
 # Optional because ssh2 -> libssh2-sys -> openssl-sys tends to trigger a full

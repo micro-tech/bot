@@ -11,6 +11,7 @@ pub mod utils;
 pub mod io;
 pub mod hooks;
 pub mod tools;
+pub mod mcp_client;
 pub mod planning;
 pub mod reasoning;
 pub mod bayesian;
