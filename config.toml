@@ -83,3 +83,26 @@ index_file = "okf_index.json"
 poll_interval_secs = 60
 request_timeout_secs = 30
 # auth_token = "optional-token-here"   # Uncomment if your OKF server requires auth
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MCP (Model Context Protocol) client
+# Lets Helix spawn external MCP servers as subprocesses over stdio and use
+# their tools. NOTE: this is unrelated to src/mcp/ ("Master Control Program",
+# the internal bus router).
+#
+# Everything below is commented out, which leaves the client disabled — the
+# default. When disabled, no servers are spawned and no MCP tools appear.
+# ─────────────────────────────────────────────────────────────────────────────
+# [mcp]
+# enabled = false                  # Master switch (set to true to activate)
+#
+# [[mcp.servers]]
+# name = "google"                  # Tool namespace: mcp__google__<tool>
+# command = "/path/to/google-mcp"  # e.g. ~/workspace/google-mcp/target/debug/google-mcp
+# args = []                        # Extra argv entries (optional)
+#
+# # Extra env vars for the server process, on top of the inherited environment.
+# # google-mcp needs these for OAuth (see ~/workspace/google-mcp/README.md).
+# [mcp.servers.env]
+# GOOGLE_CLIENT_ID = ""
+# GOOGLE_CLIENT_SECRET = ""

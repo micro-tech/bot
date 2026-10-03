@@ -22,6 +22,7 @@ mod planning;
 mod reasoning;
 mod agents;
 mod okf;
+mod mcp_client;
 
 #[tokio::main]
 async fn main() {
