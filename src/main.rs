@@ -21,32 +21,50 @@ mod bayesian;
 mod planning;
 mod reasoning;
 mod agents;
-mod router;
+mod okf;
+mod mcp_client;
 
 #[tokio::main]
 async fn main() {
-    run_bot().await;
+    // Load .env early (for GEMINI_API_KEY etc.)
+    let _ = dotenv::dotenv();
+
+    // Permanently fix rustls CryptoProvider (ring) at the absolute earliest point.
+    // This resolves conflicts caused by lettre + imap pulling in aws-lc-rs.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install global rustls crypto provider (ring)");
+
+    run_helix().await;
 }
 
-async fn run_bot() {
+async fn run_helix() {
     // Ensure required directories exist very early (prevents panics)
     let _ = std::fs::create_dir_all("logs");
-    let _ = std::fs::create_dir_all("/etc/bot/logs");
-    let _ = std::fs::create_dir_all("/etc/bot");
+    let _ = std::fs::create_dir_all("/etc/helix/logs");
+    let _ = std::fs::create_dir_all("/etc/helix");
 
-    println!("Bot is running...");
+    println!("Helix is running...");
 
     // Try multiple locations for config.toml
     let config_paths = [
         "config.toml",
-        "/etc/bot/config.toml",
-        "/usr/local/etc/bot/config.toml",
+        "/etc/helix/config.toml",
+        "/usr/local/etc/helix/config.toml",
     ];
 
     let config_str = config_paths
         .iter()
         .find_map(|path| fs::read_to_string(path).ok())
         .unwrap_or_default();
+
+    let config_path_used = config_paths
+        .iter()
+        .find(|p| fs::read_to_string(p).is_ok())
+        .copied()
+        .unwrap_or("none");
+
+    println!("Using config file: {}", config_path_used);
 
     if config_str.is_empty() {
         eprintln!("Warning: Could not find config.toml in any standard location.");
@@ -74,19 +92,44 @@ async fn run_bot() {
         })
         .collect();
 
+    println!("=== Parsed Ollama backends ({} total) ===", ollama_backends.len());
+    for (i, (name, url, model)) in ollama_backends.iter().enumerate() {
+        println!("  [{}] name='{}' url='{}' model='{}'", i, name, url, model);
+    }
+    if ollama_backends.is_empty() {
+        println!("WARNING: No [[ollama]] entries found in config!");
+    }
+
     // ── CPU response forwarder (handles llm_response → web_interface) ────────
     {
         let bus_clone = bus.clone();
+        // Load logging paths (fall back to defaults)
+        let chat_log_path: String = toml::from_str::<toml::Value>(&config_str)
+            .ok()
+            .and_then(|v| v.get("logging")?.get("chat_log")?.as_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| "logs/chat_log.md".to_string());
+
         tokio::spawn(async move {
             let rx = bus_clone.subscribe("cpu");
             println!("CPU response forwarder started (subscribed to 'cpu')");
 
             while let Ok(msg) = rx.recv() {
+                println!("[CPU-Forwarder] received message to cpu | from='{}' data_preview='{}'", msg.from, &msg.data[..msg.data.len().min(120)]);
                 if msg.data.contains("\"type\":\"llm_response\"") {
                     let payload: serde_json::Value =
                         serde_json::from_str(&msg.data).unwrap_or_default();
-                    let text = payload["msg"].as_str().unwrap_or("").to_string();
+
+                    // Robust extraction: try msg, data, content, etc.
+                    let text = payload["msg"]
+                        .as_str()
+                        .or_else(|| payload["data"].as_str())
+                        .or_else(|| payload["content"].as_str())
+                        .or_else(|| payload["text"].as_str())
+                        .unwrap_or("")
+                        .to_string();
+
                     if text.is_empty() {
+                        println!("[CPU-Forwarder] llm_response but no text, skipping");
                         continue;
                     }
 
@@ -103,24 +146,24 @@ async fn run_bot() {
                         from: display_from.clone(),
                         data: serde_json::json!({
                             "type": "llm_output",
-                            "msg": text
+                            "data": text
                         })
                         .to_string(),
                         timestamp: crate::utils::now_ms(),
                     };
 
-                    // Write to chat log
+                    // Write to chat log (use configured path)
                     if let Ok(mut f) = std::fs::OpenOptions::new()
                         .create(true)
                         .append(true)
-                        .open("logs/chat_log.md")
+                        .open(&chat_log_path)
                     {
                         use std::io::Write;
                         let _ = writeln!(f, "[{}] {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), display_from, text);
                     }
 
                     let _ = bus_clone.publish(ui_msg);
-                    println!("[CPU-Forwarder] Forwarded LLM response from {} to web_interface", display_from);
+                    println!("[CPU-Forwarder] ✅ Forwarded LLM response from {} ({} chars) to web_interface", display_from, text.len());
                 }
             }
         });
@@ -130,24 +173,49 @@ async fn run_bot() {
     for (name, url, model) in ollama_backends.clone() {
         let bus_clone = bus.clone();
         let backend_name = name.clone();
+        let backend_url = url.clone();
+        let backend_model = model.clone();
 
         tokio::spawn(async move {
             let topic = format!("ollama_{}", backend_name);
             let rx = bus_clone.subscribe(&topic);
 
-            println!("Ollama listener started for {}", topic);
+            println!("✅ Ollama listener SUBSCRIBED for topic='{}'  url={}  model={}", topic, backend_url, backend_model);
+            println!("   (waiting for messages on this bus topic...)");
+
+            // Startup health probe with extra visibility for desktop
+            let health_ok = crate::io::ollama::check_ollama_health(&backend_url).await;
+            if health_ok {
+                println!("[{}] startup health probe: OK ✅", topic);
+            } else {
+                println!("[{}] startup health probe: FAILED ❌  (Ollama not reachable at {})", topic, backend_url);
+                println!("    → Desktop/remote Ollama usually needs: OLLAMA_HOST=0.0.0.0 ollama serve");
+            }
+
+            // One-time startup health probe (very useful for diagnosis)
+            if crate::io::ollama::check_ollama_health(&backend_url).await {
+                println!("[{}] startup health probe: OK", topic);
+            } else {
+                println!("[{}] startup health probe: FAILED (Ollama not reachable at this URL)", topic);
+            }
 
             while let Ok(msg) = rx.recv() {
+                println!("[{}] 📥 RECEIVED message from='{}'  preview='{}'", 
+                    topic, msg.from, &msg.data[..msg.data.len().min(160)]);
+                
                 // Only handle chat requests
                 if msg.data.contains("\"type\":\"chat_request\"") {
+                    println!("[{}] ✅ Processing chat_request...", topic);
                     let _ = crate::io::ollama::handle_ollama_message(
                         msg,
                         &bus_clone,
-                        &url,
-                        &model,
+                        &backend_url,
+                        &backend_model,
                         &backend_name,
                     )
                     .await;
+                } else {
+                    println!("[{}] (ignoring non-chat message)", topic);
                 }
             }
         });

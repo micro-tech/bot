@@ -4,7 +4,7 @@
 //! Ensures the configured Ollama model stays resident in GPU/CPU memory by:
 //!
 //! 1. **Startup Preload** — sends a dummy `POST /api/generate` (empty prompt,
-//!    `stream: false`, `num_predict: 0`) at bot startup so the model is loaded
+//!    `stream: false`, `num_predict: 0`) at Helix startup so the model is loaded
 //!    before the first user message arrives, eliminating the cold-start delay.
 //!
 //! 2. **Keep-Alive Heartbeat** — a background Tokio task fires a keep-alive
@@ -14,7 +14,7 @@
 //! # Starlink resilience
 //! All HTTP calls use `tokio::time::timeout` + exponential-backoff retry
 //! (up to 3 attempts, delays 2 s → 4 s → 8 s, capped at 30 s).
-//! Failures are logged as warnings — the bot **never panics** on keepalive errors.
+//! Failures are logged as warnings — Helix **never panics** on keepalive errors.
 //!
 //! # Configuration (`.env`)
 //! ```env
@@ -163,7 +163,7 @@ pub async fn preload_model(base_url: &str, model: &str) -> Result<(), String> {
 /// empty prompt.  Ollama resets its eviction timer on receipt.
 ///
 /// Failures are logged as warnings — the task **never panics** and never
-/// crashes the bot.  The task runs until the process exits.
+/// crashes Helix.  The task runs until the process exits.
 ///
 /// Pass `interval_secs = 0` to disable keepalive without spawning a task.
 ///

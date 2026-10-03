@@ -1,5 +1,5 @@
 //! Plugin system for CLI (Task 118)
-//! Discovers executables in ~/.bot/plugins/
+//! Discovers executables in ~/.helix/plugins/
 
 use crate::utils::log_to_file;
 use std::fs;
@@ -8,9 +8,9 @@ use std::process::Command;
 
 pub fn plugin_dir() -> PathBuf {
     if let Ok(home) = std::env::var("HOME") {
-        PathBuf::from(format!("{}/.bot/plugins", home))
+        PathBuf::from(format!("{}/.helix/plugins", home))
     } else if let Ok(userprofile) = std::env::var("USERPROFILE") {
-        PathBuf::from(format!("{}/.bot/plugins", userprofile))
+        PathBuf::from(format!("{}/.helix/plugins", userprofile))
     } else {
         PathBuf::from("./plugins")
     }

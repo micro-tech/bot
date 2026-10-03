@@ -21,10 +21,11 @@
 //! <https://myaccount.google.com/apppasswords>.
 //! See `Doc's/email_setup.md` for full setup instructions.
 
-use lettre::{
-    Message, SmtpTransport, Transport, message::header::ContentType,
-    transport::smtp::authentication::Credentials,
-};
+// lettre imports with minimal features (builder + smtp-transport + rustls-tls)
+// "builder" feature is required for Message, Mailbox, ContentType etc.
+use lettre::message::{header::ContentType, Mailbox};
+use lettre::transport::smtp::authentication::Credentials;
+use lettre::{Message, SmtpTransport, Transport};
 use log::{error, info, warn};
 use serde_json::Value;
 use std::fs;
@@ -78,11 +79,11 @@ pub fn send_email(args: &Value) -> String {
     }
 
     // ── Parse mailbox addresses ───────────────────────────────────────────
-    let from_box = match smtp_from.parse::<lettre::message::Mailbox>() {
+    let from_box = match smtp_from.parse::<Mailbox>() {
         Ok(m) => m,
         Err(e) => return format!("Invalid SMTP_FROM '{}': {}", smtp_from, e),
     };
-    let to_box = match to.parse::<lettre::message::Mailbox>() {
+    let to_box = match to.parse::<Mailbox>() {
         Ok(m) => m,
         Err(e) => return format!("Invalid 'to' address '{}': {}", to, e),
     };

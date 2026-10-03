@@ -48,4 +48,4 @@ impl BayesianSkill {
     }
 }
 
-// Register in bot skills system (e.g., tools or mcp)
+// Register in Helix skills system (e.g., tools or mcp)

@@ -1,8 +1,12 @@
+use std::env;
+use std::fs;
+use std::path::Path;
+use std::time::SystemTime;
+
 fn main() {
     // Inject a build timestamp so the installer can print it at runtime.
-    // This makes it easy to confirm a fresh binary is actually being used.
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| d.as_secs().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
 
@@ -14,43 +18,62 @@ fn main() {
     println!("cargo:rerun-if-changed=config.toml");
     println!("cargo:rerun-if-changed=system_manifest.md");
 
-    // === Markmap Documentation Build Integration ===
-    // Detect when .mmd files are newer than their .html counterparts
-    // and trigger the markmap build script.
-    println!("cargo:rerun-if-changed=.doc/markmap");
+    // === Project Intelligence / Diagram freshness check ===
+    // This helps remind developers to update the hybrid mermaid diagrams
+    // when the source structure changes significantly.
+    check_diagram_freshness();
+}
 
-    // Check if any .mmd file is newer than its corresponding .html
-    let markmap_dir = std::path::Path::new(".doc/markmap");
-    let html_dir = std::path::Path::new(".doc/markmap/html");
+fn check_diagram_freshness() {
+    let src_path = Path::new("src");
+    let diagrams_path = Path::new(".grok/diagrams");
 
-    if markmap_dir.exists() {
-        if let Ok(entries) = std::fs::read_dir(markmap_dir) {
-            for entry in entries.flatten() {
-                if let Some(ext) = entry.path().extension() {
-                    if ext == "mmd" {
-                        let mmd_path = entry.path();
-                        let html_name = mmd_path.file_stem().unwrap().to_string_lossy().to_string() + ".html";
-                        let html_path = html_dir.join(html_name);
+    if !src_path.exists() || !diagrams_path.exists() {
+        return;
+    }
 
-                        let mmd_modified = std::fs::metadata(&mmd_path)
-                            .and_then(|m| m.modified())
-                            .ok();
+    // Get the newest modification time in src/
+    let src_newest = find_newest_mtime(src_path);
 
-                        let html_modified = std::fs::metadata(&html_path)
-                            .and_then(|m| m.modified())
-                            .ok();
+    // Get the modification time of the main hybrid diagram
+    let main_diagram = diagrams_path.join("hybrid_project_map.mmd");
+    let diagram_mtime = fs::metadata(&main_diagram)
+        .and_then(|m| m.modified())
+        .ok();
 
-                        if let (Some(mmd_time), Some(html_time)) = (mmd_modified, html_modified) {
-                            if mmd_time > html_time {
-                                println!("cargo:warning=.mmd file newer than .html — run scripts/build-markmaps.ps1");
-                            }
-                        } else if mmd_modified.is_some() && html_modified.is_none() {
-                            // HTML doesn't exist yet
-                            println!("cargo:warning=Missing HTML for .mmd file — run scripts/build-markmaps.ps1");
-                        }
-                    }
+    if let (Some(src_time), Some(diag_time)) = (src_newest, diagram_mtime) {
+        if src_time > diag_time {
+            println!(
+                "cargo:warning=src/ has been modified more recently than .grok/diagrams/hybrid_project_map.mmd"
+            );
+            println!(
+                "cargo:warning=Consider regenerating the hybrid mermaid diagrams if major modules were added/removed."
+            );
+            println!(
+                "cargo:warning=See .grok/diagrams/ for current diagrams and regeneration guidance."
+            );
+        }
+    }
+}
+
+fn find_newest_mtime(dir: &Path) -> Option<SystemTime> {
+    let mut newest: Option<SystemTime> = None;
+
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+
+            if path.is_dir() {
+                if let Some(sub_newest) = find_newest_mtime(&path) {
+                    newest = Some(newest.map_or(sub_newest, |t| t.max(sub_newest)));
+                }
+            } else if let Ok(metadata) = fs::metadata(&path) {
+                if let Ok(mtime) = metadata.modified() {
+                    newest = Some(newest.map_or(mtime, |t| t.max(mtime)));
                 }
             }
         }
     }
+
+    newest
 }

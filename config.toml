@@ -1,11 +1,13 @@
-[bot]
-name = "Bot"
+[helix]
+name = "Helix"
 
 # --- MULTIPLE OLLAMA INSTANCES ---
 [[ollama]]
 name = "server"
 url = "http://192.168.1.149:11434"
+#slow not responding
 model = "qwen3.5:0.8b"
+#model = "llama3.2:1b"
 
 [[ollama]]
 name = "desktop"
@@ -19,13 +21,22 @@ model = "gemma4:e4b"
 #   gemini-2.0-flash          (fast, cheap, good for chat)
 #   gemini-2.0-flash-thinking (reasoning model)
 #   gemini-2.5-pro-preview-03-25  (most capable)
-model = "gemini-3.1-flash-lite-preview"
+model = "gemini-3.6-flash"
 
 [web]
 port = 8443
 tls_enabled = true
 cert_path = "cert.pem"
 key_path = "key.pem"
+
+[logging]
+# Log file paths (must be relative and start with "logs/" for the sandbox).
+# These are used by read_log, web UI, and internal logging.
+# Do NOT use absolute paths like "/logs/..." — that will be rejected by security.
+chat_log = "logs/chat_log.md"
+error_log = "logs/error_log.md"
+bus_log = "logs/bus_log.md"
+hartbeat_log = "logs/hartbeat_log.md"
 
 [heartbeat]
 interval_seconds = 300
@@ -35,7 +46,7 @@ interval_seconds = 300
 # They can also be set via .env to avoid recompiling.
 #
 # OLLAMA_PRELOAD=true
-#   Send a dummy request at bot startup to pre-warm the model.
+#   Send a dummy request at Helix startup to pre-warm the model.
 #   Eliminates the cold-start delay on the first real user query.
 #   Set to "false" to skip (e.g. during development to speed up restarts).
 #
@@ -59,3 +70,39 @@ default_goal = "Improve agent reliability, safety, and self-correction"
 cycle_interval_ticks = 20
 metrics_interval_ticks = 40
 health_check_interval_ticks = 100
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helix OKF (Open Knowledge Format) Librarian System
+# Task #164
+# ─────────────────────────────────────────────────────────────────────────────
+[helix.okf]
+enabled = false                 # Master switch (set to true to activate)
+server_url = "http://localhost:8080"
+auto_reload = true
+index_file = "okf_index.json"
+poll_interval_secs = 60
+request_timeout_secs = 30
+# auth_token = "optional-token-here"   # Uncomment if your OKF server requires auth
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MCP (Model Context Protocol) client
+# Lets Helix spawn external MCP servers as subprocesses over stdio and use
+# their tools. NOTE: this is unrelated to src/mcp/ ("Master Control Program",
+# the internal bus router).
+#
+# Everything below is commented out, which leaves the client disabled — the
+# default. When disabled, no servers are spawned and no MCP tools appear.
+# ─────────────────────────────────────────────────────────────────────────────
+# [mcp]
+# enabled = false                  # Master switch (set to true to activate)
+#
+# [[mcp.servers]]
+# name = "google"                  # Tool namespace: mcp__google__<tool>
+# command = "/path/to/google-mcp"  # e.g. ~/workspace/google-mcp/target/debug/google-mcp
+# args = []                        # Extra argv entries (optional)
+#
+# # Extra env vars for the server process, on top of the inherited environment.
+# # google-mcp needs these for OAuth (see ~/workspace/google-mcp/README.md).
+# [mcp.servers.env]
+# GOOGLE_CLIENT_ID = ""
+# GOOGLE_CLIENT_SECRET = ""

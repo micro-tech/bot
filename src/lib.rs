@@ -1,4 +1,4 @@
-//! Bot crate library root (for integration tests & reuse)
+//! Helix crate library root (for integration tests & reuse)
 //! Re-exports the main public modules.
 
 pub mod bus;
@@ -11,11 +11,12 @@ pub mod utils;
 pub mod io;
 pub mod hooks;
 pub mod tools;
+pub mod mcp_client;
 pub mod planning;
 pub mod reasoning;
 pub mod bayesian;
 pub mod agents;
-pub mod router;
+pub mod okf;
 
 // Re-export commonly used types
 pub use bus::{Bus, Message};

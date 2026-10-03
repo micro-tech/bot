@@ -1,12 +1,12 @@
 [package]
-name = "agentos_io_web_server"
+name = "helix_io_web_server"
 version = "0.1.0"
 edition = "2021"
-Authors = ["AgentOS Team"]
-description = "Web Server Handler for Agent OS IO - Handles HTTPS web interface"
+authors = ["John McConnell <john.microtech@gmail.com>"]
+description = "Web Server Handler for Helix IO - Handles HTTPS web interface"
 
 [lib]
-name = "agentos_io_web_server"
+name = "helix_io_web_server"
 path = "web_server.rs"
 
 [dependencies]

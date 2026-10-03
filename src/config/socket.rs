@@ -11,8 +11,8 @@ pub struct SocketConfig {
 impl Default for SocketConfig {
     fn default() -> Self {
         Self {
-            path: "/var/run/bot.sock".to_string(),
-            group: "botctl".to_string(),
+            path: "/var/run/helix.sock".to_string(),
+            group: "helix".to_string(),
             mode: 0o660,
         }
     }

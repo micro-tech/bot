@@ -1,4 +1,4 @@
-// Tests for Ollama Handler in Agent OS
+// Tests for Ollama Handler in Helix
 // This file contains tests for the functions in ollama_handler.rs to ensure proper handling of Ollama API calls.
 
 #[cfg(test)]

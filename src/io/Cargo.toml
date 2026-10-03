@@ -1,12 +1,12 @@
 [package]
-name = "agentos_io"
+name = "helix_io"
 version = "0.1.0"
 edition = "2021"
-Authors = ["AgentOS Team"]
-description = "IO Module for Agent OS - Handles external communications"
+authors = ["John McConnell <john.microtech@gmail.com>"]
+description = "IO Module for Helix - Handles external communications (web, terminal, Ollama, Gemini, etc.)"
 
 [lib]
-name = "agentos_io"
+name = "helix_io"
 path = "io.rs"
 
 [dependencies]

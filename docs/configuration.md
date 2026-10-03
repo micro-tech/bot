@@ -1,6 +1,6 @@
 # Configuration (`config.toml`)
 
-Agent OS is configured via `config.toml` in the project root.
+Helix is configured via `config.toml` in the project root.
 
 ## Main Sections
 
@@ -37,13 +37,13 @@ UNIX domain socket CLI settings.
 
 ```toml
 [socket]
-path = "/tmp/agentos.sock"
+path = "/tmp/helix.sock"
 mode = 0o660
 ```
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `path` | Socket file location | `/tmp/agentos.sock` |
+| `path` | Socket file location | `/tmp/helix.sock` |
 | `mode` | File permissions (octal) | `0o660` |
 
 ### `[logging]`
@@ -71,8 +71,8 @@ Some paths are expanded automatically:
 
 | Platform | Example Expanded Path |
 |----------|-----------------------|
-| Windows | `%APPDATA%\bot\logs\error_log.md` |
-| Linux/macOS | `~/.bot/logs/error_log.md` |
+| Windows | `%APPDATA%\helix\logs\error_log.md` |
+| Linux/macOS | `~/.helix/logs/error_log.md` |
 
 ## Example Full File
 

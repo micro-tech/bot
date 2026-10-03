@@ -1,4 +1,4 @@
-// Tests for IO Module in Agent OS
+// Tests for IO Module in Helix
 // This file contains tests for the functions in io.rs to ensure proper routing of bus messages.
 
 #[cfg(test)]

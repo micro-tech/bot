@@ -1,4 +1,4 @@
-// IO Module for Agent OS
+// IO Module for Helix
 // This module handles external communications by reading messages from the bus
 // and routing them to the appropriate handler based on the 'to' field.
 
