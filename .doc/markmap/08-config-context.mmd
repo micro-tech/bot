@@ -1,0 +1,29 @@
+# Config & Context
+
+## Navigation
+- [Overview](00-overview.html)
+- [CLI](01-cli.html)
+- [Agent](02-agent.html)
+- [RAG](03-rag.html)
+- [Memory](04-memory.html)
+- [Tools](05-tools.html)
+- [Engine](06-engine.html)
+- [Router](07-router.html)
+- [Config & Context](08-config-context.html)
+- [MCP & ACP](09-mcp-acp.html)
+- [Safety & Security](10-safety-security.html)
+- [Utils & Display](11-utils-display.html)
+
+## Files
+- `config.toml` — Main configuration (ports, backends, models)
+- `src/config/` — `manifest.rs`, `reasoning.rs`, `socket.rs`
+- `system_manifest.md` — Runtime manifest loaded by CPU
+
+## Responsibilities
+- Parse configuration at startup
+- Provide `ReasoningConfig` to CPU
+- Load multiple Ollama backends
+
+## Links
+- [Overview](00-overview.html)
+- [Router](07-router.html)

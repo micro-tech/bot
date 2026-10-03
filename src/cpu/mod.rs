@@ -28,6 +28,7 @@ use crate::hy_evo::workflow::{Workflow, WorkflowContext};
 use crate::config::manifest::SystemManifest;
 use crate::io::ollama::LlmTarget;
 use crate::memory::MemoryManager;
+use crate::router::{route, resolve_with_fallback, LLMBackend, RoutingContext, RouterConfig, HealthStore};
 use crate::utils::{log_to_file, now_ms};
 
 use crate::agents::{
@@ -35,6 +36,7 @@ use crate::agents::{
     planner::Planner,
     rule_layer::RuleLayer,
     runtime_loop::RuntimeLoop,
+    simple_planner::SimplePlanner,
 };
 
 use chrono::{Timelike, Utc};
@@ -54,6 +56,40 @@ where
     pub personality: String,
     pub reasoning: Option<ReasoningEngine>,
     pub reasoning_config: crate::config::reasoning::ReasoningConfig,
+    pub router_config: RouterConfig,
+    pub health_store: Option<HealthStore>,
+}
+
+// -------------------------------------------------------------------------
+// Router Configuration Accessors
+// -------------------------------------------------------------------------
+
+impl<L> Cpu<L>
+where
+    L: ReflectionLlm + LlmInterface + Send + Sync + 'static,
+{
+    /// Replace the current router configuration at runtime.
+    pub fn set_router_config(&mut self, config: RouterConfig) {
+        self.router_config = config;
+        log_to_file("CPU router configuration updated");
+    }
+
+    /// Load router configuration from a TOML file (hot-reload friendly).
+    pub fn load_router_config(&mut self, path: &str) -> Result<(), String> {
+        match std::fs::read_to_string(path) {
+            Ok(content) => {
+                match toml::from_str::<RouterConfig>(&content) {
+                    Ok(cfg) => {
+                        self.router_config = cfg;
+                        log_to_file(&format!("Loaded router config from {}", path));
+                        Ok(())
+                    }
+                    Err(e) => Err(format!("Failed to parse router config: {}", e)),
+                }
+            }
+            Err(e) => Err(format!("Failed to read router config file: {}", e)),
+        }
+    }
 }
 
 impl<L> Cpu<L>
@@ -72,6 +108,34 @@ where
         // Load the system manifest from disk
         let manifest = SystemManifest::load(manifest_path)?;
 
+        // Load router configuration at startup (non-fatal)
+        let router_config = match std::fs::read_to_string("router.toml") {
+            Ok(content) => {
+                match toml::from_str::<RouterConfig>(&content) {
+                    Ok(cfg) => {
+                        log_to_file("Loaded router.toml at Cpu startup");
+                        cfg
+                    }
+                    Err(e) => {
+                        log_to_file(&format!("Failed to parse router.toml, using defaults: {}", e));
+                        RouterConfig::default()
+                    }
+                }
+            }
+            Err(_) => {
+                log_to_file("router.toml not found, using RouterConfig::default()");
+                RouterConfig::default()
+            }
+        };
+
+        // Auto-create HealthStore for backend health monitoring (Task 161)
+        let default_backends = vec![
+            "localollama".to_string(),
+            "lanollama".to_string(),
+            "gemini".to_string(),
+        ];
+        let health_store = Some(HealthStore::new(default_backends));
+
         Ok(Self {
             state: AgentState::new(),
             memory,
@@ -83,6 +147,8 @@ where
             personality: "neutral".to_string(),
             reasoning: None,
             reasoning_config,
+            router_config,
+            health_store,
         })
     }
 
@@ -185,6 +251,21 @@ where
             log_to_file("[CPU] Unified agent runtime completed successfully");
             Ok("Agent completed".to_string())
         }
+    }
+
+    /// High-level convenience method: run an agent using the default planner.
+    /// Uses ReflectionPlannerAdapter<SimplePlanner> for structured reasoning (Task 2).
+    /// Falls back to SimplePlanner if reflection parsing fails.
+    pub async fn run_agent(&self, goal: &str, max_steps: u32) -> anyhow::Result<String> {
+        log_to_file(&format!("[CPU] run_agent (ReflectionPlannerAdapter default) started: {}", goal));
+
+        // Wrap SimplePlanner with ReflectionPlannerAdapter for structured output
+        let inner_planner = SimplePlanner::new(goal.to_string());
+        let planner = crate::agents::reflection_planner_adapter::ReflectionPlannerAdapter::new(inner_planner);
+
+        let allowed_tools = vec!["noop".to_string(), "search".to_string(), "calc".to_string()];
+
+        self.run_unified_agent(goal, planner, allowed_tools, max_steps).await
     }
 
     /// Reset reasoning state (stop + clear goal)
@@ -495,15 +576,38 @@ where
     }
 
     // -------------------------------------------------------------------------
-    // LLM Routing
+    // LLM Routing (now powered by Context Engine / Router)
     // -------------------------------------------------------------------------
 
-    fn route_llm_request(&self, target: LlmTarget, prompt: String, correlation_id: u64) {
-        let to = match target {
-            LlmTarget::OllamaLan => "ollama_server",
-            LlmTarget::OllamaLocal => "ollama_local3090",
-            LlmTarget::Gemini => "gemini",
-            LlmTarget::Grok => "grok",
+    /// Build a RoutingContext from a prompt for intelligent backend selection.
+    fn build_routing_context(&self, prompt: &str, correlation_id: u64) -> RoutingContext {
+        let token_estimate = prompt.split_whitespace().count();
+        let has_code = prompt.contains("```") || prompt.contains("fn ") || prompt.contains("struct ");
+
+        RoutingContext {
+            prompt: prompt.to_string(),
+            token_estimate,
+            has_code,
+            complexity_score: 0.0, // will be computed by router
+            timestamp: chrono::Utc::now(),
+            user_override: None,
+            telemetry: None,
+            health: None,
+        }
+    }
+
+    /// Intelligent LLM routing using the Context Engine.
+    /// Falls back to a safe default (OllamaLan) if routing fails.
+    fn route_llm_request(&self, prompt: String, correlation_id: u64) {
+        let ctx = self.build_routing_context(&prompt, correlation_id);
+        let backend = route(&ctx, &self.router_config);
+
+        let to = match backend {
+            LLMBackend::LocalOllama => "ollama_local",
+            LLMBackend::LanOllama => "ollama_server",
+            LLMBackend::Gemini => "gemini",
+            LLMBackend::Grok => "grok",
+            LLMBackend::Fallback => "ollama_server", // safe default
         };
 
         let msg = Message {
@@ -513,6 +617,7 @@ where
                 "type": "chat_request",
                 "correlation_id": correlation_id,
                 "prompt": prompt,
+                "routed_via": format!("{:?}", backend),
             })
             .to_string(),
             timestamp: now_ms(),
@@ -520,9 +625,10 @@ where
 
         if let Err(e) = self.bus.publish(msg.clone()) {
             error!("Failed to route LLM request to {}: {}", to, e);
+            log_to_file(&format!("CPU routing error: {}", e));
         } else {
-            debug!("CPU routed LLM request to {}", to);
-            log_to_file(&format!("CPU routed LLM request to {}", to));
+            debug!("CPU routed LLM request to {} via {:?}", to, backend);
+            log_to_file(&format!("CPU routed to {} via {:?}", to, backend));
         }
     }
 
@@ -589,25 +695,23 @@ where
                         serde_json::Value::String(format!("user: {}", prompt)),
                     );
 
-                    self.route_llm_request(
-                        crate::io::ollama::LlmTarget::OllamaLan,
-                        prompt,
-                        correlation_id,
-                    );
-                    log_to_file("CPU routed user_input to Ollama");
+                    self.route_llm_request(prompt, correlation_id);
+                    log_to_file("CPU routed user_input via Context Engine");
                 }
 
                 "chat_request" => {
-                    // Direct chat requests from the web UI (bypassing CPU for LLM,
-                    // but we still want to record them in memory for context).
+                    // Route through Context Engine for intelligent backend selection
                     let prompt = payload["prompt"].as_str().unwrap_or("").to_string();
+                    let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
+
                     if !prompt.is_empty() {
                         let _ = self.memory.working.write(
                             "context",
                             serde_json::Value::String(format!("user: {}", prompt)),
                         );
+                        self.route_llm_request(prompt.clone(), correlation_id);
                         log_to_file(&format!(
-                            "CPU recorded chat_request in memory: {}",
+                            "CPU routed chat_request via Context Engine: {}",
                             &prompt[..prompt.len().min(80)]
                         ));
                     }
@@ -650,39 +754,66 @@ where
 
                 "agent_run" => {
                     let goal = payload["goal"].as_str().unwrap_or("").to_string();
+                    let max_steps = payload["max_steps"].as_u64().unwrap_or(20) as u32;
+
                     if goal.is_empty() {
                         log_to_file("CPU received empty agent_run goal — ignored");
                     } else {
-                        log_to_file(&format!("CPU received AgentRun via bus: {}", goal));
+                        log_to_file(&format!("CPU received AgentRun via bus: {} (max_steps={})", goal, max_steps));
 
-                        // Spawn the runtime asynchronously
-                        // We use a dummy planner for now (SimplePlanner)
-                        // In production you would inject a real planner via DI
                         let bus_clone = self.bus.clone();
                         let goal_clone = goal.clone();
 
+                        // Emit start event
+                        let _ = bus_clone.publish(Message {
+                            to: "event_log".to_string(),
+                            from: "cpu".to_string(),
+                            data: serde_json::json!({
+                                "type": "agent_started",
+                                "goal": goal_clone.clone(),
+                                "max_steps": max_steps,
+                                "status": "running"
+                            }).to_string(),
+                            timestamp: now_ms(),
+                        });
+
+                        // Real async execution using RuntimeLoop + SimplePlanner
                         tokio::spawn(async move {
                             use crate::agents::simple_planner::SimplePlanner;
-                            use crate::agents::planner::Planner;
+                            use crate::agents::rule_layer::RuleLayer;
+                            use crate::agents::runtime_loop::RuntimeLoop;
+                            use crate::agents::agent_state::AgentState as UnifiedAgentState;
 
-                            // This is a placeholder — in real code the Cpu would hold the planner
-                            // For now we just demonstrate the wiring
-                            log_to_file(&format!(
-                                "[Bus] AgentRun goal '{}' would now execute run_unified_agent",
-                                goal_clone
-                            ));
+                            let planner = SimplePlanner::new(goal_clone.clone());
+                            let allowed_tools = vec!["noop".to_string(), "search".to_string(), "calc".to_string()];
+                            let rule_layer = RuleLayer::new(allowed_tools);
+                            let mut runtime = RuntimeLoop::new(planner, rule_layer, max_steps);
 
-                            // Emit a synthetic completion event so downstream systems can react
+                            let mut state = UnifiedAgentState::new();
+                            state.messages.push(format!("goal: {}", goal_clone));
+
+                            let final_state = runtime.run(state).await;
+
+                            let status = if final_state.last_error.is_some() {
+                                "error"
+                            } else {
+                                "completed"
+                            };
+
                             let _ = bus_clone.publish(Message {
                                 to: "event_log".to_string(),
                                 from: "cpu".to_string(),
                                 data: serde_json::json!({
                                     "type": "agent_finished",
                                     "goal": goal_clone,
-                                    "status": "simulated"
+                                    "status": status,
+                                    "steps_taken": final_state.step_count,
+                                    "error": final_state.last_error
                                 }).to_string(),
                                 timestamp: now_ms(),
                             });
+
+                            log_to_file(&format!("[CPU] RuntimeLoop finished for goal '{}' with status {}", goal_clone, status));
                         });
                     }
                 }
@@ -787,7 +918,7 @@ where
                 correlation_id,
             } => {
                 let enhanced_prompt = self.enhance_prompt_with_memory(&prompt);
-                self.route_llm_request(target, enhanced_prompt, correlation_id);
+                self.route_llm_request(enhanced_prompt, correlation_id);
             }
         }
     }

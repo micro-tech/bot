@@ -1,5 +1,5 @@
 // router/schedule.rs - Full Time-of-Day & Schedule Logic (Task 129)
-use chrono::{DateTime, Timelike, Utc, Weekday};
+use chrono::{DateTime, Timelike, Datelike, Utc, Weekday};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
