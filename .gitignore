@@ -64,3 +64,5 @@ H:\GitHub\helix\certs
 cert.pem
 key.pem
 .zed/settings.json
+.tmp.driveupload
+.tmp.drivedownload
