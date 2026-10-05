@@ -93,12 +93,12 @@ request_timeout_secs = 30
 # Everything below is commented out, which leaves the client disabled — the
 # default. When disabled, no servers are spawned and no MCP tools appear.
 # ─────────────────────────────────────────────────────────────────────────────
-# [mcp]
-# enabled = false                  # Master switch (set to true to activate)
+ [mcp]
+ enabled = true                  # Master switch (set to true to activate)
 #
-# [[mcp.servers]]
-# name = "google"                  # Tool namespace: mcp__google__<tool>
-# command = "/path/to/google-mcp"  # e.g. ~/workspace/google-mcp/target/debug/google-mcp
+[[mcp.servers]]
+name = "google"                  # Tool namespace: mcp__google__<tool>
+command = "/home/cobble/.local/bin/google-mcp"  # e.g. ~/workspace/google-mcp/target/debug/google-mcp
 # args = []                        # Extra argv entries (optional)
 #
 # # Extra env vars for the server process, on top of the inherited environment.
