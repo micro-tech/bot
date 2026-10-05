@@ -1,6 +1,6 @@
 //! Bus subsystem test scenarios
 use crate::TestContext;
-use bot::bus::Message;
+use helix::bus::Message;
 use std::time::Duration;
 
 #[tokio::test]
@@ -14,7 +14,7 @@ async fn test_bus_publish_subscribe_roundtrip() {
             to: "test_topic".into(),
             from: "harness".into(),
             data: format!(r#"{{"seq":{}}}"#, i),
-            timestamp: bot::utils::now_ms(),
+            timestamp: helix::utils::now_ms(),
         };
         let _ = ctx.bus.publish(msg);
         {
@@ -41,7 +41,7 @@ async fn test_bus_error_propagation() {
         to: "test_harness".into(),
         from: "harness".into(),
         data: r#"{"type":"error","msg":"test failure"}"#.into(),
-        timestamp: bot::utils::now_ms(),
+        timestamp: helix::utils::now_ms(),
     };
     let _ = ctx.bus.publish(msg);
 
