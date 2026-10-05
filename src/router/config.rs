@@ -8,7 +8,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use log::{info, warn};
 use notify::{Watcher, RecursiveMode, RecommendedWatcher, Event};
-use std::time::Duration;
 use std::env;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

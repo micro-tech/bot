@@ -34,6 +34,10 @@ pub struct OkfLibrarian {
     pub registry: OkfRegistry,
     validator: OkfValidator,
 
+    /// The currently loaded manifest (retained so the server half can serve
+    /// GET /okf/manifest.json and /okf/bundles/{id}/manifest.json — v1).
+    pub current_manifest: Option<OkfBundleManifest>,
+
     /// Last seen ETag for efficient conditional polling / change detection (164.1)
     pub last_etag: Option<String>,
 
@@ -197,6 +201,7 @@ impl OkfLibrarian {
             config: config.clone(),
             registry: OkfRegistry::new(),
             validator: OkfValidator::new(),
+            current_manifest: None,
             last_etag: None,
             last_reload_ms: None,
             reload_count: 0,
@@ -222,6 +227,8 @@ impl OkfLibrarian {
 
         if validation.is_valid {
             self.registry = OkfRegistry::from_manifest(&manifest);
+            // Retain the manifest so the server half can serve it (v1).
+            self.current_manifest = Some(manifest);
             // Also write index file if configured
             let _ = self.registry.write_to_file(&self.config.index_file());
         }
@@ -258,6 +265,8 @@ impl OkfLibrarian {
 
                 if validation.is_valid {
                     self.registry = OkfRegistry::from_manifest(&manifest);
+                    // Retain the manifest so the server half can serve it (v1).
+                    self.current_manifest = Some(manifest.clone());
                     let _ = self.registry.write_to_file(&self.config.index_file());
 
                     if let Some(etag) = new_etag {
