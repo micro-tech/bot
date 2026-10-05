@@ -65,6 +65,30 @@ working_max = 50
 episodic_max = 1000
 ```
 
+### `[shell]`
+Local shell tool (`run_shell`) — lets the agent run commands on its own
+server via `/bin/sh -c`. **Disabled by default**; explicit opt-in required.
+The SSH server (task 192) executes sessions through this same policy and
+fails closed when it is off.
+
+```toml
+[shell]
+enabled = false            # master switch — the tool refuses to run unless true
+default_timeout_secs = 60  # per-command timeout when the caller doesn't set one (1-3600)
+workdir = "."              # base directory commands run in (relative to Helix's CWD)
+allow_absolute_paths = false  # when false, workdir args must stay under `workdir`
+max_output_bytes = 32768   # per-stream (stdout/stderr) capture cap
+```
+
+Protections (all enforced, not just the denylist): two-layer
+destructive-shell analysis (argv[0] program-name matching + substring
+denylist — shared with the ACP surface, implemented once in
+`src/tools/shell_security.rs`); timeout kills the whole process group;
+stdout/stderr truncated with notice; stdin is `/dev/null` (no TTY, so
+interactive prompts fail fast); working directory confined to `workdir`.
+Defense-in-depth framing: the denylist sits *behind* the agent's own
+judgment, never as the sole protection.
+
 ## Cross-Platform Paths
 
 Some paths are expanded automatically:
