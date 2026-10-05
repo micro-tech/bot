@@ -23,9 +23,22 @@ mod reasoning;
 mod agents;
 mod okf;
 mod mcp_client;
+mod router;
+mod acp;
+mod a2a;
+mod ssh;
+mod cron;
 
 #[tokio::main]
 async fn main() {
+    // `helix acp` — ACP server mode (Zed / ACP clients drive Helix over
+    // stdio). Handled before normal startup; see run_acp_server().
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some("acp") {
+        run_acp_server().await;
+        return;
+    }
+
     // Load .env early (for GEMINI_API_KEY etc.)
     let _ = dotenv::dotenv();
 
@@ -36,6 +49,57 @@ async fn main() {
         .expect("Failed to install global rustls crypto provider (ring)");
 
     run_helix().await;
+}
+
+/// `helix acp` entry point: run the ACP server on stdio.
+///
+/// Opt-in via the `[acp]` config section (`enabled = true`). When disabled
+/// (the default) this prints a hint and exits — an ACP server is a
+/// remote-control surface and must never start unasked.
+///
+/// Logging goes to stderr so the JSON-RPC stream on stdout stays clean.
+async fn run_acp_server() {
+    // Same config resolution as run_helix: first match wins.
+    let config_paths = [
+        "config.toml",
+        "/etc/helix/config.toml",
+        "/usr/local/etc/helix/config.toml",
+    ];
+    let config_str = config_paths
+        .iter()
+        .find_map(|path| fs::read_to_string(path).ok())
+        .unwrap_or_default();
+
+    let acp_cfg = crate::config::acp::AcpConfig::load_from_toml(&config_str);
+    if !acp_cfg.is_enabled() {
+        eprintln!("ACP server is disabled. Enable it with [acp] enabled = true in config.toml.");
+        std::process::exit(2);
+    }
+
+    eprintln!(
+        "Helix ACP server starting (max_steps={}) — waiting for client on stdio…",
+        acp_cfg.max_steps
+    );
+    let agent = crate::acp::HelixAcpAgent::new(acp_cfg.max_steps);
+    if let Err(e) = crate::acp::server::run_acp_stdio(agent).await {
+        eprintln!("ACP server error: {:#}", e);
+        std::process::exit(1);
+    }
+}
+
+/// Directory Helix considers its runtime home: the parent of the config file
+/// it actually loaded (task 188). Heartbeat/cron files land here, never in
+/// a CWD-relative path that may not be the live one.
+fn runtime_dir(config_path_used: &str) -> std::path::PathBuf {
+    if config_path_used == "none" {
+        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+    } else {
+        std::path::Path::new(config_path_used)
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+    }
 }
 
 async fn run_helix() {
@@ -65,6 +129,36 @@ async fn run_helix() {
         .unwrap_or("none");
 
     println!("Using config file: {}", config_path_used);
+
+    // Dual-deploy coherence: the installer keeps ./config.toml (the primary,
+    // under the service WorkingDirectory) and /etc/helix/config.toml as
+    // byte-identical copies, primary winning on first-exists-wins. If they
+    // ever diverge, say so loudly instead of silently running on one while
+    // the operator edits the other.
+    if config_path_used == "config.toml" {
+        let primary = fs::read("config.toml");
+        let fallback = fs::read("/etc/helix/config.toml");
+        if let (Ok(a), Ok(b)) = (primary, fallback) {
+            if a != b {
+                eprintln!(
+                    "WARNING: ./config.toml and /etc/helix/config.toml differ — \
+                     using ./config.toml (first match); the /etc/helix copy is stale. \
+                     Reconcile them or reinstall."
+                );
+            }
+        }
+    }
+
+    // Tell the MCP client which file is live, so it reads [mcp] from the same
+    // config Helix loaded. "none" (no config anywhere) falls back to the
+    // CWD-relative config.toml, matching previous behavior.
+    let mcp_config_path = if config_path_used == "none" {
+        std::path::PathBuf::from("config.toml")
+    } else {
+        std::path::PathBuf::from(config_path_used)
+    };
+    crate::mcp_client::set_config_path(mcp_config_path.clone());
+    crate::tools::shell_tool::set_config_path(mcp_config_path);
 
     if config_str.is_empty() {
         eprintln!("Warning: Could not find config.toml in any standard location.");
@@ -100,6 +194,212 @@ async fn run_helix() {
         println!("WARNING: No [[ollama]] entries found in config!");
     }
 
+    // ── Heartbeat: construct the live Cpu and drive it on a real tick loop ──
+    // Task 199. John's intent: the heartbeat is the drumbeat that keeps the
+    // bot busy moving along through different jobs — a scheduler tick that
+    // advances queued work, NOT just a liveness ping. Until now nothing
+    // ticked in production: Cpu was never constructed, handle_heartbeat had
+    // zero callers, and TimeScheduler::start was an uncalled placeholder.
+    {
+        let heartbeat_interval_secs: u64 = toml::from_str::<toml::Value>(&config_str)
+            .ok()
+            .and_then(|v| v.get("heartbeat")?.get("interval_seconds")?.as_integer())
+            .and_then(|i| u64::try_from(i).ok())
+            .filter(|&i| i > 0)
+            .unwrap_or(300);
+
+        // Manifest: prefer the runtime dir (task 188); fall back to CWD.
+        let rt_dir = runtime_dir(config_path_used);
+        let manifest_candidates = [
+            rt_dir.join("system_manifest.md"),
+            std::path::PathBuf::from("system_manifest.md"),
+        ];
+        let manifest_path = manifest_candidates
+            .iter()
+            .find(|p| p.is_file())
+            .cloned()
+            .unwrap_or_else(|| manifest_candidates[0].clone());
+        let manifest_path_str = manifest_path.to_string_lossy().to_string();
+
+        let memory = memory::MemoryManager::new(1000, 500);
+        let skills: Box<dyn cpu::interfaces::SkillInterface> =
+            Box::new(skills::SkillRegistry::new());
+
+        let mut ollama_router = io::ollama::OllamaRouter::new();
+        for (_name, url, model) in &ollama_backends {
+            ollama_router.add_backend(url.clone(), model.clone());
+        }
+        let ollama_router = std::sync::Arc::new(ollama_router);
+        let llm = io::ollama::llm::OllamaLlm::new(ollama_router);
+        let hyevo = hy_evo::integration::HyEvoIntegration::new(hy_evo::engine::HyEvoEngine::new(
+            llm.clone(),
+        ));
+        let reasoning_config = config::reasoning::ReasoningConfig::load_from_toml(&config_str);
+
+        match cpu::Cpu::new(
+            memory,
+            skills,
+            llm,
+            bus.clone(),
+            hyevo,
+            &manifest_path_str,
+            reasoning_config,
+        ) {
+            Ok(cpu) => {
+                let cpu = std::sync::Arc::new(tokio::sync::Mutex::new(cpu));
+                println!(
+                    "Heartbeat: live Cpu constructed (manifest: {}), ticking every {}s",
+                    manifest_path_str, heartbeat_interval_secs
+                );
+                // Files live next to the config Helix actually loaded (task 188),
+                // never in a CWD-relative path that may not be the live one.
+                let hb_dir = rt_dir.clone();
+                let hb_bus = bus.clone();
+                let hb_interval = heartbeat_interval_secs;
+                // Clones for the watchdog spawn below (the tick spawn moves
+                // hb_dir/hb_bus into its async block).
+                let wd_dir = hb_dir.clone();
+                let wd_bus = hb_bus.clone();
+                // Task 202: routine dispatch. The cron registry scheduler
+                // (task 201) publishes `routine_run` to "cpu"; this task
+                // delivers them to the Cpu. (The bus router broadcasts to
+                // every subscriber of "cpu", so this coexists with the
+                // llm_response forwarder below.)
+                let routine_cpu = cpu.clone();
+                let routine_bus = bus.clone();
+                tokio::spawn(async move {
+                    let rx = routine_bus.subscribe("cpu");
+                    while let Ok(msg) = rx.recv() {
+                        if !msg.data.contains("\"type\":\"routine_run\"") {
+                            continue;
+                        }
+                        let payload: serde_json::Value =
+                            serde_json::from_str(&msg.data).unwrap_or_default();
+                        let routine_id = payload["routine_id"]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_string();
+                        let routine_name = payload["routine_name"]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_string();
+                        if routine_id.is_empty() {
+                            continue;
+                        }
+                        let cpu_clone = routine_cpu.clone();
+                        tokio::spawn(async move {
+                            let mut guard = cpu_clone.lock().await;
+                            guard.handle_routine_run(&routine_id, &routine_name).await;
+                        });
+                    }
+                });
+                // Consecutive beat failures, reported in heartbeat.md.
+                let beat_errors = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+                let beat_errors_clone = beat_errors.clone();
+                tokio::spawn(async move {
+                    let mut ticker = tokio::time::interval(std::time::Duration::from_secs(
+                        heartbeat_interval_secs,
+                    ));
+                    // Skip the immediate first tick — startup shouldn't wait on it.
+                    ticker.tick().await;
+                    loop {
+                        ticker.tick().await;
+                        let (tick, uptime_secs) = {
+                            let mut guard = cpu.lock().await;
+                            guard.handle_heartbeat().await;
+                            (guard.state.tick_count, guard.state.uptime.as_secs())
+                        };
+                        // Task 200: observability. Every beat writes
+                        // heartbeat.md and appends to logs/hartbeat_log.md.
+                        let ts = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+                        let errors = beat_errors_clone
+                            .load(std::sync::atomic::Ordering::Relaxed);
+                        let hb_md = crate::utils::format_heartbeat_md(
+                            tick, &ts, uptime_secs, errors
+                        );
+                        if std::fs::write(hb_dir.join("heartbeat.md"), &hb_md).is_err() {
+                            beat_errors_clone
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        let log_line = format!(
+                            "[{}] tick={} uptime_secs={} errors={}\n",
+                            chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                            tick,
+                            uptime_secs,
+                            errors
+                        );
+                        if let Ok(mut f) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(hb_dir.join("logs/hartbeat_log.md"))
+                        {
+                            use std::io::Write as _;
+                            if f.write_all(log_line.as_bytes()).is_err() {
+                                beat_errors_clone
+                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            }
+                        }
+                        // Slow-cadence broadcast so the UI stays live without
+                        // a message per beat.
+                        if tick % 10 == 0 {
+                            let _ = hb_bus.publish(crate::bus::Message {
+                                to: "web_interface".to_string(),
+                                from: "heartbeat".to_string(),
+                                data: serde_json::json!({
+                                    "type": "heartbeat_status",
+                                    "tick": tick,
+                                    "uptime_secs": uptime_secs,
+                                    "errors": errors,
+                                })
+                                .to_string(),
+                                timestamp: crate::utils::now_ms(),
+                            });
+                        }
+                    }
+                });
+                // Missed-beat watchdog: if the beat file goes stale (> 3x the
+                // interval), the tick loop is stuck — log loudly and alert.
+                tokio::spawn(async move {
+                    let mut check = tokio::time::interval(std::time::Duration::from_secs(
+                        hb_interval,
+                    ));
+                    check.tick().await; // let beats land before first check
+                    loop {
+                        check.tick().await;
+                        let stale = crate::utils::heartbeat_stale_secs(
+                            &wd_dir.join("heartbeat.md"),
+                            std::time::SystemTime::now(),
+                        );
+                        if crate::utils::is_heartbeat_missed(stale, hb_interval) {
+                            eprintln!(
+                                "Heartbeat watchdog: MISSED BEAT — last beat {:?} (threshold {}s)",
+                                stale.map(|s| format!("{}s ago", s)).unwrap_or_else(|| "never".to_string()),
+                                3 * hb_interval
+                            );
+                            let _ = wd_bus.publish(crate::bus::Message {
+                                to: "web_interface".to_string(),
+                                from: "heartbeat".to_string(),
+                                data: serde_json::json!({
+                                    "type": "heartbeat_missed",
+                                    "last_beat_secs_ago": stale,
+                                    "threshold_secs": 3 * hb_interval,
+                                })
+                                .to_string(),
+                                timestamp: crate::utils::now_ms(),
+                            });
+                        }
+                    }
+                });
+            }
+            Err(e) => {
+                eprintln!(
+                    "Heartbeat: Cpu construction failed ({}); heartbeat disabled, reactive paths unaffected",
+                    e
+                );
+            }
+        }
+    }
+
     // ── CPU response forwarder (handles llm_response → web_interface) ────────
     {
         let bus_clone = bus.clone();
@@ -114,7 +414,7 @@ async fn run_helix() {
             println!("CPU response forwarder started (subscribed to 'cpu')");
 
             while let Ok(msg) = rx.recv() {
-                println!("[CPU-Forwarder] received message to cpu | from='{}' data_preview='{}'", msg.from, &msg.data[..msg.data.len().min(120)]);
+                println!("[CPU-Forwarder] received message to cpu | from='{}' data_preview='{}'", msg.from, crate::utils::truncate_str(&msg.data, 120));
                 if msg.data.contains("\"type\":\"llm_response\"") {
                     let payload: serde_json::Value =
                         serde_json::from_str(&msg.data).unwrap_or_default();
@@ -201,7 +501,7 @@ async fn run_helix() {
 
             while let Ok(msg) = rx.recv() {
                 println!("[{}] 📥 RECEIVED message from='{}'  preview='{}'", 
-                    topic, msg.from, &msg.data[..msg.data.len().min(160)]);
+                    topic, msg.from, crate::utils::truncate_str(&msg.data, 160));
                 
                 // Only handle chat requests
                 if msg.data.contains("\"type\":\"chat_request\"") {
@@ -252,8 +552,52 @@ async fn run_helix() {
         });
     }
 
-    // Start the web server (this blocks)
-    if let Err(e) = crate::io::web_server::start_web_server(bus, port, config_str).await {
+    // Start the SSH server (task 192) alongside the web server. It runs as a
+    // background task; fail-closed refusals are loud but don't take down
+    // the rest of Helix.
+    {
+        let ssh_cfg = crate::config::ssh::SshConfig::load_from_toml(&config_str);
+        if ssh_cfg.is_enabled() {
+            // Helix-managed ssh material lives next to the config file Helix
+            // actually loaded (same resolution as the web editor's path).
+            let config_dir = std::path::Path::new(config_path_used)
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| {
+                    std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+                });
+            tokio::spawn(async move {
+                if let Err(e) = crate::ssh::start_ssh_server(ssh_cfg, config_dir).await {
+                    eprintln!("SSH server failed to start: {}", e);
+                }
+            });
+        }
+    }
+
+    // Task 201: routine registry + scheduler. The registry lives in the
+    // runtime dir next to the config; the scheduler fires due jobs on their
+    // own schedules (no global 5s tick). The same Arc is handed to the web
+    // server so the routines WS API toggles the live registry.
+    let rt_dir = runtime_dir(config_path_used);
+    let routines = std::sync::Arc::new(tokio::sync::RwLock::new(
+        crate::cron::registry::RoutineRegistry::load_or_seed(rt_dir.join("routines.json")),
+    ));
+    crate::cron::registry::spawn_scheduler(bus.clone(), routines.clone());
+
+    // Start the web server (this blocks). The resolved live config path goes
+    // along so the web config editor reads/writes the file Helix actually
+    // loaded, not a hardcoded CWD-relative "config.toml".
+    let web_config_path = config_path_used.to_string();
+    if let Err(e) = crate::io::web_server::start_web_server(
+        bus,
+        port,
+        config_str,
+        web_config_path,
+        routines,
+    )
+    .await
+    {
         eprintln!("Failed to start web server: {}", e);
     }
 }
