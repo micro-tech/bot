@@ -19,6 +19,7 @@ use log::{info, warn};
 use reqwest::Client;
 use serde_json::Value;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use crate::bus::Bus;
@@ -85,7 +86,7 @@ pub enum LlmTarget {
 // ── client factory ────────────────────────────────────────────────────────────
 
 /// Build a `reqwest::Client` with connection and request timeouts pre-set.
-/// Called for every handler invocation so timeouts are always in effect.
+/// Called once to seed the shared client (see [`shared_client`]).
 fn build_client() -> Client {
     Client::builder()
         .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
@@ -94,49 +95,147 @@ fn build_client() -> Client {
         .expect("Failed to build reqwest HTTP client")
 }
 
+/// Process-wide shared `reqwest::Client`, built once from [`build_client`].
+/// `Client::clone()` is cheap (Arc-backed connection pool), so every health
+/// check, model check, and chat turn reuses the same pool — keep-alive works
+/// and per-turn TCP handshakes are gone.
+static SHARED_CLIENT: OnceLock<Client> = OnceLock::new();
+
+/// Return the shared HTTP client, building it once on first use.
+pub fn shared_client() -> Client {
+    SHARED_CLIENT.get_or_init(build_client).clone()
+}
+
+/// Install the rustls ring crypto provider for tests.
+///
+/// The binary does this in `main()`; the lib test harness does not, and
+/// reqwest is built with `rustls-tls-manual-roots-no-provider`, so any test
+/// that builds a `reqwest::Client` must call this first.
+#[cfg(test)]
+pub(crate) fn ensure_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+// ── health/model probe cache (task 178) ───────────────────────────────────────
+// Every chat turn used to cost 2–3 sequential `/api/tags` round trips (health
+// check, model-existence check, and a re-fetch on failure) before the real
+// work started. One `/api/tags` response carries everything needed for both
+// checks, so we probe once and trust the result for PROBE_TTL. The entry is
+// invalidated when a real request fails, forcing re-validation on next turn.
+
+/// How long a `/api/tags` probe result is trusted before re-checking.
+const PROBE_TTL: Duration = Duration::from_secs(60);
+
+/// Cached outcome of one `/api/tags` probe.
+#[derive(Debug, Clone)]
+enum OllamaProbe {
+    /// Reachable; carries the installed model list.
+    Healthy(Vec<String>),
+    /// Connection refused / timed out / non-2xx.
+    Unreachable,
+    /// Probe inconclusive (DNS, parse error…): caller may proceed anyway.
+    Unknown(String),
+}
+
+static PROBE_CACHE: OnceLock<std::sync::Mutex<std::collections::HashMap<String, (OllamaProbe, std::time::Instant)>>> =
+    OnceLock::new();
+
+fn probe_cache(
+) -> &'static std::sync::Mutex<std::collections::HashMap<String, (OllamaProbe, std::time::Instant)>> {
+    PROBE_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// Health + model list for `base_url`, served from a 60s TTL cache.
+/// One `/api/tags` round trip populates both — no separate health check needed.
+async fn probe_ollama(base_url: &str) -> OllamaProbe {
+    if let Ok(cache) = probe_cache().lock() {
+        if let Some((probe, at)) = cache.get(base_url) {
+            if at.elapsed() < PROBE_TTL {
+                return probe.clone();
+            }
+        }
+    }
+    let probe = probe_ollama_fresh(base_url).await;
+    if let Ok(mut cache) = probe_cache().lock() {
+        cache.insert(base_url.to_string(), (probe.clone(), std::time::Instant::now()));
+    }
+    probe
+}
+
+/// Single fresh `/api/tags` probe (no cache).
+async fn probe_ollama_fresh(base_url: &str) -> OllamaProbe {
+    let client = shared_client();
+    let url = format!("{}/api/tags", base_url);
+    let resp = match client.get(&url).send().await {
+        Ok(r) => r,
+        Err(e) if e.is_timeout() || e.is_connect() => return OllamaProbe::Unreachable,
+        Err(e) => return OllamaProbe::Unknown(e.to_string()),
+    };
+    if !resp.status().is_success() {
+        return OllamaProbe::Unreachable;
+    }
+    match resp.json::<Value>().await {
+        Ok(json) => {
+            let models = json["models"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| m["name"].as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            OllamaProbe::Healthy(models)
+        }
+        Err(e) => OllamaProbe::Unknown(format!("failed to parse /api/tags JSON: {e}")),
+    }
+}
+
+/// Drop the cached probe for `base_url` so the next turn re-validates.
+/// Called when a real request fails — the cache must not mask an outage.
+pub fn invalidate_ollama_probe(base_url: &str) {
+    if let Ok(mut cache) = probe_cache().lock() {
+        cache.remove(base_url);
+    }
+}
+
+/// Does `model` match an entry of the installed-model list?
+/// (Exact match, or base-name match: `"llama3.2"` matches `"llama3.2:latest"`.)
+fn model_in_list(models: &[String], model: &str) -> bool {
+    let model_base = model.split(':').next().unwrap_or(model);
+    models
+        .iter()
+        .any(|a| a == model || a.split(':').next().unwrap_or(a) == model_base)
+}
+
 // ── health check ──────────────────────────────────────────────────────────────
 
 /// Ping `{base_url}/api/tags` to verify that Ollama is alive and responding.
 ///
 /// Returns `true` when the endpoint replies with a 2xx status code.
-/// This is a cheap, fast check — use it before every real request.
+/// Served from a 60s TTL probe cache (see [`probe_ollama`]): consecutive calls
+/// within the window cost no extra round trip. Use [`invalidate_ollama_probe`]
+/// to force re-validation after a real request failure.
 ///
 /// # Example
-/// ```no_run
+///
+/// ```ignore
+/// // (async context required)
 /// if check_ollama_health("http://localhost:11434").await {
 ///     println!("Ollama is up!");
 /// }
 /// ```
 pub async fn check_ollama_health(base_url: &str) -> bool {
-    let client = build_client();
-    let url = format!("{}/api/tags", base_url);
-
-    match client.get(&url).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            info!(
-                "Ollama health-check ✅  ({}/api/tags → {})",
-                base_url,
-                resp.status()
-            );
+    match probe_ollama(base_url).await {
+        OllamaProbe::Healthy(_) => {
+            info!("Ollama health-check ✅  ({}/api/tags reachable)", base_url);
             true
         }
-        Ok(resp) => {
-            warn!(
-                "Ollama health-check ⚠️  unexpected HTTP status: {}",
-                resp.status()
-            );
+        OllamaProbe::Unreachable => {
+            error!("Ollama health-check ❌  unreachable: {}", base_url);
             false
         }
-        Err(e) if e.is_timeout() => {
-            error!("Ollama health-check ❌  timed out: {}", e);
-            false
-        }
-        Err(e) if e.is_connect() => {
-            error!("Ollama health-check ❌  connection refused/failed: {}", e);
-            false
-        }
-        Err(e) => {
-            error!("Ollama health-check ❌  {}", e);
+        OllamaProbe::Unknown(e) => {
+            warn!("Ollama health-check ⚠️  inconclusive: {}", e);
             false
         }
     }
@@ -149,7 +248,7 @@ pub async fn check_ollama_health(base_url: &str) -> bool {
 /// Useful for startup diagnostics and for generating a helpful error message
 /// when the configured model is not found.
 pub async fn fetch_available_models(base_url: &str) -> Result<Vec<String>, String> {
-    let client = build_client();
+    let client = shared_client();
     let url = format!("{}/api/tags", base_url);
 
     let resp = client
@@ -232,65 +331,64 @@ pub async fn handle_ollama_message(
         truncate(&message.data, 120)
     );
 
-    let client = build_client();
+    let client = shared_client();
 
-    // ── 1. health check ───────────────────────────────────────────────────────
-    println!("[ollama_{}] starting health check on {}", backend_name, base_url);
-    if !check_ollama_health(base_url).await {
-        let err = format!(
-            "Ollama is not reachable at '{}'.\n\
-             Common causes:\n\
-             • Ollama not running on that machine\n\
-             • Firewall blocking the port\n\
-             • Ollama bound only to 127.0.0.1 (default). Fix: set OLLAMA_HOST=0.0.0.0 before starting Ollama, or use `ollama serve --host 0.0.0.0`\n\
-             • Wrong IP in config.toml for this backend",
-            base_url
-        );
-        error!("{}", err);
-        publish_error(bus, &err);
-        return None;
-    }
-    println!("[ollama_{}] health check PASSED", backend_name);
-
-    // ── 2. model validation ───────────────────────────────────────────────────
-    // Do this BEFORE the retry loop — a missing model always returns 404 and
-    // retrying it is pointless.  We give the user a precise, actionable error.
-    println!("[ollama_{}] checking model '{}' exists...", backend_name, model);
-    match check_model_exists(base_url, model).await {
-        Ok(true) => {
+    // ── 1+2. health check + model validation (single cached probe) ────────────
+    // One `/api/tags` round trip (amortized over PROBE_TTL) covers both the
+    // reachability check and the model-availability check that used to cost
+    // 2–3 sequential round trips per turn.
+    println!("[ollama_{}] probing {} ...", backend_name, base_url);
+    match probe_ollama(base_url).await {
+        OllamaProbe::Healthy(models) => {
+            println!("[ollama_{}] Ollama reachable ✅", backend_name);
+            if !model_in_list(&models, model) {
+                let list = if models.is_empty() {
+                    "  (no models found — run `ollama pull <model>` first)".to_string()
+                } else {
+                    models
+                        .iter()
+                        .map(|m| format!("  • {}", m))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                };
+                let err = format!(
+                    "Model '{}' is NOT installed in Ollama.\n\
+                     Fix: update config.toml  →  [ollama] model = \"<name>\"\n\
+                          or run: ollama pull {}\n\
+                         Available models:\n{}",
+                    model, model, list
+                );
+                error!("{}", err);
+                publish_error(bus, &err);
+                return None;
+            }
             info!("Model '{}' is available in Ollama ✅", model);
             println!("[ollama_{}] model '{}' exists ✅", backend_name, model);
         }
-        Ok(false) => {
-            // Fetch the list again to include it in the error message.
-            let available = fetch_available_models(base_url).await.unwrap_or_default();
-            let list = if available.is_empty() {
-                "  (no models found — run `ollama pull <model>` first)".to_string()
-            } else {
-                available
-                    .iter()
-                    .map(|m| format!("  • {}", m))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            };
+        OllamaProbe::Unreachable => {
             let err = format!(
-                "Model '{}' is NOT installed in Ollama.\n\
-                 Fix: update config.toml  →  [ollama] model = \"<name>\"\n\
-                      or run: ollama pull {}\n\
-                 Available models:\n{}",
-                model, model, list
+                "Ollama is not reachable at '{}'.\n\
+                 Common causes:\n\
+                 • Ollama not running on that machine\n\
+                 • Firewall blocking the port\n\
+                 • Ollama bound only to 127.0.0.1 (default). Fix: set OLLAMA_HOST=0.0.0.0 before starting Ollama, or use `ollama serve --host 0.0.0.0`\n\
+                 • Wrong IP in config.toml for this backend",
+                base_url
             );
             error!("{}", err);
             publish_error(bus, &err);
             return None;
         }
-        Err(e) => {
+        OllamaProbe::Unknown(e) => {
             // If we can't even check, log a warning and try anyway.
             warn!(
-                "Could not verify model availability ({}). Proceeding — may get a 404.",
+                "Could not verify Ollama health/model availability ({}). Proceeding — may get a 404.",
                 e
             );
-            println!("[ollama_{}] model check error (proceeding anyway): {}", backend_name, e);
+            println!(
+                "[ollama_{}] probe inconclusive ({}), proceeding anyway",
+                backend_name, e
+            );
         }
     }
 
@@ -395,6 +493,9 @@ pub async fn handle_ollama_message(
     }
 
     // ── 4. all retries exhausted ──────────────────────────────────────────────
+    // The server may have gone away: drop the cached probe so the next turn
+    // re-validates instead of trusting a stale "healthy".
+    invalidate_ollama_probe(base_url);
     let err = format!(
         "Ollama failed after {} attempt(s): {}",
         MAX_RETRIES, last_err
@@ -423,6 +524,34 @@ async fn call_ollama(
 pub mod tools {
     use super::*; // Import top-level dependencies
 
+    /// Max characters of a single tool result fed back into the model.
+    /// Tool output is unbounded (log tails, greps, scans); the model only
+    /// needs the head of it. Char-boundary safe via [`truncate`].
+    const MAX_TOOL_RESULT_CHARS: usize = 8_000;
+
+    /// Sliding-window cap on the message history sent to Ollama: the original
+    /// user prompt (index 0) plus the most recent turns.
+    const MAX_HISTORY_MESSAGES: usize = 21;
+
+    /// Drop the oldest middle messages, always keeping the original user
+    /// prompt (index 0) and the most recent `MAX_HISTORY_MESSAGES - 1`.
+    ///
+    /// A drain can land between an assistant message carrying `tool_calls`
+    /// and its `tool`-role result, orphaning one side of the pair. After
+    /// draining, drop any leading `tool` messages left without their call —
+    /// a result with no call is confusing to the model.
+    fn cap_history(messages: &mut Vec<Value>) {
+        if messages.len() > MAX_HISTORY_MESSAGES {
+            let keep = MAX_HISTORY_MESSAGES - 1;
+            messages.drain(1..messages.len() - keep);
+            while messages.get(1).and_then(|m| m.get("role")).and_then(|r| r.as_str())
+                == Some("tool")
+            {
+                messages.remove(1);
+            }
+        }
+    }
+
     /// Agentic tool-calling loop:
     /// - Send the prompt.
     /// - If the model returns `tool_calls`, execute them locally and send results back.
@@ -442,6 +571,10 @@ pub mod tools {
         let mut tool_rounds = 0usize;
 
         loop {
+            // Sliding-window cap: the history would otherwise grow without
+            // bound across tool rounds, re-sending everything every turn.
+            cap_history(&mut messages);
+
             let resp = client
                 .post(format!("{}/api/chat", base_url))
                 .json(&json!({
@@ -505,7 +638,7 @@ pub mod tools {
                             "type": "tool_call",
                             "tool": name,
                             "args": args,
-                            "result_preview": &tool_result[..tool_result.len().min(200)],
+                            "result_preview": truncate(&tool_result, 200),
                         })
                         .to_string(),
                         timestamp: now_ms(),
@@ -514,7 +647,7 @@ pub mod tools {
                     messages.push(json!({
                         "role":         "tool",
                         "tool_call_id": tool["id"],
-                        "content":      tool_result
+                        "content":      truncate(&tool_result, MAX_TOOL_RESULT_CHARS),
                     }));
                 }
                 // Loop — send tool results back to the model.
@@ -579,6 +712,44 @@ pub mod tools {
             let truncated = truncate(input, 4);
             assert_eq!(truncated, "a"); // Safe boundary
         }
+
+        #[test]
+        fn test_cap_history_keeps_prompt_and_recent() {
+            let mut msgs: Vec<Value> = (0..50)
+                .map(|i| json!({"role": "user", "content": format!("msg {}", i)}))
+                .collect();
+            msgs[0] = json!({"role": "user", "content": "ORIGINAL PROMPT"});
+            cap_history(&mut msgs);
+            assert_eq!(msgs.len(), MAX_HISTORY_MESSAGES);
+            assert_eq!(msgs[0]["content"], "ORIGINAL PROMPT");
+            assert_eq!(msgs[msgs.len() - 1]["content"], "msg 49");
+        }
+
+        #[test]
+        fn test_cap_history_short_history_untouched() {
+            let mut msgs: Vec<Value> = (0..5).map(|i| json!({"content": i})).collect();
+            cap_history(&mut msgs);
+            assert_eq!(msgs.len(), 5);
+        }
+
+        #[test]
+        fn test_cap_history_drops_orphaned_tool_messages() {
+            // GIVEN a history where the drain would leave a "tool" result at
+            // index 1 with its assistant tool_call drained away:
+            let mut msgs: Vec<Value> = (0..50)
+                .map(|i| json!({"role": "user", "content": format!("msg {}", i)}))
+                .collect();
+            msgs[0] = json!({"role": "user", "content": "ORIGINAL PROMPT"});
+            // Index 30 becomes index 1 after the drain (keep = 20).
+            msgs[30] = json!({"role": "tool", "content": "orphaned result"});
+            // WHEN the history is capped,
+            cap_history(&mut msgs);
+            // THEN the orphan is gone, the prompt survives, and the window
+            // holds at most MAX_HISTORY_MESSAGES.
+            assert_eq!(msgs[0]["content"], "ORIGINAL PROMPT");
+            assert_ne!(msgs[1]["role"], "tool", "orphaned tool result survived");
+            assert!(msgs.len() <= MAX_HISTORY_MESSAGES);
+        }
     }
 }
 
@@ -597,15 +768,7 @@ fn publish_error(bus: &Arc<Bus>, msg: &str) {
 /// Return at most `max` bytes of `s` (no panic on non-ASCII boundaries thanks
 /// to `char_indices`).
 fn truncate(s: &str, max: usize) -> &str {
-    if s.len() <= max {
-        return s;
-    }
-    // Walk back from `max` to a valid char boundary.
-    let mut boundary = max;
-    while !s.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    &s[..boundary]
+    crate::utils::truncate_str(s, max)
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -618,6 +781,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_available_models_unreachable() {
+        ensure_crypto_provider();
         // Should return an Err, not panic, when Ollama is not running.
         let result = fetch_available_models("http://127.0.0.1:19999").await;
         assert!(result.is_err(), "Expected Err when Ollama is unreachable");
@@ -625,6 +789,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_check_model_exists_unreachable() {
+        ensure_crypto_provider();
         // Should return Err (not panic) when Ollama is not reachable.
         let result = check_model_exists("http://127.0.0.1:19999", "llama3.2").await;
         assert!(result.is_err(), "Expected Err when Ollama is unreachable");
@@ -634,6 +799,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_check_unreachable_port() {
+        ensure_crypto_provider();
         // Port 19999 should never be open in a normal test environment.
         let result = check_ollama_health("http://127.0.0.1:19999").await;
         assert!(!result, "Port 19999 should be unreachable");
@@ -641,8 +807,33 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_check_invalid_host() {
+        ensure_crypto_provider();
         let result = check_ollama_health("http://this.host.does.not.exist:11434").await;
         assert!(!result, "Non-existent host should fail health check");
+    }
+
+    // ── probe cache (task 178) ──────────────────────────────────────────────
+
+    #[test]
+    fn test_model_in_list_matching() {
+        let models = vec!["llama3.2:latest".to_string(), "qwen3:4b".to_string()];
+        assert!(model_in_list(&models, "llama3.2:latest")); // exact
+        assert!(model_in_list(&models, "llama3.2")); // base-name match
+        assert!(model_in_list(&models, "qwen3:4b"));
+        assert!(!model_in_list(&models, "mistral"));
+        assert!(!model_in_list(&models, ""));
+    }
+
+    #[tokio::test]
+    async fn test_probe_cache_unreachable_and_invalidate() {
+        ensure_crypto_provider();
+        // Dead port → Unreachable; invalidate() must not panic and the
+        // re-probe must also report Unreachable.
+        let p1 = probe_ollama("http://127.0.0.1:19999").await;
+        assert!(matches!(p1, OllamaProbe::Unreachable));
+        invalidate_ollama_probe("http://127.0.0.1:19999");
+        let p2 = probe_ollama("http://127.0.0.1:19999").await;
+        assert!(matches!(p2, OllamaProbe::Unreachable));
     }
 
     // ── tool execution ────────────────────────────────────────────────────────
