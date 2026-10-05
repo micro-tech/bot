@@ -17,6 +17,11 @@ pub mod reasoning;
 pub mod bayesian;
 pub mod agents;
 pub mod okf;
+pub mod router;
+pub mod acp;
+pub mod a2a;
+pub mod ssh;
+pub mod cron;
 
 // Re-export commonly used types
 pub use bus::{Bus, Message};
