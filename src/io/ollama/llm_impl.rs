@@ -160,6 +160,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ollama_llm_impl_model_name() {
+        crate::io::ollama::ensure_crypto_provider();
         let llm = OllamaLlmImpl::new("http://localhost:11434", "llama3.2");
         assert_eq!(llm.model_name(), "llama3.2");
     }
