@@ -1,11 +1,11 @@
 //! End-to-end test verifying ReflectionPlannerAdapter as default planner (Task 2)
 //! and HealthStore integration in Cpu (Task 161).
 
-use bot::agents::simple_planner::SimplePlanner;
-use bot::agents::reflection_planner_adapter::ReflectionPlannerAdapter;
-use bot::agents::runtime_loop::RuntimeLoop;
-use bot::agents::rule_layer::RuleLayer;
-use bot::agents::agent_state::AgentState;
+use helix::agents::simple_planner::SimplePlanner;
+use helix::agents::reflection_planner_adapter::ReflectionPlannerAdapter;
+use helix::agents::runtime_loop::RuntimeLoop;
+use helix::agents::rule_layer::RuleLayer;
+use helix::agents::agent_state::AgentState;
 
 #[tokio::test]
 async fn test_reflection_planner_adapter_end_to_end() {

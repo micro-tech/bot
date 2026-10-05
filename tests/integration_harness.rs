@@ -5,10 +5,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
-use bot::bus::{Bus, Message};
-use bot::memory::MemoryManager;
-use bot::skills::SkillRegistry;
+use helix::bus::{Bus, Message};
+use helix::memory::MemoryManager;
+use helix::skills::SkillRegistry;
 
 pub mod scenarios;
 
@@ -47,11 +46,18 @@ impl TestContext {
     pub async fn bootstrap(&mut self) -> anyhow::Result<()> {
         println!("[Harness] Bootstrapping test environment...");
 
-        // Spawn a simple message counter on the bus
-        let bus_clone = self.bus.clone();
+        // Spawn a simple message counter on the bus.
+        // NOTE: the bus uses blocking std::sync::mpsc channels, and these
+        // tests run on tokio's current_thread runtime, so a blocking recv()
+        // inside tokio::spawn would wedge the executor's only thread.
+        // spawn_blocking keeps the blocking recv off the async executor.
+        // The subscription is taken BEFORE spawning so the blocking thread
+        // holds only the Receiver: when the TestContext (and its Bus) is
+        // dropped, the subscription Sender dies, recv() returns Err, and the
+        // thread exits instead of keeping the Bus alive forever via Arc.
+        let rx = self.bus.subscribe("test_harness");
         let metrics_clone = self.metrics.clone();
-        let handle = tokio::spawn(async move {
-            let rx = bus_clone.subscribe("test_harness");
+        let handle = tokio::task::spawn_blocking(move || {
             while let Ok(msg) = rx.recv() {
                 let mut m = metrics_clone.lock().unwrap();
                 m.messages_received += 1;
@@ -75,7 +81,7 @@ impl TestContext {
             to: to.to_string(),
             from: "test_harness".to_string(),
             data: data.to_string(),
-            timestamp: bot::utils::now_ms(),
+            timestamp: helix::utils::now_ms(),
         };
 
         self.bus.publish(msg).map_err(|e| anyhow::anyhow!(e))?;
