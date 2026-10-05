@@ -110,7 +110,7 @@ impl TelemetryCollector {
 }
 
 // Integration helper for RoutingContext
-pub fn inject_telemetry(ctx: &mut crate::router::RoutingContext, collector: &TelemetryCollector) {
+pub fn inject_telemetry(_ctx: &mut crate::router::RoutingContext, _collector: &TelemetryCollector) {
     // In real use this would be called from CPU pipeline before routing
     // ctx.telemetry = Some(serde_json::to_value(collector.get_latest().await).unwrap());
 }
