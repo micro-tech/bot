@@ -1,5 +1,8 @@
 pub mod manifest;
 pub mod mcp;
+pub mod acp;
+pub mod shell;
+pub mod ssh;
 pub mod okf;
 pub mod project_scanner;
 pub mod reasoning;

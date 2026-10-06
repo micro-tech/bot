@@ -4,7 +4,10 @@ use serde_json::Value;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const BELIEFS_FILE: &str = "beliefs.json";
+// Beliefs live in crate::memory::manager (single source of truth, task 203);
+// the tools below delegate to its load/save helpers so there is exactly one
+// file and one serialization for beliefs.
+use crate::memory::manager::{BELIEFS_FILE, load_beliefs, save_beliefs};
 
 // ── system_status ─────────────────────────────────────────────────────────────
 
@@ -243,14 +246,11 @@ pub fn bayes_reset() -> String {
 // ── get_beliefs ───────────────────────────────────────────────────────────────
 
 pub fn get_beliefs() -> String {
-    match fs::read_to_string(BELIEFS_FILE) {
-        Ok(content) if !content.trim().is_empty() => {
-            match serde_json::from_str::<Value>(&content) {
-                Ok(json) => serde_json::to_string_pretty(&json).unwrap_or_else(|_| content),
-                Err(_) => content,
-            }
-        }
-        _ => "{}  (no beliefs stored yet — use set_belief to add some)".to_string(),
+    let beliefs = load_beliefs();
+    if beliefs.is_empty() {
+        "{}  (no beliefs stored yet — use set_belief to add some)".to_string()
+    } else {
+        serde_json::to_string_pretty(&beliefs).unwrap_or_else(|_| "{}".to_string())
     }
 }
 
@@ -264,18 +264,13 @@ pub fn set_belief(args: &Value) -> String {
         return "Error: 'key' field is required and must not be empty.".to_string();
     }
 
-    // Load existing beliefs
-    let mut beliefs: serde_json::Map<String, Value> = fs::read_to_string(BELIEFS_FILE)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default();
+    // Load existing beliefs through the shared store (task 203) so the tool
+    // and MemoryManager can never disagree on format or location.
+    let mut beliefs = load_beliefs();
 
     beliefs.insert(key.clone(), Value::String(value.clone()));
 
-    let pretty =
-        serde_json::to_string_pretty(&Value::Object(beliefs)).unwrap_or_else(|_| "{}".to_string());
-
-    match fs::write(BELIEFS_FILE, &pretty) {
+    match save_beliefs(&beliefs) {
         Ok(_) => format!(
             "✅ Belief '{}' = '{}' saved to {}",
             key, value, BELIEFS_FILE

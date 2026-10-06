@@ -1,10 +1,10 @@
 //! Integration test for the Unified Agent Runtime Loop.
 
-use bot::agents::agent_state::AgentState;
-use bot::agents::planner::Planner;
-use bot::agents::planner_output::PlannerOutput;
-use bot::agents::rule_layer::RuleLayer;
-use bot::agents::runtime_loop::RuntimeLoop;
+use helix::agents::agent_state::AgentState;
+use helix::agents::planner::Planner;
+use helix::agents::planner_output::PlannerOutput;
+use helix::agents::rule_layer::RuleLayer;
+use helix::agents::runtime_loop::RuntimeLoop;
 use async_trait::async_trait;
 
 struct DummyPlanner;
