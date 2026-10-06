@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use super::{
     engine::HyEvoEngine,
@@ -29,27 +30,27 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoIntegration<L> {
     }
 
     /// Get the best workflow currently in the population.
-    pub fn get_best_workflow(&self) -> Option<WorkflowGenome> {
-        let engine = self.engine.lock().unwrap();
+    pub async fn get_best_workflow(&self) -> Option<WorkflowGenome> {
+        let engine = self.engine.lock().await;
         engine.best_workflow().cloned()
     }
 
     /// Seed the population with an initial workflow genome.
-    pub fn seed(&self, genome: WorkflowGenome) {
-        let mut engine = self.engine.lock().unwrap();
+    pub async fn seed(&self, genome: WorkflowGenome) {
+        let mut engine = self.engine.lock().await;
         engine.seed(genome);
     }
 
     /// Run a single evolution cycle given execution metrics.
     pub async fn evolve(&self, metrics: ExecutionMetrics) -> anyhow::Result<()> {
-        let mut engine = self.engine.lock().unwrap();
+        let mut engine = self.engine.lock().await;
         engine.evolve_once(&metrics).await?;
         Ok(())
     }
 
     /// Select the best genome from the current population.
-    pub fn select_best(&self) -> Option<WorkflowGenome> {
-        let engine = self.engine.lock().unwrap();
+    pub async fn select_best(&self) -> Option<WorkflowGenome> {
+        let engine = self.engine.lock().await;
         engine.best_workflow().cloned()
     }
 
@@ -57,7 +58,7 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoIntegration<L> {
     pub async fn run_and_evolve<E: CpuExecutor>(&self, cpu: &mut E) -> anyhow::Result<()> {
         // 1. Select best workflow
         let genome = {
-            let engine = self.engine.lock().unwrap();
+            let engine = self.engine.lock().await;
             engine.best_workflow().cloned()
         };
 
@@ -74,7 +75,7 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoIntegration<L> {
 
         // 4. Evolve based on execution results
         let reflection = {
-            let mut engine = self.engine.lock().unwrap();
+            let mut engine = self.engine.lock().await;
             engine.evolve_once(&metrics).await?
         };
 

@@ -9,7 +9,6 @@
 //! and serialized for persistence / debugging.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Status of a plan node.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -1,6 +1,6 @@
 //! Memory subsystem test scenarios
 use crate::TestContext;
-use bot::cpu::interfaces::MemoryInterface;
+use helix::cpu::interfaces::MemoryInterface;
 use serde_json::json;
 
 #[tokio::test]
@@ -11,7 +11,7 @@ async fn test_memory_write_read_context() {
     {
         let _ = ctx.memory.write("context", json!("hello world"));
         let read = ctx.memory.read("context");
-        assert!(matches!(read, bot::hy_evo::node::NodeResult::Value(_)));
+        assert!(matches!(read, helix::hy_evo::node::NodeResult::Value(_)));
     }
 
     ctx.shutdown().await;

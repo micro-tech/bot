@@ -248,8 +248,11 @@ fn install() {
     println!("Primary runtime dir : {}", primary_runtime_dir);
 
     // Create runtime directories.
-    // Dual layout kept for compatibility (/primary + /etc/helix).
-    // The actual WorkingDirectory is controlled by helix.service.
+    // Dual layout kept for compatibility: <primary> is the canonical live
+    // location (the service's WorkingDirectory, so main.rs resolves
+    // ./config.toml to it) and /etc/helix holds a byte-identical fallback
+    // that only matters if the primary copy ever goes missing. Both are
+    // written on every install and the verify step checks they match.
     for dir in [&primary_runtime_dir, "/etc/helix"] {
         fs::create_dir_all(dir).unwrap_or_else(|e| eprintln!("WARNING: mkdir {}: {}", dir, e));
     }
@@ -367,11 +370,42 @@ fn install() {
 }
 
 // ---------------------------------------------------------------------------
-// File helpers  — NO pre-delete; overwrite in place
+// File helpers  — NO pre-delete; overwrite in place (with backup)
 // ---------------------------------------------------------------------------
 
+/// Back up `dest` to `<dest>.bak-<unix-epoch>` before it gets overwritten.
+/// Prints where the backup went. No-op when `dest` doesn't exist yet (fresh
+/// install) — there's nothing to lose.
+fn backup_existing(dest: &Path) {
+    if !dest.exists() {
+        return;
+    }
+    let epoch = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let backup_name = format!("{}.bak-{}", dest.display(), epoch);
+    let backup = Path::new(&backup_name);
+    match fs::copy(dest, &backup) {
+        Ok(_) => println!("Backed up {} -> {}", dest.display(), backup.display()),
+        Err(e) => eprintln!(
+            "WARNING: could not back up {}: {} — proceeding with overwrite",
+            dest.display(),
+            e
+        ),
+    }
+}
+
 /// Copy `src` to <primary_runtime_dir>/<name> and /etc/helix/<name>.
-/// Does NOT delete the destination first — overwrites in place.
+/// Does NOT delete the destination first — overwrites in place, but backs up
+/// any existing destination first (see `backup_existing`).
+///
+/// Policy: <primary_runtime_dir>/<name> is the canonical live copy (the
+/// systemd service runs with WorkingDirectory=<primary_runtime_dir>, so
+/// main.rs resolves ./config.toml to it). /etc/helix/<name> is a
+/// byte-identical fallback that only matters if the primary ever goes
+/// missing. The installer keeps both in sync; if they ever diverge, the
+/// primary wins at runtime (first-exists-wins in main.rs).
 fn safe_copy_to_both(name: &str, src: &Path, primary_runtime_dir: &str) {
     let src_canonical = src.canonicalize().ok();
 
@@ -385,6 +419,7 @@ fn safe_copy_to_both(name: &str, src: &Path, primary_runtime_dir: &str) {
             }
         }
 
+        backup_existing(&dest);
         match fs::copy(src, &dest) {
             Ok(_) => println!("Copied {} -> {}", name, dest.display()),
             Err(e) => eprintln!(
@@ -398,10 +433,11 @@ fn safe_copy_to_both(name: &str, src: &Path, primary_runtime_dir: &str) {
 }
 
 /// Write `data` to <primary>/<name> and /etc/helix/<name>.
-/// Does NOT delete the destination first — overwrites in place.
+/// Backs up any existing destination first (see `backup_existing`).
 fn safe_write_to_both(name: &str, data: &[u8], primary_runtime_dir: &str) {
     for dest_dir in [primary_runtime_dir, "/etc/helix"] {
         let dest = Path::new(dest_dir).join(name);
+        backup_existing(&dest);
         match fs::write(&dest, data) {
             Ok(_) => println!("Wrote {} -> {}", name, dest.display()),
             Err(e) => eprintln!("WARNING: failed to write {}: {}", dest.display(), e),
@@ -521,6 +557,26 @@ fn verify_installation(primary_runtime_dir: &str) {
     for f in ["config.toml", "system_manifest.md"] {
         check_path(&format!("{}/{}", primary_runtime_dir, f), true, &mut all_good);
         check_path(&format!("/etc/helix/{}", f), true, &mut all_good);
+    }
+
+    // Dual-deploy coherence: the two copies of each tracked config must be
+    // byte-identical. If they ever diverge (e.g. a hand-edit touched only one
+    // side), the primary wins at runtime and the /etc/helix copy is silently
+    // stale — so say so loudly here instead.
+    for f in ["config.toml", "system_manifest.md"] {
+        let primary = format!("{}/{}", primary_runtime_dir, f);
+        let secondary = format!("/etc/helix/{}", f);
+        match (fs::read(&primary), fs::read(&secondary)) {
+            (Ok(a), Ok(b)) if a == b => println!("✓ {} matches {}", primary, secondary),
+            (Ok(_), Ok(_)) => eprintln!(
+                "✗ DIVERGENCE: {} and {} differ — the primary copy wins at runtime; reconcile or reinstall",
+                primary, secondary
+            ),
+            _ => eprintln!(
+                "✗ Could not compare {} and {} (one is missing — see above)",
+                primary, secondary
+            ),
+        }
     }
 
     // User-edited files — present but may contain placeholder values.

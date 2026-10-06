@@ -1,6 +1,6 @@
 //! CPU / Workflow executor test scenarios (lightweight)
 use crate::TestContext;
-use bot::cpu::interfaces::MemoryInterface;
+use helix::cpu::interfaces::MemoryInterface;
 use serde_json::json;
 
 #[tokio::test]
