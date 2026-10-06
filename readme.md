@@ -6,6 +6,21 @@ It provides a central bus, execution engine, memory system, plugin architecture,
 
 ---
 
+## What's new (Oct 2026) — merged via PR #5
+
+The overnight mega-batch (tasks 187–211) landed on `PreRelese`:
+
+- **Protocols**: ACP server (189), real A2A v1.0 (190), guarded `run_shell` tool (191), embedded SSH server (`src/ssh/`, 192).
+- **Web UI**: Grok-style three-column layout (193–198), Helix brand icon as favicon/header (209).
+- **Autonomy**: heartbeat rewired as a real job pump (199) with observability (200), a real cron registry (201), and nightly maintenance (202).
+- **Memory rebuilt** (203–206): `beliefs.json` as the single source of truth, disk-backed episodic + vector memory with real Ollama embeddings, nightly consolidation.
+- **OKF v1** (207–208): protocol contract in `PROTOCOL.md`; Helix runs its own OKF server (`[helix.okf]`, serves `/okf/*`, self-fetch) with `OkfLibrarian`/`OkfFetcher`/`OkfRegistry` in `src/okf/`.
+- **Cleanup** (210–211): warning-free build, runtime rule layer wired, `tests/*.rs` ported to the `helix::` crate name — which caught a real bug (trace JSONL is now flushed before the 202 ack).
+
+**Direction**: the in-Helix OKF server stays as an **offline fallback**; the Dell's shared OKF backend becomes the primary knowledge store (unification plan, Phase 3). Full details in [CHANGELOG.md](CHANGELOG.md).
+
+---
+
 ## Features
 
 ### Core System
@@ -42,8 +57,8 @@ It provides a central bus, execution engine, memory system, plugin architecture,
 ## Quick Start
 
 ```bash
-git clone https://github.com/yourusername/helix.git
-cd helix
+git clone https://github.com/micro-tech/bot.git
+cd bot
 cargo build --release
 cargo run
 ```
