@@ -2,10 +2,35 @@
 
 use serde_json::Value;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 // Bring in chrono for timestamps (already a dependency)
 
+// ── Path sandboxing ───────────────────────────────────────────────────────────
+
+/// Resolve `candidate` against `base_dir` and ensure the canonicalized result
+/// stays inside `base_dir`. Defeats `..` segments (e.g. `logs/../../config.toml`)
+/// and symlink escapes. `base_dir` should be absolute (we anchor it on
+/// `current_dir()` at each call site).
+fn resolve_inside(base_dir: &Path, candidate: &str) -> Result<PathBuf, String> {
+    if candidate.contains('\0') {
+        return Err(format!("Security error: invalid path '{}'.", candidate));
+    }
+    let joined = base_dir.join(candidate);
+    let canon = joined
+        .canonicalize()
+        .map_err(|e| format!("Error reading '{}': {}", candidate, e))?;
+    let base_canon = base_dir
+        .canonicalize()
+        .unwrap_or_else(|_| base_dir.to_path_buf());
+    if !canon.starts_with(&base_canon) {
+        return Err(format!(
+            "Security error: path '{}' escapes the allowed directory.",
+            candidate
+        ));
+    }
+    Ok(canon)
+}
 
 // ── Existing note/log tools (kept for brevity) ────────────────────────────────
 
@@ -15,11 +40,26 @@ pub fn read_log(args: &Value) -> String {
     if !normalised.starts_with("logs/") {
         return format!("Security error: only files inside logs/ are readable. Got '{}'.", file);
     }
-    match fs::read_to_string(file) {
+    // Canonicalize under logs/: rejects `logs/../../config.toml` and symlink
+    // escapes while keeping the historical "must start with logs/" contract.
+    let base = std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("logs");
+    let rel = normalised.strip_prefix("logs/").unwrap_or(&normalised);
+    let path = match resolve_inside(&base, rel) {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
+    match fs::read_to_string(&path) {
         Ok(content) => {
             const MAX: usize = 2_000;
             if content.len() > MAX {
-                format!("[…showing last {} chars of {}…]\n{}", MAX, file, &content[content.len() - MAX..])
+                format!(
+                    "[…showing last {} chars of {}…]\n{}",
+                    MAX,
+                    file,
+                    crate::utils::tail_str(&content, MAX)
+                )
             } else if content.is_empty() {
                 format!("'{}' exists but is empty.", file)
             } else {
@@ -124,12 +164,16 @@ pub fn repo_read(args: &Value) -> String {
         return "Error: 'path' is required for repo_read".to_string();
     }
 
-    // Basic security: only allow relative paths inside the project (no absolute outside).
-    if Path::new(path).is_absolute() {
-        return "Security error: absolute paths are not allowed for repo_read.".to_string();
-    }
+    // Constrain to the repository root (canonicalized): blocks `..` escapes
+    // (e.g. `../../.ssh/id_rsa`), absolute paths outside the repo, and
+    // symlink escapes. Replaces the old absolute-path-only check.
+    let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let canon = match resolve_inside(&root, path) {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
 
-    match fs::read_to_string(path) {
+    match fs::read_to_string(&canon) {
         Ok(content) => {
             let lines: Vec<&str> = content.lines().collect();
             let total = lines.len();
@@ -374,6 +418,24 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// Scope guard: runs cleanup even if the test panics, so probe files and
+    /// symlinks never leak into the workspace on a failed assertion.
+    struct Cleanup<F: FnOnce()> {
+        f: Option<F>,
+    }
+    impl<F: FnOnce()> Cleanup<F> {
+        fn new(f: F) -> Self {
+            Self { f: Some(f) }
+        }
+    }
+    impl<F: FnOnce()> Drop for Cleanup<F> {
+        fn drop(&mut self) {
+            if let Some(f) = self.f.take() {
+                f();
+            }
+        }
+    }
+
     #[test]
     fn test_repo_read_basic() {
         // This test assumes Cargo.toml exists at project root.
@@ -385,5 +447,80 @@ mod tests {
     fn test_repo_glob_placeholder() {
         let result = repo_glob(&json!({"pattern": "**/*.rs"}));
         assert!(result.contains("**/*.rs"));
+    }
+
+    // ── path traversal (task 185) ───────────────────────────────────────────
+
+    #[test]
+    fn test_read_log_rejects_dotdot_traversal() {
+        // logs/../config.toml passes the old starts_with("logs/") check and
+        // resolves to an existing file outside logs/ — must be rejected.
+        let result = read_log(&json!({"log_file": "logs/../config.toml"}));
+        assert!(
+            result.contains("escapes the allowed directory"),
+            "traversal must be rejected, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_read_log_rejects_non_logs_prefix() {
+        let result = read_log(&json!({"log_file": "/etc/passwd"}));
+        assert!(result.contains("Security error"), "got: {}", result);
+    }
+
+    #[test]
+    fn test_read_log_rejects_symlink_escape() {
+        // A symlink inside logs/ pointing outside must not be followed.
+        // Unix-only; skipped elsewhere.
+        #[cfg(unix)]
+        {
+            let link = std::path::PathBuf::from("logs/_test_evil_link_do_not_use");
+            let _ = std::fs::remove_file(&link);
+            if std::os::unix::fs::symlink("../config.toml", &link).is_err() {
+                return; // cannot create symlinks here — skip
+            }
+            // Panic-proof: the symlink is removed even if the assert below fails.
+            let _cleanup =
+                Cleanup::new(|| _ = std::fs::remove_file("logs/_test_evil_link_do_not_use"));
+            let result = read_log(&json!({"log_file": "logs/_test_evil_link_do_not_use"}));
+            assert!(
+                result.contains("escapes the allowed directory"),
+                "symlink escape must be rejected, got: {}",
+                result
+            );
+        }
+    }
+
+    #[test]
+    fn test_repo_read_rejects_parent_escape() {
+        // Plant a probe file just outside the repo root; `../<probe>` must be
+        // rejected even though the target exists (old code would read it).
+        // Panic-proof: the probe is removed even if the assert below fails.
+        let probe = std::path::PathBuf::from("../_test_escape_probe_xyz.txt");
+        std::fs::write(&probe, "probe").ok();
+        let _cleanup = Cleanup::new(|| _ = std::fs::remove_file("../_test_escape_probe_xyz.txt"));
+        let result = repo_read(&json!({"path": "../_test_escape_probe_xyz.txt"}));
+        assert!(
+            result.contains("escapes the allowed directory"),
+            "escape must be rejected, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_repo_read_rejects_absolute_outside_repo() {
+        let result = repo_read(&json!({"path": "/etc/passwd"}));
+        assert!(
+            result.contains("escapes the allowed directory"),
+            "absolute escape must be rejected, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_repo_read_missing_is_error_not_panic() {
+        let result = repo_read(&json!({"path": "no_such_file_xyz.rs"}));
+        assert!(result.contains("Error reading"), "got: {}", result);
     }
 }

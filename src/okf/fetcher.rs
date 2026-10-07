@@ -147,3 +147,210 @@ impl OkfFetcher {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::okf::OkfConfig;
+
+    /// Unit tests don't run through main(), which installs the rustls ring
+    /// provider — install it once here so the reqwest client can build.
+    fn ensure_crypto_provider() {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        });
+    }
+
+    /// Minimal manifest conforming to okf_bundle_schema.json (required: id, version).
+    fn sample_manifest_json() -> String {
+        serde_json::json!({
+            "id": "test-bundle",
+            "version": "1.0.0",
+            "name": "Test Bundle",
+            "tools": [],
+            "knowledge": [
+                {
+                    "id": "k1",
+                    "title": "Test Knowledge",
+                    "content_type": "text/markdown",
+                    "content": "# Hello\nTest content.",
+                }
+            ],
+            "schemas": [],
+        })
+        .to_string()
+    }
+
+    fn test_config(server_url: &str, token: Option<&str>) -> OkfConfig {
+        OkfConfig {
+            enabled: Some(true),
+            server_url: Some(server_url.to_string()),
+            auth_token: token.map(|s| s.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn contract_fetch_manifest_hits_canonical_path_with_bearer_and_etag() {
+        ensure_crypto_provider();
+        // GIVEN a mock OKF v1 server:
+        let mut server = mockito::Server::new_async().await;
+        let manifest = sample_manifest_json();
+        let mock = server
+            .mock("GET", "/okf/manifest.json")
+            .match_header("authorization", "Bearer test-token")
+            .with_status(200)
+            .with_header("etag", "\"v1-abc\"")
+            .with_header("content-type", "application/json")
+            .with_body(&manifest)
+            .create_async()
+            .await;
+
+        // WHEN the fetcher requests the manifest:
+        let fetcher = OkfFetcher::new(test_config(&server.url(), Some("test-token")));
+        let (parsed, etag) = fetcher
+            .fetch_manifest(None, None)
+            .await
+            .expect("fetch_manifest should succeed");
+
+        // THEN the exact canonical path was hit once, with the Bearer <redacted>
+        // the ETag was captured, and the manifest parses with required fields:
+        mock.assert_async().await;
+        assert_eq!(parsed.id, "test-bundle");
+        assert_eq!(parsed.version, "1.0.0");
+        assert_eq!(etag.as_deref(), Some("\"v1-abc\""));
+        assert_eq!(parsed.knowledge.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn contract_fetch_manifest_bundle_scoped_path() {
+        ensure_crypto_provider();
+        // GIVEN a mock server serving a per-bundle manifest:
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/okf/bundles/my-bundle/manifest.json")
+            .with_status(200)
+            .with_body(sample_manifest_json())
+            .create_async()
+            .await;
+
+        // WHEN fetching with a bundle id:
+        let fetcher = OkfFetcher::new(test_config(&server.url(), None));
+        let (parsed, _) = fetcher
+            .fetch_manifest(Some("my-bundle"), None)
+            .await
+            .expect("bundle-scoped fetch should succeed");
+
+        // THEN the bundle-scoped canonical path was hit:
+        mock.assert_async().await;
+        assert_eq!(parsed.id, "test-bundle");
+    }
+
+    #[tokio::test]
+    async fn contract_etag_round_trip_yields_not_modified() {
+        ensure_crypto_provider();
+        // GIVEN a server that answers 304 when the ETag matches:
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/okf/manifest.json")
+            .match_header("if-none-match", "\"v1-abc\"")
+            .with_status(304)
+            .create_async()
+            .await;
+
+        // WHEN the fetcher sends the cached ETag:
+        let fetcher = OkfFetcher::new(test_config(&server.url(), None));
+        let err = fetcher
+            .fetch_manifest(None, Some("\"v1-abc\""))
+            .await
+            .expect_err("304 should surface as NOT_MODIFIED");
+
+        // THEN the conditional request went out and the sentinel came back:
+        mock.assert_async().await;
+        assert_eq!(err, "NOT_MODIFIED");
+    }
+
+    #[tokio::test]
+    async fn contract_fetch_knowledge_hits_canonical_path() {
+        ensure_crypto_provider();
+        // GIVEN a mock server with a knowledge document:
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/okf/knowledge/k1")
+            .with_status(200)
+            .with_header("content-type", "text/markdown")
+            .with_body("# Hello\nTest content.")
+            .create_async()
+            .await;
+
+        // WHEN fetching the document:
+        let fetcher = OkfFetcher::new(test_config(&server.url(), None));
+        let body = fetcher
+            .fetch_knowledge("k1")
+            .await
+            .expect("fetch_knowledge should succeed");
+
+        // THEN the canonical knowledge path was hit and the body returned:
+        mock.assert_async().await;
+        assert!(body.contains("Test content."));
+    }
+
+    #[tokio::test]
+    async fn contract_health_check_hits_canonical_path() {
+        ensure_crypto_provider();
+        // GIVEN a mock server reporting healthy:
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("GET", "/okf/health")
+            .with_status(200)
+            .with_body(r#"{"status":"ok"}"#)
+            .create_async()
+            .await;
+
+        // WHEN the health check runs:
+        let fetcher = OkfFetcher::new(test_config(&server.url(), None));
+        let healthy = fetcher.health_check().await.expect("health check runs");
+
+        // THEN the canonical health path was hit and reported healthy:
+        mock.assert_async().await;
+        assert!(healthy);
+    }
+
+    #[tokio::test]
+    async fn contract_manifest_conforms_to_bundle_schema() {
+        ensure_crypto_provider();
+        // GIVEN the official schema and a manifest from the mock server:
+        let schema_text =
+            std::fs::read_to_string("okf_bundle_schema.json").expect("schema file present");
+        let schema: serde_json::Value =
+            serde_json::from_str(&schema_text).expect("schema parses");
+        let required: Vec<&str> = schema["required"]
+            .as_array()
+            .expect("schema has required")
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
+
+        // WHEN the manifest is fetched and parsed:
+        let mut server = mockito::Server::new_async().await;
+        let _mock = server
+            .mock("GET", "/okf/manifest.json")
+            .with_status(200)
+            .with_body(sample_manifest_json())
+            .create_async()
+            .await;
+        let fetcher = OkfFetcher::new(test_config(&server.url(), None));
+        let (parsed, _) = fetcher.fetch_manifest(None, None).await.unwrap();
+        let as_value = serde_json::to_value(&parsed).unwrap();
+
+        // THEN every schema-required field is present (id, version):
+        for field in required {
+            assert!(
+                as_value.get(field).is_some(),
+                "manifest missing required field '{}'",
+                field
+            );
+        }
+    }
+}

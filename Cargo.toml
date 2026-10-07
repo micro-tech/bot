@@ -6,7 +6,9 @@ rust-version = "1.99.0"
 
 [dependencies]
 log = "0.4"
+libc = "0.2"
 env_logger = "0.11.11"
+subtle = "2.6.1"
 #serenity = { git = "https://github.com/serenity-rs/serenity", branch = "current", features = ["full"] }
 
 
@@ -17,6 +19,7 @@ tokio = { version = "1.53.2", features = [
     "net",
     "sync",
     "process",
+    "io-std",
 ] }
 axum = { version = "0.8.9", features = ["ws"] }
 axum-server = { version = "0.8.0", default-features = false, features = ["tls-rustls-no-provider"] }
@@ -28,6 +31,8 @@ rustls-pemfile = "2"
 rcgen = "0.14.10"
 tower = "0.5"
 futures-util = { version = "0.3", features = ["sink"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+agent-client-protocol = "2.2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "1.1.6"
@@ -93,6 +98,11 @@ rmcp = { version = "3.5.0", features = ["transport-child-process", "client"] }
 #
 # Do NOT use vendored-openssl unless you have Perl installed.
 ssh2 = { version = "0.9", optional = true }
+regex = "1"
+notify = "8"
+russh = { version = "0.63", default-features = false, features = ["aws-lc-rs"] }
+rand_core = "0.10"
+getrandom = "0.3"
 
 [features]
 default = []
@@ -102,3 +112,7 @@ ssh = ["dep:ssh2"]
 [[bin]]
 name = "installer"
 path = "src/bin/installer.rs"
+
+[dev-dependencies]
+# HTTP contract tests for the OKF protocol v1 (task 207).
+mockito = "1.7"

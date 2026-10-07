@@ -25,8 +25,23 @@ use tokio::sync::Mutex as TokioMutex;
 use crate::config::mcp::McpConfig;
 use manager::McpManager;
 
-/// Lazily parsed `[mcp]` config, read once from `./config.toml`.
+/// Lazily parsed `[mcp]` config, read once from the config file Helix actually
+/// loaded at startup (resolved by main.rs; see `set_config_path`). Falls back
+/// to `./config.toml` when main.rs never set a path (unit tests, other entry
+/// points) — which used to be the only place it ever looked, so `[mcp]` was
+/// invisible whenever Helix ran off /etc/helix/config.toml.
 static MCP_CONFIG: OnceLock<McpConfig> = OnceLock::new();
+
+/// The config file Helix loaded, set once by main.rs right after config
+/// resolution. The MCP client must read `[mcp]` from the LIVE file, for the
+/// same reason the web editor must write to it.
+static CONFIG_PATH: OnceLock<std::path::PathBuf> = OnceLock::new();
+
+/// Record the config file Helix loaded at startup. Call once from main.rs;
+/// later calls are ignored (first one wins, like the OnceLock contract).
+pub fn set_config_path(p: std::path::PathBuf) {
+    let _ = CONFIG_PATH.set(p);
+}
 
 /// Dedicated multi-threaded runtime for ALL MCP I/O. Keeping every MCP
 /// future (spawning, handshakes, stdio) on one runtime means child-process
@@ -36,10 +51,18 @@ static MCP_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 /// Global connection manager, created on first use when MCP is enabled.
 static MCP_MANAGER: OnceLock<std::sync::Arc<TokioMutex<McpManager>>> = OnceLock::new();
 
-fn load_config() -> McpConfig {
-    std::fs::read_to_string("config.toml")
+fn load_config_from(path: &std::path::Path) -> McpConfig {
+    std::fs::read_to_string(path)
         .map(|s| McpConfig::load_from_toml(&s))
         .unwrap_or_default()
+}
+
+fn load_config() -> McpConfig {
+    let path = CONFIG_PATH
+        .get()
+        .map(|p| p.as_path())
+        .unwrap_or_else(|| std::path::Path::new("config.toml"));
+    load_config_from(path)
 }
 
 /// The parsed `[mcp]` config (process-wide, loaded once).
@@ -174,5 +197,42 @@ mod tests {
                 .unwrap_or(false)),
             "no mcp__ tools may be advertised while MCP is disabled"
         );
+    }
+
+    // NOTE: load_config_from (not load_config) is tested here on purpose —
+    // load_config reads the process-global OnceLock path, which must stay
+    // unset so the tests above keep seeing the worktree's disabled config.
+
+    #[test]
+    fn load_config_from_reads_mcp_section_at_given_path() {
+        // GIVEN a config file with [mcp] enabled, at an arbitrary path:
+        let dir = std::env::temp_dir().join("helix-mcp-path-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("custom-config.toml");
+        std::fs::write(
+            &path,
+            "[mcp]\nenabled = true\n\n[[mcp.servers]]\nname = \"google\"\ncommand = \"/bin/true\"\n",
+        )
+        .unwrap();
+
+        // WHEN loading from that path explicitly,
+        // THEN the [mcp] section is honored:
+        let cfg = load_config_from(&path);
+        assert!(cfg.is_enabled());
+        assert_eq!(cfg.servers.len(), 1);
+        assert_eq!(cfg.servers[0].name, "google");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn load_config_from_missing_file_yields_disabled_default() {
+        // GIVEN a path that does not exist,
+        // WHEN loading from it,
+        // THEN we get the disabled default instead of a panic:
+        let cfg = load_config_from(std::path::Path::new(
+            "/nonexistent-dir-xyz/helix-test-config.toml",
+        ));
+        assert!(!cfg.is_enabled());
     }
 }
