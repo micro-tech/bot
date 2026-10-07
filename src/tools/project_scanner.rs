@@ -322,7 +322,13 @@ fn walk_ssh_directory(
 }
 
 /// Fallback when SSH feature is disabled
+///
+/// Check artifact, not real dead code: the only caller is
+/// `test_ssh_walk_fallback_when_feature_disabled` (cfg(test)), which the
+/// plain `cargo check --lib` target never compiles. Silence the lint for the
+/// lib target only.
 #[cfg(not(feature = "ssh"))]
+#[cfg_attr(not(test), allow(dead_code))]
 fn walk_ssh_directory(
     _remote_path: &str,
     _host: &str,

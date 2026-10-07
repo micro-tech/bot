@@ -3,175 +3,826 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Helix Control Panel</title>
+        <title>Helix</title>
+        <link rel="icon" type="image/png" href="data:image/png;base64,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" />
         <!-- Version: 2026-06-10-v2.3.0 -->
         <style>
+            :root {
+                --bg: #0d1117;
+                --panel: #161b22;
+                --panel-alt: #0d1117;
+                --border: #30363d;
+                --text: #e6edf3;
+                --muted: #8b949e;
+                --accent: #00d4ff;
+                --danger: #ff6b6b;
+                --warn: #e3b341;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            html,
             body {
-                font-family: Arial, sans-serif;
-                margin: 20px;
-                background: #1a1a2e;
-                color: #e0e0e0;
+                height: 100%;
+                overflow: hidden;
             }
-            h1 {
-                color: #00d4ff;
+            body {
+                margin: 0;
+                background: var(--bg);
+                color: var(--text);
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica,
+                    Arial, sans-serif;
+                font-size: 14px;
             }
-            #tabs {
+            #app {
+                display: grid;
+                grid-template-columns: 280px minmax(0, 1fr) 340px;
+                height: 100vh;
+                width: 100vw;
+            }
+
+            /* ── Left sidebar ─────────────────────────────── */
+            #sidebar {
+                background: var(--panel-alt);
+                border-right: 1px solid var(--border);
                 display: flex;
-                gap: 5px;
-                margin-bottom: 15px;
+                flex-direction: column;
+                overflow: hidden;
             }
-            .tab-button {
-                padding: 10px 20px;
-                background: #16213e;
-                color: #e0e0e0;
-                border: 1px solid #0f3460;
-                cursor: pointer;
+            #brand {
+                padding: 16px;
+                border-bottom: 1px solid var(--border);
             }
-            .tab-button.active {
-                background: #0f3460;
-                color: #00d4ff;
-                border-color: #00d4ff;
+            #brand h1 {
+                margin: 0;
+                font-size: 1.3em;
+                color: var(--text);
+            }
+            #brand .version {
+                font-size: 0.75em;
+                color: var(--muted);
+            }
+            #brand {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            #brand-mark {
+                width: 38px;
+                height: 38px;
+                border-radius: 8px;
+                flex: none;
+            }
+            #brand-text h1 {
+                margin: 0;
+                font-size: 1.3em;
+                color: var(--text);
+            }
+            #brand-text .version {
+                font-size: 0.75em;
+                color: var(--muted);
+            }
+            #backend-list {
+                flex: 1;
+                overflow-y: auto;
+                padding: 8px;
             }
             .llm-btn {
-                margin-right: 6px;
-                background: #16213e;
-                color: #e0e0e0;
-                border: 1px solid #0f3460;
-            }
-            .llm-btn.selected {
-                border: 2px solid #00d4ff;
-                color: #00d4ff;
-                background: #0f3460;
-            }
-            .tab-content {
-                display: none;
-                background: #16213e;
-                padding: 20px;
-                border: 1px solid #0f3460;
-            }
-            .tab-content.active {
                 display: block;
-            }
-            #chat-input {
-                width: 70%;
-                padding: 10px;
-                background: #0d1b2a;
-                color: #e0e0e0;
-                border: 1px solid #0f3460;
-            }
-            #chat-send {
-                padding: 10px 20px;
-                background: #00897b;
-                color: white;
-                border: none;
+                width: 100%;
+                text-align: left;
+                margin: 0 0 6px 0;
+                padding: 10px 12px;
+                background: var(--panel);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
                 cursor: pointer;
             }
+            .llm-btn .kind {
+                display: block;
+                font-size: 0.75em;
+                color: var(--muted);
+            }
+            .llm-btn.selected {
+                border-color: var(--accent);
+                color: var(--accent);
+            }
+            .llm-btn .row-main {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .status-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--muted);
+                flex-shrink: 0;
+            }
+
+            /* ── Center chat panel ────────────────────────── */
+            #chat-panel {
+                display: flex;
+                flex-direction: column;
+                background: var(--bg);
+                min-width: 0;
+            }
+            #chat-header {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 12px 16px;
+                border-bottom: 1px solid var(--border);
+                background: var(--panel-alt);
+            }
+            #chat-title {
+                font-weight: 600;
+                font-size: 1.05em;
+            }
+            #chat-backend-label {
+                color: var(--muted);
+                font-size: 0.9em;
+            }
+            #conn-dot {
+                margin-left: auto;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                background: var(--muted);
+                flex-shrink: 0;
+            }
             #chat-messages {
-                height: 400px;
+                flex: 1;
                 overflow-y: auto;
-                border: 1px solid #0f3460;
-                padding: 12px;
-                margin-top: 10px;
-                background: #0d1b2a;
+                padding: 16px;
             }
             .message {
                 margin-bottom: 10px;
+                max-width: 78%;
+                padding: 10px 14px;
+                border-radius: 12px;
+                overflow-wrap: break-word;
+            }
+            .agent-bubble {
+                margin-right: auto;
+                background: var(--panel);
+                border: 1px solid var(--border);
+                border-top-left-radius: 4px;
+            }
+            .user-bubble {
+                margin-left: auto;
+                background: #0f3460;
+                border: 1px solid #0f3460;
+                border-top-right-radius: 4px;
+            }
+            .new-divider {
+                text-align: center;
+                color: var(--accent);
+                font-size: 0.75em;
+                letter-spacing: 0.1em;
+                margin: 14px 0;
+            }
+            #conn-dot.green {
+                background: #3fb950;
+            }
+            #conn-dot.red {
+                background: var(--danger);
             }
             .sender {
                 font-weight: bold;
-                color: #00d4ff;
+                color: var(--accent);
             }
-            textarea {
-                width: 100%;
-                background: #0d1b2a;
-                color: #e0e0e0;
-                border: 1px solid #0f3460;
-                padding: 8px;
+            #chat-input-row {
+                display: flex;
+                gap: 8px;
+                padding: 12px 16px;
+                border-top: 1px solid var(--border);
+                background: var(--panel-alt);
+                flex-shrink: 0;
             }
-            button {
-                margin-top: 8px;
-                padding: 8px 16px;
+            #chat-input {
+                flex: 1;
+                padding: 10px 12px;
+                background: var(--panel);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+            }
+            #chat-send {
+                padding: 10px 20px;
                 background: #0f3460;
-                color: #00d4ff;
-                border: 1px solid #00d4ff;
+                color: var(--accent);
+                border: 1px solid var(--accent);
+                border-radius: 6px;
                 cursor: pointer;
+            }
+
+            /* ── Right detail panel ───────────────────────── */
+            #detail-panel {
+                background: var(--panel-alt);
+                border-left: 1px solid var(--border);
+                overflow-y: auto;
+                padding: 16px;
+            }
+            #detail-panel h2 {
+                font-size: 1em;
+                margin: 0 0 10px 0;
+                color: var(--text);
+            }
+            #detail-panel section {
+                margin-bottom: 28px;
+            }
+            /* Detail tabs */
+            #detail-tabs {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 16px;
+                border-bottom: 1px solid var(--border);
+                padding-bottom: 8px;
+            }
+            .detail-tab {
+                background: none;
+                border: none;
+                color: var(--muted);
+                padding: 6px 10px;
+                cursor: pointer;
+                font-size: 0.9em;
+                margin: 0;
+            }
+            .detail-tab.active {
+                color: var(--text);
+                border-bottom: 2px solid var(--accent);
+                padding-bottom: 4px;
+            }
+            .detail-tab-content {
+                display: none;
+            }
+            .detail-tab-content.active {
+                display: block;
+            }
+            #raw-config-wrap {
+                margin-top: 16px;
+            }
+            #raw-config-wrap summary {
+                cursor: pointer;
+                color: var(--accent);
+                font-size: 0.9em;
+                margin-bottom: 8px;
+            }
+            #config-summary pre {
+                background: var(--panel);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 10px;
+                font-size: 11px;
+                max-height: 300px;
+                overflow-y: auto;
+                white-space: pre-wrap;
+            }
+            .summary-row {
+                display: flex;
+                justify-content: space-between;
+                padding: 6px 0;
+                border-bottom: 1px solid var(--border);
+                font-size: 0.9em;
+            }
+            .summary-row .k {
+                color: var(--muted);
+            }
+            #library-content ul {
+                list-style: none;
+                padding: 0;
+                margin: 8px 0;
+            }
+            #library-content li {
+                padding: 4px 0;
+                border-bottom: 1px solid var(--border);
+                font-size: 0.9em;
+            }
+            #library-content h3 {
+                font-size: 0.9em;
+                color: var(--muted);
+                margin: 14px 0 4px 0;
+            }
+            #config-textarea {
+                width: 100%;
+                min-height: 220px;
+                background: var(--panel);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 8px;
+                font-family: ui-monospace, monospace;
+                font-size: 12px;
+                resize: vertical;
+            }
+            #config-status {
+                margin-top: 8px;
+                font-size: 0.85em;
+                color: var(--muted);
+            }
+            #detail-panel button {
+                margin: 4px 4px 4px 0;
+                padding: 8px 14px;
+                background: var(--panel);
+                color: var(--accent);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                cursor: pointer;
+            }
+            #detail-panel button:hover {
+                border-color: var(--accent);
+            }
+            #log-output {
+                white-space: pre-wrap;
+                background: var(--panel);
+                padding: 12px;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                font-size: 12px;
+                max-height: 400px;
+                overflow-y: auto;
+            }
+            .error-msg {
+                color: var(--danger);
+            }
+            /* Routines */
+            #routines-section h2 {
+                font-size: 1em;
+                margin: 0 0 6px 0;
+            }
+            .routine-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 10px 0;
+                border-bottom: 1px solid var(--border);
+            }
+            .routine-name {
+                font-weight: 600;
+                font-size: 0.9em;
+            }
+            .routine-schedule {
+                color: var(--muted);
+                font-size: 0.8em;
+            }
+            .toggle {
+                position: relative;
+                width: 40px;
+                height: 22px;
+                border-radius: 11px;
+                background: var(--panel);
+                border: 1px solid var(--border);
+                cursor: pointer;
+                padding: 0;
+                margin: 0;
+                flex-shrink: 0;
+            }
+            .toggle .knob {
+                position: absolute;
+                top: 2px;
+                left: 2px;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background: var(--muted);
+            }
+            .toggle.on {
+                background: #0f3460;
+                border-color: var(--accent);
+            }
+            .toggle.on .knob {
+                left: 20px;
+                background: var(--accent);
+            }
+            .toggle:disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+            }
+
+            /* ── Responsive: drawers below desktop widths ── */
+            #drawer-sidebar-btn,
+            #drawer-detail-btn {
+                display: none;
+                padding: 6px 10px;
+                background: var(--panel);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.85em;
+            }
+            @media (max-width: 1100px) {
+                #app {
+                    grid-template-columns: 280px minmax(0, 1fr);
+                }
+                #detail-panel {
+                    position: fixed;
+                    top: 0;
+                    right: 0;
+                    bottom: 0;
+                    width: min(340px, 92vw);
+                    z-index: 50;
+                    transform: translateX(105%);
+                    transition: transform 0.18s ease-out;
+                    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.5);
+                }
+                #detail-panel.drawer-open {
+                    transform: none;
+                }
+                #drawer-detail-btn {
+                    display: inline-block;
+                }
+            }
+            @media (max-width: 800px) {
+                #app {
+                    grid-template-columns: minmax(0, 1fr);
+                }
+                #sidebar {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    bottom: 0;
+                    width: min(280px, 92vw);
+                    z-index: 50;
+                    transform: translateX(-105%);
+                    transition: transform 0.18s ease-out;
+                    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.5);
+                }
+                #sidebar.drawer-open {
+                    transform: none;
+                }
+                #drawer-sidebar-btn {
+                    display: inline-block;
+                }
             }
         </style>
     </head>
     <body>
-        <h1>
-            Helix Control Panel
-            <span style="font-size: 0.5em; color: #666"
-                >v2026-06-10-v2.3.0</span
-            >
-        </h1>
-        <p style="margin: -10px 0 15px 0; color:#00d4ff; font-size: 0.9em;">
-            Helix AI Agent — Full control over reasoning, tools &amp; memory
-        </p>
-        <div style="font-size:0.75em; color:#666; margin-bottom:10px;">
-            Connected to Helix Core • Reasoning • Tools • Memory
-        </div>
+        <div id="app">
+            <!-- LEFT SIDEBAR -->
+            <aside id="sidebar">
+                <div id="brand">
+                    <img id="brand-mark" src="data:image/png;base64,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" alt="Helix" />
+                    <div id="brand-text">
+                        <h1>Helix</h1>
+                        <span class="version">v2026-06-10-v2.3.0</span>
+                    </div>
+                </div>
+                <div id="backend-list">
+                    <div style="color: var(--muted); padding: 8px">
+                        Connecting…
+                    </div>
+                </div>
+            </aside>
 
-        <div id="tabs">
-            <button class="tab-button active" onclick="showTab('chat')">
-                Chat
-            </button>
-            <button class="tab-button" onclick="showTab('config')">
-                Config
-            </button>
-            <button class="tab-button" onclick="showTab('logs')">Logs</button>
-        </div>
+            <!-- CENTER CHAT -->
+            <main id="chat-panel">
+                <header id="chat-header">
+                    <button
+                        id="drawer-sidebar-btn"
+                        onclick="toggleSidebarDrawer()"
+                        title="Backends"
+                    >
+                        ☰
+                    </button>
+                    <span id="chat-title">Chat</span>
+                    <span id="chat-backend-label"></span>
+                    <button
+                        id="drawer-detail-btn"
+                        onclick="toggleDetailDrawer()"
+                        title="Details"
+                    >
+                        Details
+                    </button>
+                    <span id="conn-dot" title="connection status"></span>
+                </header>
+                <div id="chat-messages"></div>
+                <div id="chat-input-row">
+                    <input
+                        type="text"
+                        id="chat-input"
+                        placeholder="Message Helix..."
+                        onkeypress="if (event.key === 'Enter') sendChat();"
+                    />
+                    <button id="chat-send" onclick="sendChat()">Send</button>
+                </div>
+            </main>
 
-        <!-- CHAT TAB -->
-        <div id="chat-tab" class="tab-content active">
-            <div id="llm-selector" style="margin-bottom: 12px">
-                <span style="color:#00d4ff; font-weight:bold;">Helix LLM:</span>
-                <span id="llm-buttons"></span>
-            </div>
-            <input
-                type="text"
-                id="chat-input"
-                placeholder="Message Helix..."
-                onkeypress="if (event.key === 'Enter') sendChat();"
-            />
-            <button id="chat-send" onclick="sendChat()">Send</button>
-            <div style="margin: 8px 0 4px; font-size: 0.85em; color: #00d4ff;">Helix Response:</div>
-            <div id="chat-messages"></div>
-        </div>
+            <!-- RIGHT DETAIL PANEL -->
+            <aside id="detail-panel">
+                <div id="detail-tabs">
+                    <button
+                        class="detail-tab active"
+                        data-tab="details"
+                        onclick="showDetailTab('details')"
+                    >
+                        Details
+                    </button>
+                    <button
+                        class="detail-tab"
+                        data-tab="library"
+                        onclick="showDetailTab('library')"
+                    >
+                        Library
+                    </button>
+                    <button
+                        class="detail-tab"
+                        data-tab="computer"
+                        onclick="showDetailTab('computer')"
+                    >
+                        Computer
+                    </button>
+                    <button
+                        class="detail-tab"
+                        data-tab="logs"
+                        onclick="showDetailTab('logs')"
+                    >
+                        Logs
+                    </button>
+                </div>
 
-        <!-- CONFIG TAB -->
-        <div id="config-tab" class="tab-content">
-            <h2>Config</h2>
-            <textarea id="config-textarea" rows="20"></textarea>
-            <button onclick="saveConfig()">Save Config</button>
-            <div id="config-status"></div>
-        </div>
+                <section
+                    id="tab-details"
+                    class="detail-tab-content active"
+                >
+                    <h2>Details</h2>
+                    <div id="config-summary">
+                        <div style="color: var(--muted)">
+                            Waiting for config…
+                        </div>
+                    </div>
+                    <details id="raw-config-wrap">
+                        <summary>Edit raw config</summary>
+                        <textarea id="config-textarea"></textarea>
+                        <button onclick="saveConfig()">Save Config</button>
+                        <div id="config-status"></div>
+                    </details>
+                </section>
 
-        <!-- LOGS TAB -->
-        <div id="logs-tab" class="tab-content">
-            <h2>Logs</h2>
-            <button onclick="loadLog('/logs/chat')">Chat Log</button>
-            <button onclick="clearLog('/logs/chat/clear', 'chat')">
-                Clear Chat Log
-            </button>
-            <button onclick="loadLog('/logs/error')">Error Log</button>
-            <button onclick="clearLog('/logs/error/clear', 'error')">
-                Clear Error Log
-            </button>
-            <pre
-                id="log-output"
-                style="
-                    white-space: pre-wrap;
-                    background: #0d1b2a;
-                    padding: 12px;
-                    border: 1px solid #0f3460;
-                "
-            ></pre>
+                <section id="tab-library" class="detail-tab-content">
+                    <h2>Library</h2>
+                    <div id="library-content">
+                        <div style="color: var(--muted)">Loading…</div>
+                    </div>
+                </section>
+
+                <section id="tab-computer" class="detail-tab-content">
+                    <h2>Computer</h2>
+                    <div id="computer-backends">
+                        <div style="color: var(--muted)">
+                            Waiting for backends…
+                        </div>
+                    </div>
+                    <div
+                        id="computer-tools-note"
+                        style="
+                            margin-top: 12px;
+                            font-size: 0.85em;
+                            color: var(--muted);
+                        "
+                    ></div>
+                </section>
+
+                <section id="tab-logs" class="detail-tab-content">
+                    <h2>Logs</h2>
+                    <button onclick="loadLog('/logs/chat')">Chat Log</button>
+                    <button onclick="clearLog('/logs/chat/clear', 'chat')">
+                        Clear Chat Log
+                    </button>
+                    <button onclick="loadLog('/logs/error')">Error Log</button>
+                    <button onclick="clearLog('/logs/error/clear', 'error')">
+                        Clear Error Log
+                    </button>
+                    <pre id="log-output"></pre>
+                </section>
+
+                <section id="routines-section">
+                    <h2>Routines</h2>
+                    <div id="routines-list"></div>
+                </section>
+            </aside>
         </div>
 
         <script>
             let ws;
             let selectedLlm = "";
+            // id -> label for the chat header (from the real `backends` message)
+            let backendLabels = {};
+            // Full backend list cache, for the Computer tab.
+            let backendListCache = [];
+            // NEW divider: inserted once, above the first message appended
+            // after page load. Simple, honest semantics.
+            let newDividerShown = false;
+
+            // Responsive drawers (task 198): below ~1100px the detail
+            // panel and below ~800px the sidebar become toggleable
+            // overlays instead of grid columns. Content is never lost —
+            // the header buttons always bring the panels back.
+            function toggleDetailDrawer() {
+                const p = document.getElementById("detail-panel");
+                if (p) p.classList.toggle("drawer-open");
+            }
+            function toggleSidebarDrawer() {
+                const s = document.getElementById("sidebar");
+                if (s) s.classList.toggle("drawer-open");
+            }
+
+            function showDetailTab(name) {
+                document
+                    .querySelectorAll(".detail-tab-content")
+                    .forEach((el) => el.classList.remove("active"));
+                document
+                    .querySelectorAll(".detail-tab")
+                    .forEach((el) =>
+                        el.classList.toggle("active", el.dataset.tab === name),
+                    );
+                const tab = document.getElementById("tab-" + name);
+                if (tab) tab.classList.add("active");
+                if (name === "library") loadLibrary();
+            }
+
+            // DETAILS tab: read-only summary derived from the `config` WS
+            // message. The config arrives REDACTED until auth — values are
+            // displayed exactly as received; nothing is unredacted or
+            // reconstructed client-side, ever.
+            function renderConfigSummary(tomlText) {
+                const box = document.getElementById("config-summary");
+                if (!box) return;
+                box.innerHTML = "";
+                const text = String(tomlText == null ? "" : tomlText);
+                if (!text.trim()) {
+                    box.innerHTML =
+                        '<div style="color: var(--muted)">No config received yet.</div>';
+                    return;
+                }
+                // Section headers like [web], [[ollama]], with key counts.
+                const lines = text.split("\n");
+                const sections = [];
+                let current = null;
+                const headerRe = /^\s*\[+\s*([^\]]+?)\s*\]+/;
+                const keyRe = /^\s*[A-Za-z0-9_.-]+\s*=/;
+                for (const line of lines) {
+                    const h = line.match(headerRe);
+                    if (h) {
+                        current = { name: h[1].trim(), keys: 0 };
+                        sections.push(current);
+                    } else if (current && keyRe.test(line)) {
+                        current.keys++;
+                    }
+                }
+                const frag = document.createDocumentFragment
+                    ? document.createDocumentFragment()
+                    : null;
+                const addRow = (k, v) => {
+                    const row = document.createElement("div");
+                    row.className = "summary-row";
+                    const ks = document.createElement("span");
+                    ks.className = "k";
+                    ks.textContent = k;
+                    const vs = document.createElement("span");
+                    vs.textContent = v;
+                    row.appendChild(ks);
+                    row.appendChild(vs);
+                    (frag || box).appendChild(row);
+                };
+                addRow("sections", String(sections.length));
+                sections.slice(0, 12).forEach((s) => {
+                    addRow("[" + s.name + "]", s.keys + " keys");
+                });
+                if (frag) box.appendChild(frag);
+                const pre = document.createElement("pre");
+                pre.textContent = text;
+                box.appendChild(pre);
+            }
+
+            // LIBRARY tab: real GET /okf/registry endpoint.
+            let libraryLoaded = false;
+            function loadLibrary() {
+                const box = document.getElementById("library-content");
+                if (!box || libraryLoaded) return;
+                const empty = (t) => {
+                    box.innerHTML = "";
+                    const d = document.createElement("div");
+                    d.style.color = "var(--muted)";
+                    d.textContent = t;
+                    box.appendChild(d);
+                };
+                fetch("/okf/registry")
+                    .then((r) => r.json())
+                    .then((data) => {
+                        if (
+                            !data ||
+                            data.status === "disabled" ||
+                            data.bundle_id == null
+                        ) {
+                            empty(
+                                "OKF Library is disabled or unavailable. Set [helix.okf] enabled = true to use it.",
+                            );
+                            return;
+                        }
+                        libraryLoaded = true;
+                        box.innerHTML = "";
+                        const head = document.createElement("div");
+                        const bname = document.createElement("div");
+                        bname.style.fontWeight = "600";
+                        bname.textContent =
+                            "Bundle " + data.bundle_id + " v" + data.version;
+                        const counts = document.createElement("div");
+                        counts.style.color = "var(--muted)";
+                        counts.style.fontSize = "0.85em";
+                        counts.textContent =
+                            data.tool_count +
+                            " tools · " +
+                            data.knowledge_count +
+                            " knowledge entries";
+                        head.appendChild(bname);
+                        head.appendChild(counts);
+                        box.appendChild(head);
+                        const listSection = (title, items, nameOf) => {
+                            if (!items || !items.length) return;
+                            const h = document.createElement("h3");
+                            h.textContent = title;
+                            const ul = document.createElement("ul");
+                            items.forEach((it) => {
+                                const li = document.createElement("li");
+                                li.textContent =
+                                    nameOf(it) ||
+                                    JSON.stringify(it).slice(0, 80);
+                                ul.appendChild(li);
+                            });
+                            box.appendChild(h);
+                            box.appendChild(ul);
+                        };
+                        const toolName = (t) =>
+                            typeof t === "string"
+                                ? t
+                                : t.name || t.id || "";
+                        const knowName = (k) =>
+                            typeof k === "string"
+                                ? k
+                                : k.id || k.title || k.name || "";
+                        listSection("Tools", data.tools, toolName);
+                        listSection("Knowledge", data.knowledge, knowName);
+                    })
+                    .catch(() => {
+                        empty(
+                            "Could not reach the library endpoint (/okf/registry).",
+                        );
+                    });
+            }
+
+            // COMPUTER tab: backends from the real `backends` WS message.
+            // NOTE (flagged for Ranger 1): no WS message or endpoint exposes
+            // Helix's full tool list today — tools are only reachable via
+            // chat text commands like /tools. Needed: a `tools_list` WS
+            // message or GET /tools endpoint returning [{name, description}].
+            // This tab ships with backends data and the documented gap.
+            function renderComputerTab() {
+                const box = document.getElementById("computer-backends");
+                if (!box) return;
+                box.innerHTML = "";
+                if (!backendListCache.length) {
+                    box.innerHTML =
+                        '<div style="color: var(--muted)">No backends connected.</div>';
+                } else {
+                    backendListCache.forEach((b) => {
+                        const row = document.createElement("div");
+                        row.className = "summary-row";
+                        const ks = document.createElement("span");
+                        ks.textContent = b.label;
+                        const vs = document.createElement("span");
+                        vs.className = "k";
+                        vs.textContent = b.kind || "";
+                        row.appendChild(ks);
+                        row.appendChild(vs);
+                        box.appendChild(row);
+                    });
+                }
+                const note = document.getElementById("computer-tools-note");
+                if (note && !note.textContent) {
+                    note.textContent =
+                        "Full tool list is not exposed by the backend yet — use /tools in chat.";
+                }
+            }
+
+            function setConnDot(state) {
+                const dot = document.getElementById("conn-dot");
+                if (!dot) return;
+                dot.classList.remove("green", "red");
+                if (state === "open") {
+                    dot.classList.add("green");
+                    dot.title = "connected";
+                } else if (state === "closed") {
+                    dot.classList.add("red");
+                    dot.title = "disconnected — reconnecting…";
+                } else {
+                    dot.title = "connection status";
+                }
+            }
 
             // Log functions defined first so they're always available
             function loadLog(url) {
@@ -192,35 +843,21 @@
                     });
             }
 
-            function showTab(name) {
-                document
-                    .querySelectorAll(".tab-content")
-                    .forEach((el) => el.classList.remove("active"));
-                document
-                    .querySelectorAll(".tab-button")
-                    .forEach((el) => el.classList.remove("active"));
-                const tab = document.getElementById(name + "-tab");
-                if (tab) tab.classList.add("active");
-
-                document.querySelectorAll(".tab-button").forEach((btn) => {
-                    if (
-                        btn.getAttribute("onclick") &&
-                        btn.getAttribute("onclick").includes("'" + name + "'")
-                    ) {
-                        btn.classList.add("active");
-                    }
-                });
-            }
-
             function connectWS() {
                 const protocol =
                     location.protocol === "https:" ? "wss:" : "ws:";
                 ws = new WebSocket(
                     protocol + "//" + location.hostname + ":8443/ws",
                 );
-                ws.onopen = () => console.log("WS connected");
+                ws.onopen = () => {
+                    console.log("WS connected");
+                    setConnDot("open");
+                };
                 ws.onmessage = handleMessage;
-                ws.onclose = () => setTimeout(connectWS, 3000);
+                ws.onclose = () => {
+                    setConnDot("closed");
+                    setTimeout(connectWS, 3000);
+                };
             }
 
             function handleMessage(event) {
@@ -230,10 +867,17 @@
                 if (msg.type === "config") {
                     const ta = document.getElementById("config-textarea");
                     if (ta) ta.value = msg.data;
+                    renderConfigSummary(msg.data);
                 } else if (msg.type === "manifest") {
                     // ignore manifest on the UI for now
                 } else if (msg.type === "backends") {
                     buildLlmButtons(msg.backends);
+                } else if (msg.type === "routines") {
+                    renderRoutines(
+                        Array.isArray(msg.routines) ? msg.routines : [],
+                    );
+                } else if (msg.type === "routine_status") {
+                    handleRoutineStatus(msg);
                 } else if (
                     msg.type === "user_msg" ||
                     msg.type === "ollama_response" ||
@@ -246,14 +890,45 @@
             }
 
             function buildLlmButtons(backends) {
-                const container = document.getElementById("llm-buttons");
+                const container = document.getElementById("backend-list");
                 if (!container) return;
                 container.innerHTML = "";
+                backendLabels = {};
+                backendListCache = Array.isArray(backends) ? backends : [];
+                renderComputerTab();
+                if (!backends || backends.length === 0) {
+                    // Honest empty state — never a blank panel.
+                    const empty = document.createElement("div");
+                    empty.style.cssText =
+                        "color: var(--muted); padding: 8px;";
+                    empty.textContent = "No backends connected";
+                    container.appendChild(empty);
+                    const hdr = document.getElementById("chat-backend-label");
+                    if (hdr) hdr.textContent = "";
+                    return;
+                }
                 backends.forEach((b, i) => {
+                    backendLabels[b.id] = b.label;
                     const btn = document.createElement("button");
-                    btn.textContent = b.label;
                     btn.className = "llm-btn";
                     btn.dataset.id = b.id;
+                    // Status dot: the `backends` message carries no health
+                    // data, so this stays neutral ("unknown") rather than
+                    // implying a live status we don't have.
+                    const dot = document.createElement("span");
+                    dot.className = "status-dot";
+                    dot.title = "status unknown";
+                    const label = document.createElement("span");
+                    label.textContent = b.label;
+                    const rowMain = document.createElement("span");
+                    rowMain.className = "row-main";
+                    rowMain.appendChild(dot);
+                    rowMain.appendChild(label);
+                    const kind = document.createElement("span");
+                    kind.className = "kind";
+                    kind.textContent = b.kind || "";
+                    btn.appendChild(rowMain);
+                    btn.appendChild(kind);
                     btn.onclick = () => selectLlm(b.id);
                     container.appendChild(btn);
                     // Auto-select the first backend
@@ -266,6 +941,8 @@
                 document.querySelectorAll(".llm-btn").forEach((el) => {
                     el.classList.toggle("selected", el.dataset.id === id);
                 });
+                const hdr = document.getElementById("chat-backend-label");
+                if (hdr) hdr.textContent = backendLabels[id] || "";
             }
 
             function sendChat() {
@@ -350,8 +1027,20 @@
                     text = "(no readable text received from server)";
                 }
 
+                const isUser = msg.type === "user_msg";
                 const p = document.createElement("div");
-                p.className = "message" + (isError ? " error-msg" : "");
+                p.className =
+                    "message " +
+                    (isUser ? "user-bubble" : "agent-bubble") +
+                    (isError ? " error-msg" : "");
+                // NEW divider above the first message appended after load.
+                if (!newDividerShown) {
+                    newDividerShown = true;
+                    const divider = document.createElement("div");
+                    divider.className = "new-divider";
+                    divider.textContent = "— NEW —";
+                    div.appendChild(divider);
+                }
                 // Use textContent on a span to guarantee we never get [object Object]
                 const senderSpan = document.createElement("span");
                 senderSpan.className = "sender";
@@ -374,8 +1063,99 @@
                     ws.send(JSON.stringify({ type: "config_save", data: val }));
             }
 
+            // ROUTINES section — built against the documented contract:
+            //   backend -> {type:"routines", routines:[{id,name,schedule,enabled}]}
+            //   UI      -> {type:"routine_toggle", id, enabled}  (user clicks on live rows only)
+            //   backend -> {type:"routine_status", id, enabled, ok}
+            // The backend exposes NO routines API today, so this renders an
+            // honest empty state and sends NOTHING until a real `routines`
+            // message arrives. No invented message types in shipped code.
+            let routinesLive = false;
+            function renderRoutinesEmpty() {
+                const list = document.getElementById("routines-list");
+                if (!list) return;
+                list.innerHTML = "";
+                routinesLive = false;
+                const d = document.createElement("div");
+                d.style.color = "var(--muted)";
+                d.style.fontSize = "0.9em";
+                d.textContent = "No routines exposed by the backend yet.";
+                list.appendChild(d);
+            }
+            function renderRoutines(routines) {
+                const list = document.getElementById("routines-list");
+                if (!list) return;
+                list.innerHTML = "";
+                routinesLive = true;
+                routines.forEach((r) => {
+                    const row = document.createElement("div");
+                    row.className = "routine-row";
+                    row.dataset.id = r.id;
+                    const info = document.createElement("div");
+                    const nm = document.createElement("div");
+                    nm.className = "routine-name";
+                    nm.textContent = r.name || r.id;
+                    const sc = document.createElement("div");
+                    sc.className = "routine-schedule";
+                    sc.textContent = r.schedule || "";
+                    info.appendChild(nm);
+                    info.appendChild(sc);
+                    const tgl = document.createElement("button");
+                    tgl.className = "toggle" + (r.enabled ? " on" : "");
+                    tgl.setAttribute("role", "switch");
+                    tgl.setAttribute(
+                        "aria-checked",
+                        r.enabled ? "true" : "false",
+                    );
+                    tgl.setAttribute("aria-label", "Toggle " + (r.name || r.id));
+                    const knob = document.createElement("span");
+                    knob.className = "knob";
+                    tgl.appendChild(knob);
+                    tgl.onclick = () => {
+                        const next = !tgl.classList.contains("on");
+                        if (ws)
+                            ws.send(
+                                JSON.stringify({
+                                    type: "routine_toggle",
+                                    id: r.id,
+                                    enabled: next,
+                                }),
+                            );
+                    };
+                    row.appendChild(info);
+                    row.appendChild(tgl);
+                    list.appendChild(row);
+                });
+            }
+            function handleRoutineStatus(msg) {
+                // {type:"routine_status", id, enabled, ok}
+                const list = document.getElementById("routines-list");
+                if (!list || !routinesLive) return;
+                const rows = list.children;
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (!row.dataset || row.dataset.id !== msg.id) continue;
+                    if (msg.ok === false) return; // backend refused: leave as-is
+                    for (let j = 0; j < row.children.length; j++) {
+                        const tgl = row.children[j];
+                        if (
+                            tgl.className &&
+                            tgl.className.split(" ").includes("toggle")
+                        ) {
+                            tgl.classList.toggle("on", !!msg.enabled);
+                            tgl.setAttribute(
+                                "aria-checked",
+                                msg.enabled ? "true" : "false",
+                            );
+                        }
+                    }
+                    return;
+                }
+            }
+
             window.onload = () => {
                 connectWS();
+                renderRoutinesEmpty();
             };
         </script>
     </body>

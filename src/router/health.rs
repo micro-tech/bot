@@ -67,7 +67,6 @@ impl HealthStore {
     fn start_probe_loop(&self) {
         let statuses = self.statuses.clone();
         let backends = self.backends.clone();
-        let _thresholds = self.thresholds.clone();
 
         tokio::spawn(async move {
             let mut ticker = interval(Duration::from_secs(5));

@@ -1,10 +1,7 @@
 //! Integration test: ReflectionPlannerAdapter + RuntimeLoop
-
-use bot::agents::agent_state::AgentState;
-use bot::agents::planner::Planner;
-use bot::agents::reflection_planner_adapter::ReflectionPlannerAdapter;
-use bot::agents::rule_layer::RuleLayer;
-use bot::agents::runtime_loop::RuntimeLoop;
+//!
+//! Compile-only smoke test: the adapter type must exist and be nameable.
+//! (Actual adapter behavior is covered in planner_v2_tests.rs.)
 
 #[tokio::test]
 async fn test_reflection_planner_adapter_compiles() {
