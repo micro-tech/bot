@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Merged — Mega-batch PR #5 (tasks 187–211), 2026-10-06
+
+All entries below shipped to `PreRelese` via
+[micro-tech/bot#5](https://github.com/micro-tech/bot/pull/5). (Known gap:
+`Cargo.lock` exceeds the upload size limit — run `cargo build` after merge
+to regenerate it.)
+
+**Locked direction (OKF unification):** the in-Helix OKF server
+(`[helix.okf]`, `PROTOCOL.md` v1) stays as the **offline fallback**; the
+Dell's shared OKF backend becomes primary in Phase 3. Local disk remains
+the memory fallback when the Dell is unreachable.
+
 ### Fixed — Port tests/*.rs to the current crate name; unmask follow-on failures (task 211, 2026-10-05)
 
 - All `bot::` → `helix::` across `tests/*.rs` and `tests/scenarios/*.rs`
