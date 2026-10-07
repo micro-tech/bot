@@ -14,16 +14,24 @@
 - [Safety & Security](10-safety-security.html)
 - [Utils & Display](11-utils-display.html)
 
-## Components
-- `src/memory/manager.rs` — `MemoryManager` orchestrator
+## Components (rebuilt, tasks 203–206)
+- `src/memory/manager.rs` — `MemoryManager` orchestrator; `beliefs.json` is the ONE store (`BELIEFS_FILE`)
 - `src/memory/mod.rs` — `MemoryHandle` (working memory)
-- `src/memory/episodic.rs` — Event storage
-- `src/memory/vector.rs` — Vector embeddings + similarity
+- `src/memory/episodic.rs` — disk-backed event storage, fsynced (`HELIX_EPISODES_FILE`)
+- `src/memory/vector.rs` — disk-backed vector facts with **real Ollama embeddings** (`HELIX_EMBED_URL`, `HELIX_EMBED_MODEL`, default `nomic-embed-text`); degrades honestly to keyword search when no embedder is reachable
+- Nightly consolidation (task 205) — short-term → long-term path, runs via the cron registry
 
 ## Responsibilities
 - Inject context into LLM prompts
-- Store beliefs (`beliefs.json`)
+- Store beliefs (`beliefs.json`, single source of truth)
 - Provide short-term + long-term recall
+- Persist across restarts (disk-backed episodic + vector)
+
+## OKF knowledge (tasks 207–208)
+- `src/okf/` — `OkfLibrarian`, `OkfFetcher`, `OkfRegistry`, `OkfValidator`, `OkfBundleManifest`
+- Protocol contract: `PROTOCOL.md` (v1) — `/okf/manifest.json`, `/okf/bundles/{id}/manifest.json`, `/okf/knowledge/{kid}`, `POST /okf/traces` (flushed before the 202 ack), `POST /okf/bundles/{b}/concepts`
+- Helix runs its own OKF server (`[helix.okf] enabled`, serves `/okf/*` on the web port, self-fetch via `server_url`)
+- **Direction**: in-Helix server stays as the **offline fallback**; the Dell's shared OKF backend becomes primary (unification Phase 3)
 
 ## Links
 - [Overview](00-overview.html)
