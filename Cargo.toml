@@ -98,8 +98,7 @@ rmcp = { version = "3.5.0", features = ["transport-child-process", "client"] }
 #
 # Do NOT use vendored-openssl unless you have Perl installed.
 ssh2 = { version = "0.9", optional = true }
-regex = "1"
-notify = "8"
+
 russh = { version = "0.63", default-features = false, features = ["aws-lc-rs"] }
 rand_core = "0.10"
 getrandom = "0.3"
