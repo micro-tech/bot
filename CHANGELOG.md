@@ -75,6 +75,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed — Web config.toml editor: modal popout, live-file trace, divergence guard (task 213, 2026-10-07)
+
+- Replaced the cramped inline `<details>` config editor with a modal popout:
+  large (55vh) textarea, Save/Discard/Reload buttons, dirty-state indicator
+  (● unsaved changes), visible config-file path, and a status line. Save
+  success/failure (`config_status`) is now actually rendered — previously it
+  arrived over the socket and was silently dropped.
+- Trace result: the backend was already saving to the correct live path
+  (`state.config_path`, threaded through by task 188). The "wrong file"
+  perception comes from the editor showing the **startup-frozen** config
+  string — hand-edits made after Helix starts never appear, and the UI never
+  showed which file it was editing.
+- Divergence guard (task-188 rule, enforced client-side): if a fresh `config`
+  push arrives while the operator has unsaved edits, the edits are kept and a
+  warning banner is shown instead of silently overwriting the textarea;
+  Discard takes the fresh copy, Save asks for confirmation first. The save's
+  own echo is recognized via an in-flight flag so it never trips the warning.
+- Added a "Reload from disk" button that sends `{type:"config_reload"}`
+  (safely ignored by the current backend). Full live reload needs a small
+  backend addition — flagged for Ranger 1 (see task 213 results).
+- Single-file setup intact: no new assets, all inline in `index.html`.
+
 ### Merged — Mega-batch PR #5 (tasks 187–211), 2026-10-06
 
 All entries below shipped to `PreRelese` via
