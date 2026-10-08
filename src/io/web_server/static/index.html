@@ -141,7 +141,6 @@
                 flex-direction: column;
                 background: var(--bg);
                 min-width: 0;
-                min-height: 0; /* grid item: allow shrink below content so #chat-messages can scroll */
             }
             #chat-header {
                 display: flex;
@@ -169,7 +168,6 @@
             }
             #chat-messages {
                 flex: 1;
-                min-height: 0; /* flex item: allow shrink below content so overflow-y engages */
                 overflow-y: auto;
                 padding: 16px;
             }
@@ -277,15 +275,6 @@
             .detail-tab-content.active {
                 display: block;
             }
-            #raw-config-wrap {
-                margin-top: 16px;
-            }
-            #raw-config-wrap summary {
-                cursor: pointer;
-                color: var(--accent);
-                font-size: 0.9em;
-                margin-bottom: 8px;
-            }
             #config-summary pre {
                 background: var(--panel);
                 border: 1px solid var(--border);
@@ -321,22 +310,123 @@
                 color: var(--muted);
                 margin: 14px 0 4px 0;
             }
-            #config-textarea {
-                width: 100%;
-                min-height: 220px;
-                background: var(--panel);
-                color: var(--text);
-                border: 1px solid var(--border);
-                border-radius: 6px;
-                padding: 8px;
+            /* Config editor (task 213): detail-panel launcher + modal popout. */
+            .config-path-line {
+                font-size: 0.8em;
+                color: var(--muted);
                 font-family: ui-monospace, monospace;
-                font-size: 12px;
-                resize: vertical;
+                margin: 8px 0;
+                overflow-wrap: anywhere;
             }
             #config-status {
                 margin-top: 8px;
                 font-size: 0.85em;
                 color: var(--muted);
+            }
+            .modal-backdrop {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.62);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+            }
+            .modal-backdrop[hidden] {
+                display: none;
+            }
+            .config-modal {
+                width: min(1100px, 94vw);
+                max-height: 92vh;
+                display: flex;
+                flex-direction: column;
+                background: var(--panel);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+            }
+            .config-modal-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 16px;
+                border-bottom: 1px solid var(--border);
+            }
+            .config-modal-header h2 {
+                margin: 0;
+                font-size: 1.05em;
+            }
+            .dirty-dot {
+                font-size: 0.8em;
+                color: var(--warn);
+                white-space: nowrap;
+            }
+            .dirty-dot[hidden] {
+                display: none;
+            }
+            .modal-close {
+                margin-left: auto;
+                background: none;
+                border: 1px solid var(--border);
+                color: var(--muted);
+                border-radius: 6px;
+                padding: 4px 10px;
+                cursor: pointer;
+            }
+            .config-modal-path {
+                padding: 8px 16px 0;
+                font-size: 0.8em;
+                color: var(--muted);
+                font-family: ui-monospace, monospace;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .config-modal-warn {
+                margin: 10px 16px 0;
+                padding: 10px 12px;
+                border: 1px solid var(--warn);
+                border-radius: 6px;
+                color: var(--warn);
+                font-size: 0.85em;
+                background: rgba(227, 179, 65, 0.08);
+            }
+            .config-modal-warn[hidden] {
+                display: none;
+            }
+            #config-modal-textarea {
+                margin: 12px 16px;
+                min-height: 55vh;
+                background: var(--panel-alt);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 10px;
+                font-family: ui-monospace, monospace;
+                font-size: 12.5px;
+                line-height: 1.5;
+                resize: vertical;
+                tab-size: 4;
+            }
+            .config-modal-footer {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px 16px;
+                border-top: 1px solid var(--border);
+            }
+            .config-modal-footer .spacer {
+                flex: 1;
+            }
+            #config-modal-status {
+                font-size: 0.85em;
+                color: var(--muted);
+            }
+            #config-modal-status.ok {
+                color: #3fb950;
+            }
+            #config-modal-status.err {
+                color: var(--danger);
             }
             #detail-panel button {
                 margin: 4px 4px 4px 0;
@@ -570,12 +660,9 @@
                             Waiting for config…
                         </div>
                     </div>
-                    <details id="raw-config-wrap">
-                        <summary>Edit raw config</summary>
-                        <textarea id="config-textarea"></textarea>
-                        <button onclick="saveConfig()">Save Config</button>
-                        <div id="config-status"></div>
-                    </details>
+                    <div id="config-path-line" class="config-path-line">config file: <span id="config-path-value">waiting for backend…</span></div>
+                    <button onclick="openConfigModal()">Open config editor</button>
+                    <div id="config-status"></div>
                 </section>
 
                 <section id="tab-library" class="detail-tab-content">
@@ -894,9 +981,9 @@
                 console.log("[WS] Received:", msg);
 
                 if (msg.type === "config") {
-                    const ta = document.getElementById("config-textarea");
-                    if (ta) ta.value = msg.data;
-                    renderConfigSummary(msg.data);
+                    onConfigPush(msg);
+                } else if (msg.type === "config_status") {
+                    onConfigStatus(msg);
                 } else if (msg.type === "manifest") {
                     // ignore manifest on the UI for now
                 } else if (msg.type === "backends") {
@@ -1103,11 +1190,244 @@
                 div.scrollTop = div.scrollHeight;
             }
 
-            function saveConfig() {
-                const val = document.getElementById("config-textarea").value;
-                if (ws)
-                    ws.send(JSON.stringify({ type: "config_save", data: val }));
+            // ── CONFIG EDITOR (task 213) ──────────────────────────────────
+            // Modal popout over the existing WS contract — no new backend
+            // messages invented:
+            //   backend -> {type:"config", data, [path], [mtime]}
+            //   UI      -> {type:"config_save", data}
+            //   backend -> {type:"config_status", status, msg}
+            //   UI      -> {type:"config_reload"}  (sent on Reload; the current
+            //              backend ignores unknown types, so this is a safe
+            //              no-op until Ranger 1 implements the re-read.)
+            //
+            // Divergence rule (from task 188, enforced client-side): never
+            // silently clobber. If a fresh config push arrives while the
+            // operator has unsaved edits, the edits are kept and a warning
+            // banner is shown instead of overwriting the textarea.
+            const configEditor = {
+                loadedText: "",
+                loadedPath: "",
+                loadedMtime: null,
+                pendingFresh: null, // newer server push that arrived while dirty
+                expectingOwnEcho: false, // our save is in flight; next push is its echo
+                dirty: false,
+                open: false,
+            };
+
+            function configPathLabel() {
+                return (
+                    configEditor.loadedPath ||
+                    "(live config — path not reported by this backend version)"
+                );
             }
+
+            function renderConfigPath() {
+                const label = configPathLabel();
+                const pv = document.getElementById("config-path-value");
+                if (pv) pv.textContent = label;
+                const mp = document.getElementById("config-modal-path");
+                if (mp) mp.textContent = "file: " + label;
+            }
+
+            function setModalStatus(text, cls) {
+                const s = document.getElementById("config-modal-status");
+                if (s) {
+                    s.textContent = text;
+                    s.className = cls || "";
+                }
+                // Mirror into the detail panel so feedback is never silent
+                // when the modal is closed.
+                const ps = document.getElementById("config-status");
+                if (ps && !configEditor.open) ps.textContent = text;
+            }
+
+            function showModalWarn(text) {
+                const w = document.getElementById("config-modal-warn");
+                if (!w) return;
+                w.textContent = text;
+                w.hidden = false;
+            }
+
+            function hideModalWarn() {
+                const w = document.getElementById("config-modal-warn");
+                if (w) w.hidden = true;
+            }
+
+            function updateDirty() {
+                const ta = document.getElementById("config-modal-textarea");
+                configEditor.dirty =
+                    !!ta && ta.value !== configEditor.loadedText;
+                const dot = document.getElementById("config-modal-dirty");
+                if (dot) dot.hidden = !configEditor.dirty;
+                const saveBtn = document.getElementById("config-modal-save-btn");
+                if (saveBtn) saveBtn.disabled = !configEditor.dirty;
+            }
+
+            function applyFreshConfig(text, path, mtime) {
+                configEditor.loadedText = text;
+                if (path) configEditor.loadedPath = path;
+                if (mtime != null) configEditor.loadedMtime = mtime;
+                configEditor.pendingFresh = null;
+                configEditor.expectingOwnEcho = false;
+                configEditor.dirty = false;
+                hideModalWarn();
+                const ta = document.getElementById("config-modal-textarea");
+                if (ta && configEditor.open) ta.value = text;
+                updateDirty();
+                renderConfigPath();
+            }
+
+            // Every {type:"config"} push from the backend lands here.
+            function onConfigPush(msg) {
+                const fresh =
+                    typeof msg.data === "string" ? msg.data : "";
+                const freshPath =
+                    typeof msg.path === "string" ? msg.path : "";
+                const freshMtime = msg.mtime != null ? msg.mtime : null;
+                renderConfigSummary(fresh);
+                if (configEditor.expectingOwnEcho) {
+                    // Our save's echo (may arrive before config_status):
+                    // it IS the new baseline, not a divergence.
+                    applyFreshConfig(fresh, freshPath, freshMtime);
+                    return;
+                }
+                if (
+                    configEditor.open &&
+                    configEditor.dirty &&
+                    fresh !== configEditor.loadedText
+                ) {
+                    // Divergence: keep the operator's edits, warn loudly.
+                    configEditor.pendingFresh = {
+                        text: fresh,
+                        path: freshPath,
+                        mtime: freshMtime,
+                    };
+                    showModalWarn(
+                        "The config changed on the server while you were editing " +
+                            "(another tab saved, or the file was reloaded). Your edits are " +
+                            "kept — Discard to take the fresh copy, or review and Save to " +
+                            "overwrite it."
+                    );
+                    return;
+                }
+                applyFreshConfig(fresh, freshPath, freshMtime);
+            }
+
+            // Backend answer to config_save.
+            function onConfigStatus(msg) {
+                const ok = msg.status === "success";
+                setModalStatus(
+                    msg.msg || msg.status || "",
+                    ok ? "ok" : "err"
+                );
+                if (ok) {
+                    // Optimistic baseline: the echo push arriving next will
+                    // reconcile any redaction-merge differences via the
+                    // expectingOwnEcho path above.
+                    const ta = document.getElementById("config-modal-textarea");
+                    configEditor.loadedText = ta
+                        ? ta.value
+                        : configEditor.loadedText;
+                    configEditor.pendingFresh = null;
+                    configEditor.dirty = false;
+                    hideModalWarn();
+                    updateDirty();
+                } else {
+                    configEditor.expectingOwnEcho = false;
+                }
+            }
+
+            function openConfigModal() {
+                configEditor.open = true;
+                const bd = document.getElementById("config-modal-backdrop");
+                if (bd) bd.hidden = false;
+                applyFreshConfig(
+                    configEditor.loadedText,
+                    configEditor.loadedPath,
+                    configEditor.loadedMtime
+                );
+                if (!configEditor.loadedText) {
+                    setModalStatus("Waiting for config from backend…", "");
+                } else {
+                    setModalStatus("", "");
+                }
+                const ta = document.getElementById("config-modal-textarea");
+                if (ta) {
+                    ta.oninput = updateDirty;
+                    ta.focus();
+                }
+            }
+
+            function closeConfigModal() {
+                if (
+                    configEditor.dirty &&
+                    !window.confirm("Discard unsaved config changes?")
+                )
+                    return;
+                configEditor.open = false;
+                configEditor.pendingFresh = null;
+                const bd = document.getElementById("config-modal-backdrop");
+                if (bd) bd.hidden = true;
+            }
+
+            function configModalBackdropClick(event) {
+                if (
+                    event.target &&
+                    event.target.id === "config-modal-backdrop"
+                )
+                    closeConfigModal();
+            }
+
+            function discardConfigModal() {
+                if (configEditor.pendingFresh) {
+                    const p = configEditor.pendingFresh;
+                    applyFreshConfig(p.text, p.path, p.mtime);
+                    setModalStatus("Took the fresh copy.", "");
+                } else {
+                    applyFreshConfig(
+                        configEditor.loadedText,
+                        configEditor.loadedPath,
+                        configEditor.loadedMtime
+                    );
+                    setModalStatus("Changes discarded.", "");
+                }
+            }
+
+            function reloadConfigModal() {
+                if (
+                    configEditor.dirty &&
+                    !window.confirm(
+                        "Reload from disk and lose your unsaved edits?"
+                    )
+                )
+                    return;
+                if (ws) ws.send(JSON.stringify({ type: "config_reload" }));
+                setModalStatus(
+                    "Reload requested — waiting for the backend…",
+                    ""
+                );
+            }
+
+            function saveConfigModal() {
+                const ta = document.getElementById("config-modal-textarea");
+                if (!ta || !configEditor.dirty) return;
+                if (
+                    configEditor.pendingFresh &&
+                    !window.confirm(
+                        "The server copy changed since you started editing. " +
+                            "Save anyway and overwrite it?"
+                    )
+                )
+                    return;
+                configEditor.expectingOwnEcho = true;
+                if (ws)
+                    ws.send(JSON.stringify({ type: "config_save", data: ta.value }));
+                setModalStatus("Saving…", "");
+            }
+
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape" && configEditor.open) closeConfigModal();
+            });
 
             // ROUTINES section — built against the documented contract:
             //   backend -> {type:"routines", routines:[{id,name,schedule,enabled}]}
@@ -1204,5 +1524,25 @@
                 renderRoutinesEmpty();
             };
         </script>
+        <!-- Config editor modal (task 213): single-file, no external assets. -->
+        <div id="config-modal-backdrop" class="modal-backdrop" hidden onclick="configModalBackdropClick(event)">
+            <div class="config-modal" role="dialog" aria-modal="true" aria-labelledby="config-modal-title">
+                <div class="config-modal-header">
+                    <h2 id="config-modal-title">Edit config.toml</h2>
+                    <span id="config-modal-dirty" class="dirty-dot" hidden>● unsaved changes</span>
+                    <button class="modal-close" onclick="closeConfigModal()" aria-label="Close">✕</button>
+                </div>
+                <div class="config-modal-path"><span id="config-modal-path">waiting for backend…</span></div>
+                <div id="config-modal-warn" class="config-modal-warn" hidden></div>
+                <textarea id="config-modal-textarea" spellcheck="false" autocomplete="off"></textarea>
+                <div class="config-modal-footer">
+                    <button id="config-modal-reload-btn" onclick="reloadConfigModal()" title="Ask the backend to re-read the config file from disk">↻ Reload from disk</button>
+                    <span class="spacer"></span>
+                    <span id="config-modal-status"></span>
+                    <button onclick="discardConfigModal()">Discard</button>
+                    <button id="config-modal-save-btn" onclick="saveConfigModal()">Save</button>
+                </div>
+            </div>
+        </div>
     </body>
 </html>
