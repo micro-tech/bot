@@ -76,7 +76,7 @@ pub fn execute(name: &str, args: &Value) -> String {
             }
         }
         "list_okf_tools" => list_okf_tools(),
-        other => String::new(), // signal: try OKF or unknown
+        _other => String::new(), // signal: try OKF or unknown
     };
 
     if !result.is_empty() {

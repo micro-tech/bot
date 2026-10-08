@@ -27,22 +27,12 @@ const GEMINI_URL_BASE: &str = "https://generativelanguage.googleapis.com/v1beta/
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 fn build_client() -> Client {
-    // reqwest is compiled with `rustls-tls-manual-roots-no-provider`, which means
-    // NO root CAs are trusted by default.  Without loading a CA bundle every
-    // HTTPS TLS handshake fails (and reqwest mis-reports it as a connection/DNS
-    // error because `is_connect()` covers all connection-phase failures).
-    // We load Mozilla's webpki bundle so Google's certificate chain verifies.
-    let mut root_store = rustls::RootCertStore::empty();
-    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-
-    let tls_cfg = rustls::ClientConfig::builder()
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
-
+    // reqwest 0.13 with `rustls-no-provider` bundles Mozilla's root CA store
+    // automatically, so no manual cert loading is needed.  The global ring
+    // crypto provider is installed once at startup in main.rs.
     Client::builder()
         .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
         .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
-        .use_preconfigured_tls(tls_cfg)
         .build()
         .expect("Failed to build Gemini reqwest client")
 }

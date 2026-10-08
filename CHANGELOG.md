@@ -6,6 +6,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — 2026-10-04
+
+**Author:** AI Assistant (Claude Sonnet 4.6) — triggered by user "Cobble"
+
+### Fixed
+
+- **Gemini TLS failure** (`src/io/llm_gemini/mod.rs`) — reqwest was compiled
+  with `rustls-tls-manual-roots-no-provider` (0.12) / `rustls-no-provider`
+  (0.13), which starts with an empty CA trust store. Every HTTPS connection to
+  the Gemini API silently failed at TLS handshake. Fixed by upgrading to
+  reqwest 0.13 where `rustls-no-provider` bundles Mozilla root certs
+  automatically.
+
+- **Misleading error label** (`src/io/llm_gemini/mod.rs`) — `reqwest`'s
+  `is_connect()` fires for TCP refused, DNS failures, _and_ TLS cert errors.
+  The handler was labelling all three as `"connection refused / DNS failure"`.
+  Error classification now inspects the error string to distinguish TLS errors,
+  DNS failures, and TCP errors separately.
+
+- **Missing `router` module** (`src/main.rs`, `src/lib.rs`) — `src/router/`
+  existed on disk but was not declared in either crate root. Added `mod router;`
+  to both `main.rs` (binary crate root) and `lib.rs` (library crate root).
+
+- **Missing `plan_tree` and `memory_continuity` modules** (`src/agents/mod.rs`)
+  — both files existed but were not declared. Added `pub mod plan_tree;` and
+  `pub mod memory_continuity;`.
+
+- **Missing crates** (`Cargo.toml`) — `regex` and `notify` used in
+  `src/router/complexity.rs` and `src/router/config.rs` respectively but not
+  declared as dependencies. Added `regex = "1"` and `notify = "6"`.
+
+- **reqwest feature name change** (`Cargo.toml`) — after version bump to 0.13.5
+  the feature `rustls-tls-manual-roots-no-provider` no longer exists. Updated
+  to the correct 0.13 name: `rustls-no-provider`.
+
+- **`helix.service` wrong user/path** (`helix.service`) — hardcoded `User=helix`
+  and `WorkingDirectory=/opt/helix` did not match the actual deployment user
+  `cobble`. Updated to `User=cobble` / `WorkingDirectory=/home/cobble/helix`
+  and added `EnvironmentFile` so `.env` is loaded by the service.
+
+### Fixed (warnings)
+
+- Removed unused imports: `std::path::Path` (okf/registry.rs),
+  `std::collections::HashMap` (agents/plan_tree.rs),
+  `serde_json::Value` (agents/memory_continuity.rs),
+  `std::time::Duration` (router/config.rs),
+  `LLMBackend / OverrideCommand / OverrideTier / TelemetryCollector`
+  (router/integration.rs).
+- Prefixed intentionally unused variables with `_` in cpu/mod.rs,
+  router/health.rs, router/telemetry.rs, agents/runtime_trace.rs,
+  okf/fetcher.rs, tools/mod.rs.
+- Removed unnecessary `mut` on `ctx` in router/integration.rs.
+
+### Documentation
+
+- Rewrote `docs/configuration.md` to match the actual `config.toml` structure
+  (all sections: ollama array, gemini, web, logging, heartbeat, ollama_keepalive,
+  reasoning, helix.okf).
+- Added `docs/deployment.md` covering install, update workflow, branch strategy,
+  directory layout, and troubleshooting.
+- Updated `docs/docker_systemd.md` to reference the installer binary instead of
+  manual service file copy.
+- Updated `docs/logging.md` with correct server paths and web UI viewer info.
+- Updated `readme.md` quick-start and removed broken doc links.
+
+---
+
 ## [Unreleased]
 
 ### Fixed — Web config.toml editor: modal popout, live-file trace, divergence guard (task 213, 2026-10-07)
@@ -559,26 +626,26 @@ claimed status.
 
 #### Status corrections applied to `task_list.json`
 
-| Task | Title | Was | Now | Reason |
-|------|-------|-----|-----|--------|
-| 2 | Vector Memory Search | `done` | `in_progress` | `dummy_embed()` placeholder — no real embeddings |
-| 3 | Docker & Systemd Deploy | `done` | `pending` | No `Dockerfile` or `.service` file exists |
-| 4 | Web Auth & Polish | `done` | `pending` | Zero JWT / auth code in web server |
-| 5 | Planning Loop | `done` | `in_progress` | Executor stubs only — no real planning logic |
-| 7 | Logging instructions.rs | `done` | `in_progress` | Only 1 log call found; rest are comments |
-| 16 | Node-level Mutations | `done` | `in_progress` | `replace_node()` function absent |
-| 31 | Workflow Execution in CPU | `pending` | `done` | Fully implemented in `cpu/` + `integration.rs` |
-| 47 | Memory-Aware Prompting | `done` | `in_progress` | Subtasks 47.2 (vector) & 47.3 (episodic) not wired |
-| 54 | Agent Personality Profiles | `done` | `in_progress` | Single hardcoded `"neutral"` string, no profiles |
+| Task | Title                      | Was       | Now           | Reason                                             |
+| ---- | -------------------------- | --------- | ------------- | -------------------------------------------------- |
+| 2    | Vector Memory Search       | `done`    | `in_progress` | `dummy_embed()` placeholder — no real embeddings   |
+| 3    | Docker & Systemd Deploy    | `done`    | `pending`     | No `Dockerfile` or `.service` file exists          |
+| 4    | Web Auth & Polish          | `done`    | `pending`     | Zero JWT / auth code in web server                 |
+| 5    | Planning Loop              | `done`    | `in_progress` | Executor stubs only — no real planning logic       |
+| 7    | Logging instructions.rs    | `done`    | `in_progress` | Only 1 log call found; rest are comments           |
+| 16   | Node-level Mutations       | `done`    | `in_progress` | `replace_node()` function absent                   |
+| 31   | Workflow Execution in CPU  | `pending` | `done`        | Fully implemented in `cpu/` + `integration.rs`     |
+| 47   | Memory-Aware Prompting     | `done`    | `in_progress` | Subtasks 47.2 (vector) & 47.3 (episodic) not wired |
+| 54   | Agent Personality Profiles | `done`    | `in_progress` | Single hardcoded `"neutral"` string, no profiles   |
 
 #### Final tally for tasks 1–59
 
-| Verdict | Count | IDs |
-|---------|-------|-----|
-| ✅ done | 39 | 1,6,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,31,41,42,43,44,45,46,48,49,50,51,52,53,55,56,57,58,59 |
-| ⚠️ in_progress | 6 | 2, 5, 7, 16, 47, 54 |
-| ❌ pending | 13 | 3, 4, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 39 |
-| ⏸️ deferred | 1 | 40 |
+| Verdict        | Count | IDs                                                                                                              |
+| -------------- | ----- | ---------------------------------------------------------------------------------------------------------------- |
+| ✅ done        | 39    | 1,6,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,31,41,42,43,44,45,46,48,49,50,51,52,53,55,56,57,58,59 |
+| ⚠️ in_progress | 6     | 2, 5, 7, 16, 47, 54                                                                                              |
+| ❌ pending     | 13    | 3, 4, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 39                                                                 |
+| ⏸️ deferred    | 1     | 40                                                                                                               |
 
 Full detail report saved to `Doc's/AiSummary/task_audit_1_59.md`.
 
@@ -589,6 +656,7 @@ Full detail report saved to `Doc's/AiSummary/task_audit_1_59.md`.
 **Author:** AI Assistant (Claude Sonnet 4.6) — triggered by user "Cobble"
 
 #### Problem
+
 The task list started at ID 31 (tasks 1–30 were from a prior phase and had
 been removed). This caused Grok-CLI to miscalculate task positions when
 navigating by sequential index, producing the wrong task for a given ID.
@@ -607,15 +675,16 @@ reference throughout the file was updated accordingly:
 
 #### Key ID mapping (notable tasks)
 
-| Old ID | New ID | Task Title |
-|--------|--------|------------|
-| 31 | 1 | LLM Tool Calling (Ollama Functions) |
-| 70 | 40 | Reserved / Removed Task (stub) |
-| 85 | 55 | Self-Repair Routines |
-| 90 | 60 | Design Reasoning Protocol Layer (RPL) Architecture |
-| 105 | 75 | End-to-End Reasoning Engine CPU Integration Tests |
+| Old ID | New ID | Task Title                                         |
+| ------ | ------ | -------------------------------------------------- |
+| 31     | 1      | LLM Tool Calling (Ollama Functions)                |
+| 70     | 40     | Reserved / Removed Task (stub)                     |
+| 85     | 55     | Self-Repair Routines                               |
+| 90     | 60     | Design Reasoning Protocol Layer (RPL) Architecture |
+| 105    | 75     | End-to-End Reasoning Engine CPU Integration Tests  |
 
 #### Result
+
 - JSON validates cleanly — zero parse errors
 - IDs 1–75, perfectly sequential, no gaps
 - All subtask IDs and dependency references consistent and correct
@@ -627,6 +696,7 @@ reference throughout the file was updated accordingly:
 **Author:** AI Assistant (Claude Sonnet 4.6) — triggered by user "Cobble"
 
 #### Problem
+
 Grok-CLI was confusing task IDs when navigating the task list. Asking for
 "task 90" would execute a different task, and searching by title
 `"Design Reasoning Protocol Layer (RPL) Architecture"` returned the wrong
@@ -661,11 +731,11 @@ task number (85 instead of 90).
    and prevent any array-position-based tool from miscounting tasks.
 
 #### Result
+
 - JSON validates cleanly with no parse errors
 - 75 tasks, IDs 31–105, no gaps
 - All subtask IDs are strings
 - All subtask dependencies reference the correct parent task
-
 
 ---
 
@@ -687,14 +757,14 @@ Standalone keepalive module added to the Ollama IO sub-system:
 - **`spawn_keepalive_task(base_url, model, interval_secs)`** — spawns a
   long-lived background Tokio task that fires a heartbeat `POST /api/generate`
   (with `keep_alive: "1h"`) every N seconds (default: 240 s, below Ollama's
-  default 5-minute eviction timeout).  The task never panics.
+  default 5-minute eviction timeout). The task never panics.
 
 - **`read_preload_flag()`** / **`read_keep_alive_secs()`** — env-var config
   helpers with safe defaults.
 
 - **Network resilience (Starlink policy)**: every HTTP call is wrapped in
   `tokio::time::timeout` and retried up to 3 times with exponential-backoff
-  delays (2 s → 4 s → 8 s, capped at 30 s).  Failures are warnings only —
+  delays (2 s → 4 s → 8 s, capped at 30 s). Failures are warnings only —
   Helix never crashes on keepalive errors.
 
 - **10 unit tests** covering config-flag defaults, custom values, garbage input
@@ -731,7 +801,7 @@ Standalone keepalive module added to the Ollama IO sub-system:
 
 - **`src/tools/mod.rs`** — Central `execute(name, args) -> String` dispatcher
   and `tool_definitions() -> Value` that returns the Ollama-compatible JSON
-  schema array.  Both the Ollama agentic loop and the CPU `SkillRegistry` now
+  schema array. Both the Ollama agentic loop and the CPU `SkillRegistry` now
   delegate here, so adding a tool in one place automatically makes it available
   everywhere.
 
@@ -763,7 +833,7 @@ Standalone keepalive module added to the Ollama IO sub-system:
   can be published to the bus.
 - **Tool-call events** — every time Ollama invokes a tool, a `tool_call` message
   is published to `"web_interface"` with the tool name, args, and a 200-char
-  result preview.  The web UI renders these with a distinct gold ⚙ style and
+  result preview. The web UI renders these with a distinct gold ⚙ style and
   dark-background `<code>` for the args.
 
 #### `SkillRegistry` fully populated
@@ -777,16 +847,16 @@ Standalone keepalive module added to the Ollama IO sub-system:
 
 Seven slash commands handled directly in `web_server` without hitting an LLM:
 
-| Command | Action |
-|---|---|
-| `/status` | `system_status` tool |
-| `/tools` | `list_tools` tool |
-| `/notes` | `list_notes` tool |
-| `/note <title>` | `read_note` tool |
-| `/beliefs` | `get_beliefs` tool |
-| `/set key=value` | `set_belief` tool |
-| `/log [file]` | `read_log` tool (defaults to `logs/chat_log.md`) |
-| `/help` | Lists all slash commands |
+| Command          | Action                                           |
+| ---------------- | ------------------------------------------------ |
+| `/status`        | `system_status` tool                             |
+| `/tools`         | `list_tools` tool                                |
+| `/notes`         | `list_notes` tool                                |
+| `/note <title>`  | `read_note` tool                                 |
+| `/beliefs`       | `get_beliefs` tool                               |
+| `/set key=value` | `set_belief` tool                                |
+| `/log [file]`    | `read_log` tool (defaults to `logs/chat_log.md`) |
+| `/help`          | Lists all slash commands                         |
 
 The web client intercepts messages starting with `/` and sends
 `{type: "slash_cmd", cmd}` over WebSocket; the server executes the tool
@@ -795,6 +865,7 @@ synchronously and publishes the result back to the chat.
 #### CPU memory recording
 
 `Cpu::handle_bus_message` now handles four message types:
+
 - `user_input` — records `"user: <prompt>"` in working memory (existing).
 - `chat_request` — records web-UI chat messages in working memory.
 - `ollama_response` / `llm_output` — records bot replies (up to 500 chars) in
@@ -918,6 +989,7 @@ unknown-tool handling, schema shape, and no-panic guarantees for all tools.
 ## [0.3.0] - 2025 (prior work)
 
 ### Added
+
 - `[[ollama]]` array support in `config.toml` — multiple Ollama instances
   (`server` at `192.168.1.149`, `local3090` at `192.168.1.196`).
 - `OllamaRouter` struct in `main.rs` for routing LLM requests across backends.
@@ -935,6 +1007,7 @@ unknown-tool handling, schema shape, and no-panic guarantees for all tools.
 - Config and Manifest tabs with save-to-disk functionality.
 
 ### Fixed
+
 - Duplicate `use log::{debug, error}` in `cpu/cpu.rs` (dead file, not compiled).
 
 ---
@@ -942,6 +1015,7 @@ unknown-tool handling, schema shape, and no-panic guarantees for all tools.
 ## [0.2.0] - 2025 (prior work)
 
 ### Added
+
 - `Bus` message-routing system with sync `mpsc` channels and subscription model.
 - `Cpu<L>` generic struct with `handle_bus_message`, `handle_heartbeat`,
   `execute_instruction`, `run_hyevo_cycle`.
@@ -956,6 +1030,7 @@ unknown-tool handling, schema shape, and no-panic guarantees for all tools.
 ## [0.1.0] - 2025 (initial)
 
 ### Added
+
 - Initial project scaffold: `src/main.rs`, `src/bus/`, `src/cpu/`, `src/io/`,
   `src/memory/`, `src/skills/`, `src/utils.rs`.
 - `config.toml` with `[bot]`, `[ollama]`, `[web]`, `[heartbeat]` sections.
