@@ -8,7 +8,7 @@ use log::info;
 /// Execute the `agent.run` command with optional trace logging.
 /// This is the main CLI entry point for the Unified Agent Runtime.
 pub async fn handle_agent_run<L>(
-    cpu: &Cpu<L>,
+    cpu: &mut Cpu<L>,
     goal: &str,
     trace: bool,
 ) -> anyhow::Result<String>

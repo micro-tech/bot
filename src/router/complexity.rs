@@ -1,5 +1,4 @@
 // router/complexity.rs - Full Complexity Scoring Engine (Task 128)
-use regex::Regex;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]

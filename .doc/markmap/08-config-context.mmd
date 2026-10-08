@@ -24,6 +24,12 @@
 - Provide `ReasoningConfig` to CPU
 - Load multiple Ollama backends
 
+## Key sections (`config.toml`)
+- `[helix.okf]` — OKF v1 server (tasks 207–208): `enabled` master switch, `server_url` (default `http://localhost:8080`), `trace_file` (`okf_traces.jsonl`, flushed before the 202 ack), `index_file`, `auto_reload`, `poll_interval_secs`; optional `auth_token` (fail-open when unset, required on writes when set)
+- `[shell] enabled` (`src/config/shell.rs`) — gates the `run_shell` tool; fails closed with a clear error when `false`
+- `[web] auth_token` (or `HELIX_WEB_TOKEN`, `src/io/web_server/mod.rs`) — fail-open when unset; set it if the UI ever faces beyond localhost
+- `HELIX_EMBED_URL` / `HELIX_EMBED_MODEL` / `HELIX_VECTOR_FACTS_FILE` / `HELIX_EPISODES_FILE` — embedding + memory file knobs
+
 ## Links
 - [Overview](00-overview.html)
 - [Router](07-router.html)

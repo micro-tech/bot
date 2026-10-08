@@ -26,6 +26,10 @@ pub struct OkfConfig {
 
     /// Timeout for HTTP requests to the OKF server (in seconds).
     pub request_timeout_secs: Option<u64>,
+
+    /// Path of the JSONL file trace appends go to (server half, v1).
+    /// Each POST /okf/traces appends one JSON line.
+    pub trace_file: Option<String>,
 }
 
 impl OkfConfig {
@@ -64,5 +68,11 @@ impl OkfConfig {
 
     pub fn request_timeout_secs(&self) -> u64 {
         self.request_timeout_secs.unwrap_or(30)
+    }
+
+    pub fn trace_file(&self) -> String {
+        self.trace_file
+            .clone()
+            .unwrap_or_else(|| "okf_traces.jsonl".to_string())
     }
 }

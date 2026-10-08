@@ -2,7 +2,7 @@
 //!
 //! ## Configuration — add to .env
 //!
-//! ```
+//! ```text
 //! # SMTP (sending)
 //! SMTP_HOST=smtp.gmail.com
 //! SMTP_PORT=587            # 587 = STARTTLS  |  465 = SSL

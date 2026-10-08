@@ -1,9 +1,49 @@
 //! Unit + integration tests for PlannerOutput + ReflectionPlannerAdapter (Task 155.5)
 
-use bot::agents::planner_output::PlannerOutput;
-use bot::agents::planner::Planner;
-use bot::agents::reflection_planner_adapter::ReflectionPlannerAdapter;
-use bot::agents::agent_state::AgentState;
+use helix::agents::planner_output::PlannerOutput;
+use helix::agents::planner::Planner;
+use helix::agents::reflection_planner_adapter::ReflectionPlannerAdapter;
+use helix::agents::agent_state::AgentState;
+use async_trait::async_trait;
+
+/// Message-driven stub planner implementing the parsing contract the adapter
+/// tests were written against ("use tool: <name> <json>" and
+/// "final answer: <text>"). The adapter delegates to its inner planner (and
+/// step_count is 0 in these tests, so no reflection fires), which is why the
+/// stub carries the message parsing the assertions depend on.
+struct Dummy;
+
+#[async_trait]
+impl Planner for Dummy {
+    async fn decide(&self, state: &AgentState) -> PlannerOutput {
+        if let Some(last) = state.messages.last() {
+            let trimmed = last.trim();
+            if let Some(rest) = trimmed.strip_prefix("use tool:") {
+                let rest = rest.trim();
+                let (name, args) = match rest.find(char::is_whitespace) {
+                    Some(i) => (rest[..i].trim(), rest[i..].trim()),
+                    None => (rest, "{}"),
+                };
+                let args_json =
+                    serde_json::from_str(args).unwrap_or(serde_json::json!({}));
+                return PlannerOutput::ToolCall {
+                    tool_name: name.to_string(),
+                    args_json,
+                    reasoning: None,
+                };
+            }
+            if let Some(rest) = trimmed.strip_prefix("final answer:") {
+                return PlannerOutput::FinalAnswer {
+                    message: rest.trim().to_string(),
+                    reasoning: None,
+                };
+            }
+        }
+        PlannerOutput::Error {
+            message: "dummy planner: no parseable message".to_string(),
+        }
+    }
+}
 
 #[tokio::test]
 async fn test_planner_output_variants() {
@@ -37,7 +77,6 @@ async fn test_planner_output_variants() {
 #[tokio::test]
 async fn test_reflection_planner_adapter_parsing() {
     // Create a dummy inner planner (we only test the adapter's parsing layer)
-    struct Dummy;
     let adapter = ReflectionPlannerAdapter::new(Dummy);
 
     let mut state = AgentState::new();
@@ -49,7 +88,6 @@ async fn test_reflection_planner_adapter_parsing() {
 
 #[tokio::test]
 async fn test_reflection_planner_adapter_final_answer() {
-    struct Dummy;
     let adapter = ReflectionPlannerAdapter::new(Dummy);
 
     let mut state = AgentState::new();

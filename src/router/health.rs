@@ -67,7 +67,6 @@ impl HealthStore {
     fn start_probe_loop(&self) {
         let statuses = self.statuses.clone();
         let backends = self.backends.clone();
-        let thresholds = self.thresholds.clone();
 
         tokio::spawn(async move {
             let mut ticker = interval(Duration::from_secs(5));
@@ -87,7 +86,7 @@ impl HealthStore {
         });
     }
 
-    async fn probe(backend: &str) -> HealthStatus {
+    async fn probe(_backend: &str) -> HealthStatus {
         // Placeholder – real implementation would do HTTP HEAD or lightweight prompt
         let latency = 80 + (rand::random::<u32>() % 120);
         HealthStatus {
