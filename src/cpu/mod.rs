@@ -1271,7 +1271,7 @@ where
             }
 
             Instruction::CallLlm {
-                target,
+                target: _,
                 prompt,
                 correlation_id,
             } => {

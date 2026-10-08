@@ -24,6 +24,12 @@ model = "gemma4:e4b"
 model = "gemini-3.6-flash"
 
 [web]
+bind = "0.0.0.0"
+<<<<<<< HEAD
+auth_token = "pick-something-long-and-random"
+=======
+auth_token = "3de6ab5550ed8b30da67102712fff6f2"
+>>>>>>> e0f7fd7b3fe07eb1cdef1529a010e7f5e6719992
 port = 8443
 tls_enabled = true
 cert_path = "cert.pem"
