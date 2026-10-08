@@ -25,7 +25,6 @@ model = "gemini-3.6-flash"
 
 [web]
 bind = "0.0.0.0"
-<<<<<<< HEAD
 auth_token = "pick-something-long-and-random"
 port = 8443
 tls_enabled = true
