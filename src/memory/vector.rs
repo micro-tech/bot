@@ -77,7 +77,7 @@ impl OllamaEmbedder {
     /// (default: `nomic-embed-text`).
     pub fn from_env() -> Self {
         let base_url = std::env::var("HELIX_EMBED_URL")
-            .unwrap_or_else(|_| "http://192.168.1.196:11434".to_string());
+            .unwrap_or_else(|_| "http://192.168.1.149:11434".to_string());
         let model =
             std::env::var("HELIX_EMBED_MODEL").unwrap_or_else(|_| "nomic-embed-text".to_string());
         Self::new(base_url, model)

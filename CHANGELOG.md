@@ -6,6 +6,92 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Added (task 221 DONE — Ranger 1, Gemini tool-calling loop)
+
+- **Function calling on the Gemini backend** (`src/io/llm_gemini/mod.rs`): the commander pattern can now delegate on Gemini — John's fast pick. Shared tool definitions are converted to Gemini `functionDeclarations`; the agentic loop sends `functionResponse` parts back and iterates (10-round cap) until the model returns text; every invocation publishes `{type:"tool_call"}` on the bus with the same contract as the Ollama path, so the UI delegation cards render there too. The 215 commander `system_instruction` block is carried into the loop. Each billable round feeds the 217 spend cap via `note_api_call`. `call_gemini_direct` (spawn runner) and `call_gemini_sync` stay single-shot on purpose; the reqwest error diagnosis was extracted to a shared `map_reqwest_err` helper.
+- **Tests**: declarations shape (spawn_subagent present, Gemini form not the Ollama wrapper), response-parsing helpers, and a headless mockito drill proving the Gemini path emits a `spawn_subagent` function call and publishes the `tool_call` bus message (stubbed sub-agent, temp spend file — no real API key). Full suite: 289 pass; the 6 failures (a2a, acp::agent, mcp_client) are pre-existing, verified identical on a clean tree.
+
+### Added (task 220 DONE — Ranger 1, routine CRUD WS API)
+
+- **Routine CRUD over WebSocket** (`src/cron/registry.rs`, `src/io/web_server/mod.rs`): `routine_create {name, schedule, agent_role, task, backend, enabled}` validates schedule (`daily HH:MM` / `every <n>s|m|h|d`) and backend, generates a unique id, persists, replies `{type:"routine_saved", id, ok}` (`ok:false` + `msg` on bad input). `routine_update {id, ...same}` patches supplied fields (absent = unchanged), replies `routine_saved`. `routine_delete {id}` replies `{type:"routine_status", id, ok}`. All three match the shapes Sapper 1's editor already sends/waits for (5s confirm window).
+- **Schedule round-trip**: `routines_list` now includes `schedule_raw` (canonical form) alongside the human display `schedule`, so the editor can load the value back into the field instead of starting empty.
+- **Tests**: 5 new registry CRUD tests (add ok + next-run, bad schedule/backend/name rejection, id uniqueness incl. empty-name fallback, update patch + validation, remove). 22 cron tests pass. Full suite: 286 pass; the 6 failures (a2a, acp::agent, mcp_client) are pre-existing — verified identical on a clean tree.
+- **Deviation note**: the WS arms themselves have no socket-level test (no WS client harness exists in the suite); they are thin wrappers over the tested registry methods, and the live UI drill in task 218 remains the end-to-end check.
+
+### Added (task 219 DONE — Sapper 1, web UI)
+- **Delegation cards in chat** (`src/io/web_server/static/index.html`, single-file, no new assets): the WS handler now renders `{type:"tool_call", tool:"spawn_subagent", args, result_preview}` as a card showing the backend badge (local/LAN/Gemini/Grok/auto), role hint, the task, and the sub-agent's report in a distinct block. Other tools stay silent in chat. Built against the Ollama-path `tool_call` publish contract — no invented messages.
+- **Routines section that actually loads**: the UI never sent `routines_list` before, so the section could never populate — it now requests on every WS (re)connect. Rows show the task-216 payload (agent role, backend, task) alongside name/schedule/enabled toggle.
+- **Routine editor modal**: ＋New / Edit dialog with name, schedule (canonical `daily HH:MM` / `every <n>s|m|h|d`), agent role, task, backend select, enabled, and delete. Save sends the documented shapes `routine_create` / `routine_update` / `routine_delete`; these need backend support (flagged for Ranger 1 — no Rust touched), so the UI waits 5s for a `routine_status`/`routine_saved` confirmation and shows an explicit inline error on timeout instead of failing silently. Zero UI changes needed when the backend lands.
+- **Tests**: node DOM-stub harness, 20/20 pass (card content, non-spawn silence, empty-args degrade, payload render, editor validation, create shape, timeout honesty, confirm/refresh, toggle isolation); `node --check` clean.
+- **Known gaps (flagged, not built)**: the Gemini backend has no tool-calling loop and publishes no `tool_call` — commander delegation can't surface (or fire) there until Ranger 1 adds function calling to the Gemini path. The WS `schedule` field is human display text and doesn't round-trip to canonical form for edits.
+
+## [Unreleased] — 2026-10-08 (Ranger 1 build)
+
+### Added (task 214 DONE)
+- **`spawn_subagent` LLM tool** (`src/tools/subagent_tool.rs`): params `task` (required), `backend` (local_ollama | lan_ollama | gemini | grok | auto, default auto), `role_hint`, `timeout_secs` (default 300, max 1800). Wired into `execute()` and `static_tool_definitions()` (kept in sync). Blocks with timeout, returns task id + backend + sub-agent's final message.
+- **Guardrails:** max spawn depth 1 — enforced by task-local depth counter AND by excluding `spawn_subagent` from the sub-agent's own tool definitions; nested spawn refused with a clear message. API backends go through the new spend counter (`src/router/spend.rs`): per-day estimated USD, persisted to `spend_state.json`, default $5.00/day cap (policy wiring in task 217).
+- **Backend resolution:** explicit param wins; `auto` builds a RoutingContext and calls the complexity router (Grok pick falls back to Gemini — no Grok client exists yet). Ollama endpoints come from `[[ollama]]` config names via `set_ollama_endpoints()` in main.rs, with env/default fallbacks.
+- **Tests:** 8 subagent unit tests (schema, dispatch, depth refusal, stub integration, aliases, env fallback) + 4 spend tests (free locals, accumulation, cap trip, persistence). Full suite: 271 pass; 6 failures in a2a/acp::agent/mcp_client are pre-existing (verified on clean tree).
+
+### Added (task 216 DONE)
+- **Cron routine job payloads** (`src/cron/registry.rs`): `Routine` gains `agent_role`/`task`/`backend` (all serde-defaulted — old routine files load unchanged). `spawn_scheduler` publishes the payload in the `routine_run` bus message. CPU `handle_routine_run` now takes the full payload: when `task` is non-empty it dispatches via the shared `dispatch_spawn` helper (same path as the tool), logs the report, and appends it to the nightly report; legacy id-based routines keep today's behavior. Seeded a disabled twice-daily `mail_check` example (John enables it when he wants the agent watching mail). WS `routines_list` now exposes the payload fields (create/edit UI is Sapper 1's task 219).
+- **Tests:** payload round-trip save/load, legacy-file backward compat, seed presence/disabled, shared-helper dispatch via stub. 16 cron tests pass.
+
+### Added (task 217 DONE)
+- **Machine-assignment policy + cost caps** (`src/router/docs.rs`, `src/router/spend.rs`, `src/tools/subagent_tool.rs`, `src/main.rs`, `src/io/ollama/mod.rs`):
+  - Ladder: `local_ollama` (desktop 3060, fast/free) -> `lan_ollama` (ollama box, overflow) -> `gemini` (paid) -> `grok` (not implemented). Explicit backend wins; `auto` defers to the complexity router.
+  - **LanOllama's role (decided):** overflow rung only — `route()` never selects it directly; reached by explicit pick or health fallback. Documented in `router/docs.rs`.
+  - **Health-aware fallback:** `dispatch_spawn` probes the chosen Ollama rung (`/api/tags`, new `ollama_reachable()`, 60s cache) and walks down the ladder on unreachability; every fallback is logged + noted in the commander report. All-down + cap-tripped -> honest error.
+  - **`[router] daily_api_cap_usd`** (default $5.00) parsed in `main.rs` -> `spend::set_daily_api_cap_usd()`; at cap, paid rungs refuse with a John-facing message routed back through the commander report.
+  - `main.rs` endpoint mapping now sends `desktop`-named `[[ollama]]` entries to `local_ollama` (was silently ignored -> both rungs pointed at the server box).
+- **Tests:** cap override changes effective cap (and reset clears it), fallback skips dead Ollama boxes to Gemini with a note, all-down errors cleanly. 5 spend + 13 subagent tests pass.
+
+### Added (task 218 IN PROGRESS — headless done, UI drills need John)
+- **Headless verification:** full lib suite 281 passed / 6 failed — the 6 are the pre-existing a2a/acp/mcp failures confirmed identical on a clean tree (zero regressions from 214–217). New: `cron_agent_job_end_to_end_via_stub` (every-2m routine with payload -> fire_due -> dispatch_spawn -> commander report), `fallback_skips_unreachable_ollama` (dead local+lan -> Gemini with fallback note), `fallback_fails_cleanly_when_everything_is_down` (honest error), `nested_spawn_is_refused_at_depth_limit` (recursion guard).
+- **IP hygiene (2026-10-08):** `HELIX_EMBED_URL` default in `src/memory/vector.rs` moved `192.168.1.196` -> `192.168.1.149` (ollama box); per John's LAN map `.196` is the desktop (DHCP), so the `[[ollama]] name="desktop"` entry correctly stays at `.196`. Test runs now use `HELIX_EMBED_URL=http://127.0.0.1:11434` to keep sandbox traffic off the LAN entirely (no more approval cards).
+- **Still pending John's eyes:** 218.1 (desktop backend UI drill) and 218.2 (Gemini backend UI drill) — exact click/type steps handed to parent for John.
+
+### Fixed
+- **Stale embed-service default:** `HELIX_EMBED_URL` in `src/memory/vector.rs` defaulted to `192.168.1.196:11434`; the ollama box is now at `192.168.1.149`, so the default is updated to `.149`. (Flagged 2026-10-08: build/test traffic to `.196` was popping approval cards on John's phone. Note: per John's LAN map `.196` is currently the *desktop* (DHCP), so the `[[ollama]] name="desktop"` entry in `config.toml` correctly stays at `.196` — only the embed default moved.)
+
+### Added (task 215 DONE)
+- **Commander system prompt** (`COMMANDER_SYSTEM_PROMPT` in `src/tools/subagent_tool.rs`): finding — no system prompt existed on ANY chat path. Created the assembly point: Ollama `call_ollama_tools` prepends it as a system message; Gemini `call_gemini` sends it as `system_instruction`. Gate: `[helix.commander] enabled` (default true, parsed in main.rs) + `HELIX_COMMANDER_ENABLED` env override.
+- **Tests:** prompt mentions spawn_subagent and stays under 1200 chars; gate on/off snapshot test.
+
+### Deviations from the plan (task 214)
+- Did not reuse A2A `TaskStore::create` + `run_prompt`: no global TaskStore exists, and `run_prompt`'s AcpPlanner can only call `system_status` — useless for real sub-agent work. The runner drives the backend's native chat-with-tools loop (Ollama) or a single-shot prompt (Gemini) instead.
+- On timeout the worker is cancelled; there is no poll-after-timeout registry yet (follow-up candidate for Sapper 1's UI work).
+
+## [Unreleased] — 2026-10-08
+
+**Author:** Surveyor 1 (planning only, no code touched) — commissioned by John
+
+### Restored
+
+- **Tasks 212 and 213 re-filed** in `.zed/task_list.json`: the Quartermaster's
+  2026-10-08 nightly filings were wiped by an uncommitted working-tree reset
+  during planning and have been reconstructed from
+  `nightly-quartermaster-run/hidden_files/run-2026-10-08.md` (212: ssh/mod.rs:13
+  unused-import warning; 213: 6 lib test failures from `[mcp] enabled=true`,
+  with Surveyor 1's repair plan as subtasks 213.1–213.4). Left uncommitted per
+  standing practice.
+
+### Added (planned, tasks 214–219 in .zed/task_list.json)
+
+- **Commander pattern for Helix (John's 2026-10-08 commission):** chat with one
+  backend as commander; it delegates via a new `spawn_subagent` tool and
+  sub-agents run on the chosen backends. Tonight's live test ("run a sub agent
+  to plan out a bot app in rust" on desktop) failed because no spawn tool
+  exists — task 214 builds it.
+- Task 214: `spawn_subagent` tool (task/backend/role_hint, depth guard, spend hook).
+- Task 215: commander system prompt per backend, config-gated.
+- Task 216: cron Routine job payloads (agent_role/task/backend) so schedules can
+  run agent tasks (e.g. twice-daily mail check).
+- Task 217: machine-assignment policy — explicit wins, else complexity router,
+  health fallback, daily API spend cap.
+- Task 218: end-to-end verification in the web UI (John's acceptance).
+- Task 219 (Sapper 1): web UI surfaces sub-agent activity + routine editor.
+
 ## [Unreleased] — 2026-10-04
 
 **Author:** AI Assistant (Claude Sonnet 4.6) — triggered by user "Cobble"

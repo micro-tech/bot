@@ -12,6 +12,7 @@ pub mod file_tools;
 pub mod project_scanner;
 pub mod shell_security;
 pub mod shell_tool;
+pub mod subagent_tool;
 pub mod system_tools;
 
 use serde_json::Value;
@@ -49,6 +50,8 @@ pub fn execute(name: &str, args: &Value) -> String {
         // The tool itself enforces the gate, the denylist, timeouts,
         // output caps, and workdir confinement.
         "run_shell" => shell_tool::run_shell(args),
+        // Commander delegation (task 214): spin up a sub-agent on a chosen backend.
+        "spawn_subagent" => subagent_tool::spawn_subagent(args),
         "repo_glob" => file_tools::repo_glob(args),
         "repo_read" => file_tools::repo_read(args),
         "repo_grep" => file_tools::repo_grep(args),
@@ -478,6 +481,36 @@ fn static_tool_definitions() -> &'static Vec<Value> {
                         "required": ["command"]
                     }
                 }
+            }),
+            // Commander delegation (task 214) — keep in sync with the execute() arm above.
+            serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": "spawn_subagent",
+                    "description": "Spawn a sub-agent to do a task on a chosen backend, then report back its final summary. You are the commander: break work down and delegate pieces with this tool instead of doing everything inline. The sub-agent cannot spawn further sub-agents.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "task": {
+                                "type": "string",
+                                "description": "The marching orders for the sub-agent (required). Be specific: goal, context, and what a good result looks like."
+                            },
+                            "backend": {
+                                "type": "string",
+                                "description": "Which backend runs the sub-agent: local_ollama (fast, free), lan_ollama, gemini (strong, costs API budget), grok (not wired yet), or auto to let the router decide from the task. Default: auto."
+                            },
+                            "role_hint": {
+                                "type": "string",
+                                "description": "Optional role for the sub-agent: planner | builder | reviewer | ui, or free text."
+                            },
+                            "timeout_secs": {
+                                "type": "number",
+                                "description": "Max seconds to wait for the sub-agent (default 300, max 1800). On timeout the run is cancelled and you get a timeout report."
+                            }
+                        },
+                        "required": ["task"]
+                    }
+                }
             })
         ]
     })
@@ -516,6 +549,28 @@ pub fn tool_definitions() -> Value {
     defs.extend(crate::mcp_client::tool_definitions());
 
     Value::Array(defs)
+}
+
+/// Tool definitions minus the named tools. Used by the sub-agent runner
+/// (task 214): a sub-agent never sees `spawn_subagent`, which enforces the
+/// max-spawn-depth guardrail by construction.
+pub fn tool_definitions_excluding(exclude: &[&str]) -> Value {
+    let arr = tool_definitions()
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let filtered: Vec<Value> = arr
+        .into_iter()
+        .filter(|d| {
+            let name = d
+                .get("function")
+                .and_then(|f| f.get("name"))
+                .and_then(|n| n.as_str())
+                .unwrap_or("");
+            !exclude.contains(&name)
+        })
+        .collect();
+    Value::Array(filtered)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

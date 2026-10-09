@@ -1,1036 +1,1353 @@
 {
-    "tasks":  [
-                  {
-                      "dependencies":  [
-                                           153
-                                       ],
-                      "description":  "Enhance runtime observability and complete the bus integration so the agent can be driven from events, cron, and other agents.",
-                      "details":  "1) Add detailed per-step trace logging (planner decision, action type, tool calls, memory writes, rule checks). 2) Fully implement the AgentRun bus handler so Cpu actually spawns the runtime and emits AgentFinished/AgentError. 3) Add a simple trace flag or log level so operators can turn detailed logging on/off.",
-                      "id":  154,
-                      "priority":  "high",
-                      "status":  "done",
-                      "subtasks":  [
-                                       {
-                                           "id":  "154.1",
-                                           "status":  "done",
-                                           "title":  "Add detailed per-step logging in RuntimeLoop (planner decision, step type, tool result, memory)"
-                                       },
-                                       {
-                                           "id":  "154.2",
-                                           "status":  "done",
-                                           "title":  "Implement real AgentRun bus handler that calls run_unified_agent and emits completion events"
-                                       },
-                                       {
-                                           "id":  "154.3",
-                                           "status":  "done",
-                                           "title":  "Add runtime trace flag / log level control"
-                                       },
-                                       {
-                                           "id":  "154.4",
-                                           "status":  "done",
-                                           "title":  "Test end-to-end via CLI and bus event"
-                                       }
-                                   ],
-                      "testStrategy":  "Run agent.run from CLI with trace logs visible. Send AgentRun bus message and verify AgentFinished event is emitted.",
-                      "title":  "Add Rich Trace Logging + Proper Bus Event Hook for Unified Runtime"
-                  },
-                  {
-                      "dependencies":  [
-                                           154
-                                       ],
-                      "description":  "Enable the Unified Agent Runtime Loop to make structured decisions by integrating the existing planning/ module through a thin adapter layer with proper PlannerOutput enum and reflection parsing.",
-                      "details":  "This is the next-level planner integration. It introduces PlannerOutput as the canonical decision type and a ReflectionPlannerAdapter that parses reflection text into structured actions (ToolCall, LLMCall, FinalAnswer). Must not modify planning/planner.rs or planning/reflection.rs.",
-                      "id":  155,
-                      "priority":  "high",
-                      "status":  "done",
-                      "subtasks":  [
-                                       {
-                                           "id":  "155.1",
-                                           "status":  "done",
-                                           "title":  "Add Planner trait with decide(\u0026AgentState) -\u003e PlannerOutput"
-                                       },
-                                       {
-                                           "id":  "155.2",
-                                           "status":  "done",
-                                           "title":  "Add PlannerOutput enum (LLMCall, ToolCall, FinalAnswer, Error)"
-                                       },
-                                       {
-                                           "id":  "155.3",
-                                           "status":  "done",
-                                           "title":  "Implement ReflectionPlannerAdapter with reflection parsing logic"
-                                       },
-                                       {
-                                           "id":  "155.4",
-                                           "status":  "done",
-                                           "title":  "Integrate PlannerOutput handling into RuntimeLoop"
-                                       },
-                                       {
-                                           "id":  "155.5",
-                                           "status":  "done",
-                                           "title":  "Add unit tests for PlannerOutput + adapter parsing and integration test"
-                                       }
-                                   ],
-                      "testStrategy":  "Unit tests for trait and parsing, integration test running full RuntimeLoop with ReflectionPlannerAdapter, verify no changes to existing planning/ module.",
-                      "title":  "Planner v2: Structured PlannerOutput + ReflectionPlannerAdapter"
-                  },
-                  {
-                      "dependencies":  [
-                                           155
-                                       ],
-                      "description":  "Make the agent actually use tools and LLM in a real scenario. Ensure tool results flow back into the planner, LLM responses are stored in state, the planner can chain multiple steps, and the loop can run 5–20 cycles without stalling.",
-                      "details":  "This is a full integration test of the Unified Agent Runtime. The goal is to have a working multi-step agent that: 1) Uses tools and receives results, 2) Uses LLM calls and stores responses, 3) Chains multiple decisions, 4) Reaches a FinalAnswer after several cycles.",
-                      "id":  156,
-                      "priority":  "high",
-                      "status":  "done",
-                      "subtasks":  [
-                                       {
-                                           "id":  "156.1",
-                                           "status":  "done",
-                                           "title":  "Ensure tool results are fed back into AgentState for the next planner decision"
-                                       },
-                                       {
-                                           "id":  "156.2",
-                                           "status":  "done",
-                                           "title":  "Ensure LLM responses are stored in state.messages"
-                                       },
-                                       {
-                                           "id":  "156.3",
-                                           "status":  "done",
-                                           "title":  "Implement a planner that can chain multiple ToolCall + LLMCall steps"
-                                       },
-                                       {
-                                           "id":  "156.4",
-                                           "status":  "done",
-                                           "title":  "Create an end-to-end test that runs 5–20 cycles and reaches FinalAnswer"
-                                       },
-                                       {
-                                           "id":  "156.5",
-                                           "status":  "done",
-                                           "title":  "Verify no stalling and proper termination"
-                                       }
-                                   ],
-                      "testStrategy":  "Run a full end-to-end test with a real multi-step scenario (e.g. search → calc → final answer). Verify state contains tool results and LLM responses, and the loop terminates cleanly.",
-                      "title":  "End-to-end agent test: make the runtime loop execute a real multi-step plan using LLM + tools + final answer"
-                  },
-                  {
-                      "dependencies":  [
-                                           156
-                                       ],
-                      "description":  "Add a structured tracing system to the Unified Agent Runtime Loop so each planner decision, LLM call, tool call, and state update is captured in a RuntimeTrace. Provide optional CLI output for step-by-step visualization.",
-                      "details":  "Introduce a RuntimeTrace struct that records each cycle of the agent loop, including planner decisions, LLM prompts/responses, tool calls/results, and state deltas. Add a --trace flag to the CLI to print a human-readable step-by-step execution log. Ensure tracing is optional and does not affect runtime behavior.",
-                      "id":  157,
-                      "priority":  "high",
-                      "status":  "done",
-                      "subtasks":  [
-                                       {
-                                           "id":  "157.1",
-                                           "status":  "done",
-                                           "title":  "Add RuntimeTrace struct"
-                                       },
-                                       {
-                                           "id":  "157.2",
-                                           "status":  "done",
-                                           "title":  "Instrument RuntimeLoop to push trace steps"
-                                       },
-                                       {
-                                           "id":  "157.3",
-                                           "status":  "done",
-                                           "title":  "Add CLI flag --trace"
-                                       },
-                                       {
-                                           "id":  "157.4",
-                                           "status":  "done",
-                                           "title":  "Implement pretty-printer for trace output"
-                                       },
-                                       {
-                                           "id":  "157.5",
-                                           "status":  "done",
-                                           "title":  "Add unit tests for trace recording"
-                                       }
-                                   ],
-                      "title":  "Runtime Trace Logging + Step Visualization"
-                  },
-                  {
-                      "id":  158,
-                      "title":  "Tool Supervisor v2: Validation + Retry + Error Classification",
-                      "description":  "Upgrade the Tool Supervisor to validate tool arguments, classify tool errors, retry failed calls when appropriate, and provide structured feedback to the planner. This improves reliability and prevents the agent from stalling or hallucinating when tools fail.",
-                      "priority":  "high",
-                      "status":  "done",
-                      "dependencies":  [
-                                           156
-                                       ],
-                      "details":  "All subtasks including 158.5 (tests + the never_loop fix in execute()) are complete. The dead loop was removed and logic simplified with explanatory comment. Integration in runtime_loop.rs works. Task marked fully done.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "158.1",
-                                           "status":  "done",
-                                           "title":  "Add ToolError enum with classification",
-                                           "description":  "Define ToolError { InvalidArgs, ExecutionError, NotFound, RateLimit, Timeout, Unknown }. Include original error message and optional context."
-                                       },
-                                       {
-                                           "id":  "158.2",
-                                           "status":  "done",
-                                           "title":  "Add ToolResult enum",
-                                           "description":  "Define ToolResult { Success(Value), RetryableError(ToolError), FatalError(ToolError) }. This becomes the canonical output of all tool calls."
-                                       },
-                                       {
-                                           "id":  "158.3",
-                                           "status":  "done",
-                                           "title":  "Implement ToolSupervisorV2",
-                                           "description":  "Wrap all tool calls with argument validation, error classification, and retry logic. Retry up to N times for RetryableError. Return FatalError for non-retryable cases."
-                                       },
-                                       {
-                                           "id":  "158.4",
-                                           "status":  "done",
-                                           "title":  "Integrate ToolSupervisorV2 into runtime loop",
-                                           "description":  "Modify runtime_loop.rs so ToolCall steps use ToolSupervisorV2. Push normalized ToolResult into AgentState and RuntimeTrace."
-                                       },
-                                       {
-                                           "id":  "158.5",
-                                           "status":  "done",
-                                           "title":  "Add tests for ToolSupervisorV2",
-                                           "description":  "Unit tests for error classification, retry behavior, and integration with RuntimeLoop."
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  159,
-                      "title":  "Local FastContext-style Repo Explorer subagent",
-                      "description":  "Introduce a local repo-explorer subagent (FastContext-style) that handles all repository exploration via tools (glob, read, grep) and returns compact evidence (file paths + line ranges) to the main agent.",
-                      "priority":  "high",
-                      "status":  "done",
-                      "dependencies":  [
-                                           158
-                                       ],
-                      "details":  "Implementation started: created src/agents/repo_explorer/ with types + stub explorer. Next: add required tools (glob/read/grep) then wire into explorer.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "159.1",
-                                           "status":  "done",
-                                           "title":  "Create repo_explorer module and types (RepoQuery, RepoEvidence, RepoEvidenceItem)"
-                                       },
-                                       {
-                                           "id":  "159.2",
-                                           "status":  "done",
-                                           "title":  "Implement RepoExplorer trait and LocalLLMClient"
-                                       },
-                                       {
-                                           "id":  "159.3",
-                                           "status":  "done",
-                                           "title":  "Add required tools: tool_glob, tool_read (range), tool_grep"
-                                       },
-                                       {
-                                           "id":  "159.4",
-                                           "status":  "done",
-                                           "title":  "Implement explorer planning + parallel tool execution + evidence aggregation"
-                                       },
-                                       {
-                                           "id":  "159.5",
-                                           "status":  "done",
-                                           "title":  "Integrate with main planner: \u0027Do I need repo context?\u0027 hook + evidence injection"
-                                       },
-                                       {
-                                           "id":  "159.6",
-                                           "status":  "done",
-                                           "title":  "Add fallback when local model unavailable; write tests"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  160,
-                      "title":  "Restructure .grok folder for rules + diagrams",
-                      "description":  "Move agents.md into .grok/rules/, create diagrams folder, clean docs/ for user-facing content only, and create hybrid Mermaid diagrams.",
-                      "status":  "done",
-                      "dependencies":  [
-
-                                       ],
-                      "priority":  "high",
-                      "details":  "Completed: Rules updated in .grok/rules/agents.md, hybrid mermaid created, docs/ cleaned (builder docs moved to .grok/docs/), .grok/README.md added.",
-                      "testStrategy":  "Verify folder structure and that first mermaid file renders correctly.",
-                      "subtasks":  [
-
-                                   ]
-                  },
-                  {
-                      "id":  161,
-                      "title":  "Create focused mermaid diagrams + build.rs auto-update",
-                      "description":  "Create additional focused mermaid diagrams and integrate auto-generation via build.rs or a dedicated tool.",
-                      "status":  "done",
-                      "dependencies":  [
-
-                                       ],
-                      "priority":  "high",
-                      "details":  "Completed: 4 focused mermaid diagrams created + build.rs enhanced with diagram freshness warning system. Generator stub added in .grok/tools/.",
-                      "testStrategy":  "Verify new diagrams exist and build.rs triggers regeneration logic",
-                      "subtasks":  [
-
-                                   ]
-                  },
-                  {
-                      "id":  162,
-                      "title":  "Create Master System Overview Mermaid (full app coverage)",
-                      "description":  "Build a comprehensive master mermaid diagram that captures the entire application structure and flows. Also propose bot name ideas.",
-                      "status":  "done",
-                      "dependencies":  [
-
-                                       ],
-                      "priority":  "high",
-                      "details":  "Master system overview mermaid created with full app coverage.",
-                      "testStrategy":  "",
-                      "subtasks":  [
-
-                                   ]
-                  },
-                  {
-                      "id":  163,
-                      "title":  "Rename project from bot → Helix",
-                      "description":  "Systematically rename the project across Cargo.toml, source, docs, paths, and diagrams.",
-                      "status":  "done",
-                      "dependencies":  [
-
-                                       ],
-                      "priority":  "high",
-                      "details":  "Rebranding completed across source, configs, docs, diagrams, service files, and key references. \"bot\" references systematically replaced with \"Helix\" (or \"helix\"). Legacy files preserved with notes. Task 163 fully complete.",
-                      "testStrategy":  "",
-                      "subtasks":  [
-
-                                   ]
-                  },
-                  {
-                      "id":  164,
-                      "title":  "Implement Helix OKF Librarian System",
-                      "description":  "Add remote OKF bundle management to Helix, including manifest parsing, registry building, validation, and remote change detection via webhook or polling.",
-                      "priority":  "high",
-                      "status":  "done",
-                      "dependencies":  [
-
-                                       ],
-                      "details":  "Core OKF Librarian System fully implemented and integrated.\n\nDelivered:\n- Complete src/okf/ crate: manifest, registry, validator, fetcher, api\n- OkfLibrarian facade + global singleton (tokio Mutex) for runtime discovery\n- Full Axum API: /okf/status, /registry, /reload, /manifest, /webhook, /health\n- Startup auto-load of okf_index.json + okf_sample_manifest.json\n- Deep integration into tools/mod.rs:\n  - execute() falls through to OKF tools\n  - tool_definitions() dynamically merges OKF tools\n  - list_okf_tools() built-in\n- list_tools() now surfaces OKF tools\n- Config [helix.okf] fully respected\n- okf_sample_manifest.json with realistic tools + knowledge\n\nSubtasks 164.2-164.7 complete. 164.1 (active polling) partially addressed via webhook; full background poller belongs in 165.",
-                      "testStrategy":  "Implement modules, wire into runtime, test bundle loading and change detection.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "164.1",
-                                           "title":  "Implement remote OKF change detection",
-                                           "description":  "Replace local filesystem watcher with webhook endpoint or polling system to detect bundle updates on the OKF server.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "164.2",
-                                           "title":  "Create okf_manifest module",
-                                           "description":  "Add manifest.json parser using serde; build internal structs for tools, knowledge, and schemas.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "164.3",
-                                           "title":  "Create okf_registry module",
-                                           "description":  "Generate tool registry, knowledge registry, and version index files based on remote OKF bundle data.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "164.4",
-                                           "title":  "Create okf_validator module",
-                                           "description":  "Validate bundle structure, JSON schemas, required fields, and versioning rules after fetching bundles from the OKF server.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "164.5",
-                                           "title":  "Create okf_api module",
-                                           "description":  "Expose control API endpoints for reload, index, and status using axum. Include webhook receiver for remote OKF change notifications.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "164.6",
-                                           "title":  "Add helix.okf config section",
-                                           "description":  "Add remote OKF server URL, auto_reload flag, and index file path to Helix config.toml.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "164.7",
-                                           "title":  "Integrate modules into Helix runtime",
-                                           "description":  "Wire remote change detection, registry updates, validator, and control API into Helix startup and event loop.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  165,
-                      "title":  "Implement Helix OKF Remote Hot-Reload System",
-                      "description":  "Add automatic reload behavior for OKF bundles when remote OKF server reports changes. Replace filesystem watcher with webhook or polling-based reload triggers.",
-                      "priority":  "high",
-                      "status":  "done",
-                      "dependencies":  [
-
-                                       ],
-                      "details":  "Core remote hot-reload system for OKF bundles is fully implemented and integrated.\n\nDelivered in this pass + prior work:\n- `hot_reload_from_remote()` with ETag-based change detection (NOT_MODIFIED handling)\n- `start_okf_poller()` background task with debounce (20s) and configurable poll_interval\n- Rich logging for reloads, no-change, and errors\n- `/okf/reload` and `/okf/reload/force` endpoints\n- Webhook receiver (`/okf/webhook`) that can trigger reload when auto_reload=true\n- `force_reload_from_remote()` (clears ETag)\n- Reload counters, last_reload_ms, last_reload_error tracking\n- Poller started automatically in web_server when OKF enabled\n- Already wired into OkfLibrarian and global singleton\n\nTask 165 requirements (webhook/polling, reload pipeline, debounce, logging) are satisfied.",
-                      "testStrategy":  "Test reload on simulated remote change events, verify debounce and logging.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "165.1",
-                                           "title":  "Add remote change event routing",
-                                           "description":  "Implement webhook receiver or polling loop to detect OKF bundle updates from the remote OKF server.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "165.2",
-                                           "title":  "Implement remote bundle reload pipeline",
-                                           "description":  "Fetch updated bundle from OKF server, parse manifest, validate bundle, update registry, and refresh active toolset.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "165.3",
-                                           "title":  "Add debounce logic",
-                                           "description":  "Prevent rapid reload loops when multiple remote change events or polling cycles occur.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "165.4",
-                                           "title":  "Add reload logging",
-                                           "description":  "Log reload events, bundle versions, and registry changes for debugging and monitoring.",
-                                           "priority":  "low",
-                                           "status":  "pending"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  166,
-                      "title":  "Implement Grok-CLI OKF Integration Layer",
-                      "description":  "Add support in Grok-CLI for consuming Helix\u0027s remote OKF registry, requesting reloads, and loading tools/knowledge dynamically from the OKF server.",
-                      "priority":  "high",
-                      "status":  "in_progress",
-                      "dependencies":  [
-
-                                       ],
-                      "details":  "Starting implementation of Grok-CLI OKF integration. Adding HTTP client support to fetch from Helix\u0027s /okf/registry, dynamic tool loading from OKF, and reload triggers. This will be integrated into the tools system and CLI where appropriate.",
-                      "testStrategy":  "Verify CLI can fetch registry from Helix, load tools dynamically, and trigger reloads.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "166.1",
-                                           "title":  "Add Helix registry fetch",
-                                           "description":  "Implement HTTP client to request /helix/okf/index and cache results. Registry is fetched from Helix, not local filesystem.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "166.2",
-                                           "title":  "Add dynamic tool loader",
-                                           "description":  "Load tool definitions from Helix\u0027s registry instead of scanning local or remote filesystem directories.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "166.3",
-                                           "title":  "Add dynamic knowledge loader",
-                                           "description":  "Load knowledge bundles based on registry entries provided by Helix. Fetch bundles from OKF server via Helix-provided URLs.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "166.4",
-                                           "title":  "Add reload request support",
-                                           "description":  "Implement POST /helix/okf/reload for manual reload triggers. Reloads are remote, not filesystem-based.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  167,
-                      "title":  "Define OKF Bundle Schema v1.0 + Mermaid/File-Change support",
-                      "description":  "Create the official JSON schema for OKF bundles including manifest, tools, knowledge, and metadata fields.",
-                      "priority":  "medium",
-                      "status":  "done",
-                      "dependencies":  [
-
-                                       ],
-                      "details":  "Schema v1.0 enhanced with explicit support for mermaid/project-map/file-tree knowledge types + cross-machine metadata (source_machine, detected_at, diagram_type, base_path, changed_files). New tools added: scan_directory, generate_mermaid_project_map, generate_okf_project_map_knowledge. These directly enable scanning local files/changes → building Mermaid diagrams → packaging as OKF knowledge ready for central server (Dell 630 / Proxmox).",
-                      "testStrategy":  "Validate sample bundles against the schema; document the schema.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "167.1",
-                                           "title":  "Define manifest.json schema",
-                                           "description":  "Specify required fields: id, version, tools, knowledge, schemas.",
-                                           "priority":  "high",
-                                           "status":  "done"
-                                       },
-                                       {
-                                           "id":  "167.2",
-                                           "title":  "Define tool schema",
-                                           "description":  "Specify structure for tool definitions including name, description, input, output.",
-                                           "priority":  "medium",
-                                           "status":  "done"
-                                       },
-                                       {
-                                           "id":  "167.3",
-                                           "title":  "Define knowledge schema",
-                                           "description":  "Specify structure for knowledge bundles including metadata and content type.",
-                                           "priority":  "medium",
-                                           "status":  "done"
-                                       },
-                                       {
-                                           "id":  "167.4",
-                                           "title":  "Add versioning rules",
-                                           "description":  "Define semantic versioning rules for OKF bundles and manifests.",
-                                           "priority":  "low",
-                                           "status":  "done"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  168,
-                      "title":  "Implement OKF Server Webhook System",
-                      "description":  "Add webhook support to the OKF server so it can notify Helix when bundles are added, updated, or removed.",
-                      "priority":  "high",
-                      "status":  "pending",
-                      "dependencies":  [
-
-                                       ],
-                      "details":  "Add webhook support to the OKF server so it can notify Helix when bundles are added, updated, or removed.",
-                      "testStrategy":  "Test webhook delivery on bundle changes, verify retries and logging.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "168.1",
-                                           "title":  "Add webhook configuration",
-                                           "description":  "Add configuration for Helix webhook URL, authentication token, and retry policy.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "168.2",
-                                           "title":  "Implement bundle change detection",
-                                           "description":  "Detect changes to OKF bundles and trigger webhook events. Use local filesystem watching or internal update hooks.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "168.3",
-                                           "title":  "Implement webhook sender",
-                                           "description":  "Send POST requests to Helix with bundle ID and version when changes occur.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "168.4",
-                                           "title":  "Add webhook retry logic",
-                                           "description":  "Retry failed webhook deliveries with exponential backoff.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "168.5",
-                                           "title":  "Add webhook logging",
-                                           "description":  "Log webhook events, delivery status, and failures for debugging.",
-                                           "priority":  "low",
-                                           "status":  "pending"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  169,
-                      "title":  "Implement Helix Remote Bundle Fetcher",
-                      "description":  "Add support for Helix to fetch OKF bundles, manifests, and metadata directly from the remote OKF server.",
-                      "priority":  "high",
-                      "status":  "pending",
-                      "dependencies":  [
-
-                                       ],
-                      "details":  "Add support for Helix to fetch OKF bundles, manifests, and metadata directly from the remote OKF server.",
-                      "testStrategy":  "Test fetching manifests and bundles over network, verify caching and error handling.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "169.1",
-                                           "title":  "Add remote fetch configuration",
-                                           "description":  "Add OKF server base URL, authentication token, and fetch timeout settings to Helix config.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "169.2",
-                                           "title":  "Implement manifest fetcher",
-                                           "description":  "Fetch manifest.json for bundles from the OKF server and parse using serde.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "169.3",
-                                           "title":  "Implement bundle content fetcher",
-                                           "description":  "Fetch tool definitions, knowledge bundles, and schema files from the OKF server.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "169.4",
-                                           "title":  "Add caching layer",
-                                           "description":  "Cache fetched bundles locally to reduce network load and improve reload speed.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "169.5",
-                                           "title":  "Add fetch error handling",
-                                           "description":  "Handle network failures, missing bundles, and invalid responses gracefully.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  170,
-                      "title":  "Implement OKF Bundle Testing Suite",
-                      "description":  "Create a testing suite to validate OKF bundles, manifests, schemas, and tool definitions before deployment.",
-                      "priority":  "medium",
-                      "status":  "pending",
-                      "dependencies":  [
-
-                                       ],
-                      "details":  "Create a testing suite to validate OKF bundles, manifests, schemas, and tool definitions before deployment.",
-                      "testStrategy":  "Run tests against sample bundles; integrate into CI and verify failures on bad data.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "170.1",
-                                           "title":  "Add manifest validation tests",
-                                           "description":  "Test manifest.json files for required fields, correct types, and valid versioning.",
-                                           "priority":  "high",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "170.2",
-                                           "title":  "Add tool definition tests",
-                                           "description":  "Validate tool JSON definitions including input, output, and description fields.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "170.3",
-                                           "title":  "Add knowledge bundle tests",
-                                           "description":  "Validate knowledge bundles for correct metadata and content structure.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "170.4",
-                                           "title":  "Add schema validation tests",
-                                           "description":  "Validate JSON schemas for correctness and compatibility with OKF bundle structure.",
-                                           "priority":  "medium",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "170.5",
-                                           "title":  "Add CI integration",
-                                           "description":  "Integrate OKF bundle tests into CI pipeline to prevent invalid bundles from being deployed.",
-                                           "priority":  "low",
-                                           "status":  "pending"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  171,
-                      "title":  "Project Scanner Module – Remote scan of Main PC from Dell 630 (Dell 630 scans Main PC over LAN)",
-                      "description":  "Create a configurable \"project scanner\" that runs on the Dell 630 (Helix agent + OKF server in separate Proxmox VMs) and remotely scans the Main PC (where coding/development happens) over the local network. Must support a programmable list of projects + per-PC and per-project settings in config. Outputs structured trees suitable for Mermaid (primary) / OKF bundles. Note: User clarified possible confusion between Markmap and Mermaid — primary focus is Mermaid diagrams (already supported in schema from task 167).",
-                      "status":  "pending",
-                      "dependencies":  [
-                                           167
-                                       ],
-                      "priority":  "high",
-                      "details":  "Corrected architecture from user:\n- Helix agent lives on Dell 630 (Proxmox VM)\n- OKF server also on Dell 630 (separate Proxmox VM)\n- Main PC is the target machine where actual coding occurs\n- ALL scanning is remote over local network (Dell 630 → Main PC)\n\nKey requirements:\n1. Add config section [helix.project_scanner] + [[helix.projects]] array in config.toml.\n2. Per-project settings: name, target_machine (\"main-pc\"), remote_path, protocol (smb | ssh | http | local), include/exclude globs, max_depth.\n3. Per-PC settings block for hosts, auth methods, credentials placeholders.\n4. Core scanner capable of local walks today + remote access (start with mounted SMB share or stub for SSH/file-server).\n5. Rich output metadata: source_machine=\"main-pc\", scanned_from=\"dell630\", timestamp, file counts, etc.\n6. Reuse/extend existing scan_directory + generate_mermaid_project_map from task 167.\n7. Expose as tool: scan_projects (and scan_remote_project).\n8. Output must be directly usable for OKF knowledge entries (content_type \"file-tree\" or \"project-map\").\n\nRemote access strategy options:\n- SMB/CIFS share mounted on Dell 630 pointing to Main PC\n- SSH from Dell 630 to Main PC\n- Small dedicated file-server or agent running on Main PC that Helix calls\n\nMermaid priority: Generate Mermaid file-tree / project-map diagrams (not Markmap for now, unless user confirms otherwise).",
-                      "testStrategy":  "Configure a project in config pointing at a network path (or local mount for dev). Run scanner from Dell 630 context and verify output contains correct source_machine/scanned_from metadata + usable tree for Mermaid generation. Test include/exclude and depth limits.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "171.1",
-                                           "title":  "Design and add [helix.project_scanner] + [[projects]] config schema",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "171.2",
-                                           "title":  "Implement core ProjectScanner module (walk + filters + metadata)",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "171.3",
-                                           "title":  "Add structured output types (ProjectTree, ProjectScanResult) with cross-machine fields",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "171.4",
-                                           "title":  "Expose as tool (scan_projects / scan_remote_project) and wire into list_tools + OKF",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "171.5",
-                                           "title":  "Add remote scan stub + network config placeholders (SMB/SSH/http)",
-                                           "status":  "pending"
-                                       },
-                                       {
-                                           "id":  "171.6",
-                                           "title":  "Unit + integration tests + example config for Main PC scanning",
-                                           "status":  "pending"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  172,
-                      "title":  "Markmap Generator Module (structure + notes → Markmap Markdown)",
-                      "description":  "Create a module that converts directory structure (from Project Scanner) + optional notes into Markmap-compatible Markdown format for mindmaps. Research showed no direct Rust crate on crates.io for Markmap generation (it\u0027s primarily a JS ecosystem tool: markmap-lib). We will implement a pure Markdown generator that produces valid Markmap syntax.",
-                      "priority":  "high",
-                      "status":  "pending",
-                      "dependencies":  [
-                                           171,
-                                           167
-                                       ],
-                      "details":  "1. Research / confirm Markmap Markdown syntax (## Title, - item, indentation for hierarchy).\n2. Implement MarkmapGenerator that takes ProjectTree (or similar) and produces .mm.md or raw markdown.\n3. Support enriching with notes / descriptions from OKF knowledge or .md files.\n4. Add optional metadata header (source, generated_at, project).\n5. Expose as tool: generate_markmap.\n6. Output should be consumable by the Bundle Builder.\n7. Later: consider calling JS markmap via process or web service if richer rendering needed.\nTest: Feed a scanned project and produce valid markmap markdown that renders in markmap.app or VSCode Markmap extension.",
-                      "testStrategy":  "Generate markmap from a real project scan. Verify syntax is valid and hierarchy is preserved. Manual test in markmap viewer.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "172.1",
-                                           "status":  "pending",
-                                           "title":  "Document Markmap Markdown format and implement generator"
-                                       },
-                                       {
-                                           "id":  "172.2",
-                                           "status":  "pending",
-                                           "title":  "Integrate with ProjectScanner output (ProjectTree → Markmap)"
-                                       },
-                                       {
-                                           "id":  "172.3",
-                                           "status":  "pending",
-                                           "title":  "Support injecting notes / descriptions into map nodes"
-                                       },
-                                       {
-                                           "id":  "172.4",
-                                           "status":  "pending",
-                                           "title":  "Add generate_markmap tool + registration"
-                                       },
-                                       {
-                                           "id":  "172.5",
-                                           "status":  "pending",
-                                           "title":  "Add tests and example output"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  173,
-                      "title":  "OKF Bundle Builder Module (auto-generate bundles)",
-                      "description":  "Create an automatic OKF Bundle Builder that assembles project scans, markmaps, mermaid diagrams, and metadata into valid OKF bundle manifests + knowledge entries. This is the core automation layer for turning local/remote scans into shareable OKF knowledge.",
-                      "priority":  "high",
-                      "status":  "pending",
-                      "dependencies":  [
-                                           171,
-                                           172,
-                                           167
-                                       ],
-                      "details":  "1. Define BundleBuilder struct that collects:\n   - Tools (optional)\n   - Knowledge entries (file-trees, markmaps, mermaid, change logs, etc.)\n   - Metadata (source_machine, version, generated_at)\n2. Implement logic to package scanner output + markmap output into OkfKnowledgeEntry with correct content_type.\n3. Support multiple projects in one bundle or separate bundles.\n4. Auto-increment or manage semantic versions.\n5. Write bundle to disk (manifest.json + knowledge files) or return in-memory.\n6. Integrate with existing OkfBundleManifest / validator.\n7. Add CLI / tool: build_okf_bundle.\nTest: End-to-end from scan → markmap → bundle that passes validator.",
-                      "testStrategy":  "Build a complete bundle from a scanned project + generated markmap. Validate the resulting manifest against the schema and load it via OkfLibrarian.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "173.1",
-                                           "status":  "pending",
-                                           "title":  "Design BundleBuilder API and data flow"
-                                       },
-                                       {
-                                           "id":  "173.2",
-                                           "status":  "pending",
-                                           "title":  "Implement assembly of knowledge entries from scanner + markmap + mermaid"
-                                       },
-                                       {
-                                           "id":  "173.3",
-                                           "status":  "pending",
-                                           "title":  "Add version management and bundle metadata"
-                                       },
-                                       {
-                                           "id":  "173.4",
-                                           "status":  "pending",
-                                           "title":  "Write bundle to OKF format (manifest + embedded or external knowledge)"
-                                       },
-                                       {
-                                           "id":  "173.5",
-                                           "status":  "pending",
-                                           "title":  "Expose build_okf_bundle tool and integration tests"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  174,
-                      "title":  "Remote Uploader Module for OKF Bundles",
-                      "description":  "Implement a module that POSTs generated OKF bundles (manifest + knowledge) to the central OKF server (e.g. on Dell 630 / Proxmox). Supports authentication, retries, and ETag / versioning awareness.",
-                      "priority":  "high",
-                      "status":  "pending",
-                      "dependencies":  [
-                                           173,
-                                           169
-                                       ],
-                      "details":  "1. Use existing OkfFetcher or new HttpUploader (reqwest).\n2. Endpoints to support: POST /okf/bundles/{id} or /upload.\n3. Handle bundle payload (JSON manifest + base64 or multipart for large knowledge).\n4. Add config for server_url, auth_token, retry policy.\n5. Support dry-run and force-upload.\n6. Return upload result with new version / ETag.\n7. Integrate after Bundle Builder (auto-upload option).\n8. Add tool: upload_okf_bundle.\nTest: Upload a test bundle to a running OKF server and verify it appears in registry.",
-                      "testStrategy":  "Manual + automated test uploading a small bundle to localhost OKF server. Verify server receives it and Helix can later fetch it.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "174.1",
-                                           "status":  "pending",
-                                           "title":  "Create RemoteUploader with POST logic and auth"
-                                       },
-                                       {
-                                           "id":  "174.2",
-                                           "status":  "pending",
-                                           "title":  "Support bundle serialization (manifest + knowledge payload)"
-                                       },
-                                       {
-                                           "id":  "174.3",
-                                           "status":  "pending",
-                                           "title":  "Add retry, error handling, and progress logging"
-                                       },
-                                       {
-                                           "id":  "174.4",
-                                           "status":  "pending",
-                                           "title":  "Add upload_okf_bundle tool + config integration"
-                                       },
-                                       {
-                                           "id":  "174.5",
-                                           "status":  "pending",
-                                           "title":  "End-to-end upload test from BundleBuilder"
-                                       }
-                                   ]
-                  },
-                  {
-                      "id":  175,
-                      "title":  "OKF Bundle Indexer (registry + version updater)",
-                      "description":  "Create a Bundle Indexer that, after a bundle is built or uploaded, updates the local OKF registry, index file, and version tracking. Works together with hot-reload and poller so newly built bundles become immediately available.",
-                      "priority":  "high",
-                      "status":  "pending",
-                      "dependencies":  [
-                                           173,
-                                           165
-                                       ],
-                      "details":  "1. Implement indexer that:\n   - Reads newly built bundle\n   - Updates OkfRegistry\n   - Writes okf_index.json\n   - Increments / records version\n2. Support both local build and post-upload indexing.\n3. Hook into hot-reload or provide explicit index_bundle() method.\n4. Emit events or logs for the poller / agents.\n5. Add tool: index_okf_bundle or auto-index after build.\n6. Ensure compatibility with existing OkfLibrarian and validator.\nTest: After building a bundle, indexer updates the live registry so list_okf_tools / try_execute_okf_tool sees new knowledge.",
-                      "testStrategy":  "Build a bundle → run indexer → verify registry now contains the new knowledge/tools and summary reflects the update.",
-                      "subtasks":  [
-                                       {
-                                           "id":  "175.1",
-                                           "status":  "pending",
-                                           "title":  "Implement core BundleIndexer logic (update registry + write index)"
-                                       },
-                                       {
-                                           "id":  "175.2",
-                                           "status":  "pending",
-                                           "title":  "Version tracking and conflict resolution"
-                                       },
-                                       {
-                                           "id":  "175.3",
-                                           "status":  "pending",
-                                           "title":  "Integrate with BundleBuilder (post-build indexing)"
-                                       },
-                                       {
-                                           "id":  "175.4",
-                                           "status":  "pending",
-                                           "title":  "Add index_okf_bundle tool and CLI hook"
-                                       },
-                                       {
-                                           "id":  "175.5",
-                                           "status":  "pending",
-                                           "title":  "Ensure poller / hot-reload respects indexed bundles"
-                                       }
-                                   ]
-                  },
-                  {
-                      "subtasks":  [
-                                       {
-                                           "status":  "pending",
-                                           "title":  "Research MCP spec and upstream implementation plan",
-                                           "id":  "176.1"
-                                       },
-                                       {
-                                           "status":  "pending",
-                                           "title":  "Add MCP client: connect to external MCP servers and expose as Helix tools",
-                                           "id":  "176.2"
-                                       },
-                                       {
-                                           "status":  "pending",
-                                           "title":  "Add MCP server mode: expose Helix tools/resources via MCP",
-                                           "id":  "176.3"
-                                       },
-                                       {
-                                           "status":  "pending",
-                                           "title":  "Map Helix tool system + OKF tools to MCP protocol",
-                                           "id":  "176.4"
-                                       },
-                                       {
-                                           "status":  "pending",
-                                           "title":  "Config + installer support for MCP (servers to connect to, exposed capabilities)",
-                                           "id":  "176.5"
-                                       },
-                                       {
-                                           "status":  "pending",
-                                           "title":  "Documentation, examples, and end-to-end testing with real MCP servers",
-                                           "id":  "176.6"
-                                       }
-                                   ],
-                      "id":  176,
-                      "description":  "New MCP support is coming in the base project / Grok-CLI at the end of the month. Plan and implement MCP integration into Helix (tools, resources, prompts, server/client capabilities).",
-                      "details":  "MCP (Model Context Protocol) is being added upstream end of month.\\n\\n1. Research MCP spec (tools, resources, prompts, sampling, roots).\\n2. Add MCP client support so Helix can call external MCP servers.\\n3. Add MCP server capability so external clients can use Helix tools/resources.\\n4. Map Helix tools to MCP tool definitions.\\n5. Integrate with existing OKF librarian + tool system.\\n6. Update installer, config, and web UI if MCP endpoints are exposed.\\n7. Add docs and example MCP server configs.\\n8. Test with common MCP servers (filesystem, git, browser, etc.).",
-                      "dependencies":  [
-
-                                       ],
-                      "status":  "pending",
-                      "testStrategy":  "Helix can act as MCP client (call external MCP tools) and optionally as MCP server. Existing tools continue to work. Integration with OKF is clean.",
-                      "title":  "Integrate / adopt MCP (Model Context Protocol) - new upstream version end of month",
-                      "priority":  "high"
-                  },
-                  {
-                      "dependencies":  [
-
-                                       ],
-                      "description":  "grok-cli and Helix speak different OKF protocols today; define ONE canonical v1 contract and contract-test both clients against it.",
-                      "details":  "2026-10-04 FINDING (John's Drive upload): the 'OKF server software' is byte-identical to Helix's own src/okf/ module \u2014 there is no standalone server. KEY INSIGHT: Helix was designed to BE its own OKF server: src/io/web_server/mod.rs already mounts /okf/status, /okf/registry, /okf/health, /okf/schema, POST /okf/webhook (public) and POST /okf/reload, /okf/reload/force, /okf/manifest (protected), gated on [helix.okf] enabled (default false). BUT Helix's own fetcher (src/okf/fetcher.rs) requests endpoints the server does NOT mount: GET /okf/manifest.json, GET /okf/bundles/{id}/manifest.json, GET /okf/knowledge/{kid}. So Helix cannot serve itself \u2014 the server half and client half disagree on paths. The v1 protocol MUST reconcile the mounted routes with what the fetcher (and grok-cli) expect; do not design in a vacuum. GROUND TRUTH (verified 2026-10-04 against actual code): the two OKF clients were built against different imagined servers. Helix (src/okf/fetcher.rs) expects: GET {base}/okf/manifest.json, GET {base}/okf/bundles/{id}/manifest.json, GET {base}/okf/knowledge/{kid}, GET {base}/okf/health, optional Bearer auth_token, ETag/If-None-Match. grok-cli expects: POST {http(s)}://{server}:{port}/api/traces (default port 8080, 10s timeout, buffer-on-failure; src/workflow/okf.rs), POST {remote_url}/bundles/{bundle}/concepts (15s timeout; src/tools/okf_tools.rs push_concept_to_remote). grok-cli has NO remote fetch; Helix has NO push/trace. No single server satisfies both. CANONICAL v1 PROPOSAL (minimizes churn \u2014 Helix reads stay as-is): GET /okf/health -> 200 {\"status\":\"ok\"}; GET /okf/manifest.json and GET /okf/bundles/{id}/manifest.json -> manifest matching okf_bundle_schema.json (required: id, version); GET /okf/knowledge/{kid} -> document; POST /okf/traces (JSON WorkflowTrace, was grok-cli /api/traces); POST /okf/bundles/{bundle}/concepts (JSON OkfConcept, was grok-cli /bundles/{b}/concepts). Optional Bearer auth on all; ETag/If-None-Match on GETs; JSON error bodies {\"error\": ...}. WORK: write PROTOCOL.md (repo root or src/okf/) documenting every endpoint with request/response examples; update any Helix paths that deviate; grok-cli retarget is task grok-cli#480 (cross-repo \u2014 coordinate, do not duplicate). Contract tests: mock HTTP server asserting exact paths, methods, auth headers, ETag round-trip, and shape conformance to okf_bundle_schema.json.",
-                      "id":  207,
-                      "results":  "PROTOCOL.md written at repo root (unified OKF v1: canonical /okf/* paths, auth/ETag/error conventions, client mapping table, migration notes). 6 Helix fetcher contract tests green against mockito mock server (canonical paths, Bearer, ETag 304 round-trip, schema conformance). No deviating paths remained in bot-repo; legacy grok-cli paths documented in PROTOCOL.md migration notes only.",
-                      "status":  "done",
-                      "subtasks":  [
-                                       {
-                                           "id":  207.1,
-                                           "title":  "Write PROTOCOL.md v1 with request/response examples",
-                                           "status":  "done",
-                                           "dependencies":  [
-
-                                                            ]
-                                       },
-                                       {
-                                           "id":  207.2,
-                                           "title":  "Contract tests: Helix fetcher against mock server",
-                                           "status":  "done",
-                                           "dependencies":  [
-
-                                                            ]
-                                       },
-                                       {
-                                           "id":  207.3,
-                                           "title":  "Update OKF docs/comments to the canonical paths",
-                                           "status":  "done",
-                                           "dependencies":  [
-
-                                                            ]
-                                       }
-                                   ],
-                      "testStrategy":  "Contract tests green against a mock server for every endpoint in PROTOCOL.md (both clients). grep proves no remaining '/api/traces' or unprefixed '/bundles/' references in either client after grok-cli#480. Existing okf unit tests still green.",
-                      "title":  "Define the unified OKF server protocol v1 (both clients, one contract)",
-                      "priority":  "high"
-                  },
-                  {
-                      "dependencies":  [
-                                           207
-                                       ],
-                      "description":  "No OKF server implementation exists anywhere reachable; build the minimal reference server per PROTOCOL.md v1.",
-                      "details":  "2026-10-04 REFRAME: no standalone server exists or is needed yet \u2014 Helix already contains the server half (see task 207 finding). This task is now: complete/wire the IN-Helix OKF server \u2014 enablement path ([helix.okf] enabled), reconcile mounted routes with the v1 protocol from 207, verify Helix can fetch from itself, systemd/deploy notes for the Ubuntu box. Only build a separate standalone server if John asks for it. FINDING (2026-10-04): searched ~/workspace (client code only), the Drive helix folder (schema + sample manifest + deploy notes only), and the micro-tech GitHub org (no okf repo) \u2014 there is no OKF server implementation anywhere reachable. 'It doesn't work' because it was never built. DECISION FOR JOHN BEFORE STARTING: repo home (suggest new micro-tech/okf-server) and deploy target (the Ubuntu box on the R630). Do not start until he confirms. BUILD (Rust + axum, matches his stack): serve a bundle directory on disk. GET /okf/health -> {\"status\":\"ok\"}; GET /okf/manifest.json and /okf/bundles/{id}/manifest.json (ETag support); GET /okf/knowledge/{kid}; POST /okf/traces (append JSONL); POST /okf/bundles/{bundle}/concepts (append concept, update manifest). Optional Bearer auth via env var; bind 127.0.0.1 default, LAN bind explicit. Ship with a systemd unit example and the diagnostic curl commands from the 2026-10-04 runbook.",
-                      "id":  208,
-                      "results":  "In-Helix OKF server completed (no standalone built -- reframed per 2026-10-04 finding). New v1 routes: GET /okf/manifest.json, GET /okf/bundles/{id}/manifest.json, GET /okf/knowledge/{kid}, POST /okf/traces (202, JSONL append to [helix.okf] trace_file), POST /okf/bundles/{bundle}/concepts (201, inserts knowledge entry + persists index). Librarian retains current_manifest; ETag/304 on manifest GETs; /okf/health returns status:ok. New require_okf_write_token middleware accepts web token OR okf auth_token Bearer, fail-open when neither configured. config.toml [helix.okf] documents v1 + trace_file; deploy runbook in PROTOCOL.md. Tests: 3 self-fetch integration tests green (Helix fetches from itself); full lib suite 263 passed, 0 failed; zero new warnings.",
-                      "status":  "done",
-                      "subtasks":  [
-                                       {
-                                           "id":  208.1,
-                                           "title":  "Scaffold axum server + bundle-dir layout",
-                                           "status":  "done",
-                                           "dependencies":  [
-
-                                                            ]
-                                       },
-                                       {
-                                           "id":  208.2,
-                                           "title":  "Read endpoints: health, manifest(s), knowledge (+ETag)",
-                                           "status":  "done",
-                                           "dependencies":  [
-
-                                                            ]
-                                       },
-                                       {
-                                           "id":  208.3,
-                                           "title":  "Write endpoints: traces + concepts (JSONL append)",
-                                           "status":  "done",
-                                           "dependencies":  [
-
-                                                            ]
-                                       },
-                                       {
-                                           "id":  208.4,
-                                           "title":  "Bearer auth, bind policy, systemd unit example",
-                                           "status":  "done",
-                                           "dependencies":  [
-
-                                                            ]
-                                       }
-                                   ],
-                      "testStrategy":  "The contract tests from task 207 run green against the real server (not a mock). Manual: curl the runbook commands on the Ubuntu box, compare shapes to okf_bundle_schema.json.",
-                      "title":  "Complete the in-Helix OKF server (no standalone needed)",
-                      "priority":  "medium"
-                  },
-                  {
-                      "dependencies":  [
-
-                                       ],
-                      "description":  "The 2026-10-05 mega-batch (tasks 187-208) added 8 new dead-code/unused warnings to cargo check --lib (9 baseline lines -> 17). None break the build, but two need judgment calls (rule_layer never read; web_server config fields never read). Clean them so the tree is warning-free again.",
-                      "details":  "FILED BY QUARTERMASTER 2026-10-05 ~05:00 EDT. METHOD: stashed the mega-batch working tree, ran cargo check --lib --message-format=short (9 unique warning lines), unstashed, re-ran (17 lines). Diff = 8 new lines, all in mega-batch code. RULED OUT: pre-existing warnings untouched (unix_socket x3, okf/fetcher resp, okf/registry Path import, tools/mod other, runtime_trace i, cpu/mod target (line shifted 916->1274 only), build-script std::env). NEW WARNINGS: (1) src/acp/agent.rs:22 unused import crate::agents::simple_planner::SimplePlanner -- the module docs explicitly say SimplePlanner is NOT used; delete the import. (2) src/agents/runtime_loop.rs:13 field rule_layer: RuleLayer never read -- constructor stores it, no method reads self.rule_layer. FUNCTIONAL QUESTION, not just lint: was the rule layer supposed to validate/retry steps in the loop (tasks 157/158 Tool Supervisor v2)? Wire it or allow(dead_code) with a comment; do not blindly underscore. (3)-(7) src/io/web_server/mod.rs -- Config.helix, Config.heartbeat, HelixConfig.name, OllamaConfig.url/model, WebConfig.port, HeartbeatConfig.interval_seconds never read. These are #[derive(Deserialize)] config-schema structs from the UI rework (193-198); check WebConfig.port especially (where does the server get its bind port? if from elsewhere, flag the inconsistency). (8) src/tools/project_scanner.rs:326 walk_ssh_directory (cfg(not(feature=ssh)) fallback) flagged never-used -- CHECK ARTIFACT, not real dead code: it IS called by test_ssh_walk_fallback_when_feature_disabled (line 669, cfg(test)); cargo check --lib does not compile test code. Verify with cargo check --lib --tests that the warning vanishes, then cfg_attr(not(test), allow(dead_code)) with comment. OBSERVATION (not a warning, for the repair plan): src/tools/project_scanner.rs:57-63 hardcodes \"youruser\" and None key_path with TODOs to load from scanner_cfg.machines[target_machine] -- the real SSH path cannot authenticate until pending task 171 lands. Not a new failure; noted so the plan accounts for it.",
-                      "id":  210,
-                      "status":  "done",
-                      "subtasks":  [
-                                       {
-                                           "id":  210.1,
-                                           "title":  "Remove dead import; silence check-artifact warning",
-                                           "status":  "done",
-                                           "dependencies":  [
-
-                                                            ]
-                                       },
-                                       {
-                                           "id":  210.2,
-                                           "title":  "Config-schema structs: allow(dead_code) or wire fields",
-                                           "status":  "done",
-                                           "dependencies":  [
-
-                                                            ]
-                                       },
-                                       {
-                                           "id":  210.3,
-                                           "title":  "Decide the fate of RuntimeLoop.rule_layer",
-                                           "status":  "done",
-                                           "dependencies":  [
-
-                                                            ]
-                                       },
-                                       {
-                                           "id":  210.4,
-                                           "title":  "Re-verify warning-free plus full lib suite",
-                                           "status":  "done",
-                                           "dependencies":  [
-                                                            210.1,
-                                                            210.2,
-                                                            210.3
-                                                            ]
-                                       }
-                                   ],
-                      "testStrategy":  "cargo check --lib --bins --tests emits zero warnings (compare against the 9-line pre-existing baseline); cargo test --lib still 263 passed, 0 failed.",
-                      "title":  "Warning cleanup: 8 new dead-code warnings from the mega-batch",
-                      "priority":  "medium",
-                      "results":  "DONE 2026-10-05 ~06:15 EDT by Ranger 1. All 8 warnings eliminated; cargo check --lib --bins shows only pre-existing baseline lines. 210.1: deleted dead SimplePlanner import (acp/agent.rs); walk_ssh_directory silenced via cfg_attr(not(test), allow(dead_code)) with comment (only caller is the cfg(test) fallback test). 210.2: #[allow(dead_code)] + why-comments on web_server parse-schema mirror fields; bind port confirmed to arrive via the start_web_server() argument from main.rs (schema field redundant, documented). 210.3: rule_layer WIRED per plan - RuntimeLoop::run() validates every ToolCall via RuleLayer::validate before execution; rejections land in the transcript (recoverable), consume step budget (no infinite spin), consecutive-call counter resets on non-tool decisions; ACP allowlist fixed to [system_status] (empty set would have rejected its own grounding call). 210.4: full lib suite 265 passed (263 + 2 new runtime_loop tests), 0 failed, 4 ignored. CHALLENGES: (a) walk_ssh warning does NOT vanish under cargo check --lib --tests (lib target still warns); cfg_attr approach verified correct instead. (b) tests/integration_harness.rs and other tests/*.rs are PRE-EXISTING broken (old bot:: crate name, 18 E0433 on base commit) - blocks cargo check --tests; NOT fixed (out of scope), noted in CHANGELOG. DEVIATION: added 2 unit tests for the new wiring (wiring an untested safety check without tests would be malpractice)."
-                  },
-                  {
-                      "dependencies":  [
-                                           210
-                                       ],
-                      "description":  "tests/integration_harness.rs and other tests/*.rs reference the old bot:: crate name, so cargo check --tests fails with 18 E0433 errors. Port them to the helix:: crate name.",
-                      "details":  "1) Confirm the lib crate name in Cargo.toml (package helix, src/lib.rs => crate helix). 2) Mechanically replace bot:: with helix:: in tests/*.rs and tests/scenarios/*.rs - no behavior changes. 3) cargo check --tests must be error-free. 4) Fix any follow-on errors (renamed/moved modules) minimally, keeping the tests' original intent. 5) Full cargo test (lib + integration + doctests) must be green.",
-                      "id":  211,
-                      "status":  "done",
-                      "subtasks":  [
-
-                                   ],
-                      "testStrategy":  "cargo check --tests: zero errors. cargo test: lib + integration + doctests all green, 0 failures.",
-                      "title":  "Port tests/*.rs to the current crate name (fix 18 E0433)",
-                      "priority":  "high",
-                      "results":  "DONE 2026-10-05. (1) bot:: -> helix:: across tests/*.rs + tests/scenarios/*.rs: 18 E0433 gone, cargo check --tests clean. (2) integration_harness: blocking std mpsc recv() inside tokio::spawn wedged the single-threaded test executor (whole binary hung) -> spawn_blocking, subscribe-before-spawn to break the Arc<Bus> keep-alive cycle; two scenario tests switched to publish_and_wait; dropped unused anyhow::Result import. (3) planner_v2_tests: hoisted Dummy with a message-driven Planner impl matching the assertions. (4) REAL PRODUCTION BUG in src/okf/api.rs okf_traces: tokio::fs::File pipelines writes, so write_all Ok did not mean written - 202 was returned before the JSONL line was visible (proven with minimal repro). Now flush().await after write; unique trace file per OKF test. (5) runtime_end_to_end_test: SimplePlanner's noop was never a registered tool (supervisor FatalError -> halt at step 0) -> local StatusPlanner calling real read-only system_status. (6) runtime_loop.rs: FinalAnswer branch now records the terminal step (was breaking before record_step, leaving step_count 0). (7) Two broken doctests fixed (env block -> text; async example -> ignore); reflection_planner_adapter_test: 5 unused imports removed. Full suite: lib 265x2, integration 12+3+3+1+2+1+1+1+1, doctests - 0 failures. No new warnings. CHALLENGES: the tokio pipelined-write finding took isolated repro tests to pin down (write_all Ok + immediate read -> empty); the integration_harness hang needed two fixes (spawn_blocking, then the Arc cycle). DEVIATIONS: small production changes where tests exposed real bugs (okf flush, terminal step recording) - documented in CHANGELOG."
-                  }
-              ]
+  "tasks": [
+    {
+      "dependencies": [
+        153
+      ],
+      "description": "Enhance runtime observability and complete the bus integration so the agent can be driven from events, cron, and other agents.",
+      "details": "1) Add detailed per-step trace logging (planner decision, action type, tool calls, memory writes, rule checks). 2) Fully implement the AgentRun bus handler so Cpu actually spawns the runtime and emits AgentFinished/AgentError. 3) Add a simple trace flag or log level so operators can turn detailed logging on/off.",
+      "id": 154,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "154.1",
+          "status": "done",
+          "title": "Add detailed per-step logging in RuntimeLoop (planner decision, step type, tool result, memory)"
+        },
+        {
+          "id": "154.2",
+          "status": "done",
+          "title": "Implement real AgentRun bus handler that calls run_unified_agent and emits completion events"
+        },
+        {
+          "id": "154.3",
+          "status": "done",
+          "title": "Add runtime trace flag / log level control"
+        },
+        {
+          "id": "154.4",
+          "status": "done",
+          "title": "Test end-to-end via CLI and bus event"
+        }
+      ],
+      "testStrategy": "Run agent.run from CLI with trace logs visible. Send AgentRun bus message and verify AgentFinished event is emitted.",
+      "title": "Add Rich Trace Logging + Proper Bus Event Hook for Unified Runtime"
+    },
+    {
+      "dependencies": [
+        154
+      ],
+      "description": "Enable the Unified Agent Runtime Loop to make structured decisions by integrating the existing planning/ module through a thin adapter layer with proper PlannerOutput enum and reflection parsing.",
+      "details": "This is the next-level planner integration. It introduces PlannerOutput as the canonical decision type and a ReflectionPlannerAdapter that parses reflection text into structured actions (ToolCall, LLMCall, FinalAnswer). Must not modify planning/planner.rs or planning/reflection.rs.",
+      "id": 155,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "155.1",
+          "status": "done",
+          "title": "Add Planner trait with decide(&AgentState) -> PlannerOutput"
+        },
+        {
+          "id": "155.2",
+          "status": "done",
+          "title": "Add PlannerOutput enum (LLMCall, ToolCall, FinalAnswer, Error)"
+        },
+        {
+          "id": "155.3",
+          "status": "done",
+          "title": "Implement ReflectionPlannerAdapter with reflection parsing logic"
+        },
+        {
+          "id": "155.4",
+          "status": "done",
+          "title": "Integrate PlannerOutput handling into RuntimeLoop"
+        },
+        {
+          "id": "155.5",
+          "status": "done",
+          "title": "Add unit tests for PlannerOutput + adapter parsing and integration test"
+        }
+      ],
+      "testStrategy": "Unit tests for trait and parsing, integration test running full RuntimeLoop with ReflectionPlannerAdapter, verify no changes to existing planning/ module.",
+      "title": "Planner v2: Structured PlannerOutput + ReflectionPlannerAdapter"
+    },
+    {
+      "dependencies": [
+        155
+      ],
+      "description": "Make the agent actually use tools and LLM in a real scenario. Ensure tool results flow back into the planner, LLM responses are stored in state, the planner can chain multiple steps, and the loop can run 5\u201320 cycles without stalling.",
+      "details": "This is a full integration test of the Unified Agent Runtime. The goal is to have a working multi-step agent that: 1) Uses tools and receives results, 2) Uses LLM calls and stores responses, 3) Chains multiple decisions, 4) Reaches a FinalAnswer after several cycles.",
+      "id": 156,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "156.1",
+          "status": "done",
+          "title": "Ensure tool results are fed back into AgentState for the next planner decision"
+        },
+        {
+          "id": "156.2",
+          "status": "done",
+          "title": "Ensure LLM responses are stored in state.messages"
+        },
+        {
+          "id": "156.3",
+          "status": "done",
+          "title": "Implement a planner that can chain multiple ToolCall + LLMCall steps"
+        },
+        {
+          "id": "156.4",
+          "status": "done",
+          "title": "Create an end-to-end test that runs 5\u201320 cycles and reaches FinalAnswer"
+        },
+        {
+          "id": "156.5",
+          "status": "done",
+          "title": "Verify no stalling and proper termination"
+        }
+      ],
+      "testStrategy": "Run a full end-to-end test with a real multi-step scenario (e.g. search \u2192 calc \u2192 final answer). Verify state contains tool results and LLM responses, and the loop terminates cleanly.",
+      "title": "End-to-end agent test: make the runtime loop execute a real multi-step plan using LLM + tools + final answer"
+    },
+    {
+      "dependencies": [
+        156
+      ],
+      "description": "Add a structured tracing system to the Unified Agent Runtime Loop so each planner decision, LLM call, tool call, and state update is captured in a RuntimeTrace. Provide optional CLI output for step-by-step visualization.",
+      "details": "Introduce a RuntimeTrace struct that records each cycle of the agent loop, including planner decisions, LLM prompts/responses, tool calls/results, and state deltas. Add a --trace flag to the CLI to print a human-readable step-by-step execution log. Ensure tracing is optional and does not affect runtime behavior.",
+      "id": 157,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "157.1",
+          "status": "done",
+          "title": "Add RuntimeTrace struct"
+        },
+        {
+          "id": "157.2",
+          "status": "done",
+          "title": "Instrument RuntimeLoop to push trace steps"
+        },
+        {
+          "id": "157.3",
+          "status": "done",
+          "title": "Add CLI flag --trace"
+        },
+        {
+          "id": "157.4",
+          "status": "done",
+          "title": "Implement pretty-printer for trace output"
+        },
+        {
+          "id": "157.5",
+          "status": "done",
+          "title": "Add unit tests for trace recording"
+        }
+      ],
+      "title": "Runtime Trace Logging + Step Visualization"
+    },
+    {
+      "id": 158,
+      "title": "Tool Supervisor v2: Validation + Retry + Error Classification",
+      "description": "Upgrade the Tool Supervisor to validate tool arguments, classify tool errors, retry failed calls when appropriate, and provide structured feedback to the planner. This improves reliability and prevents the agent from stalling or hallucinating when tools fail.",
+      "priority": "high",
+      "status": "done",
+      "dependencies": [
+        156
+      ],
+      "details": "All subtasks including 158.5 (tests + the never_loop fix in execute()) are complete. The dead loop was removed and logic simplified with explanatory comment. Integration in runtime_loop.rs works. Task marked fully done.",
+      "subtasks": [
+        {
+          "id": "158.1",
+          "status": "done",
+          "title": "Add ToolError enum with classification",
+          "description": "Define ToolError { InvalidArgs, ExecutionError, NotFound, RateLimit, Timeout, Unknown }. Include original error message and optional context."
+        },
+        {
+          "id": "158.2",
+          "status": "done",
+          "title": "Add ToolResult enum",
+          "description": "Define ToolResult { Success(Value), RetryableError(ToolError), FatalError(ToolError) }. This becomes the canonical output of all tool calls."
+        },
+        {
+          "id": "158.3",
+          "status": "done",
+          "title": "Implement ToolSupervisorV2",
+          "description": "Wrap all tool calls with argument validation, error classification, and retry logic. Retry up to N times for RetryableError. Return FatalError for non-retryable cases."
+        },
+        {
+          "id": "158.4",
+          "status": "done",
+          "title": "Integrate ToolSupervisorV2 into runtime loop",
+          "description": "Modify runtime_loop.rs so ToolCall steps use ToolSupervisorV2. Push normalized ToolResult into AgentState and RuntimeTrace."
+        },
+        {
+          "id": "158.5",
+          "status": "done",
+          "title": "Add tests for ToolSupervisorV2",
+          "description": "Unit tests for error classification, retry behavior, and integration with RuntimeLoop."
+        }
+      ]
+    },
+    {
+      "id": 159,
+      "title": "Local FastContext-style Repo Explorer subagent",
+      "description": "Introduce a local repo-explorer subagent (FastContext-style) that handles all repository exploration via tools (glob, read, grep) and returns compact evidence (file paths + line ranges) to the main agent.",
+      "priority": "high",
+      "status": "done",
+      "dependencies": [
+        158
+      ],
+      "details": "Implementation started: created src/agents/repo_explorer/ with types + stub explorer. Next: add required tools (glob/read/grep) then wire into explorer.",
+      "subtasks": [
+        {
+          "id": "159.1",
+          "status": "done",
+          "title": "Create repo_explorer module and types (RepoQuery, RepoEvidence, RepoEvidenceItem)"
+        },
+        {
+          "id": "159.2",
+          "status": "done",
+          "title": "Implement RepoExplorer trait and LocalLLMClient"
+        },
+        {
+          "id": "159.3",
+          "status": "done",
+          "title": "Add required tools: tool_glob, tool_read (range), tool_grep"
+        },
+        {
+          "id": "159.4",
+          "status": "done",
+          "title": "Implement explorer planning + parallel tool execution + evidence aggregation"
+        },
+        {
+          "id": "159.5",
+          "status": "done",
+          "title": "Integrate with main planner: 'Do I need repo context?' hook + evidence injection"
+        },
+        {
+          "id": "159.6",
+          "status": "done",
+          "title": "Add fallback when local model unavailable; write tests"
+        }
+      ]
+    },
+    {
+      "id": 160,
+      "title": "Restructure .grok folder for rules + diagrams",
+      "description": "Move agents.md into .grok/rules/, create diagrams folder, clean docs/ for user-facing content only, and create hybrid Mermaid diagrams.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Completed: Rules updated in .grok/rules/agents.md, hybrid mermaid created, docs/ cleaned (builder docs moved to .grok/docs/), .grok/README.md added.",
+      "testStrategy": "Verify folder structure and that first mermaid file renders correctly.",
+      "subtasks": []
+    },
+    {
+      "id": 161,
+      "title": "Create focused mermaid diagrams + build.rs auto-update",
+      "description": "Create additional focused mermaid diagrams and integrate auto-generation via build.rs or a dedicated tool.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Completed: 4 focused mermaid diagrams created + build.rs enhanced with diagram freshness warning system. Generator stub added in .grok/tools/.",
+      "testStrategy": "Verify new diagrams exist and build.rs triggers regeneration logic",
+      "subtasks": []
+    },
+    {
+      "id": 162,
+      "title": "Create Master System Overview Mermaid (full app coverage)",
+      "description": "Build a comprehensive master mermaid diagram that captures the entire application structure and flows. Also propose bot name ideas.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Master system overview mermaid created with full app coverage.",
+      "testStrategy": "",
+      "subtasks": []
+    },
+    {
+      "id": 163,
+      "title": "Rename project from bot \u2192 Helix",
+      "description": "Systematically rename the project across Cargo.toml, source, docs, paths, and diagrams.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Rebranding completed across source, configs, docs, diagrams, service files, and key references. \"bot\" references systematically replaced with \"Helix\" (or \"helix\"). Legacy files preserved with notes. Task 163 fully complete.",
+      "testStrategy": "",
+      "subtasks": []
+    },
+    {
+      "id": 164,
+      "title": "Implement Helix OKF Librarian System",
+      "description": "Add remote OKF bundle management to Helix, including manifest parsing, registry building, validation, and remote change detection via webhook or polling.",
+      "priority": "high",
+      "status": "done",
+      "dependencies": [],
+      "details": "Core OKF Librarian System fully implemented and integrated.\n\nDelivered:\n- Complete src/okf/ crate: manifest, registry, validator, fetcher, api\n- OkfLibrarian facade + global singleton (tokio Mutex) for runtime discovery\n- Full Axum API: /okf/status, /registry, /reload, /manifest, /webhook, /health\n- Startup auto-load of okf_index.json + okf_sample_manifest.json\n- Deep integration into tools/mod.rs:\n  - execute() falls through to OKF tools\n  - tool_definitions() dynamically merges OKF tools\n  - list_okf_tools() built-in\n- list_tools() now surfaces OKF tools\n- Config [helix.okf] fully respected\n- okf_sample_manifest.json with realistic tools + knowledge\n\nSubtasks 164.2-164.7 complete. 164.1 (active polling) partially addressed via webhook; full background poller belongs in 165.",
+      "testStrategy": "Implement modules, wire into runtime, test bundle loading and change detection.",
+      "subtasks": [
+        {
+          "id": "164.1",
+          "title": "Implement remote OKF change detection",
+          "description": "Replace local filesystem watcher with webhook endpoint or polling system to detect bundle updates on the OKF server.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "164.2",
+          "title": "Create okf_manifest module",
+          "description": "Add manifest.json parser using serde; build internal structs for tools, knowledge, and schemas.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "164.3",
+          "title": "Create okf_registry module",
+          "description": "Generate tool registry, knowledge registry, and version index files based on remote OKF bundle data.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "164.4",
+          "title": "Create okf_validator module",
+          "description": "Validate bundle structure, JSON schemas, required fields, and versioning rules after fetching bundles from the OKF server.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "164.5",
+          "title": "Create okf_api module",
+          "description": "Expose control API endpoints for reload, index, and status using axum. Include webhook receiver for remote OKF change notifications.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "164.6",
+          "title": "Add helix.okf config section",
+          "description": "Add remote OKF server URL, auto_reload flag, and index file path to Helix config.toml.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "164.7",
+          "title": "Integrate modules into Helix runtime",
+          "description": "Wire remote change detection, registry updates, validator, and control API into Helix startup and event loop.",
+          "priority": "high",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 165,
+      "title": "Implement Helix OKF Remote Hot-Reload System",
+      "description": "Add automatic reload behavior for OKF bundles when remote OKF server reports changes. Replace filesystem watcher with webhook or polling-based reload triggers.",
+      "priority": "high",
+      "status": "done",
+      "dependencies": [],
+      "details": "Core remote hot-reload system for OKF bundles is fully implemented and integrated.\n\nDelivered in this pass + prior work:\n- `hot_reload_from_remote()` with ETag-based change detection (NOT_MODIFIED handling)\n- `start_okf_poller()` background task with debounce (20s) and configurable poll_interval\n- Rich logging for reloads, no-change, and errors\n- `/okf/reload` and `/okf/reload/force` endpoints\n- Webhook receiver (`/okf/webhook`) that can trigger reload when auto_reload=true\n- `force_reload_from_remote()` (clears ETag)\n- Reload counters, last_reload_ms, last_reload_error tracking\n- Poller started automatically in web_server when OKF enabled\n- Already wired into OkfLibrarian and global singleton\n\nTask 165 requirements (webhook/polling, reload pipeline, debounce, logging) are satisfied.",
+      "testStrategy": "Test reload on simulated remote change events, verify debounce and logging.",
+      "subtasks": [
+        {
+          "id": "165.1",
+          "title": "Add remote change event routing",
+          "description": "Implement webhook receiver or polling loop to detect OKF bundle updates from the remote OKF server.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "165.2",
+          "title": "Implement remote bundle reload pipeline",
+          "description": "Fetch updated bundle from OKF server, parse manifest, validate bundle, update registry, and refresh active toolset.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "165.3",
+          "title": "Add debounce logic",
+          "description": "Prevent rapid reload loops when multiple remote change events or polling cycles occur.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "165.4",
+          "title": "Add reload logging",
+          "description": "Log reload events, bundle versions, and registry changes for debugging and monitoring.",
+          "priority": "low",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 166,
+      "title": "Implement Grok-CLI OKF Integration Layer",
+      "description": "Add support in Grok-CLI for consuming Helix's remote OKF registry, requesting reloads, and loading tools/knowledge dynamically from the OKF server.",
+      "priority": "high",
+      "status": "in_progress",
+      "dependencies": [],
+      "details": "Starting implementation of Grok-CLI OKF integration. Adding HTTP client support to fetch from Helix's /okf/registry, dynamic tool loading from OKF, and reload triggers. This will be integrated into the tools system and CLI where appropriate.",
+      "testStrategy": "Verify CLI can fetch registry from Helix, load tools dynamically, and trigger reloads.",
+      "subtasks": [
+        {
+          "id": "166.1",
+          "title": "Add Helix registry fetch",
+          "description": "Implement HTTP client to request /helix/okf/index and cache results. Registry is fetched from Helix, not local filesystem.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "166.2",
+          "title": "Add dynamic tool loader",
+          "description": "Load tool definitions from Helix's registry instead of scanning local or remote filesystem directories.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "166.3",
+          "title": "Add dynamic knowledge loader",
+          "description": "Load knowledge bundles based on registry entries provided by Helix. Fetch bundles from OKF server via Helix-provided URLs.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "166.4",
+          "title": "Add reload request support",
+          "description": "Implement POST /helix/okf/reload for manual reload triggers. Reloads are remote, not filesystem-based.",
+          "priority": "medium",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 167,
+      "title": "Define OKF Bundle Schema v1.0 + Mermaid/File-Change support",
+      "description": "Create the official JSON schema for OKF bundles including manifest, tools, knowledge, and metadata fields.",
+      "priority": "medium",
+      "status": "done",
+      "dependencies": [],
+      "details": "Schema v1.0 enhanced with explicit support for mermaid/project-map/file-tree knowledge types + cross-machine metadata (source_machine, detected_at, diagram_type, base_path, changed_files). New tools added: scan_directory, generate_mermaid_project_map, generate_okf_project_map_knowledge. These directly enable scanning local files/changes \u2192 building Mermaid diagrams \u2192 packaging as OKF knowledge ready for central server (Dell 630 / Proxmox).",
+      "testStrategy": "Validate sample bundles against the schema; document the schema.",
+      "subtasks": [
+        {
+          "id": "167.1",
+          "title": "Define manifest.json schema",
+          "description": "Specify required fields: id, version, tools, knowledge, schemas.",
+          "priority": "high",
+          "status": "done"
+        },
+        {
+          "id": "167.2",
+          "title": "Define tool schema",
+          "description": "Specify structure for tool definitions including name, description, input, output.",
+          "priority": "medium",
+          "status": "done"
+        },
+        {
+          "id": "167.3",
+          "title": "Define knowledge schema",
+          "description": "Specify structure for knowledge bundles including metadata and content type.",
+          "priority": "medium",
+          "status": "done"
+        },
+        {
+          "id": "167.4",
+          "title": "Add versioning rules",
+          "description": "Define semantic versioning rules for OKF bundles and manifests.",
+          "priority": "low",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": 168,
+      "title": "Implement OKF Server Webhook System",
+      "description": "Add webhook support to the OKF server so it can notify Helix when bundles are added, updated, or removed.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [],
+      "details": "Add webhook support to the OKF server so it can notify Helix when bundles are added, updated, or removed.",
+      "testStrategy": "Test webhook delivery on bundle changes, verify retries and logging.",
+      "subtasks": [
+        {
+          "id": "168.1",
+          "title": "Add webhook configuration",
+          "description": "Add configuration for Helix webhook URL, authentication token, and retry policy.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "168.2",
+          "title": "Implement bundle change detection",
+          "description": "Detect changes to OKF bundles and trigger webhook events. Use local filesystem watching or internal update hooks.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "168.3",
+          "title": "Implement webhook sender",
+          "description": "Send POST requests to Helix with bundle ID and version when changes occur.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "168.4",
+          "title": "Add webhook retry logic",
+          "description": "Retry failed webhook deliveries with exponential backoff.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "168.5",
+          "title": "Add webhook logging",
+          "description": "Log webhook events, delivery status, and failures for debugging.",
+          "priority": "low",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 169,
+      "title": "Implement Helix Remote Bundle Fetcher",
+      "description": "Add support for Helix to fetch OKF bundles, manifests, and metadata directly from the remote OKF server.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [],
+      "details": "Add support for Helix to fetch OKF bundles, manifests, and metadata directly from the remote OKF server.",
+      "testStrategy": "Test fetching manifests and bundles over network, verify caching and error handling.",
+      "subtasks": [
+        {
+          "id": "169.1",
+          "title": "Add remote fetch configuration",
+          "description": "Add OKF server base URL, authentication token, and fetch timeout settings to Helix config.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "169.2",
+          "title": "Implement manifest fetcher",
+          "description": "Fetch manifest.json for bundles from the OKF server and parse using serde.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "169.3",
+          "title": "Implement bundle content fetcher",
+          "description": "Fetch tool definitions, knowledge bundles, and schema files from the OKF server.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "169.4",
+          "title": "Add caching layer",
+          "description": "Cache fetched bundles locally to reduce network load and improve reload speed.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "169.5",
+          "title": "Add fetch error handling",
+          "description": "Handle network failures, missing bundles, and invalid responses gracefully.",
+          "priority": "medium",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 170,
+      "title": "Implement OKF Bundle Testing Suite",
+      "description": "Create a testing suite to validate OKF bundles, manifests, schemas, and tool definitions before deployment.",
+      "priority": "medium",
+      "status": "pending",
+      "dependencies": [],
+      "details": "Create a testing suite to validate OKF bundles, manifests, schemas, and tool definitions before deployment.",
+      "testStrategy": "Run tests against sample bundles; integrate into CI and verify failures on bad data.",
+      "subtasks": [
+        {
+          "id": "170.1",
+          "title": "Add manifest validation tests",
+          "description": "Test manifest.json files for required fields, correct types, and valid versioning.",
+          "priority": "high",
+          "status": "pending"
+        },
+        {
+          "id": "170.2",
+          "title": "Add tool definition tests",
+          "description": "Validate tool JSON definitions including input, output, and description fields.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "170.3",
+          "title": "Add knowledge bundle tests",
+          "description": "Validate knowledge bundles for correct metadata and content structure.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "170.4",
+          "title": "Add schema validation tests",
+          "description": "Validate JSON schemas for correctness and compatibility with OKF bundle structure.",
+          "priority": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "170.5",
+          "title": "Add CI integration",
+          "description": "Integrate OKF bundle tests into CI pipeline to prevent invalid bundles from being deployed.",
+          "priority": "low",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 171,
+      "title": "Project Scanner Module \u2013 Remote scan of Main PC from Dell 630 (Dell 630 scans Main PC over LAN)",
+      "description": "Create a configurable \"project scanner\" that runs on the Dell 630 (Helix agent + OKF server in separate Proxmox VMs) and remotely scans the Main PC (where coding/development happens) over the local network. Must support a programmable list of projects + per-PC and per-project settings in config. Outputs structured trees suitable for Mermaid (primary) / OKF bundles. Note: User clarified possible confusion between Markmap and Mermaid \u2014 primary focus is Mermaid diagrams (already supported in schema from task 167).",
+      "status": "pending",
+      "dependencies": [
+        167
+      ],
+      "priority": "high",
+      "details": "Corrected architecture from user:\n- Helix agent lives on Dell 630 (Proxmox VM)\n- OKF server also on Dell 630 (separate Proxmox VM)\n- Main PC is the target machine where actual coding occurs\n- ALL scanning is remote over local network (Dell 630 \u2192 Main PC)\n\nKey requirements:\n1. Add config section [helix.project_scanner] + [[helix.projects]] array in config.toml.\n2. Per-project settings: name, target_machine (\"main-pc\"), remote_path, protocol (smb | ssh | http | local), include/exclude globs, max_depth.\n3. Per-PC settings block for hosts, auth methods, credentials placeholders.\n4. Core scanner capable of local walks today + remote access (start with mounted SMB share or stub for SSH/file-server).\n5. Rich output metadata: source_machine=\"main-pc\", scanned_from=\"dell630\", timestamp, file counts, etc.\n6. Reuse/extend existing scan_directory + generate_mermaid_project_map from task 167.\n7. Expose as tool: scan_projects (and scan_remote_project).\n8. Output must be directly usable for OKF knowledge entries (content_type \"file-tree\" or \"project-map\").\n\nRemote access strategy options:\n- SMB/CIFS share mounted on Dell 630 pointing to Main PC\n- SSH from Dell 630 to Main PC\n- Small dedicated file-server or agent running on Main PC that Helix calls\n\nMermaid priority: Generate Mermaid file-tree / project-map diagrams (not Markmap for now, unless user confirms otherwise).",
+      "testStrategy": "Configure a project in config pointing at a network path (or local mount for dev). Run scanner from Dell 630 context and verify output contains correct source_machine/scanned_from metadata + usable tree for Mermaid generation. Test include/exclude and depth limits.",
+      "subtasks": [
+        {
+          "id": "171.1",
+          "title": "Design and add [helix.project_scanner] + [[projects]] config schema",
+          "status": "pending"
+        },
+        {
+          "id": "171.2",
+          "title": "Implement core ProjectScanner module (walk + filters + metadata)",
+          "status": "pending"
+        },
+        {
+          "id": "171.3",
+          "title": "Add structured output types (ProjectTree, ProjectScanResult) with cross-machine fields",
+          "status": "pending"
+        },
+        {
+          "id": "171.4",
+          "title": "Expose as tool (scan_projects / scan_remote_project) and wire into list_tools + OKF",
+          "status": "pending"
+        },
+        {
+          "id": "171.5",
+          "title": "Add remote scan stub + network config placeholders (SMB/SSH/http)",
+          "status": "pending"
+        },
+        {
+          "id": "171.6",
+          "title": "Unit + integration tests + example config for Main PC scanning",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 172,
+      "title": "Markmap Generator Module (structure + notes \u2192 Markmap Markdown)",
+      "description": "Create a module that converts directory structure (from Project Scanner) + optional notes into Markmap-compatible Markdown format for mindmaps. Research showed no direct Rust crate on crates.io for Markmap generation (it's primarily a JS ecosystem tool: markmap-lib). We will implement a pure Markdown generator that produces valid Markmap syntax.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [
+        171,
+        167
+      ],
+      "details": "1. Research / confirm Markmap Markdown syntax (## Title, - item, indentation for hierarchy).\n2. Implement MarkmapGenerator that takes ProjectTree (or similar) and produces .mm.md or raw markdown.\n3. Support enriching with notes / descriptions from OKF knowledge or .md files.\n4. Add optional metadata header (source, generated_at, project).\n5. Expose as tool: generate_markmap.\n6. Output should be consumable by the Bundle Builder.\n7. Later: consider calling JS markmap via process or web service if richer rendering needed.\nTest: Feed a scanned project and produce valid markmap markdown that renders in markmap.app or VSCode Markmap extension.",
+      "testStrategy": "Generate markmap from a real project scan. Verify syntax is valid and hierarchy is preserved. Manual test in markmap viewer.",
+      "subtasks": [
+        {
+          "id": "172.1",
+          "status": "pending",
+          "title": "Document Markmap Markdown format and implement generator"
+        },
+        {
+          "id": "172.2",
+          "status": "pending",
+          "title": "Integrate with ProjectScanner output (ProjectTree \u2192 Markmap)"
+        },
+        {
+          "id": "172.3",
+          "status": "pending",
+          "title": "Support injecting notes / descriptions into map nodes"
+        },
+        {
+          "id": "172.4",
+          "status": "pending",
+          "title": "Add generate_markmap tool + registration"
+        },
+        {
+          "id": "172.5",
+          "status": "pending",
+          "title": "Add tests and example output"
+        }
+      ]
+    },
+    {
+      "id": 173,
+      "title": "OKF Bundle Builder Module (auto-generate bundles)",
+      "description": "Create an automatic OKF Bundle Builder that assembles project scans, markmaps, mermaid diagrams, and metadata into valid OKF bundle manifests + knowledge entries. This is the core automation layer for turning local/remote scans into shareable OKF knowledge.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [
+        171,
+        172,
+        167
+      ],
+      "details": "1. Define BundleBuilder struct that collects:\n   - Tools (optional)\n   - Knowledge entries (file-trees, markmaps, mermaid, change logs, etc.)\n   - Metadata (source_machine, version, generated_at)\n2. Implement logic to package scanner output + markmap output into OkfKnowledgeEntry with correct content_type.\n3. Support multiple projects in one bundle or separate bundles.\n4. Auto-increment or manage semantic versions.\n5. Write bundle to disk (manifest.json + knowledge files) or return in-memory.\n6. Integrate with existing OkfBundleManifest / validator.\n7. Add CLI / tool: build_okf_bundle.\nTest: End-to-end from scan \u2192 markmap \u2192 bundle that passes validator.",
+      "testStrategy": "Build a complete bundle from a scanned project + generated markmap. Validate the resulting manifest against the schema and load it via OkfLibrarian.",
+      "subtasks": [
+        {
+          "id": "173.1",
+          "status": "pending",
+          "title": "Design BundleBuilder API and data flow"
+        },
+        {
+          "id": "173.2",
+          "status": "pending",
+          "title": "Implement assembly of knowledge entries from scanner + markmap + mermaid"
+        },
+        {
+          "id": "173.3",
+          "status": "pending",
+          "title": "Add version management and bundle metadata"
+        },
+        {
+          "id": "173.4",
+          "status": "pending",
+          "title": "Write bundle to OKF format (manifest + embedded or external knowledge)"
+        },
+        {
+          "id": "173.5",
+          "status": "pending",
+          "title": "Expose build_okf_bundle tool and integration tests"
+        }
+      ]
+    },
+    {
+      "id": 174,
+      "title": "Remote Uploader Module for OKF Bundles",
+      "description": "Implement a module that POSTs generated OKF bundles (manifest + knowledge) to the central OKF server (e.g. on Dell 630 / Proxmox). Supports authentication, retries, and ETag / versioning awareness.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [
+        173,
+        169
+      ],
+      "details": "1. Use existing OkfFetcher or new HttpUploader (reqwest).\n2. Endpoints to support: POST /okf/bundles/{id} or /upload.\n3. Handle bundle payload (JSON manifest + base64 or multipart for large knowledge).\n4. Add config for server_url, auth_token, retry policy.\n5. Support dry-run and force-upload.\n6. Return upload result with new version / ETag.\n7. Integrate after Bundle Builder (auto-upload option).\n8. Add tool: upload_okf_bundle.\nTest: Upload a test bundle to a running OKF server and verify it appears in registry.",
+      "testStrategy": "Manual + automated test uploading a small bundle to localhost OKF server. Verify server receives it and Helix can later fetch it.",
+      "subtasks": [
+        {
+          "id": "174.1",
+          "status": "pending",
+          "title": "Create RemoteUploader with POST logic and auth"
+        },
+        {
+          "id": "174.2",
+          "status": "pending",
+          "title": "Support bundle serialization (manifest + knowledge payload)"
+        },
+        {
+          "id": "174.3",
+          "status": "pending",
+          "title": "Add retry, error handling, and progress logging"
+        },
+        {
+          "id": "174.4",
+          "status": "pending",
+          "title": "Add upload_okf_bundle tool + config integration"
+        },
+        {
+          "id": "174.5",
+          "status": "pending",
+          "title": "End-to-end upload test from BundleBuilder"
+        }
+      ]
+    },
+    {
+      "id": 175,
+      "title": "OKF Bundle Indexer (registry + version updater)",
+      "description": "Create a Bundle Indexer that, after a bundle is built or uploaded, updates the local OKF registry, index file, and version tracking. Works together with hot-reload and poller so newly built bundles become immediately available.",
+      "priority": "high",
+      "status": "pending",
+      "dependencies": [
+        173,
+        165
+      ],
+      "details": "1. Implement indexer that:\n   - Reads newly built bundle\n   - Updates OkfRegistry\n   - Writes okf_index.json\n   - Increments / records version\n2. Support both local build and post-upload indexing.\n3. Hook into hot-reload or provide explicit index_bundle() method.\n4. Emit events or logs for the poller / agents.\n5. Add tool: index_okf_bundle or auto-index after build.\n6. Ensure compatibility with existing OkfLibrarian and validator.\nTest: After building a bundle, indexer updates the live registry so list_okf_tools / try_execute_okf_tool sees new knowledge.",
+      "testStrategy": "Build a bundle \u2192 run indexer \u2192 verify registry now contains the new knowledge/tools and summary reflects the update.",
+      "subtasks": [
+        {
+          "id": "175.1",
+          "status": "pending",
+          "title": "Implement core BundleIndexer logic (update registry + write index)"
+        },
+        {
+          "id": "175.2",
+          "status": "pending",
+          "title": "Version tracking and conflict resolution"
+        },
+        {
+          "id": "175.3",
+          "status": "pending",
+          "title": "Integrate with BundleBuilder (post-build indexing)"
+        },
+        {
+          "id": "175.4",
+          "status": "pending",
+          "title": "Add index_okf_bundle tool and CLI hook"
+        },
+        {
+          "id": "175.5",
+          "status": "pending",
+          "title": "Ensure poller / hot-reload respects indexed bundles"
+        }
+      ]
+    },
+    {
+      "subtasks": [
+        {
+          "status": "pending",
+          "title": "Research MCP spec and upstream implementation plan",
+          "id": "176.1"
+        },
+        {
+          "status": "pending",
+          "title": "Add MCP client: connect to external MCP servers and expose as Helix tools",
+          "id": "176.2"
+        },
+        {
+          "status": "pending",
+          "title": "Add MCP server mode: expose Helix tools/resources via MCP",
+          "id": "176.3"
+        },
+        {
+          "status": "pending",
+          "title": "Map Helix tool system + OKF tools to MCP protocol",
+          "id": "176.4"
+        },
+        {
+          "status": "pending",
+          "title": "Config + installer support for MCP (servers to connect to, exposed capabilities)",
+          "id": "176.5"
+        },
+        {
+          "status": "pending",
+          "title": "Documentation, examples, and end-to-end testing with real MCP servers",
+          "id": "176.6"
+        }
+      ],
+      "id": 176,
+      "description": "New MCP support is coming in the base project / Grok-CLI at the end of the month. Plan and implement MCP integration into Helix (tools, resources, prompts, server/client capabilities).",
+      "details": "MCP (Model Context Protocol) is being added upstream end of month.\\n\\n1. Research MCP spec (tools, resources, prompts, sampling, roots).\\n2. Add MCP client support so Helix can call external MCP servers.\\n3. Add MCP server capability so external clients can use Helix tools/resources.\\n4. Map Helix tools to MCP tool definitions.\\n5. Integrate with existing OKF librarian + tool system.\\n6. Update installer, config, and web UI if MCP endpoints are exposed.\\n7. Add docs and example MCP server configs.\\n8. Test with common MCP servers (filesystem, git, browser, etc.).",
+      "dependencies": [],
+      "status": "pending",
+      "testStrategy": "Helix can act as MCP client (call external MCP tools) and optionally as MCP server. Existing tools continue to work. Integration with OKF is clean.",
+      "title": "Integrate / adopt MCP (Model Context Protocol) - new upstream version end of month",
+      "priority": "high"
+    },
+    {
+      "dependencies": [],
+      "description": "grok-cli and Helix speak different OKF protocols today; define ONE canonical v1 contract and contract-test both clients against it.",
+      "details": "2026-10-04 FINDING (John's Drive upload): the 'OKF server software' is byte-identical to Helix's own src/okf/ module \u2014 there is no standalone server. KEY INSIGHT: Helix was designed to BE its own OKF server: src/io/web_server/mod.rs already mounts /okf/status, /okf/registry, /okf/health, /okf/schema, POST /okf/webhook (public) and POST /okf/reload, /okf/reload/force, /okf/manifest (protected), gated on [helix.okf] enabled (default false). BUT Helix's own fetcher (src/okf/fetcher.rs) requests endpoints the server does NOT mount: GET /okf/manifest.json, GET /okf/bundles/{id}/manifest.json, GET /okf/knowledge/{kid}. So Helix cannot serve itself \u2014 the server half and client half disagree on paths. The v1 protocol MUST reconcile the mounted routes with what the fetcher (and grok-cli) expect; do not design in a vacuum. GROUND TRUTH (verified 2026-10-04 against actual code): the two OKF clients were built against different imagined servers. Helix (src/okf/fetcher.rs) expects: GET {base}/okf/manifest.json, GET {base}/okf/bundles/{id}/manifest.json, GET {base}/okf/knowledge/{kid}, GET {base}/okf/health, optional Bearer auth_token, ETag/If-None-Match. grok-cli expects: POST {http(s)}://{server}:{port}/api/traces (default port 8080, 10s timeout, buffer-on-failure; src/workflow/okf.rs), POST {remote_url}/bundles/{bundle}/concepts (15s timeout; src/tools/okf_tools.rs push_concept_to_remote). grok-cli has NO remote fetch; Helix has NO push/trace. No single server satisfies both. CANONICAL v1 PROPOSAL (minimizes churn \u2014 Helix reads stay as-is): GET /okf/health -> 200 {\"status\":\"ok\"}; GET /okf/manifest.json and GET /okf/bundles/{id}/manifest.json -> manifest matching okf_bundle_schema.json (required: id, version); GET /okf/knowledge/{kid} -> document; POST /okf/traces (JSON WorkflowTrace, was grok-cli /api/traces); POST /okf/bundles/{bundle}/concepts (JSON OkfConcept, was grok-cli /bundles/{b}/concepts). Optional Bearer auth on all; ETag/If-None-Match on GETs; JSON error bodies {\"error\": ...}. WORK: write PROTOCOL.md (repo root or src/okf/) documenting every endpoint with request/response examples; update any Helix paths that deviate; grok-cli retarget is task grok-cli#480 (cross-repo \u2014 coordinate, do not duplicate). Contract tests: mock HTTP server asserting exact paths, methods, auth headers, ETag round-trip, and shape conformance to okf_bundle_schema.json.",
+      "id": 207,
+      "results": "PROTOCOL.md written at repo root (unified OKF v1: canonical /okf/* paths, auth/ETag/error conventions, client mapping table, migration notes). 6 Helix fetcher contract tests green against mockito mock server (canonical paths, Bearer, ETag 304 round-trip, schema conformance). No deviating paths remained in bot-repo; legacy grok-cli paths documented in PROTOCOL.md migration notes only.",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": 207.1,
+          "title": "Write PROTOCOL.md v1 with request/response examples",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 207.2,
+          "title": "Contract tests: Helix fetcher against mock server",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 207.3,
+          "title": "Update OKF docs/comments to the canonical paths",
+          "status": "done",
+          "dependencies": []
+        }
+      ],
+      "testStrategy": "Contract tests green against a mock server for every endpoint in PROTOCOL.md (both clients). grep proves no remaining '/api/traces' or unprefixed '/bundles/' references in either client after grok-cli#480. Existing okf unit tests still green.",
+      "title": "Define the unified OKF server protocol v1 (both clients, one contract)",
+      "priority": "high"
+    },
+    {
+      "dependencies": [
+        207
+      ],
+      "description": "No OKF server implementation exists anywhere reachable; build the minimal reference server per PROTOCOL.md v1.",
+      "details": "2026-10-04 REFRAME: no standalone server exists or is needed yet \u2014 Helix already contains the server half (see task 207 finding). This task is now: complete/wire the IN-Helix OKF server \u2014 enablement path ([helix.okf] enabled), reconcile mounted routes with the v1 protocol from 207, verify Helix can fetch from itself, systemd/deploy notes for the Ubuntu box. Only build a separate standalone server if John asks for it. FINDING (2026-10-04): searched ~/workspace (client code only), the Drive helix folder (schema + sample manifest + deploy notes only), and the micro-tech GitHub org (no okf repo) \u2014 there is no OKF server implementation anywhere reachable. 'It doesn't work' because it was never built. DECISION FOR JOHN BEFORE STARTING: repo home (suggest new micro-tech/okf-server) and deploy target (the Ubuntu box on the R630). Do not start until he confirms. BUILD (Rust + axum, matches his stack): serve a bundle directory on disk. GET /okf/health -> {\"status\":\"ok\"}; GET /okf/manifest.json and /okf/bundles/{id}/manifest.json (ETag support); GET /okf/knowledge/{kid}; POST /okf/traces (append JSONL); POST /okf/bundles/{bundle}/concepts (append concept, update manifest). Optional Bearer auth via env var; bind 127.0.0.1 default, LAN bind explicit. Ship with a systemd unit example and the diagnostic curl commands from the 2026-10-04 runbook.",
+      "id": 208,
+      "results": "In-Helix OKF server completed (no standalone built -- reframed per 2026-10-04 finding). New v1 routes: GET /okf/manifest.json, GET /okf/bundles/{id}/manifest.json, GET /okf/knowledge/{kid}, POST /okf/traces (202, JSONL append to [helix.okf] trace_file), POST /okf/bundles/{bundle}/concepts (201, inserts knowledge entry + persists index). Librarian retains current_manifest; ETag/304 on manifest GETs; /okf/health returns status:ok. New require_okf_write_token middleware accepts web token OR okf auth_token Bearer, fail-open when neither configured. config.toml [helix.okf] documents v1 + trace_file; deploy runbook in PROTOCOL.md. Tests: 3 self-fetch integration tests green (Helix fetches from itself); full lib suite 263 passed, 0 failed; zero new warnings.",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": 208.1,
+          "title": "Scaffold axum server + bundle-dir layout",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 208.2,
+          "title": "Read endpoints: health, manifest(s), knowledge (+ETag)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 208.3,
+          "title": "Write endpoints: traces + concepts (JSONL append)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 208.4,
+          "title": "Bearer auth, bind policy, systemd unit example",
+          "status": "done",
+          "dependencies": []
+        }
+      ],
+      "testStrategy": "The contract tests from task 207 run green against the real server (not a mock). Manual: curl the runbook commands on the Ubuntu box, compare shapes to okf_bundle_schema.json.",
+      "title": "Complete the in-Helix OKF server (no standalone needed)",
+      "priority": "medium"
+    },
+    {
+      "dependencies": [],
+      "description": "The 2026-10-05 mega-batch (tasks 187-208) added 8 new dead-code/unused warnings to cargo check --lib (9 baseline lines -> 17). None break the build, but two need judgment calls (rule_layer never read; web_server config fields never read). Clean them so the tree is warning-free again.",
+      "details": "FILED BY QUARTERMASTER 2026-10-05 ~05:00 EDT. METHOD: stashed the mega-batch working tree, ran cargo check --lib --message-format=short (9 unique warning lines), unstashed, re-ran (17 lines). Diff = 8 new lines, all in mega-batch code. RULED OUT: pre-existing warnings untouched (unix_socket x3, okf/fetcher resp, okf/registry Path import, tools/mod other, runtime_trace i, cpu/mod target (line shifted 916->1274 only), build-script std::env). NEW WARNINGS: (1) src/acp/agent.rs:22 unused import crate::agents::simple_planner::SimplePlanner -- the module docs explicitly say SimplePlanner is NOT used; delete the import. (2) src/agents/runtime_loop.rs:13 field rule_layer: RuleLayer never read -- constructor stores it, no method reads self.rule_layer. FUNCTIONAL QUESTION, not just lint: was the rule layer supposed to validate/retry steps in the loop (tasks 157/158 Tool Supervisor v2)? Wire it or allow(dead_code) with a comment; do not blindly underscore. (3)-(7) src/io/web_server/mod.rs -- Config.helix, Config.heartbeat, HelixConfig.name, OllamaConfig.url/model, WebConfig.port, HeartbeatConfig.interval_seconds never read. These are #[derive(Deserialize)] config-schema structs from the UI rework (193-198); check WebConfig.port especially (where does the server get its bind port? if from elsewhere, flag the inconsistency). (8) src/tools/project_scanner.rs:326 walk_ssh_directory (cfg(not(feature=ssh)) fallback) flagged never-used -- CHECK ARTIFACT, not real dead code: it IS called by test_ssh_walk_fallback_when_feature_disabled (line 669, cfg(test)); cargo check --lib does not compile test code. Verify with cargo check --lib --tests that the warning vanishes, then cfg_attr(not(test), allow(dead_code)) with comment. OBSERVATION (not a warning, for the repair plan): src/tools/project_scanner.rs:57-63 hardcodes \"youruser\" and None key_path with TODOs to load from scanner_cfg.machines[target_machine] -- the real SSH path cannot authenticate until pending task 171 lands. Not a new failure; noted so the plan accounts for it.",
+      "id": 210,
+      "status": "done",
+      "subtasks": [
+        {
+          "id": 210.1,
+          "title": "Remove dead import; silence check-artifact warning",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 210.2,
+          "title": "Config-schema structs: allow(dead_code) or wire fields",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 210.3,
+          "title": "Decide the fate of RuntimeLoop.rule_layer",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 210.4,
+          "title": "Re-verify warning-free plus full lib suite",
+          "status": "done",
+          "dependencies": [
+            210.1,
+            210.2,
+            210.3
+          ]
+        }
+      ],
+      "testStrategy": "cargo check --lib --bins --tests emits zero warnings (compare against the 9-line pre-existing baseline); cargo test --lib still 263 passed, 0 failed.",
+      "title": "Warning cleanup: 8 new dead-code warnings from the mega-batch",
+      "priority": "medium",
+      "results": "DONE 2026-10-05 ~06:15 EDT by Ranger 1. All 8 warnings eliminated; cargo check --lib --bins shows only pre-existing baseline lines. 210.1: deleted dead SimplePlanner import (acp/agent.rs); walk_ssh_directory silenced via cfg_attr(not(test), allow(dead_code)) with comment (only caller is the cfg(test) fallback test). 210.2: #[allow(dead_code)] + why-comments on web_server parse-schema mirror fields; bind port confirmed to arrive via the start_web_server() argument from main.rs (schema field redundant, documented). 210.3: rule_layer WIRED per plan - RuntimeLoop::run() validates every ToolCall via RuleLayer::validate before execution; rejections land in the transcript (recoverable), consume step budget (no infinite spin), consecutive-call counter resets on non-tool decisions; ACP allowlist fixed to [system_status] (empty set would have rejected its own grounding call). 210.4: full lib suite 265 passed (263 + 2 new runtime_loop tests), 0 failed, 4 ignored. CHALLENGES: (a) walk_ssh warning does NOT vanish under cargo check --lib --tests (lib target still warns); cfg_attr approach verified correct instead. (b) tests/integration_harness.rs and other tests/*.rs are PRE-EXISTING broken (old bot:: crate name, 18 E0433 on base commit) - blocks cargo check --tests; NOT fixed (out of scope), noted in CHANGELOG. DEVIATION: added 2 unit tests for the new wiring (wiring an untested safety check without tests would be malpractice)."
+    },
+    {
+      "dependencies": [
+        210
+      ],
+      "description": "tests/integration_harness.rs and other tests/*.rs reference the old bot:: crate name, so cargo check --tests fails with 18 E0433 errors. Port them to the helix:: crate name.",
+      "details": "1) Confirm the lib crate name in Cargo.toml (package helix, src/lib.rs => crate helix). 2) Mechanically replace bot:: with helix:: in tests/*.rs and tests/scenarios/*.rs - no behavior changes. 3) cargo check --tests must be error-free. 4) Fix any follow-on errors (renamed/moved modules) minimally, keeping the tests' original intent. 5) Full cargo test (lib + integration + doctests) must be green.",
+      "id": 211,
+      "status": "done",
+      "subtasks": [],
+      "testStrategy": "cargo check --tests: zero errors. cargo test: lib + integration + doctests all green, 0 failures.",
+      "title": "Port tests/*.rs to the current crate name (fix 18 E0433)",
+      "priority": "high",
+      "results": "DONE 2026-10-05. (1) bot:: -> helix:: across tests/*.rs + tests/scenarios/*.rs: 18 E0433 gone, cargo check --tests clean. (2) integration_harness: blocking std mpsc recv() inside tokio::spawn wedged the single-threaded test executor (whole binary hung) -> spawn_blocking, subscribe-before-spawn to break the Arc<Bus> keep-alive cycle; two scenario tests switched to publish_and_wait; dropped unused anyhow::Result import. (3) planner_v2_tests: hoisted Dummy with a message-driven Planner impl matching the assertions. (4) REAL PRODUCTION BUG in src/okf/api.rs okf_traces: tokio::fs::File pipelines writes, so write_all Ok did not mean written - 202 was returned before the JSONL line was visible (proven with minimal repro). Now flush().await after write; unique trace file per OKF test. (5) runtime_end_to_end_test: SimplePlanner's noop was never a registered tool (supervisor FatalError -> halt at step 0) -> local StatusPlanner calling real read-only system_status. (6) runtime_loop.rs: FinalAnswer branch now records the terminal step (was breaking before record_step, leaving step_count 0). (7) Two broken doctests fixed (env block -> text; async example -> ignore); reflection_planner_adapter_test: 5 unused imports removed. Full suite: lib 265x2, integration 12+3+3+1+2+1+1+1+1, doctests - 0 failures. No new warnings. CHALLENGES: the tokio pipelined-write finding took isolated repro tests to pin down (write_all Ok + immediate read -> empty); the integration_harness hang needed two fixes (spawn_blocking, then the Arc cycle). DEVIATIONS: small production changes where tests exposed real bugs (okf flush, terminal step recording) - documented in CHANGELOG."
+    },
+    {
+      "dependencies": [],
+      "description": "One unused-import warning at src/ssh/mod.rs:13, missed by task 210's warning cleanup. Re-filed by the Quartermaster's 2026-10-08 nightly run (a prior filing was wiped by the Oct-7-morning tree reset, never committed).",
+      "details": "Remove the unused import at src/ssh/mod.rs:13. Trivial single-line fix; do not touch anything else. (Reconstructed 2026-10-08 after the working-tree filing was lost; see nightly-quartermaster-run/hidden_files/run-2026-10-08.md.)",
+      "id": 212,
+      "priority": "low",
+      "status": "pending",
+      "subtasks": [],
+      "testStrategy": "cargo build shows no warning at src/ssh/mod.rs:13; no new warnings elsewhere.",
+      "title": "Clear the unused-import warning at src/ssh/mod.rs:13"
+    },
+    {
+      "dependencies": [],
+      "description": "6 lib tests fail at b7f76b3 (baseline e0fa353: 265 passed / 0 failed / 4 ignored; now 259 passed / 6 failed / 4 ignored). Root cause: John's commit abc747f (merged via PR #10 master->PreRelese) enabled [mcp] enabled=true and the google server in the repo config.toml; the tests assume the worktree config leaves MCP disabled.",
+      "details": "Failing tests: (1) mcp_client::tests::disabled_by_default_from_worktree_config - assert!(!is_enabled()) at src/mcp_client/mod.rs:165 fails because config now enables MCP. (2) mcp_client::tests::try_execute_returns_none_for_mcp_names_when_disabled - try_execute(mcp__google__gmail_search) returns Some(spawn error) instead of None; it tried to spawn /home/cobble/.local/bin/google-mcp which does not exist in this sandbox. (3-6) a2a::a2a_handler::tests::message_send_creates_and_completes_task, cancel_terminal_task_is_noop, acp::agent::tests::run_prompt_produces_final_answer, run_prompt_unknown_session_still_runs - panic at src/mcp_client/mod.rs:103: 'can call blocking only when running on the multi-threaded runtime' via bridge()/block_in_place, because the tests now take the MCP-enabled path on a current-thread runtime. REPAIR DIRECTION: make the tests hermetic - point them at an isolated test config (or env-gated fixture) instead of the worktree config.toml. Do NOT just re-disable [mcp] in config.toml: John enabled it deliberately for his deployment (google-mcp binary at /home/cobble/.local/bin/google-mcp on the R630). Check how is_enabled() locates config.toml and inject a test override. RULED OUT: build is green (exit 0), no new warnings (11 unique, all pre-existing; 5 fixed by the same merges), no disk issues (this was a clean rerun after /tmp was freed; grok-cli fully green). Full failure output: ~/workspace/goals/nightly-quartermaster-run/hidden_files/qm-20261008-bot-test.log\n\nSURVEYOR 1 REPAIR PLAN (2026-10-08, verified by backtrace \u2014 planning only, no code touched): GOAL: make the lib unit tests hermetic w.r.t. the worktree config.toml's [mcp] section. Zero production behavior change; John's enabled [mcp] + google server entry in config.toml stays exactly as he committed it (abc747f). VERIFIED ROOT CAUSE: #[tokio::test] defaults to current_thread flavor (backtrace shows current_thread::Core driving the test fn \u2014 NOT multi-thread). mcp_client::bridge() does Handle::try_current() -> Ok -> block_in_place, which panics on current-thread runtimes. With [mcp] enabled, the 4 agent-loop tests reach bridge() via describe_tools_for_prompt -> tool_definitions -> mcp_client::tool_definitions. Production unaffected (tokio::main is multi-thread; no current_thread runtime anywhere in src/). ALSO SPOTTED: 2 false-green tests pass only because the spawn of the absent google-mcp binary fails; on John's R630 (binary present) they'd attempt real MCP handshakes in unit tests.\n\nPHASES: (1) hermetic config plumbing in src/mcp_client/mod.rs only (HELIX_MCP_CONFIG_PATH env override + #[cfg(test)] default when CONFIG_PATH unset); (2) rewrite the 2 worktree-coupled tests; (3) the 4 a2a/acp tests need NO edits (Phase 1b makes is_enabled() false); (4) full lib suite green with John's enabled config.toml untouched + CHANGELOG entry, commit on PreRelese, push on John's cards. REJECTED: re-disabling [mcp] (John's deliberate deployment choice), multi_thread test flavor (would attempt real spawns on equipped machines), .cargo/config [env] (would neuter local dev runs), reworking bridge() (production change, zero production benefit \u2014 deferred). RISKS: bridge() still panics on current-thread runtimes (future prod hazard \u2014 follow-up candidate); no hermetic enabled-path spawn coverage (fake-stdio fixture \u2014 follow-up). (Reconstructed 2026-10-08 after the working-tree filing was lost; see nightly-quartermaster-run/hidden_files/run-2026-10-08.md.)",
+      "id": 213,
+      "priority": "high",
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": "213.1",
+          "title": "Phase 1: hermetic config plumbing in src/mcp_client/mod.rs (HELIX_MCP_CONFIG_PATH + #[cfg(test)] default)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "213.2",
+          "title": "Phase 2: rewrite the 2 worktree-coupled mcp_client tests",
+          "status": "pending",
+          "dependencies": [
+            "213.1"
+          ]
+        },
+        {
+          "id": "213.3",
+          "title": "Phase 3: verify the 4 a2a/acp tests need no edits",
+          "status": "pending",
+          "dependencies": [
+            "213.1"
+          ]
+        },
+        {
+          "id": "213.4",
+          "title": "Phase 4: full lib suite green + CHANGELOG, commit on PreRelese",
+          "status": "pending",
+          "dependencies": [
+            "213.2",
+            "213.3"
+          ]
+        }
+      ],
+      "testStrategy": "cargo test lib suite: 265 passed / 0 failed / 4 ignored with John's [mcp] enabled=true config.toml byte-identical to his commit abc747f.",
+      "title": "Fix 6 lib test failures from [mcp] enabled=true in repo config.toml (PR #10 merge)"
+    },
+    {
+      "dependencies": [],
+      "description": "New LLM tool so any backend (the 'commander' John chats with) can spin up a sub-agent on a chosen backend. This is the missing piece John hit on 2026-10-08: 'run a sub agent to plan out a bot app in rust' got clarifying questions because no such tool exists in src/tools/mod.rs.",
+      "details": "New file src/tools/subagent_tool.rs (or add to system_tools.rs \u2014 Ranger's call, keep it consistent with the module layout). Tool name: spawn_subagent. Params: task (string, required) \u2014 the marching orders; backend (string, optional) \u2014 one of local_ollama | lan_ollama | gemini | grok | auto (default auto); role_hint (string, optional) \u2014 planner | builder | reviewer | ui | free text. Dispatch design: reuse the A2A task-creation pattern (a2a/tasks.rs TaskStore::create) and run the prompt on the shared agent runtime loop (acp/agent.rs run_prompt) bound to the selected backend, exactly like a2a_handler.rs handle_message_send does with tokio::spawn. When backend=auto (or omitted), build a RoutingContext from the task text and call router::route() for the pick. Return to the commander: task id, chosen backend, and the sub-agent's final message (block with a configurable timeout; on timeout return partial status + task id so the commander can poll). Guardrails (non-negotiable): max spawn depth (a sub-agent may NOT spawn sub-agents beyond depth 1 \u2014 pass depth in and enforce, prevents infinite delegation loops); API-backend calls increment the spend counter used by task 217. Wire into execute() match in src/tools/mod.rs AND add the JSON schema to static_tool_definitions() (the file's own docs demand they stay in sync; there is a test asserting definitions are stable). Branch: PreRelese. Update CHANGELOG.md.\n\n[Ranger 1 2026-10-08] Built. Deviations from plan: (1) did NOT reuse A2A TaskStore/run_prompt \u2014 no global TaskStore exists and run_prompt's AcpPlanner can only call system_status, useless for real sub-agent work. The runner drives the backend's native chat-with-tools loop (Ollama) or single-shot prompt (Gemini) instead. (2) On timeout the worker is cancelled; no poll-after-timeout registry (follow-up candidate). (3) Grok returns 'not implemented' \u2014 no client exists in the codebase. All 8 subagent + 4 spend unit tests pass; 6 pre-existing suite failures (a2a/acp/mcp_client) confirmed unrelated via clean-tree run. Zero new warnings.",
+      "id": 214,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "214.1",
+          "title": "Design spawn_subagent schema (params: task, backend, role_hint)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": "214.2",
+          "title": "Implement dispatch via A2A task store + agent runtime loop, backend selectable",
+          "status": "done",
+          "dependencies": [
+            "214.1"
+          ]
+        },
+        {
+          "id": "214.3",
+          "title": "Wire into execute() and static_tool_definitions()",
+          "status": "done",
+          "dependencies": [
+            "214.2"
+          ]
+        },
+        {
+          "id": "214.4",
+          "title": "Guardrails: max spawn depth, timeout, spend-counter hook",
+          "status": "done",
+          "dependencies": [
+            "214.2"
+          ]
+        }
+      ],
+      "testStrategy": "Unit tests: schema registered in tool_definitions() and execute('spawn_subagent', \u2026) dispatches (mock the runtime loop). Depth-limit test: nested spawn attempt is refused with a clear message. Integration: spawn a trivial sub-agent task end-to-end in a test harness and assert the commander's tool result contains the sub-agent's final message. Full: cargo test, zero new warnings (repo convention).",
+      "title": "Add spawn_subagent tool (commander delegation)"
+    },
+    {
+      "dependencies": [
+        214
+      ],
+      "description": "Teach each backend's chat prompt that it is a commander: when John asks for work, delegate via spawn_subagent instead of doing it inline or interrogating him. Without this, even with the tool present, models default to chatbot behavior (what John saw).",
+      "details": "Locate the system-prompt assembly point on the web-UI chat path for each backend (Ollama path: src/io/ollama/llm.rs + mod.rs; Gemini path: src/io/llm_gemini/). Add a commander block, roughly: 'You are the commander. When the user asks for work to be done, break it down and delegate pieces with the spawn_subagent tool, choosing the backend per piece (local for fast/cheap, Gemini/Grok for heavy). Do not do the work yourself inline and do not ask clarifying questions when the request is actionable \u2014 act. Report back a concise summary when sub-agents finish.' Make it config-gated: [helix.commander] enabled = true (default true once task 214 lands), so John can switch a backend back to plain-chat. Keep the prompt short \u2014 local models have small context windows. Branch: PreRelese. Update CHANGELOG.md.\n\n[Ranger 1 2026-10-08] Built. Finding: NO system prompt existed on any chat path \u2014 models got zero instructions. Created the assembly point: commander_system_message() helper; Ollama call_ollama_tools prepends it; Gemini call_gemini adds system_instruction. Gate: [helix.commander] enabled (default true), parsed in main.rs, env HELIX_COMMANDER_ENABLED override. 2 snapshot tests pass.",
+      "id": 215,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "215.1",
+          "title": "Locate system-prompt assembly per backend (Ollama + Gemini)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": "215.2",
+          "title": "Add commander prompt block",
+          "status": "done",
+          "dependencies": [
+            "215.1"
+          ]
+        },
+        {
+          "id": "215.3",
+          "title": "Config gate [helix.commander] enabled",
+          "status": "done",
+          "dependencies": [
+            "215.2"
+          ]
+        }
+      ],
+      "testStrategy": "Snapshot test on the assembled system prompt (contains the commander block + spawn_subagent mention when enabled; absent when disabled). Manual: John's live UI check is task 218.",
+      "title": "Commander system prompt for backends"
+    },
+    {
+      "dependencies": [
+        214
+      ],
+      "description": "Routines today are name+schedule only \u2014 firing publishes routine_run with just id/name to the CPU. John wants agents that start late at night, do a task, and stop (like the twice-daily mail check). Extend Routine to carry the job.",
+      "details": "In src/cron/registry.rs extend Routine with: agent_role (string, e.g. 'quartermaster' or free text), task (string, the prompt), backend (string, same enum as spawn_subagent incl. auto), all serde-defaulted so existing routines keep working. spawn_scheduler: include the payload in the routine_run bus message. CPU/heartbeat job-pump: handle routine_run WITH payload by dispatching through the same path as spawn_subagent (task 214's dispatch fn \u2014 refactor it into a shared helper both the tool and the cron handler call). Routine without payload (legacy) keeps today's behavior. Seed one example routine in the default registry: twice-daily inbox check ('every 12h', agent_role quartermaster-style mail check) mirroring John's existing mail agent. Expose payload fields in the WS/HTTP routine API so the web UI can create/edit them (Sapper 1 may take the UI half \u2014 see task 219). Branch: PreRelese. Update CHANGELOG.md.\n\n[Ranger 1 2026-10-08] Built. Routine{agent_role,task,backend} serde-defaulted (old files load fine); payload published in routine_run bus message; CPU handle_routine_run dispatches payload jobs via dispatch_spawn (shared helper with the tool), logs + nightly_report the result; legacy id-based routines unchanged; seeded disabled twice-daily mail_check example; WS routines_list exposes payload fields (create/edit UI is Sapper 1's 219). 16 cron tests pass.",
+      "id": 216,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "216.1",
+          "title": "Extend Routine struct with agent_role/task/backend (serde defaults)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": "216.2",
+          "title": "Publish payload in routine_run bus message",
+          "status": "done",
+          "dependencies": [
+            "216.1"
+          ]
+        },
+        {
+          "id": "216.3",
+          "title": "CPU job-pump dispatches payload via shared spawn helper",
+          "status": "done",
+          "dependencies": [
+            "216.1"
+          ]
+        },
+        {
+          "id": "216.4",
+          "title": "Seed example twice-daily mail-check routine",
+          "status": "done",
+          "dependencies": [
+            "216.3"
+          ]
+        }
+      ],
+      "testStrategy": "Registry round-trip test: routine with payload survives save/load. fire_due test: payload propagates into the routine_run message. End-to-end: register an 'every 2m' test routine with a trivial task, run the scheduler loop in-test, assert the agent task executes and completes. cargo test green.",
+      "title": "Cron routine job payloads (scheduled agent tasks)"
+    },
+    {
+      "dependencies": [
+        214
+      ],
+      "description": "Define exactly how spawn picks a backend: explicit param wins, else the complexity router decides, with health-aware fallback and a daily API spend cap that stops paid escalation and asks John.",
+      "details": "Document the policy in src/router/docs.rs (or a new POLICY.md in src/router/): ladder local_ollama -> lan_ollama -> gemini -> grok. Rules: (1) explicit backend param on spawn_subagent always wins (this is also John's manual UI override path via user_override); (2) backend=auto builds a RoutingContext and calls router::route() \u2014 note route() currently never selects LanOllama, decide its role (overflow/embeddings box at 192.168.1.149 vs general) and wire it in or document why not; (3) health-aware fallback: RoutingContext already carries health \u2014 if the chosen backend is unhealthy, walk down the ladder; (4) cost caps: [router] daily_api_cap_usd (default 5.00); every Gemini/Grok call decrements; at cap, paid backends are refused with a message routed to John (web UI notice + log) and the job falls back to local or waits. Persist spend state across restarts (beliefs.json or a small state file, not just memory). Keep John's hardware truth in the doc: desktop 3060 = fast interactive, R630 = patient batch (Helix host itself), ollama box = embeddings/overflow, APIs = heavy hitters that cost per token. Branch: PreRelese. Update CHANGELOG.md.\n\n[Ranger 1 2026-10-08] Built. Ladder documented in router/docs.rs: local (desktop 3060, fast) -> lan (ollama box, overflow; route() never selects it directly \u2014 explicit pick or fallback only) -> gemini (paid, spend-gated) -> grok (not implemented). Explicit backend wins, else complexity router decides. [router] daily_api_cap_usd parsed in main.rs (default $5.00) -> spend::set_daily_api_cap_usd; refusal message is John-facing and returns via the commander report. dispatch_spawn probes the chosen rung (/api/tags, 60s cache) and falls back down the ladder, noting every fallback in the report. main.rs endpoint mapping now sends 'desktop'-named entries to local.",
+      "id": 217,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "217.1",
+          "title": "Document ladder + decide LanOllama's role",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": "217.2",
+          "title": "Implement daily API spend cap with persisted counter",
+          "status": "done",
+          "dependencies": [
+            "217.1"
+          ]
+        },
+        {
+          "id": "217.3",
+          "title": "Health-aware fallback down the ladder",
+          "status": "done",
+          "dependencies": [
+            "217.1"
+          ]
+        }
+      ],
+      "testStrategy": "Unit tests: explicit-wins, auto-routes-via-complexity, unhealthy-backend falls down the ladder, cap enforcement (spend at cap -> paid refused, message mentions the cap). Persistence test: spend counter survives a registry reload. cargo test green.",
+      "title": "Machine-assignment policy + API cost caps (the picky part)"
+    },
+    {
+      "dependencies": [
+        214,
+        215,
+        216,
+        217
+      ],
+      "description": "John's acceptance test in the web UI plus a scheduled-agent drill. Nothing is 'done' until John sees it work in the UI.",
+      "details": "With 214+215 built and deployed to PreRelese on the R630: (1) John opens the web UI, picks the desktop backend, and sends 'run a sub agent to plan out a bot app in rust' \u2014 expect a spawn_subagent tool call (visible in logs/tool trace), NOT clarifying questions; the sub-agent runs on the chosen/auto backend and the commander reports back a summary. (2) Repeat on the Gemini backend. (3) Cron drill: create a routine 'every 2m' with a trivial agent task + payload, watch it fire, run, and stop via logs; then delete it. (4) Recursion guard drill: ask a sub-agent (via a crafted task) to spawn another sub-agent \u2014 expect refusal at depth limit. Record results (pass/fail + logs) in the task. If anything fails, file a follow-up task, do not mark 218 done on assertion.\n\n[Ranger 1 2026-10-08] Headless verification DONE: full suite 281 pass / 6 fail (the 6 are pre-existing a2a/acp/mcp failures, confirmed identical on clean tree \u2014 zero regressions); cron e2e (fire->payload->dispatch->report) passes; recursion guard passes; health-fallback ladder passes (dead Ollama -> Gemini with note; all-down errors cleanly). 218.1/218.2 REQUIRE John in the web UI \u2014 not marked done on assertion. Exact steps for him in the parent report.",
+      "id": 218,
+      "priority": "high",
+      "status": "in_progress",
+      "subtasks": [
+        {
+          "id": "218.1",
+          "title": "UI drill: desktop backend spawns sub-agent (no clarifying questions)",
+          "status": "in_progress",
+          "dependencies": [
+            214,
+            215
+          ],
+          "details": "BLOCKED on John: needs his eyes in the web UI on the deployed R630 build. Exact click/type steps in the final report."
+        },
+        {
+          "id": "218.2",
+          "title": "UI drill: Gemini backend commander",
+          "status": "pending",
+          "dependencies": [
+            214,
+            215
+          ],
+          "details": "BLOCKED on John: needs his eyes in the web UI on the deployed R630 build. Exact click/type steps in the final report."
+        },
+        {
+          "id": "218.3",
+          "title": "Cron drill: every-2m routine fires, runs, stops",
+          "status": "done",
+          "dependencies": [
+            216
+          ],
+          "details": "Headless e2e passes (cron_agent_job_end_to_end_via_stub): every-2m routine with payload fires via fire_due, payload reaches dispatch_spawn (stubbed), commander report names task+role. Live every-2m watch still needs the deployed binary."
+        },
+        {
+          "id": "218.4",
+          "title": "Recursion-guard drill: nested spawn refused",
+          "status": "done",
+          "dependencies": [
+            214
+          ],
+          "details": "nested_spawn_is_refused_at_depth_limit passes: sub-agent attempting to spawn returns the depth refusal, no recursion."
+        }
+      ],
+      "testStrategy": "All four drills pass, or follow-up tasks filed. This task is verified by John's own eyes in the UI, not by code tests.",
+      "title": "End-to-end verification: commander pattern live"
+    },
+    {
+      "dependencies": [
+        214
+      ],
+      "description": "UI half of the commander work, flagged for Sapper 1. Backend must expose what the UI needs (task 214/216 should include the WS messages).",
+      "details": "Sapper 1: (1) In chat, when the commander calls spawn_subagent, show a delegation card/inline status ('delegated to sub-agent on gemini\u2026 working\u2026 done') instead of silence, and render the sub-agent's returned summary distinctly. (2) Routines UI: list cron routines with their payload (agent_role/task/backend/schedule/enabled) and allow create/edit/enable/disable \u2014 backend API from task 216. Keep the existing backend picker untouched. Coordinate with Ranger 1 on the WS message shapes. Branch: PreRelese (Sapper's usual fix-* branch workflow per repo convention).\n\n[Sapper 1 2026-10-08] Built on PreRelese, single-file index.html only (no new assets).\n219.1 chat delegation: handleMessage now handles {type:\"tool_call\"}; spawn_subagent calls render a delegation card in #chat-messages with backend badge (local/LAN/Gemini/Grok/auto), role_hint, task (400ch cap), and the sub-agent's result_preview in a distinct \"sub-agent report\" block. Other tools stay silent (restraint). Contract verified against src/io/ollama/mod.rs tool_call publish. FINDING for Ranger 1: the Gemini backend (src/io/llm_gemini/mod.rs) has NO tool-calling loop and publishes no tool_call messages \u2014 the commander pattern cannot delegate there until function calling is added to the Gemini path. UI renders whatever arrives; nothing invented.\n219.2 routines: UI now sends {type:\"routines_list\"} on every WS (re)connect (it never did before \u2014 the section could never populate). Rows show agent_role/backend/task payload from task 216. New \uff0bNew/Edit modal with fields name, schedule, agent_role, task, backend select, enabled, delete. Save sends the documented shapes {type:\"routine_create\"|\"routine_update\", name,schedule,agent_role,task,backend,enabled} and {type:\"routine_delete\", id} \u2014 these need backend support (no Rust touched per boundary); the UI waits 5s for {type:\"routine_status\"|\"routine_saved\", id, ok} and shows an explicit inline error on timeout instead of failing silently. When Ranger 1 adds the 3 messages, the UI lights up with zero changes. NOTE: backend sends schedule as human display text (\"Every day at 2:00 AM\") which does not round-trip to canonical form \u2014 edit field starts empty with the current value as placeholder hint; suggest backend echo raw schedule or accept display form.\nTests: node DOM-stub harness (/tmp/sapper219_test.js), 20/20 pass \u2014 delegation card content/badge/role/report, non-spawn silence, empty-args degrade, routines payload render, editor validation, create shape, timeout honesty, confirm-close+refresh, toggle isolation. node --check clean. Follow-up simplification: once backend routine CRUD lands, drop the 5s-timeout path to a straight confirm.\n",
+      "id": 219,
+      "priority": "medium",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "219.1",
+          "title": "Chat UI: sub-agent delegation status display",
+          "status": "done",
+          "dependencies": [
+            214
+          ]
+        },
+        {
+          "id": "219.2",
+          "title": "Routines UI: create/edit/enable with payload fields",
+          "status": "done",
+          "dependencies": [
+            216
+          ]
+        }
+      ],
+      "testStrategy": "Manual UI walkthrough: delegation visible in chat; routine created in UI fires on schedule. Screenshots or a short screen recording attached to the task.",
+      "title": "Web UI: surface sub-agent activity + routine editor (Sapper 1)"
+    },
+    {
+      "id": 220,
+      "title": "Routine CRUD WS messages + schedule round-trip (Ranger 1)",
+      "description": "Sapper 1 built the routines editor UI (219.2) but the backend only has routines_list/routine_toggle. Add routine_create/update/delete WS messages and fix the schedule field so it round-trips.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Ranger 1, PreRelese branch. Sapper 1's UI contract (from task 219 report, verified):\n- UI sends {type:\"routine_create\"|\"routine_update\", name, schedule, agent_role, task, backend, enabled}\n- UI sends {type:\"routine_delete\", id}\n- UI waits 5s for {type:\"routine_status\"|\"routine_saved\", id, ok} and shows inline error on timeout/no-confirm.\nBuild:\n220.1 registry: add RoutineRegistry::add (generates unique id, validates schedule via parse_schedule, refreshes next_run, persists), ::update (patch fields by id, re-validate schedule, persist), ::remove (by id, persist). Unit tests for each incl. bad-schedule rejection and id uniqueness.\n220.2 WS handlers in src/io/web_server/mod.rs next to routine_toggle: \"routine_create\" validates schedule with parse_schedule \u2014 on bad input reply {type:\"routine_saved\", id:\"\", ok:false, msg} ; on success reply {type:\"routine_saved\", id, ok:true}. \"routine_update\" same shape (unknown id -> ok:false). \"routine_delete\" replies {type:\"routine_status\", id, ok}. All three persist via registry.save().\n220.3 schedule round-trip: routines_list currently serves human display text (\"Every day at 2:00 AM\") which the editor cannot parse back. Add \"schedule_raw\" (canonical \"daily HH:MM\" / \"every <n>s|m|h|d\") to each routine in the list reply; keep \"schedule\" display text for backward compat (task 197 contract). routine_create/update accept the canonical form in \"schedule\".\nKeep existing tests green; CHANGELOG entry.\n\n[Ranger 1 2026-10-08] Built. Deviation: WS arms have no socket-level test (no WS client harness in suite) \u2014 thin wrappers over tested registry methods; live UI drill stays in 218. Full suite: 286 pass, 6 pre-existing failures unchanged.",
+      "testStrategy": "cargo test cron:: registry add/update/remove incl. bad schedule rejection; WS-level: drive the three new message types through the existing web_server test harness (see the routines test at web_server/mod.rs:~1522) asserting confirm shapes; routines_list asserts schedule_raw parses via parse_schedule.",
+      "subtasks": [
+        {
+          "id": "220.1",
+          "title": "Registry add/update/remove + unit tests",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": "220.2",
+          "title": "WS create/update/delete handlers + confirm shapes",
+          "status": "done",
+          "dependencies": [
+            "220.1"
+          ]
+        },
+        {
+          "id": "220.3",
+          "title": "schedule_raw in list reply; canonical-form input",
+          "status": "done",
+          "dependencies": [
+            "220.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 221,
+      "title": "Gemini backend tool-calling loop (Ranger 1)",
+      "description": "Sapper 1 found src/io/llm_gemini/mod.rs has NO function calling at all \u2014 no functionDeclarations, no tool loop, no tool_call publish. The commander pattern cannot delegate on Gemini until this exists, and John wants Gemini as his fast commander pick.",
+      "status": "done",
+      "dependencies": [
+        214
+      ],
+      "priority": "high",
+      "details": "Ranger 1, PreRelese branch. Mirror the Ollama backend's tool loop (src/io/ollama/mod.rs \u2014 the tool_call publish contract Sapper verified against):\n221.1 Declare the shared tool set (from the same tool definitions 214 wired, INCLUDING spawn_subagent) as Gemini functionDeclarations on the generateContent request.\n221.2 Implement the call/response loop: send functionResponse parts back, iterate until the model returns text (cap iterations, same guardrails style as the Ollama loop).\n221.3 Publish {type:\"tool_call\"} messages on the bus for every tool invocation, same shape the Ollama path publishes, so the UI delegation cards work on Gemini too.\n221.4 Commander prompt: confirm the 215 commander block reaches the Gemini path (it may already via shared prompt assembly \u2014 verify, don't assume).\nDo NOT require John's real API key in the sandbox. Mock the HTTP layer for the headless drill. Any live-key verification is John's step (task 218 territory).\nKeep existing tests green; CHANGELOG entry. Document deviations from this brief in the task details.\n\n[Ranger 1 2026-10-08] Built. Deliberate choices: (1) every generateContent round calls note_api_call so the 217 spend cap sees real usage; (2) the shared reqwest error diagnosis was extracted to map_reqwest_err and reused by the old single-shot path; (3) call_gemini_direct (spawn runner) and call_gemini_sync stay single-shot on purpose. Test note: mockito matches FIFO not LIFO, so the drill uses one mock with an atomic hit counter for sequenced responses. Full suite: 289 pass, 6 pre-existing failures unchanged.",
+      "testStrategy": "Headless drill with mocked Gemini HTTP: feed a prompt that must delegate, assert the Gemini path emits a spawn_subagent function call AND publishes a {type:\"tool_call\"} bus message. Unit tests for functionDeclarations serialization. cargo test green overall.",
+      "subtasks": [
+        {
+          "id": "221.1",
+          "title": "functionDeclarations from shared tool definitions",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": "221.2",
+          "title": "Tool-call loop with iteration cap",
+          "status": "done",
+          "dependencies": [
+            "221.1"
+          ]
+        },
+        {
+          "id": "221.3",
+          "title": "Publish tool_call bus messages (UI contract)",
+          "status": "done",
+          "dependencies": [
+            "221.2"
+          ]
+        },
+        {
+          "id": "221.4",
+          "title": "Headless spawn_subagent drill on mocked HTTP",
+          "status": "done",
+          "dependencies": [
+            "221.3"
+          ]
+        }
+      ]
+    }
+  ]
 }
