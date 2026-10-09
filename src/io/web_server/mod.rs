@@ -946,7 +946,14 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                                     "id": r.id,
                                     "name": r.name,
                                     "schedule": sched_text,
+                                    // Task 220: canonical form for round-trip
+                                    // editing ("daily HH:MM" / "every <n>s|m|h|d").
+                                    "schedule_raw": r.schedule,
                                     "enabled": r.enabled,
+                                    // Task 216: agent job payload (empty for legacy routines).
+                                    "agent_role": r.agent_role,
+                                    "task": r.task,
+                                    "backend": r.backend,
                                 })
                             })
                             .collect();
@@ -982,6 +989,85 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             })
                             .to_string(),
                         };
+                        let _ = direct_tx.send(reply);
+                    }
+
+                    // ── Task 220: routine CRUD for the editor UI ──────────
+                    // UI sends {"type":"routine_create", name, schedule,
+                    // agent_role, task, backend, enabled}; we validate and
+                    // reply {"type":"routine_saved", id, ok} (ok:false with
+                    // msg on bad schedule/backend/name).
+                    "routine_create" => {
+                        let name = json_val["name"].as_str().unwrap_or("").to_string();
+                        let schedule = json_val["schedule"].as_str().unwrap_or("").to_string();
+                        let agent_role = json_val["agent_role"].as_str().unwrap_or("").to_string();
+                        let task = json_val["task"].as_str().unwrap_or("").to_string();
+                        let backend = json_val["backend"].as_str().unwrap_or("auto").to_string();
+                        let enabled = json_val["enabled"].as_bool().unwrap_or(true);
+                        let mut reg = state.routines.write().await;
+                        let reply = match reg.add(&name, &schedule, &agent_role, &task, &backend, enabled) {
+                            Ok(r) => json!({
+                                "type": "routine_saved",
+                                "id": r.id,
+                                "ok": true,
+                            })
+                            .to_string(),
+                            Err(msg) => json!({
+                                "type": "routine_saved",
+                                "id": "",
+                                "ok": false,
+                                "msg": msg,
+                            })
+                            .to_string(),
+                        };
+                        let _ = direct_tx.send(reply);
+                    }
+
+                    // UI sends {"type":"routine_update", id, ...same fields};
+                    // absent fields are left unchanged.
+                    "routine_update" => {
+                        let id = json_val["id"].as_str().unwrap_or("").to_string();
+                        let opt = |k: &str| json_val.get(k).and_then(|v| v.as_str());
+                        let enabled = json_val.get("enabled").and_then(|v| v.as_bool());
+                        let mut reg = state.routines.write().await;
+                        let reply = match reg.update(
+                            &id,
+                            opt("name"),
+                            opt("schedule"),
+                            opt("agent_role"),
+                            opt("task"),
+                            opt("backend"),
+                            enabled,
+                        ) {
+                            Ok(r) => json!({
+                                "type": "routine_saved",
+                                "id": r.id,
+                                "ok": true,
+                            })
+                            .to_string(),
+                            Err(msg) => json!({
+                                "type": "routine_saved",
+                                "id": id,
+                                "ok": false,
+                                "msg": msg,
+                            })
+                            .to_string(),
+                        };
+                        let _ = direct_tx.send(reply);
+                    }
+
+                    // UI sends {"type":"routine_delete", id}; we confirm
+                    // {"type":"routine_status", id, ok}.
+                    "routine_delete" => {
+                        let id = json_val["id"].as_str().unwrap_or("").to_string();
+                        let mut reg = state.routines.write().await;
+                        let ok = reg.remove(&id);
+                        let reply = json!({
+                            "type": "routine_status",
+                            "id": id,
+                            "ok": ok,
+                        })
+                        .to_string();
                         let _ = direct_tx.send(reply);
                     }
 
