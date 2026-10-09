@@ -190,6 +190,17 @@ async fn probe_ollama_fresh(base_url: &str) -> OllamaProbe {
     }
 }
 
+/// True when an Ollama box at `base_url` looks usable right now.
+/// Served from the 60s probe cache (no extra round trip in the common case).
+/// `Unknown` counts as usable — the caller may proceed anyway; only a hard
+/// `Unreachable` (refused/timeout/non-2xx) counts as down.
+pub async fn ollama_reachable(base_url: &str) -> bool {
+    match probe_ollama(base_url).await {
+        OllamaProbe::Unreachable => false,
+        _ => true,
+    }
+}
+
 /// Drop the cached probe for `base_url` so the next turn re-validates.
 /// Called when a real request fails — the cache must not mask an outage.
 pub fn invalidate_ollama_probe(base_url: &str) {
@@ -564,7 +575,13 @@ pub mod tools {
         tools: Value,
         bus: &Arc<Bus>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let mut messages = vec![json!({"role": "user", "content": prompt})];
+        // Task 215: commander system prompt — the model needs to know it
+        // should delegate via spawn_subagent instead of chatting.
+        let mut messages = Vec::new();
+        if let Some(sys) = crate::tools::subagent_tool::commander_system_message() {
+            messages.push(sys);
+        }
+        messages.push(json!({"role": "user", "content": prompt}));
 
         // Guard against infinite tool-call loops (e.g. a badly behaved model)
         let max_tool_rounds = 10usize;

@@ -507,6 +507,181 @@
                 opacity: 0.4;
                 cursor: not-allowed;
             }
+            /* ── Task 219: delegation cards (sub-agent activity in chat) ── */
+            .delegate-card {
+                border: 1px solid var(--accent);
+                border-left: 3px solid var(--accent);
+                border-radius: 8px;
+                background: var(--panel);
+                padding: 10px 12px;
+                margin: 8px 0;
+                font-size: 0.88em;
+            }
+            .delegate-card .delegate-head {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-weight: 600;
+                margin-bottom: 6px;
+            }
+            .delegate-card .backend-badge {
+                display: inline-block;
+                font-size: 0.78em;
+                font-weight: 600;
+                padding: 2px 8px;
+                border-radius: 10px;
+                background: #0f3460;
+                border: 1px solid var(--accent);
+                color: var(--text);
+            }
+            .delegate-card .delegate-task {
+                color: var(--text);
+                margin: 4px 0;
+                overflow-wrap: anywhere;
+            }
+            .delegate-card .delegate-role {
+                color: var(--muted);
+                font-size: 0.85em;
+                margin-bottom: 4px;
+            }
+            .delegate-card .delegate-report {
+                margin-top: 8px;
+                padding: 8px 10px;
+                border-left: 2px solid var(--muted);
+                background: rgba(255, 255, 255, 0.03);
+                font-style: italic;
+                overflow-wrap: anywhere;
+            }
+            .delegate-card .delegate-report .report-label {
+                display: block;
+                font-style: normal;
+                font-weight: 600;
+                font-size: 0.82em;
+                color: var(--muted);
+                margin-bottom: 4px;
+            }
+            /* ── Task 219: routines payload + editor ── */
+            .routine-payload {
+                color: var(--muted);
+                font-size: 0.78em;
+                margin-top: 3px;
+                overflow-wrap: anywhere;
+            }
+            .routine-payload .rp-k {
+                color: var(--text);
+                font-weight: 600;
+            }
+            .routine-row .row-actions {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-shrink: 0;
+            }
+            .routine-edit-btn {
+                background: var(--panel);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-size: 0.8em;
+                cursor: pointer;
+            }
+            .routine-edit-btn:hover {
+                border-color: var(--accent);
+            }
+            .routines-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .routine-add-btn {
+                background: var(--panel);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-size: 0.8em;
+                cursor: pointer;
+            }
+            .routine-add-btn:hover {
+                border-color: var(--accent);
+            }
+            .routine-modal {
+                background: var(--bg);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 18px;
+                width: min(560px, 92vw);
+                max-height: 88vh;
+                overflow-y: auto;
+            }
+            .routine-modal h2 {
+                margin: 0 0 12px 0;
+                font-size: 1em;
+            }
+            .routine-modal label {
+                display: block;
+                font-size: 0.82em;
+                color: var(--muted);
+                margin: 10px 0 4px 0;
+            }
+            .routine-modal input[type="text"],
+            .routine-modal textarea,
+            .routine-modal select {
+                width: 100%;
+                box-sizing: border-box;
+                background: var(--panel);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 0.88em;
+                font-family: inherit;
+            }
+            .routine-modal textarea {
+                min-height: 90px;
+                resize: vertical;
+            }
+            .routine-modal .hint {
+                font-size: 0.76em;
+                color: var(--muted);
+                margin-top: 2px;
+            }
+            .routine-modal .row-check {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-top: 12px;
+                font-size: 0.88em;
+            }
+            .routine-modal-footer {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-top: 16px;
+            }
+            .routine-modal-footer .spacer {
+                flex: 1;
+            }
+            .routine-modal-footer button {
+                background: var(--panel);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 6px 14px;
+                cursor: pointer;
+                font-size: 0.88em;
+            }
+            .routine-modal-footer button:hover {
+                border-color: var(--accent);
+            }
+            #routine-modal-status {
+                font-size: 0.82em;
+                color: var(--muted);
+            }
+            #routine-modal-status.err {
+                color: var(--danger);
+            }
 
             /* ── Responsive: drawers below desktop widths ── */
             #drawer-sidebar-btn,
@@ -703,7 +878,10 @@
                 </section>
 
                 <section id="routines-section">
-                    <h2>Routines</h2>
+                    <div class="routines-head">
+                        <h2>Routines</h2>
+                        <button class="routine-add-btn" onclick="openRoutineModal(null)" title="Create a new scheduled routine">＋ New</button>
+                    </div>
                     <div id="routines-list"></div>
                 </section>
             </aside>
@@ -968,6 +1146,12 @@
                 ws.onopen = () => {
                     console.log("WS connected");
                     setConnDot("open");
+                    // Task 219: the backend only sends `routines` in reply to
+                    // `routines_list`, so ask for it on every (re)connect.
+                    // Existing contract, no new message invented.
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: "routines_list" }));
+                    }
                 };
                 ws.onmessage = handleMessage;
                 ws.onclose = () => {
@@ -994,6 +1178,15 @@
                     );
                 } else if (msg.type === "routine_status") {
                     handleRoutineStatus(msg);
+                    handleRoutineConfirm(msg);
+                } else if (msg.type === "routine_saved") {
+                    // Proposed confirmation for routine_create/update (task 219):
+                    // backend may reply {type:"routine_saved", id, ok} — treat
+                    // like routine_status for the pending editor.
+                    handleRoutineConfirm(msg);
+                } else if (msg.type === "tool_call") {
+                    // Task 219: surface commander delegation in chat.
+                    handleToolCall(msg);
                 } else if (
                     msg.type === "user_msg" ||
                     msg.type === "ollama_response" ||
@@ -1427,16 +1620,106 @@
 
             document.addEventListener("keydown", (e) => {
                 if (e.key === "Escape" && configEditor.open) closeConfigModal();
+                if (
+                    e.key === "Escape" &&
+                    !document.getElementById("routine-modal-backdrop").hidden
+                )
+                    closeRoutineModal();
             });
 
+            // ── TASK 219.1: sub-agent delegation in chat ─────────────────
+            // Contract (from src/io/ollama/mod.rs, task 214): when any tool
+            // runs on an Ollama backend, the backend publishes
+            //   {type:"tool_call", tool, args, result_preview}
+            // to web_interface, and the WS layer forwards it as-is. We
+            // render spawn_subagent calls as delegation cards. Other tools
+            // stay quiet (restraint: no chat noise for routine tool use).
+            // NOTE: the Gemini backend has no tool-calling loop today, so no
+            // tool_call arrives there — flagged for Ranger 1 in the task.
+            const BACKEND_BADGE = {
+                local_ollama: "local",
+                lan_ollama: "LAN",
+                gemini: "Gemini",
+                grok: "Grok",
+                auto: "auto",
+            };
+            function handleToolCall(msg) {
+                if (!msg || msg.tool !== "spawn_subagent") return;
+                renderDelegationCard(msg);
+            }
+            function renderDelegationCard(msg) {
+                const div = document.getElementById("chat-messages");
+                if (!div) return;
+                const args = msg.args && typeof msg.args === "object" ? msg.args : {};
+                const backendRaw = String(args.backend || "auto");
+                const backendLabel = BACKEND_BADGE[backendRaw] || backendRaw;
+                const task = String(args.task || "").slice(0, 400);
+                const role = String(args.role_hint || "").trim();
+                const report = String(msg.result_preview || "").trim();
+
+                const card = document.createElement("div");
+                card.className = "delegate-card";
+
+                const head = document.createElement("div");
+                head.className = "delegate-head";
+                head.textContent = "⚡ Delegated to sub-agent ";
+                const badge = document.createElement("span");
+                badge.className = "backend-badge";
+                badge.textContent = "on " + backendLabel;
+                head.appendChild(badge);
+                card.appendChild(head);
+
+                if (role) {
+                    const r = document.createElement("div");
+                    r.className = "delegate-role";
+                    r.textContent = "role: " + role;
+                    card.appendChild(r);
+                }
+                if (task) {
+                    const t = document.createElement("div");
+                    t.className = "delegate-task";
+                    t.textContent = task;
+                    card.appendChild(t);
+                }
+                if (report) {
+                    const rep = document.createElement("div");
+                    rep.className = "delegate-report";
+                    const lab = document.createElement("span");
+                    lab.className = "report-label";
+                    lab.textContent = "sub-agent report";
+                    const body = document.createElement("span");
+                    body.textContent = report;
+                    rep.appendChild(lab);
+                    rep.appendChild(body);
+                    card.appendChild(rep);
+                } else {
+                    const w = document.createElement("div");
+                    w.className = "delegate-role";
+                    w.textContent = "working… the commander's reply follows.";
+                    card.appendChild(w);
+                }
+                div.appendChild(card);
+                div.scrollTop = div.scrollHeight;
+            }
+
             // ROUTINES section — built against the documented contract:
-            //   backend -> {type:"routines", routines:[{id,name,schedule,enabled}]}
-            //   UI      -> {type:"routine_toggle", id, enabled}  (user clicks on live rows only)
+            //   UI      -> {type:"routines_list"}
+            //   backend -> {type:"routines", routines:[{id,name,schedule,enabled,
+            //              agent_role,task,backend}]}          (task 216 payload)
+            //   UI      -> {type:"routine_toggle", id, enabled}
             //   backend -> {type:"routine_status", id, enabled, ok}
-            // The backend exposes NO routines API today, so this renders an
-            // honest empty state and sends NOTHING until a real `routines`
-            // message arrives. No invented message types in shipped code.
+            // Task 219: create/edit/delete need NEW backend messages
+            // (routine_create / routine_update / routine_delete) — flagged
+            // for Ranger 1 in the task results. The editor below sends the
+            // documented shapes and degrades honestly if the backend never
+            // confirms: no invented backend behavior, no silent failure.
             let routinesLive = false;
+            let routinesCache = [];
+            function requestRoutines() {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: "routines_list" }));
+                }
+            }
             function renderRoutinesEmpty() {
                 const list = document.getElementById("routines-list");
                 if (!list) return;
@@ -1453,7 +1736,16 @@
                 if (!list) return;
                 list.innerHTML = "";
                 routinesLive = true;
-                routines.forEach((r) => {
+                routinesCache = Array.isArray(routines) ? routines : [];
+                if (routinesCache.length === 0) {
+                    const d = document.createElement("div");
+                    d.style.color = "var(--muted)";
+                    d.style.fontSize = "0.9em";
+                    d.textContent = "No routines yet — use ＋ New to create one.";
+                    list.appendChild(d);
+                    return;
+                }
+                routinesCache.forEach((r) => {
                     const row = document.createElement("div");
                     row.className = "routine-row";
                     row.dataset.id = r.id;
@@ -1466,6 +1758,41 @@
                     sc.textContent = r.schedule || "";
                     info.appendChild(nm);
                     info.appendChild(sc);
+                    // Task 216 payload: show what the routine will actually run.
+                    const payload = document.createElement("div");
+                    payload.className = "routine-payload";
+                    const bits = [];
+                    if (r.agent_role) bits.push(["role", r.agent_role]);
+                    if (r.backend) bits.push(["backend", r.backend]);
+                    bits.forEach(([k, v], i) => {
+                        if (i > 0) payload.appendChild(document.createTextNode(" · "));
+                        const kk = document.createElement("span");
+                        kk.className = "rp-k";
+                        kk.textContent = k + ": ";
+                        payload.appendChild(kk);
+                        payload.appendChild(document.createTextNode(String(v)));
+                    });
+                    if (r.task) {
+                        const tk = document.createElement("div");
+                        const kk = document.createElement("span");
+                        kk.className = "rp-k";
+                        kk.textContent = "task: ";
+                        tk.appendChild(kk);
+                        const tv = String(r.task);
+                        tk.appendChild(document.createTextNode(
+                            tv.length > 120 ? tv.slice(0, 120) + "…" : tv
+                        ));
+                        tk.title = tv;
+                        payload.appendChild(tk);
+                    }
+                    info.appendChild(payload);
+                    const actions = document.createElement("div");
+                    actions.className = "row-actions";
+                    const edit = document.createElement("button");
+                    edit.className = "routine-edit-btn";
+                    edit.textContent = "Edit";
+                    edit.setAttribute("aria-label", "Edit " + (r.name || r.id));
+                    edit.onclick = () => openRoutineModal(r.id);
                     const tgl = document.createElement("button");
                     tgl.className = "toggle" + (r.enabled ? " on" : "");
                     tgl.setAttribute("role", "switch");
@@ -1488,8 +1815,10 @@
                                 }),
                             );
                     };
+                    actions.appendChild(edit);
+                    actions.appendChild(tgl);
                     row.appendChild(info);
-                    row.appendChild(tgl);
+                    row.appendChild(actions);
                     list.appendChild(row);
                 });
             }
@@ -1519,6 +1848,147 @@
                 }
             }
 
+            // ── TASK 219.2: routine editor ─────────────────────────────
+            // The editor sends the documented shapes:
+            //   new: {type:"routine_create", name, schedule, agent_role,
+            //         task, backend, enabled}
+            //   edit:{type:"routine_update", id, name, schedule, agent_role,
+            //         task, backend, enabled}
+            //   del:  {type:"routine_delete", id}
+            // These need backend support (flagged for Ranger 1 — see task
+            // results). The UI waits up to 5s for a confirmation
+            // ({type:"routine_status"|"routine_saved", id, ok:true}); on
+            // timeout it says so explicitly instead of failing silently.
+            let routineModalId = null; // null = creating
+            let routineConfirmTimer = null;
+            function openRoutineModal(id) {
+                routineModalId = id || null;
+                const r = id
+                    ? routinesCache.find((x) => x.id === id)
+                    : null;
+                document.getElementById("routine-modal-title").textContent =
+                    r ? "Edit routine" : "New routine";
+                document.getElementById("routine-f-name").value = r ? r.name || "" : "";
+                document.getElementById("routine-f-schedule").value = "";
+                // NOTE: the backend sends the human display form ("Every day
+                // at 2:00 AM"), which does not round-trip into the canonical
+                // "daily HH:MM" / "every 6h" form — so the field starts empty
+                // and the hint carries the current value. When Ranger 1 adds
+                // routine_create/update, have it accept the display form too
+                // or echo back the raw schedule in `routines`.
+                document.getElementById("routine-f-schedule").placeholder =
+                    r && r.schedule ? "currently: " + r.schedule : 'e.g. "daily 02:00" or "every 6h"';
+                document.getElementById("routine-f-role").value = r ? r.agent_role || "" : "";
+                document.getElementById("routine-f-task").value = r ? r.task || "" : "";
+                document.getElementById("routine-f-backend").value =
+                    r && r.backend ? r.backend : "auto";
+                document.getElementById("routine-f-enabled").checked =
+                    r ? !!r.enabled : true;
+                document.getElementById("routine-f-delete").style.display =
+                    r ? "" : "none";
+                setRoutineModalStatus("", false);
+                document.getElementById("routine-modal-backdrop").hidden = false;
+            }
+            function closeRoutineModal() {
+                document.getElementById("routine-modal-backdrop").hidden = true;
+                if (routineConfirmTimer) {
+                    clearTimeout(routineConfirmTimer);
+                    routineConfirmTimer = null;
+                }
+            }
+            function routineModalBackdropClick(e) {
+                if (e.target.id === "routine-modal-backdrop") closeRoutineModal();
+            }
+            function setRoutineModalStatus(text, isErr) {
+                const el = document.getElementById("routine-modal-status");
+                el.textContent = text;
+                el.className = isErr ? "err" : "";
+            }
+            function saveRoutineModal() {
+                const name = document.getElementById("routine-f-name").value.trim();
+                const schedule = document.getElementById("routine-f-schedule").value.trim();
+                const agent_role = document.getElementById("routine-f-role").value.trim();
+                const task = document.getElementById("routine-f-task").value.trim();
+                const backend = document.getElementById("routine-f-backend").value;
+                const enabled = document.getElementById("routine-f-enabled").checked;
+                if (!name) {
+                    setRoutineModalStatus("Name is required.", true);
+                    return;
+                }
+                if (!schedule) {
+                    setRoutineModalStatus(
+                        'Schedule is required, e.g. "daily 02:00" or "every 6h".',
+                        true,
+                    );
+                    return;
+                }
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    setRoutineModalStatus("Not connected to the backend.", true);
+                    return;
+                }
+                const payload = routineModalId
+                    ? {
+                          type: "routine_update",
+                          id: routineModalId,
+                          name, schedule, agent_role, task, backend, enabled,
+                      }
+                    : {
+                          type: "routine_create",
+                          name, schedule, agent_role, task, backend, enabled,
+                      };
+                ws.send(JSON.stringify(payload));
+                setRoutineModalStatus("Saving… waiting for backend confirmation.", false);
+                if (routineConfirmTimer) clearTimeout(routineConfirmTimer);
+                routineConfirmTimer = setTimeout(() => {
+                    routineConfirmTimer = null;
+                    setRoutineModalStatus(
+                        "The backend did not confirm — routine create/edit " +
+                        "needs the backend update (flagged for Ranger 1). " +
+                        "Your list below is unchanged.",
+                        true,
+                    );
+                }, 5000);
+            }
+            function deleteRoutineModal() {
+                if (!routineModalId) return;
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    setRoutineModalStatus("Not connected to the backend.", true);
+                    return;
+                }
+                if (!confirm("Delete this routine?")) return;
+                ws.send(JSON.stringify({ type: "routine_delete", id: routineModalId }));
+                setRoutineModalStatus("Deleting… waiting for backend confirmation.", false);
+                if (routineConfirmTimer) clearTimeout(routineConfirmTimer);
+                routineConfirmTimer = setTimeout(() => {
+                    routineConfirmTimer = null;
+                    setRoutineModalStatus(
+                        "The backend did not confirm — routine delete " +
+                        "needs the backend update (flagged for Ranger 1).",
+                        true,
+                    );
+                }, 5000);
+            }
+            function handleRoutineConfirm(msg) {
+                // Accepts the existing {type:"routine_status", id, ok} and the
+                // proposed {type:"routine_saved", id, ok}. Only acts while an
+                // editor save/delete is pending — plain toggle replies are
+                // handled by handleRoutineStatus and must not refresh here.
+                if (!routineConfirmTimer) return;
+                if (msg.ok !== true) {
+                    clearTimeout(routineConfirmTimer);
+                    routineConfirmTimer = null;
+                    setRoutineModalStatus(
+                        "Backend refused: " + (msg.msg || "unknown error"),
+                        true,
+                    );
+                    return;
+                }
+                clearTimeout(routineConfirmTimer);
+                routineConfirmTimer = null;
+                closeRoutineModal();
+                requestRoutines();
+            }
+
             window.onload = () => {
                 connectWS();
                 renderRoutinesEmpty();
@@ -1544,5 +2014,52 @@
                 </div>
             </div>
         </div>
+        <!-- Routine editor modal (task 219): single-file, no external assets. -->
+        <div id="routine-modal-backdrop" class="modal-backdrop" hidden onclick="routineModalBackdropClick(event)">
+            <div class="routine-modal" role="dialog" aria-modal="true" aria-labelledby="routine-modal-title">
+                <div class="config-modal-header">
+                    <h2 id="routine-modal-title">New routine</h2>
+                    <button class="modal-close" onclick="closeRoutineModal()" aria-label="Close">✕</button>
+                </div>
+                <label for="routine-f-name">Name</label>
+                <input type="text" id="routine-f-name" autocomplete="off" placeholder="e.g. Nightly inbox check" />
+                <label for="routine-f-schedule">Schedule</label>
+                <input type="text" id="routine-f-schedule" autocomplete="off" placeholder='e.g. "daily 02:00" or "every 6h"' />
+                <div class="hint">Canonical form only: <b>daily HH:MM</b> (local time) or <b>every &lt;n&gt;s|m|h|d</b>.</div>
+                <label for="routine-f-role">Agent role</label>
+                <input type="text" id="routine-f-role" autocomplete="off" placeholder="e.g. quartermaster, planner, builder…" />
+                <label for="routine-f-task">Task (the marching orders)</label>
+                <textarea id="routine-f-task" spellcheck="false" placeholder="What the agent should do when the schedule fires…"></textarea>
+                <label for="routine-f-backend">Backend</label>
+                <select id="routine-f-backend">
+                    <option value="auto">auto (let the router decide)</option>
+                    <option value="local_ollama">local_ollama (fast, free)</option>
+                    <option value="lan_ollama">lan_ollama</option>
+                    <option value="gemini">gemini (strong, uses API budget)</option>
+                    <option value="grok">grok (not wired yet)</option>
+                </select>
+                <div class="row-check">
+                    <input type="checkbox" id="routine-f-enabled" checked />
+                    <label for="routine-f-enabled" style="margin:0;">Enabled</label>
+                </div>
+                <div class="routine-modal-footer">
+                    <button id="routine-f-delete" onclick="deleteRoutineModal()" style="color: var(--danger);">Delete</button>
+                    <span class="spacer"></span>
+                    <span id="routine-modal-status"></span>
+                    <button onclick="closeRoutineModal()">Cancel</button>
+                    <button id="routine-modal-save-btn" onclick="saveRoutineModal()">Save</button>
+                </div>
+            </div>
+        </div>
     </body>
 </html>
+
+
+
+
+
+
+
+
+                    >
+     

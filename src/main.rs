@@ -194,6 +194,65 @@ async fn run_helix() {
         println!("WARNING: No [[ollama]] entries found in config!");
     }
 
+    // ── Task 215: commander mode gate ([helix.commander] enabled, default true) ──
+    {
+        let enabled = toml::from_str::<toml::Value>(&config_str)
+            .ok()
+            .and_then(|v| v.get("helix")?.get("commander")?.get("enabled")?.as_bool())
+            .unwrap_or(true);
+        crate::tools::subagent_tool::set_commander_enabled(enabled);
+        println!("commander mode: {}", if enabled { "enabled" } else { "disabled" });
+    }
+
+    // ── Task 217: daily API spend cap ([router] daily_api_cap_usd, default 5.00) ──
+    {
+        let cap = toml::from_str::<toml::Value>(&config_str)
+            .ok()
+            .and_then(|v| v.get("router")?.get("daily_api_cap_usd")?.as_float());
+        if let Some(v) = cap {
+            crate::router::spend::set_daily_api_cap_usd(v);
+            println!("daily API spend cap: ${:.2}", v);
+        }
+    }
+
+    // ── Task 214/217: register Ollama endpoints for the spawn_subagent tool ──
+    // Maps [[ollama]] entries onto the commander's backend names by matching
+    // the entry name. Task 217.1 role decision: "local"/"desktop" -> the fast
+    // interactive box (desktop RTX 3060); "lan"/"server" -> the ollama server
+    // box (overflow/embeddings). Unmatched entries fall back positionally:
+    // first -> local, second -> lan.
+    {
+        use crate::tools::subagent_tool::{set_ollama_endpoints, OllamaEndpoint};
+        let mut local: Option<OllamaEndpoint> = None;
+        let mut lan: Option<OllamaEndpoint> = None;
+        for (name, url, model) in &ollama_backends {
+            let ep = OllamaEndpoint { url: url.clone(), model: model.clone() };
+            let n = name.to_lowercase();
+            if (n.contains("local") || n.contains("desktop")) && local.is_none() {
+                local = Some(ep);
+            } else if (n.contains("lan") || n.contains("server")) && lan.is_none() {
+                lan = Some(ep);
+            }
+        }
+        let mut iter = ollama_backends.iter();
+        if local.is_none() {
+            if let Some((_, url, model)) = iter.next() {
+                local = Some(OllamaEndpoint { url: url.clone(), model: model.clone() });
+            }
+        }
+        if lan.is_none() {
+            if let Some((_, url, model)) = iter.next() {
+                lan = Some(OllamaEndpoint { url: url.clone(), model: model.clone() });
+            }
+        }
+        set_ollama_endpoints(local.clone(), lan.clone());
+        println!(
+            "spawn_subagent backends: local={} lan={}",
+            local.map(|e| format!("{} {}", e.url, e.model)).unwrap_or_else(|| "(env/default)".to_string()),
+            lan.map(|e| format!("{} {}", e.url, e.model)).unwrap_or_else(|| "(env/default)".to_string()),
+        );
+    }
+
     // ── Heartbeat: construct the live Cpu and drive it on a real tick loop ──
     // Task 199. John's intent: the heartbeat is the drumbeat that keeps the
     // bot busy moving along through different jobs — a scheduler tick that
@@ -289,7 +348,8 @@ async fn run_helix() {
                         let cpu_clone = routine_cpu.clone();
                         tokio::spawn(async move {
                             let mut guard = cpu_clone.lock().await;
-                            guard.handle_routine_run(&routine_id, &routine_name).await;
+                            // Task 216: the full payload (incl. agent job) goes through.
+                            guard.handle_routine_run(&payload).await;
                         });
                     }
                 });
