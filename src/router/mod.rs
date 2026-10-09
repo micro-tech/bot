@@ -8,6 +8,7 @@ pub mod integration;
 pub mod user_override;
 pub mod route;
 pub mod schedule;
+pub mod spend;
 pub mod strategy;
 pub mod telemetry;
 
@@ -19,3 +20,4 @@ pub use route::route;
 pub use user_override::{OverrideStore, OverrideCommand, OverrideTier};
 pub use health::HealthStore;
 pub use telemetry::TelemetryCollector;
+pub use spend::{note_api_call, check_api_allowed, paid_spent_today_usd, DEFAULT_DAILY_API_CAP_USD};
