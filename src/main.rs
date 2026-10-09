@@ -348,8 +348,7 @@ async fn run_helix() {
                         let cpu_clone = routine_cpu.clone();
                         tokio::spawn(async move {
                             let mut guard = cpu_clone.lock().await;
-                            // Task 216: the full payload (incl. agent job) goes through.
-                            guard.handle_routine_run(&payload).await;
+                            guard.handle_routine_run(&routine_id, &routine_name).await;
                         });
                     }
                 });
