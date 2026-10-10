@@ -1348,6 +1348,29 @@
           ]
         }
       ]
+    },
+    {
+      "id": 222,
+      "title": "Clear the unused-re-export warning at src/router/route.rs:94",
+      "description": "cargo check emits: warning: unused import: `crate::router::complexity::score_prompt` at src/router/route.rs:94 (`pub use crate::router::complexity::score_prompt;`). The re-export has zero consumers: the only `score_prompt` reference tree-wide is its definition at src/router/complexity.rs:128. The last user of the re-export path was removed by the Oct-8 commander merges (the line itself dates to June commit f48047d). Delete the re-export line; nothing else references it.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "low",
+      "details": "FILED BY QUARTERMASTER 2026-10-09 ~04:40 EDT. Verified: `grep -rn score_prompt src/` shows only route.rs:94 (the re-export) and complexity.rs:128 (the definition). RULED OUT: not a build/test blocker (check exit 0); not load-bearing (no `use ...route::score_prompt` anywhere). Suggested start: remove the `// Re-export for convenience` + `pub use` lines at src/router/route.rs:93-94, then `cargo check` to confirm zero warnings delta beyond the 11 pre-existing.",
+      "testStrategy": "cargo check emits no warning for src/router/route.rs; full cargo check warning inventory matches the 11 pre-existing (build.rs:1, unix_socket x3, mcp_client x1, router/mod.rs x5, ssh/mod.rs:13).",
+      "subtasks": [],
+      "results": ""
+    },
+    {
+      "id": 223,
+      "title": "Wire conversation history into Helix chat path (Ranger 1)",
+      "description": "Web chat turns are stateless: call_ollama_tools (src/io/ollama/mod.rs) and call_gemini_tools (src/io/llm_gemini/mod.rs) build a fresh message list every turn (system prompt + current message only), so 'try again' draws a blank. Add a bounded in-memory turn history, prepend recent turns as proper user/assistant messages in both backends, record each completed turn (and failed turns as user-only) at the backend handlers.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Ranger 1, PreRelese branch. New module src/chat_history.rs (LazyLock<Mutex<VecDeque<ChatTurn>>>, cap 10 turns, 2000-char per-message cap, record_turn/recent_turns/clear + unit tests). Inject in tools::call_ollama_tools after the commander system prompt and in call_gemini_tools contents (role user/model). Record in handle_ollama_message (Ok + final-failure arms) and handle_gemini_bus_message (Ok + final-failure arms). Leave unix_cli/heartbeat/cron/subagent one-shot paths stateless by design.",
+      "testStrategy": "cargo check clean; cargo test green (new chat_history unit tests: cap eviction, truncation, clear, ordering, empty-turn skip); existing ollama/gemini/web_server tests still pass.",
+      "subtasks": []
     }
   ]
 }
