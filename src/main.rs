@@ -28,6 +28,7 @@ mod acp;
 mod a2a;
 mod ssh;
 mod cron;
+mod chat_history;
 
 #[tokio::main]
 async fn main() {
