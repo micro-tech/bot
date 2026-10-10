@@ -116,6 +116,9 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
                     response.len()
                 );
 
+                // Task 223: record the completed turn for conversation history.
+                crate::chat_history::record_turn(&prompt, &response);
+
                 // Forward ONLY to CPU as llm_response (single source of truth)
                 if correlation_id != 0 {
                     let _ = bus.publish(Message {
@@ -171,6 +174,9 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
         MAX_RETRIES, last_err
     );
     error!("{}", err);
+    // Task 223: keep the failed turn so "try again" still resolves against
+    // the original request.
+    crate::chat_history::record_turn(&prompt, "");
     publish_error(bus, &err);
 }
 
@@ -295,7 +301,17 @@ async fn call_gemini_tools(
     prompt: &str,
     bus: &Arc<Bus>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let mut contents = vec![json!({"role": "user", "parts": [{"text": prompt}]})];
+    // Task 223: conversation history as proper user/model turns, so
+    // follow-ups ("try again") resolve against prior turns. History is
+    // always clean pairs (failed turns carry a marker), which satisfies
+    // Gemini's user/model role alternation. The in-flight turn is recorded
+    // only after its reply, so it never appears here twice.
+    let mut contents: Vec<Value> = Vec::new();
+    for turn in crate::chat_history::recent_turns() {
+        contents.push(json!({"role": "user", "parts": [{"text": turn.user}]}));
+        contents.push(json!({"role": "model", "parts": [{"text": turn.assistant}]}));
+    }
+    contents.push(json!({"role": "user", "parts": [{"text": prompt}]}));
     let mut rounds = 0usize;
 
     loop {

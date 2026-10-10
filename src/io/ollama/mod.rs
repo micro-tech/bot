@@ -423,6 +423,9 @@ pub async fn handle_ollama_message(
                     response.len()
                 );
 
+                // Task 223: record the completed turn for conversation history.
+                crate::chat_history::record_turn(&prompt, &response);
+
                 // Parse the ORIGINAL request to extract correlation_id
                 let request_payload: serde_json::Value =
                     serde_json::from_str(&message.data).unwrap_or_default();
@@ -512,6 +515,9 @@ pub async fn handle_ollama_message(
         MAX_RETRIES, last_err
     );
     error!("{}", err);
+    // Task 223: keep the failed turn so "try again" still resolves against
+    // the original request.
+    crate::chat_history::record_turn(&prompt, "");
     publish_error(bus, &err);
     None
 }
@@ -580,6 +586,14 @@ pub mod tools {
         let mut messages = Vec::new();
         if let Some(sys) = crate::tools::subagent_tool::commander_system_message() {
             messages.push(sys);
+        }
+        // Conversation history (task 223): recent turns as proper
+        // user/assistant messages so follow-ups ("try again") resolve
+        // against prior turns. The in-flight turn is recorded only after
+        // its reply is produced, so it can never appear here twice.
+        for turn in crate::chat_history::recent_turns() {
+            messages.push(json!({"role": "user", "content": turn.user}));
+            messages.push(json!({"role": "assistant", "content": turn.assistant}));
         }
         messages.push(json!({"role": "user", "content": prompt}));
 
