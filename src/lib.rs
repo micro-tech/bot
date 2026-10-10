@@ -22,6 +22,7 @@ pub mod acp;
 pub mod a2a;
 pub mod ssh;
 pub mod cron;
+pub mod chat_history;
 
 // Re-export commonly used types
 pub use bus::{Bus, Message};
