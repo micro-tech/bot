@@ -9,7 +9,7 @@ use axum::{
     },
     http::{HeaderMap, StatusCode},
     middleware,
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Json},
     routing::{get, post},
 };
 use axum_server::tls_rustls::RustlsConfig;
@@ -382,6 +382,9 @@ pub async fn start_web_server(
         .route("/logs/error/clear", post(clear_error_log))
         .route("/logs/bus", get(serve_bus_log))
         .route("/logs/hartbeat", get(serve_hartbeat_log))
+        .route("/ops/update", post(ops_update))
+        .route("/ops/update/status", get(ops_update_status))
+        .route("/ops/restart", post(ops_restart))
         .with_state(state);
 
     // Merge OKF routes (they have their own state) with main app.
@@ -1472,6 +1475,267 @@ fn read_heartbeat_status(config_path: &str) -> Option<(u64, String, u64, u64)> {
 
 const MAIN_HTML: &str = include_str!("static/index.html");
 
+// ── Ops endpoints: web UI self-update + restart (tasks 228, 229) ─────────────
+// Both mutate the host, so both are auth-gated with http_token_ok — the same
+// gate as the log-clear endpoints. Fail-open only when no [web] auth_token.
+
+/// Directory holding the ops job files (update script/log/pid), resolved with
+/// the same config-dir rule as every other log path (task 188).
+fn ops_dir(state: &AppState) -> std::path::PathBuf {
+    let log = resolve_log_path(&state.config_path, "logs/web-update.log");
+    std::path::Path::new(&log)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("logs"))
+}
+
+/// The checkout the running backend was built from: the directory holding the
+/// config file Helix actually loaded (WorkingDirectory under systemd).
+fn repo_dir(state: &AppState) -> std::path::PathBuf {
+    std::path::Path::new(&state.config_path)
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/home/cobble/helix"))
+        })
+}
+
+/// Single-quote a string for embedding in a shell script.
+fn sh_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+/// Is this pid alive? /proc-based, no extra crates.
+fn process_alive(pid: u32) -> bool {
+    std::path::Path::new(&format!("/proc/{pid}")).exists()
+}
+
+fn read_pid(path: &std::path::Path) -> Option<u32> {
+    std::fs::read_to_string(path).ok()?.trim().parse().ok()
+}
+
+/// Last `n` chars of a file, char-boundary safe. Empty when unreadable.
+fn tail_chars(path: &std::path::Path, n: usize) -> String {
+    let content = std::fs::read_to_string(path).unwrap_or_default();
+    if content.len() <= n {
+        return content;
+    }
+    let mut start = content.len() - n;
+    while !content.is_char_boundary(start) {
+        start += 1;
+    }
+    content[start..].to_string()
+}
+
+/// Build the self-update shell script.
+///
+/// The drill is John's own: git pull → cargo build --release →
+/// cargo run --bin installer. cargo lives in ~/.cargo/bin, which systemd
+/// services don't have on PATH, so the script exports it. The installer
+/// needs root for /usr/local/bin + /etc/systemd/system — headless sudo only
+/// works with a NOPASSWD rule, otherwise the log shows sudo's complaint.
+///
+/// `cgroup_escape` false (no systemd-run available) means the installer step
+/// is skipped: running it from inside helix.service's cgroup would SIGTERM
+/// the updater mid-install and leave helix down. The log then says exactly
+/// what to run by hand. Fail-safe beats fail-dead, sir.
+fn build_update_script(repo: &str, log: &str, pid: &str, cgroup_escape: bool) -> String {
+    let repo_q = sh_quote(repo);
+    let log_q = sh_quote(log);
+    let pid_q = sh_quote(pid);
+    let installer_step = if cgroup_escape {
+        "echo '--- cargo run --bin installer ---'\ncargo run --bin installer\nrc=$?\n".to_string()
+    } else {
+        format!(
+            "echo 'NOTE: no cgroup escape available — skipping the installer step.'\necho 'Finish by hand on the R630: cd {repo_q} && cargo run --bin installer'\nrc=2\n"
+        )
+    };
+    format!(
+        "echo $$ > {pid_q}\n{{\n\
+         echo '=== helix web update started '$(date -u +%FT%TZ)' ==='\n\
+         cd {repo_q} || {{ echo 'cannot cd to repo dir'; echo 'EXIT:1'; exit 1; }}\n\
+         echo '--- git pull ---'\n\
+         git pull || {{ echo 'git pull FAILED'; echo 'EXIT:1'; exit 1; }}\n\
+         export PATH=\"$HOME/.cargo/bin:$PATH\"\n\
+         echo '--- cargo build --release ---'\n\
+         cargo build --release || {{ echo 'build FAILED'; echo 'EXIT:1'; exit 1; }}\n\
+         {installer_step}\
+         echo \"=== update finished rc=$rc '$(date -u +%FT%TZ)' ===\"\n\
+         echo \"EXIT:$rc\"\n\
+         }} >> {log_q} 2>&1\n"
+    )
+}
+
+/// POST /ops/update — launch a detached self-update job (task 228).
+async fn ops_update(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    if !http_token_ok(&state.auth_token, &headers) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "missing or invalid web token"})),
+        )
+            .into_response();
+    }
+    let dir = ops_dir(&state);
+    let log_path = dir.join("web-update.log");
+    let pid_path = dir.join("web-update.pid");
+    if read_pid(&pid_path).is_some_and(process_alive) {
+        let pid = read_pid(&pid_path).unwrap_or(0);
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"status": "already_running", "pid": pid})),
+        )
+            .into_response();
+    }
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("cannot create ops dir: {e}")})),
+        )
+            .into_response();
+    }
+    let repo = repo_dir(&state).to_string_lossy().to_string();
+    // systemd-run --scope puts the job in its own cgroup, so the installer's
+    // `systemctl stop helix` can't SIGTERM the updater mid-install. A mere
+    // setsid child would die there and leave helix down — hence the upgrade.
+    let have_systemd_run = std::process::Command::new("systemd-run")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let script = build_update_script(
+        &repo,
+        &log_path.to_string_lossy(),
+        &pid_path.to_string_lossy(),
+        have_systemd_run,
+    );
+    let script_path = dir.join("web-update.sh");
+    if let Err(e) = std::fs::write(&script_path, &script) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("cannot write update script: {e}")})),
+        )
+            .into_response();
+    }
+    let _ = std::fs::write(
+        &log_path,
+        format!(
+            "update requested at {}\n",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        ),
+    );
+    let _ = std::fs::remove_file(&pid_path);
+
+    // setsid + spawn-without-wait: the endpoint never blocks on the job.
+    let launched = if have_systemd_run {
+        let unit = format!(
+            "helix-web-update-{}",
+            chrono::Local::now().format("%Y%m%d%H%M%S")
+        );
+        std::process::Command::new("setsid")
+            .args([
+                "systemd-run",
+                "--scope",
+                &format!("--unit={unit}"),
+                "--quiet",
+                "bash",
+            ])
+            .arg(&script_path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| "systemd-run --scope")
+            .map_err(|e| e.to_string())
+    } else {
+        std::process::Command::new("setsid")
+            .arg("bash")
+            .arg(&script_path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| "setsid (safe mode: installer step skipped)")
+            .map_err(|e| e.to_string())
+    };
+    match launched {
+        Ok(via) => Json(json!({"status": "started", "via": via})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("could not launch updater: {e}")})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /ops/update/status — poll the update job (task 228).
+async fn ops_update_status(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !http_token_ok(&state.auth_token, &headers) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "missing or invalid web token"})),
+        )
+            .into_response();
+    }
+    let dir = ops_dir(&state);
+    let running = read_pid(&dir.join("web-update.pid")).is_some_and(process_alive);
+    Json(json!({
+        "running": running,
+        "log_tail": tail_chars(&dir.join("web-update.log"), 6000),
+    }))
+    .into_response()
+}
+
+/// POST /ops/restart — restart the helix service (task 229).
+async fn ops_restart(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    if !http_token_ok(&state.auth_token, &headers) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "missing or invalid web token"})),
+        )
+            .into_response();
+    }
+    // --no-block: queue the restart and return before systemd SIGTERMs us.
+    // The installer's pattern is interactive sudo, which cannot work headless;
+    // `sudo -n` fails fast instead of hanging when no NOPASSWD rule exists.
+    let direct = std::process::Command::new("systemctl")
+        .args(["--no-block", "restart", "helix"])
+        .output();
+    let via = if matches!(&direct, Ok(o) if o.status.success()) {
+        Some("systemctl")
+    } else {
+        match std::process::Command::new("sudo")
+            .args(["-n", "systemctl", "--no-block", "restart", "helix"])
+            .output()
+        {
+            Ok(o) if o.status.success() => Some("sudo -n systemctl"),
+            Ok(o) => {
+                let detail = String::from_utf8_lossy(&o.stderr).trim().to_string();
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({
+                        "error": "restart failed",
+                        "detail": detail,
+                        "hint": "the web backend runs as cobble; allow it via polkit or add a NOPASSWD sudoers rule for 'systemctl restart helix'",
+                    })),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("could not run systemctl: {e}")})),
+                )
+                    .into_response();
+            }
+        }
+    };
+    Json(json!({"status": "restart_initiated", "via": via})).into_response()
+}
+
 /// Returns true if a file exists AND contains valid PEM data (not a placeholder).
 fn is_valid_pem(path: &str, expected_header: &str) -> bool {
     std::fs::read_to_string(path)
@@ -1837,5 +2101,229 @@ mod tests {
         assert_eq!(v["jsonrpc"], "2.0");
         assert_eq!(v["id"], 7);
         assert!(v["result"].is_array());
+    }
+
+    // ── ops endpoints: self-update + restart (tasks 228, 229) ────────────────
+
+    #[test]
+    fn build_update_script_full_mode_runs_johns_drill() {
+        // GIVEN cgroup escape is available,
+        let s = build_update_script("/home/cobble/helix", "/x/web-update.log", "/x/web-update.pid", true);
+        // WHEN the script is generated,
+        // THEN it runs John's exact drill and reports progress to the log:
+        assert!(s.contains("git pull"), "must git pull");
+        assert!(s.contains("cargo build --release"), "must build release");
+        assert!(s.contains("cargo run --bin installer"), "must run the installer, not reimplement it");
+        assert!(s.contains("$HOME/.cargo/bin"), "cargo needs its PATH export under systemd");
+        assert!(s.contains("echo $$ > '/x/web-update.pid'"), "must record its pid for the status endpoint");
+        assert!(s.contains(">> '/x/web-update.log' 2>&1"), "must append all output to the log");
+        assert!(s.contains("EXIT:"), "must leave an EXIT marker for the UI");
+    }
+
+    #[test]
+    fn build_update_script_safe_mode_skips_installer_step() {
+        // GIVEN no systemd-run (no cgroup escape),
+        let s = build_update_script("/home/cobble/helix", "/x/web-update.log", "/x/web-update.pid", false);
+        // WHEN the script is generated,
+        // THEN the installer step is skipped — running it inside
+        // helix.service's cgroup would SIGTERM the updater mid-install:
+        assert!(!s.contains("echo '--- cargo run --bin installer ---'"), "must NOT execute the installer without cgroup escape");
+        assert!(s.contains("git pull"), "pull still runs");
+        assert!(s.contains("cargo build --release"), "build still runs");
+        assert!(s.contains("Finish by hand"), "must tell John the manual finish command");
+    }
+
+    #[test]
+    fn build_update_script_quotes_paths_safely() {
+        // GIVEN paths with spaces and quotes,
+        let s = build_update_script("/tmp/a b", "/tmp/x'y.log", "/tmp/x.pid", true);
+        // WHEN the script is generated,
+        // THEN paths are single-quote-escaped for bash:
+        assert!(s.contains("'/tmp/a b'"));
+        assert!(s.contains("'/tmp/x'\\''y.log'"));
+    }
+
+    #[test]
+    fn tail_chars_returns_tail_and_respects_char_boundaries() {
+        // GIVEN a temp file with multibyte content,
+        let dir = std::env::temp_dir().join("helix-ops-test");
+        let _ = std::fs::create_dir_all(&dir);
+        let p = dir.join("tail.txt");
+        std::fs::write(&p, "héllo wörld — tail me").unwrap();
+        // WHEN we take a short tail,
+        let t = tail_chars(&p, 7);
+        // THEN we get whole chars only, never a panic or a split rune:
+        assert!(t.chars().count() <= 7);
+        assert!(t.ends_with("tail me") || "héllo wörld — tail me".ends_with(&t));
+        // AND a missing file yields empty, not a panic:
+        assert_eq!(tail_chars(&dir.join("nope.txt"), 10), "");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn process_alive_sees_own_pid_and_rejects_bogus() {
+        // GIVEN our own pid and a bogus one,
+        // WHEN checked,
+        // THEN the live one reports alive and the bogus one dead:
+        assert!(process_alive(std::process::id()));
+        assert!(!process_alive(u32::MAX));
+    }
+
+    #[test]
+    fn read_pid_roundtrip() {
+        // GIVEN a pid file,
+        let dir = std::env::temp_dir().join("helix-ops-test2");
+        let _ = std::fs::create_dir_all(&dir);
+        let p = dir.join("test.pid");
+        std::fs::write(&p, "12345\n").unwrap();
+        // WHEN read back,
+        // THEN we get the pid; garbage yields None:
+        assert_eq!(read_pid(&p), Some(12345));
+        std::fs::write(&p, "not-a-pid").unwrap();
+        assert_eq!(read_pid(&p), None);
+        assert_eq!(read_pid(&dir.join("missing.pid")), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Minimal router with just the ops endpoints, for HTTP contract tests.
+    /// config_path doubles as the repo dir + log dir anchor.
+    fn ops_test_app(auth_token: &str, anchor_dir: &str) -> Router {
+        let bus = Arc::new(Bus::new());
+        let (msg_tx, _rx) = broadcast::channel(16);
+        let routines = Arc::new(RwLock::new(
+            crate::cron::registry::RoutineRegistry::load_or_seed(
+                std::env::temp_dir().join("helix-ops-test-routines.json"),
+            ),
+        ));
+        let logging = LoggingConfig {
+            chat_log: format!("{anchor_dir}/chat_log.md"),
+            ..Default::default()
+        };
+        let state = AppState {
+            bus,
+            msg_tx,
+            config_str: String::new(),
+            config_path: format!("{anchor_dir}/config.toml"),
+            backends_json: "[]".to_string(),
+            logging,
+            auth_token: auth_token.to_string(),
+            routines,
+        };
+        Router::new()
+            .route("/ops/update", post(ops_update))
+            .route("/ops/update/status", get(ops_update_status))
+            .route("/ops/restart", post(ops_restart))
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn ops_endpoints_reject_missing_token() {
+        // GIVEN a token is configured,
+        use tower::ServiceExt;
+        let dir = std::env::temp_dir().join("helix-ops-test3");
+        let _ = std::fs::create_dir_all(&dir);
+        let app = ops_test_app("s3cret", dir.to_str().unwrap());
+        // WHEN each ops endpoint is hit without credentials,
+        // THEN all three reject with 401 (no side effects — the update job
+        // never spawns, systemctl never runs):
+        for (method, uri) in [
+            ("POST", "/ops/update"),
+            ("GET", "/ops/update/status"),
+            ("POST", "/ops/restart"),
+        ] {
+            let req = axum::http::Request::builder()
+                .method(method)
+                .uri(uri)
+                .body(axum::body::Body::empty())
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "{method} {uri}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn ops_update_status_polling_contract() {
+        // GIVEN an authed app with an ops dir,
+        use tower::ServiceExt;
+        let dir = std::env::temp_dir().join("helix-ops-test4");
+        let _ = std::fs::create_dir_all(&dir);
+        let anchor = dir.to_str().unwrap().to_string();
+        let app = ops_test_app("s3cret", &anchor);
+        // NOTE: the endpoint resolves logs/ under the config anchor (task 188).
+        let logs = dir.join("logs");
+        let _ = std::fs::create_dir_all(&logs);
+        let authed = |method: &str, uri: &str| {
+            axum::http::Request::builder()
+                .method(method)
+                .uri(uri)
+                .header("authorization", "Bearer s3cret")
+                .body(axum::body::Body::empty())
+                .unwrap()
+        };
+        // WHEN no job has ever run,
+        // THEN status reports not-running with an empty log tail:
+        let resp = app
+            .clone()
+            .oneshot(authed("GET", "/ops/update/status"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["running"], false);
+        assert_eq!(v["log_tail"], "");
+        // WHEN a live pid + log exist (simulating a running job),
+        std::fs::write(logs.join("web-update.pid"), format!("{}\n", std::process::id())).unwrap();
+        std::fs::write(logs.join("web-update.log"), "building…\n").unwrap();
+        let resp = app
+            .clone()
+            .oneshot(authed("GET", "/ops/update/status"))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // THEN the contract reports running with the log tail:
+        assert_eq!(v["running"], true);
+        assert!(v["log_tail"].as_str().unwrap().contains("building"));
+        // WHEN the pid is stale,
+        std::fs::write(logs.join("web-update.pid"), "4294967295\n").unwrap();
+        let resp = app
+            .clone()
+            .oneshot(authed("GET", "/ops/update/status"))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // THEN running flips false but the log remains readable:
+        assert_eq!(v["running"], false);
+        assert!(v["log_tail"].as_str().unwrap().contains("building"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn ops_restart_failure_returns_structured_error() {
+        // GIVEN an authed app on a box with no helix unit (this sandbox),
+        use tower::ServiceExt;
+        let dir = std::env::temp_dir().join("helix-ops-test5");
+        let _ = std::fs::create_dir_all(&dir);
+        let app = ops_test_app("s3cret", dir.to_str().unwrap());
+        // WHEN restart is requested,
+        let req = axum::http::Request::builder()
+            .method("POST")
+            .uri("/ops/restart")
+            .header("authorization", "Bearer s3cret")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // THEN we get honest structured JSON, never a panic or a hang:
+        // either initiated (a real helix box) or a detailed error here.
+        assert!(
+            v.get("status").is_some() || v.get("error").is_some(),
+            "must answer with status or error JSON, got: {v}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
