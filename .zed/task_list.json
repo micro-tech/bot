@@ -1745,13 +1745,14 @@
       "id": 240,
       "title": "S2: Apply require_web_token middleware to ops routes",
       "description": "Replace the 20 manual http_token_ok inline checks with the existing require_web_token axum middleware.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "GOAL: eliminate the forgotten-check class of auth bug. The middleware exists (src/io/web_server/mod.rs:496, already applied at lines 325, 348, 2284) but ops endpoints and 19 other sites do manual `if !http_token_ok(...)` checks inline (20 occurrences total \u2014 verified by grep).\n\nDetails: apply the middleware to the ops routes (/ops/update, /ops/update/status, /ops/restart) and audit each of the other 19 http_token_ok sites: convert to middleware where the route structure allows, keep inline only where middleware genuinely can't apply (document each kept site with a one-line reason in the task results).\n\nAcceptance: `grep -c http_token_ok src/io/web_server/mod.rs` drops to ~0 with every remaining site justified; all existing web_server auth tests still pass.",
       "testStrategy": "cargo check clean. Existing io::web_server auth tests green (31/31). New test if feasible: unauthenticated POST to /ops/restart is rejected. Full lib suite: no new failures.",
       "subtasks": [],
-      "review_type": "quality/security"
+      "review_type": "quality/security",
+      "results": "6 mutating endpoints (/logs/chat/clear, /logs/error/clear, /ops/update, /ops/update/status, /ops/restart, /ops/usage) now behind require_web_token middleware on a protected sub-router; inline http_token_ok checks removed from handlers. Remaining http_token_ok sites: the fn definition, the two middleware impls (require_web_token, require_okf_write_token \u2014 can't use middleware inside middleware), and unit tests. ops_test_app helper updated with the same middleware. 31/31 web_server tests green."
     },
     {
       "id": 241,

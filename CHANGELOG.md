@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Changed (task 240 DONE — Ranger 1, require_web_token on mutating routes)
+
+- **Forgotten-check bug class eliminated**: the 6 mutating endpoints (`/logs/chat/clear`, `/logs/error/clear`, `/ops/update`, `/ops/update/status`, `/ops/restart`, `/ops/usage`) moved onto a protected sub-router with `require_web_token` middleware; inline `http_token_ok` checks removed from their handlers. Remaining `http_token_ok` call sites are only inside the two middleware fns themselves (require_web_token, require_okf_write_token) plus unit tests — each justified.
+- **Verification**: 31/31 web_server tests green, including `ops_endpoints_reject_missing_token` (now exercises the middleware path) and the authed polling-contract test (valid Bearer <redacted> passes through).
+
+---
+
 ### Changed (task 237 DONE — Ranger 1, cache tool definitions)
 
 - **Per-spawn schema rebuild eliminated** (`src/tools/mod.rs`): the merged tool-definition list (statics + OKF + MCP) is now built once into a process-global `RwLock<Option<Value>>` cache. `tool_definitions()` clones the cached build on the fast path; `tool_definitions_excluding()` filters it. The expensive part was `mcp_client::tool_definitions()` blocking on the async manager every spawn — now runs only on cache miss.

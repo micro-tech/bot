@@ -344,7 +344,7 @@ pub async fn start_web_server(
         .route("/okf/reload/force", post(okf_api::okf_force_reload))
         .route("/okf/manifest", post(okf_api::okf_push_manifest))
         .route_layer(middleware::from_fn_with_state(
-            token_state,
+            token_state.clone(),
             require_web_token,
         ))
         .with_state(okf_state.clone());
@@ -422,19 +422,29 @@ pub async fn start_web_server(
     }
 
     // Build Axum router for main app
-    let main_app = Router::new()
-        .route("/", get(serve_index))
-        .route("/ws", get(ws_handler))
-        .route("/logs/chat", get(serve_chat_log))
+    // Task 240: mutating / auth-gated endpoints live on a protected sub-router
+    // with require_web_token middleware, instead of inline http_token_ok
+    // checks in each handler (eliminates the forgotten-check bug class).
+    let protected = Router::new()
         .route("/logs/chat/clear", post(clear_chat_log))
-        .route("/logs/error", get(serve_error_log))
         .route("/logs/error/clear", post(clear_error_log))
-        .route("/logs/bus", get(serve_bus_log))
-        .route("/logs/hartbeat", get(serve_hartbeat_log))
         .route("/ops/update", post(ops_update))
         .route("/ops/update/status", get(ops_update_status))
         .route("/ops/restart", post(ops_restart))
         .route("/ops/usage", get(ops_usage))
+        .route_layer(middleware::from_fn_with_state(
+            token_state.clone(),
+            require_web_token,
+        ))
+        .with_state(state.clone());
+    let main_app = Router::new()
+        .route("/", get(serve_index))
+        .route("/ws", get(ws_handler))
+        .route("/logs/chat", get(serve_chat_log))
+        .route("/logs/error", get(serve_error_log))
+        .route("/logs/bus", get(serve_bus_log))
+        .route("/logs/hartbeat", get(serve_hartbeat_log))
+        .merge(protected)
         .with_state(state);
 
     // Merge OKF routes (they have their own state) with main app.
@@ -1562,10 +1572,8 @@ async fn serve_chat_log(State(state): State<AppState>) -> impl IntoResponse {
     ))
 }
 
-async fn clear_chat_log(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    if !http_token_ok(&state.auth_token, &headers) {
-        return (StatusCode::UNAUTHORIZED, "missing or invalid web token").into_response();
-    }
+/// POST /logs/chat/clear — auth via require_web_token middleware (task 240).
+async fn clear_chat_log(State(state): State<AppState>) -> impl IntoResponse {
     let init_line = format!(
         "[INIT] Chat log cleared via web UI at {}\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
@@ -1574,10 +1582,8 @@ async fn clear_chat_log(State(state): State<AppState>, headers: HeaderMap) -> im
     Html("<span style='color:#69f0ae'>Chat log cleared.</span>").into_response()
 }
 
-async fn clear_error_log(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    if !http_token_ok(&state.auth_token, &headers) {
-        return (StatusCode::UNAUTHORIZED, "missing or invalid web token").into_response();
-    }
+/// POST /logs/error/clear — auth via require_web_token middleware (task 240).
+async fn clear_error_log(State(state): State<AppState>) -> impl IntoResponse {
     let init_line = format!(
         "[INIT] Error log cleared via web UI at {}\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
@@ -1747,14 +1753,8 @@ fn build_update_script(repo: &str, log: &str, pid: &str, cgroup_escape: bool) ->
 }
 
 /// POST /ops/update — launch a detached self-update job (task 228).
-async fn ops_update(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    if !http_token_ok(&state.auth_token, &headers) {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "missing or invalid web token"})),
-        )
-            .into_response();
-    }
+/// Auth via require_web_token middleware (task 240).
+async fn ops_update(State(state): State<AppState>) -> impl IntoResponse {
     let dir = ops_dir(&state);
     let log_path = dir.join("web-update.log");
     let pid_path = dir.join("web-update.pid");
@@ -1848,17 +1848,8 @@ async fn ops_update(State(state): State<AppState>, headers: HeaderMap) -> impl I
 }
 
 /// GET /ops/update/status — poll the update job (task 228).
-async fn ops_update_status(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    if !http_token_ok(&state.auth_token, &headers) {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "missing or invalid web token"})),
-        )
-            .into_response();
-    }
+/// Auth via require_web_token middleware (task 240).
+async fn ops_update_status(State(state): State<AppState>) -> impl IntoResponse {
     let dir = ops_dir(&state);
     let running = read_pid(&dir.join("web-update.pid")).is_some_and(process_alive);
     Json(json!({
@@ -1870,29 +1861,14 @@ async fn ops_update_status(
 
 /// GET /ops/usage — per-day, per-backend token usage + spend (task 236).
 /// Answers "where are usage stats": real metered tokens, not estimates.
-async fn ops_usage(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    if !http_token_ok(&state.auth_token, &headers) {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "missing or invalid web token"})),
-        )
-            .into_response();
-    }
+/// Auth via require_web_token middleware (task 240).
+async fn ops_usage() -> impl IntoResponse {
     Json(crate::router::spend::usage_summary_today()).into_response()
 }
 
 /// POST /ops/restart — restart the helix service (task 229).
-async fn ops_restart(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    if !http_token_ok(&state.auth_token, &headers) {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "missing or invalid web token"})),
-        )
-            .into_response();
-    }
+/// Auth via require_web_token middleware (task 240).
+async fn ops_restart(State(state): State<AppState>) -> impl IntoResponse {
     // --no-block: queue the restart and return before systemd SIGTERMs us.
     // The installer's pattern is interactive sudo, which cannot work headless;
     // `sudo -n` fails fast instead of hanging when no NOPASSWD rule exists.
@@ -2486,6 +2462,12 @@ mod tests {
             .route("/ops/update/status", get(ops_update_status))
             .route("/ops/restart", post(ops_restart))
             .route("/ops/usage", get(ops_usage))
+            // Task 240: same middleware as production — the handlers themselves
+            // no longer check the token.
+            .route_layer(middleware::from_fn_with_state(
+                Arc::new(auth_token.to_string()),
+                require_web_token,
+            ))
             .with_state(state)
     }
 
