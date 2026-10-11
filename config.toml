@@ -106,6 +106,10 @@ trace_file = "okf_traces.jsonl" # JSONL append target for POST /okf/traces
 [[mcp.servers]]
 name = "google"                  # Tool namespace: mcp__google__<tool>
 command = "/home/cobble/.local/bin/google-mcp"  # e.g. ~/workspace/google-mcp/target/debug/google-mcp
+
+
+
+
 # args = []                        # Extra argv entries (optional)
 #
 # # Extra env vars for the server process, on top of the inherited environment.

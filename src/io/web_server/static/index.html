@@ -125,6 +125,68 @@
                 background: var(--muted);
                 flex-shrink: 0;
             }
+            .status-dot.dot-idle {
+                background: #3fb950;
+            }
+            .status-dot.dot-working {
+                background: var(--accent);
+                animation: pulse-dot 1.2s ease-in-out infinite;
+            }
+            @keyframes pulse-dot {
+                0%,
+                100% {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+                50% {
+                    opacity: 0.45;
+                    transform: scale(0.8);
+                }
+            }
+            /* ── Sub-agents section (task 231) ────────────── */
+            #subagent-section {
+                border-top: 1px solid var(--border);
+                padding: 8px;
+                max-height: 40%;
+                overflow-y: auto;
+            }
+            #subagent-header {
+                font-size: 0.75em;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: var(--muted);
+                padding: 4px 4px 8px 4px;
+            }
+            .subagent-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 10px;
+                margin: 0 0 6px 0;
+                background: var(--panel);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+            }
+            .subagent-row.done {
+                opacity: 0.55;
+            }
+            .subagent-row .subagent-text {
+                flex: 1;
+                min-width: 0;
+            }
+            .subagent-row .role {
+                display: block;
+                font-weight: 600;
+                font-size: 0.9em;
+            }
+            .subagent-row .desc {
+                display: block;
+                font-size: 0.75em;
+                color: var(--muted);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
             .backend-icon {
                 width: 22px;
                 height: 22px;
@@ -145,6 +207,7 @@
                 flex-direction: column;
                 background: var(--bg);
                 min-width: 0;
+                min-height: 0; /* grid item: allow shrink below content so #chat-messages can scroll */
             }
             #chat-header {
                 display: flex;
@@ -172,6 +235,7 @@
             }
             #chat-messages {
                 flex: 1;
+                min-height: 0; /* flex item: allow shrink below content so overflow-y engages */
                 overflow-y: auto;
                 padding: 16px;
             }
@@ -206,6 +270,47 @@
             }
             #conn-dot.red {
                 background: var(--danger);
+            }
+            /* ── Ops buttons (tasks 228, 229) ─────────────────────── */
+            .ops-btn {
+                font-size: 0.8em;
+                padding: 4px 10px;
+                border-radius: 8px;
+                border: 1px solid var(--border);
+                background: var(--panel);
+                color: inherit;
+                cursor: pointer;
+            }
+            .ops-btn:hover {
+                border-color: var(--accent);
+            }
+            #ops-status {
+                font-size: 0.8em;
+                color: var(--muted);
+            }
+            #ops-panel {
+                display: none;
+                flex-direction: column;
+                border-bottom: 1px solid var(--border);
+                background: var(--panel-alt);
+                max-height: 240px;
+                min-height: 0;
+            }
+            #ops-panel-bar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 4px 12px;
+                font-size: 0.78em;
+                color: var(--muted);
+            }
+            #ops-log {
+                margin: 0;
+                padding: 8px 12px;
+                overflow-y: auto;
+                font-size: 0.78em;
+                white-space: pre-wrap;
+                min-height: 0;
             }
             .sender {
                 font-weight: bold;
@@ -765,6 +870,10 @@
                         Connecting…
                     </div>
                 </div>
+                <div id="subagent-section" hidden>
+                    <div id="subagent-header">Sub-agents</div>
+                    <div id="subagent-list"></div>
+                </div>
             </aside>
 
             <!-- CENTER CHAT -->
@@ -786,8 +895,39 @@
                     >
                         Details
                     </button>
+                    <button
+                        class="ops-btn"
+                        onclick="opsUpdate()"
+                        title="git pull + cargo build --release + installer"
+                    >
+                        Update
+                    </button>
+                    <button
+                        class="ops-btn"
+                        onclick="opsRestart()"
+                        title="restart the helix backend service"
+                    >
+                        Restart
+                    </button>
+                    <span id="ops-status"></span>
                     <span id="conn-dot" title="connection status"></span>
                 </header>
+                <div id="ops-panel">
+                    <div id="ops-panel-bar">
+                        <span>ops log</span>
+                        <button
+                            class="ops-btn"
+                            onclick="
+                                document.getElementById(
+                                    'ops-panel',
+                                ).style.display = 'none'
+                            "
+                        >
+                            hide
+                        </button>
+                    </div>
+                    <pre id="ops-log"></pre>
+                </div>
                 <div id="chat-messages"></div>
                 <div id="chat-input-row">
                     <input
@@ -910,6 +1050,10 @@
             let backendLabels = {};
             // Full backend list cache, for the Computer tab.
             let backendListCache = [];
+            // Task 231: backend activity (id -> "idle"|"working") from
+            // `agent_status`, and the live sub-agent record list.
+            let agentActivity = {};
+            let subagentRecords = [];
             // Backend icons (v1 winners, 64px) inlined as data URIs —
             // keeps the single-file UI setup intact (task-209 pattern).
             // id comes from the real `backends` WS message ("desktop",
@@ -922,6 +1066,8 @@
                     "data:image/png;base64,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",
                 server: "data:image/png;base64,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",
                 gemini: "data:image/png;base64,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",
+                subagent:
+                    "data:image/png;base64,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",
             };
             function backendIconFor(id) {
                 return BACKEND_ICONS[id] || BACKEND_ICONS.default;
@@ -1153,6 +1299,132 @@
                     });
             }
 
+            // ── OPS BUTTONS (tasks 228, 229) ──────────────────────────────
+            // Auth-gated backend endpoints (/ops/*). The UI keeps no token UI;
+            // on 401 we prompt once and stash the token in sessionStorage.
+            let opsToken = sessionStorage.getItem("helix_ops_token") || "";
+            let opsUpdating = false;
+
+            async function opsFetch(url, opts) {
+                opts = opts || {};
+                const headers = Object.assign({}, opts.headers || {});
+                if (opsToken) headers["Authorization"] = "Bearer " + opsToken;
+                const r = await fetch(
+                    url,
+                    Object.assign({}, opts, { headers }),
+                );
+                if (r.status === 401) {
+                    const t = prompt("This action needs the Helix web token:");
+                    if (!t) throw new Error("auth cancelled");
+                    opsToken = t;
+                    sessionStorage.setItem("helix_ops_token", t);
+                    return opsFetch(url, opts);
+                }
+                return r;
+            }
+
+            function opsShowLog(text) {
+                const panel = document.getElementById("ops-panel");
+                const pre = document.getElementById("ops-log");
+                if (panel) panel.style.display = "flex";
+                if (pre) {
+                    pre.textContent = text;
+                    pre.scrollTop = pre.scrollHeight;
+                }
+            }
+
+            function opsSetStatus(text) {
+                const st = document.getElementById("ops-status");
+                if (st) st.textContent = text;
+            }
+
+            async function opsUpdate() {
+                if (
+                    !confirm(
+                        "Update Helix now?\n\nRuns: git pull && cargo build --release && cargo run --bin installer.\nThe backend will restart when the installer finishes.",
+                    )
+                )
+                    return;
+                opsUpdating = true;
+                opsSetStatus("starting update…");
+                try {
+                    const r = await opsFetch("/ops/update", { method: "POST" });
+                    const j = await r.json();
+                    if (!r.ok) {
+                        opsShowLog(
+                            "update failed to start: " + (j.error || r.status),
+                        );
+                        opsUpdating = false;
+                        opsSetStatus("");
+                        return;
+                    }
+                    opsShowLog(
+                        (j.status === "already_running"
+                            ? "update already running (pid " + j.pid + ")…"
+                            : "update started (" + j.via + ")…") + "\n",
+                    );
+                    setTimeout(pollOpsStatus, 2000);
+                } catch (e) {
+                    opsShowLog("update error: " + e.message);
+                    opsUpdating = false;
+                    opsSetStatus("");
+                }
+            }
+
+            async function pollOpsStatus() {
+                let j = null;
+                try {
+                    const r = await opsFetch("/ops/update/status");
+                    j = await r.json();
+                } catch (e) {
+                    // Backend unreachable — the installer likely stopped it.
+                    // The WS onclose handler is already reconnecting; onopen
+                    // re-polls when the backend comes back.
+                    opsSetStatus("backend restarting…");
+                    return;
+                }
+                opsShowLog(j.log_tail || "(no log yet)");
+                if (j.running) {
+                    opsSetStatus("updating…");
+                    setTimeout(pollOpsStatus, 3000);
+                    return;
+                }
+                opsUpdating = false;
+                opsSetStatus("update finished — see log");
+            }
+
+            async function opsRestart() {
+                if (!confirm("Restart the Helix backend now?")) return;
+                try {
+                    const r = await opsFetch("/ops/restart", {
+                        method: "POST",
+                    });
+                    const j = await r.json();
+                    if (!r.ok) {
+                        alert(
+                            "restart failed: " +
+                                (j.error || r.status) +
+                                "\n" +
+                                (j.detail || "") +
+                                "\n" +
+                                (j.hint || ""),
+                        );
+                        return;
+                    }
+                    // Deliberate restarting state; the existing WS
+                    // onclose→reconnect cycle takes over from here.
+                    opsSetStatus("restarting…");
+                    const dot = document.getElementById("conn-dot");
+                    if (dot) {
+                        dot.classList.remove("green");
+                        dot.classList.add("red");
+                        dot.title = "restarting…";
+                    }
+                } catch (e) {
+                    alert("restart error: " + e.message);
+                }
+            }
+
             function connectWS() {
                 const protocol =
                     location.protocol === "https:" ? "wss:" : "ws:";
@@ -1167,6 +1439,13 @@
                     // Existing contract, no new message invented.
                     if (ws && ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({ type: "routines_list" }));
+                    }
+                    // Tasks 228/229: an update or restart may have been in
+                    // flight across the reconnect — resume polling the log.
+                    if (typeof opsUpdating !== "undefined" && opsUpdating) {
+                        pollOpsStatus();
+                    } else if (typeof opsSetStatus !== "undefined") {
+                        opsSetStatus("");
                     }
                 };
                 ws.onmessage = handleMessage;
@@ -1188,6 +1467,10 @@
                     // ignore manifest on the UI for now
                 } else if (msg.type === "backends") {
                     buildLlmButtons(msg.backends);
+                } else if (msg.type === "agent_status") {
+                    handleAgentStatus(msg);
+                } else if (msg.type === "subagent_event") {
+                    handleSubagentEvent(msg);
                 } else if (msg.type === "routines") {
                     renderRoutines(
                         Array.isArray(msg.routines) ? msg.routines : [],
@@ -1236,9 +1519,9 @@
                     const btn = document.createElement("button");
                     btn.className = "llm-btn";
                     btn.dataset.id = b.id;
-                    // Status dot: the `backends` message carries no health
-                    // data, so this stays neutral ("unknown") rather than
-                    // implying a live status we don't have.
+                    // Status dot: neutral ("unknown") until an
+                    // `agent_status` snapshot arrives; refreshBackendDots()
+                    // then paints working/idle from agentActivity.
                     const dot = document.createElement("span");
                     dot.className = "status-dot";
                     dot.title = "status unknown";
@@ -1264,6 +1547,96 @@
                     // Auto-select the first backend
                     if (i === 0) selectLlm(b.id);
                 });
+                refreshBackendDots();
+            }
+
+            // Task 231: paint backend status dots from agentActivity
+            // without rebuilding the buttons (preserves selection).
+            function refreshBackendDots() {
+                document
+                    .querySelectorAll("#backend-list .llm-btn")
+                    .forEach((btn) => {
+                        const dot = btn.querySelector(".status-dot");
+                        if (!dot) return;
+                        const activity = agentActivity[btn.dataset.id];
+                        dot.classList.remove("dot-working", "dot-idle");
+                        if (activity === "working") {
+                            dot.classList.add("dot-working");
+                            dot.title = "working";
+                        } else if (activity === "idle") {
+                            dot.classList.add("dot-idle");
+                            dot.title = "idle";
+                        } else {
+                            dot.title = "status unknown";
+                        }
+                    });
+            }
+
+            // Task 231: render the sub-agent rows wholesale from
+            // subagentRecords. Working rows pulse; finished rows grey out.
+            function renderSubagents() {
+                const section = document.getElementById("subagent-section");
+                const list = document.getElementById("subagent-list");
+                if (!section || !list) return;
+                list.innerHTML = "";
+                if (subagentRecords.length === 0) {
+                    section.hidden = true;
+                    return;
+                }
+                section.hidden = false;
+                subagentRecords.forEach((s) => {
+                    const working = s.status === "working";
+                    const row = document.createElement("div");
+                    row.className = "subagent-row" + (working ? "" : " done");
+                    const icon = document.createElement("img");
+                    icon.className = "backend-icon";
+                    icon.src = BACKEND_ICONS.subagent;
+                    icon.alt = "";
+                    icon.draggable = false;
+                    const dot = document.createElement("span");
+                    dot.className =
+                        "status-dot" + (working ? " dot-working" : "");
+                    dot.title = working ? "working" : "finished: " + s.status;
+                    const text = document.createElement("span");
+                    text.className = "subagent-text";
+                    const role = document.createElement("span");
+                    role.className = "role";
+                    role.textContent = s.role_hint || s.id || "sub-agent";
+                    const desc = document.createElement("span");
+                    desc.className = "desc";
+                    desc.textContent = s.task_summary || "";
+                    desc.title = s.task_summary || "";
+                    text.appendChild(role);
+                    text.appendChild(desc);
+                    row.appendChild(icon);
+                    row.appendChild(dot);
+                    row.appendChild(text);
+                    list.appendChild(row);
+                });
+            }
+
+            // Task 231: wholesale snapshot — backend activity plus
+            // the full sub-agent list. Re-render from it directly.
+            function handleAgentStatus(msg) {
+                agentActivity = {};
+                (msg.backends || []).forEach((b) => {
+                    agentActivity[b.id] = b.activity || "unknown";
+                });
+                subagentRecords = Array.isArray(msg.subagents)
+                    ? msg.subagents
+                    : [];
+                refreshBackendDots();
+                renderSubagents();
+            }
+
+            // Task 231: live delta — upsert the record, re-render.
+            function handleSubagentEvent(msg) {
+                const s = msg.subagent;
+                if (!s || !s.id) return;
+                const i = subagentRecords.findIndex((r) => r.id === s.id);
+                if (i >= 0) subagentRecords[i] = s;
+                else subagentRecords.push(s);
+                renderSubagents();
             }
 
             function selectLlm(id) {
