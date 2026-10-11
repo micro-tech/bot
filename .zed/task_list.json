@@ -1697,7 +1697,7 @@
       "id": 238,
       "title": "P2: Response streaming for the Ollama chat path",
       "description": "Implement SSE/NDJSON token streaming so the web UI renders time-to-first-token instead of waiting for the full response.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "GOAL: time-to-first-token in the web UI. The Ollama path currently hardcodes \"stream\": false with a comment that streaming returns NDJSON.\n\nDetails: (1) in src/io/ollama/mod.rs, add a streaming variant of the chat call that consumes the NDJSON token stream; (2) in src/io/web_server/mod.rs, forward tokens over the existing WS bridge as incremental messages (extend the bridge message contract \u2014 document the new message shape in the task results for the UI side); (3) web UI renders tokens incrementally. NOTE for John: this changes the WS message contract \u2014 flag it, don't surprise him. If task 241 (god-module split) lands first, target the new src/io/web_server/ws.rs instead of mod.rs.\n\nKeep the non-streaming path for sub-agents (they need the complete text).\n\nAcceptance: a chat round-trip delivers at least two incremental token messages before the final message; non-streaming callers unaffected.",
@@ -1726,7 +1726,8 @@
           ]
         }
       ],
-      "review_type": "gap/perf"
+      "review_type": "gap/perf",
+      "results": "Streaming shipped. call_ollama_tools streams NDJSON when given on_token callback (None = buffered, for sub-agents). Token flow: ollama handler publishes llm_token -> CPU forwards chat_token -> bridge -> WS as {type: chat_token, token, correlation_id}. UI CONTRACT (for Sapper 1/John): append token to in-progress bubble by correlation_id; final llm_output unchanged. 4 new tests green; suites 63/63. NOTE: UI incremental rendering not yet wired (backend only)."
     },
     {
       "id": 239,

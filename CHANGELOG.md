@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Added (task 238 DONE — Ranger 1, Ollama response streaming)
+
+- **Time-to-first-token**: the Ollama tool loop now streams (`"stream": true`) when given a token callback; `parse_stream_line` parses NDJSON lines, `read_streaming_response` reassembles the message (preserving `tool_calls` + eval counts for task-236 metering). `call_ollama_tools` takes `Option<&mut dyn FnMut(String)>` — `None` keeps buffered behavior for sub-agents.
+- **Token flow**: Ollama handler → `llm_token` bus msg → CPU → `chat_token` bus msg → bridge → WS. Minimal per-token overhead (no memory writes).
+- **⚠️ WS CONTRACT CHANGE** (for John/Sapper 1 — UI side not yet wired): new message shape
+  `{"type": "chat_token", "from": "cpu", "token": "<chunk>", "correlation_id": 12345}`.
+  UI should append `token` to the in-progress bubble for that `correlation_id`; the final `llm_output` still delivers the complete text. Unknown to old UIs = safely ignored.
+- **Verification**: 3 parser tests + 1 bridge test green; ollama/web_server/cpu suites 63/63.
+
+---
+
 ### Changed (task 240 DONE — Ranger 1, require_web_token on mutating routes)
 
 - **Forgotten-check bug class eliminated**: the 6 mutating endpoints (`/logs/chat/clear`, `/logs/error/clear`, `/ops/update`, `/ops/update/status`, `/ops/restart`, `/ops/usage`) moved onto a protected sub-router with `require_web_token` middleware; inline `http_token_ok` checks removed from their handlers. Remaining `http_token_ok` call sites are only inside the two middleware fns themselves (require_web_token, require_okf_write_token) plus unit tests — each justified.
