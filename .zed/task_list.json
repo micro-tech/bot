@@ -1817,13 +1817,14 @@
       "id": 243,
       "title": "G3: Persist chat history to disk",
       "description": "Persist the task-223 in-memory ring buffer as JSONL and reload on boot so restarts stop wiping the last 10 turns.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "GOAL: restarts currently wipe all conversation history.\n\nDetails: in src/chat_history.rs, append each completed turn to a JSONL file (same directory pattern as the trace log \u2014 check where the trace log lives and co-locate); on boot, reload the last 10 turns (respecting the existing 10-turn / 2000-char caps). Handle corrupt lines by skipping (log + continue, never crash boot).\n\nAcceptance: restart preserves the last 10 turns; corrupt JSONL lines don't break startup.",
       "testStrategy": "cargo check clean. New unit tests: round-trip persist/reload; corrupt-line tolerance; cap enforcement on reload. Full lib suite: no new failures.",
       "subtasks": [],
-      "review_type": "gap"
+      "review_type": "gap",
+      "results": "JSONL persistence shipped: record_turn appends to logs/chat_history.jsonl (HELIX_CHAT_HISTORY_FILE override); load_from_disk() at boot reloads last 10; corrupt lines logged+skipped; file compacts on load. 3 new tests green (round-trip, corrupt tolerance, cap); 9/9 chat_history. Test helper now uses test_env_lock (fixes pre-existing parallel flake)."
     },
     {
       "id": 244,
