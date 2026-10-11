@@ -1281,7 +1281,12 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             .to_string();
                         let mut correlation_id = get_timestamp();
                         {
-                            let mut guard = state.inflight.lock().unwrap();
+                            // Task 239: recover from a poisoned mutex instead of
+                            // panicking the request handler.
+                            let mut guard = state
+                                .inflight
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
                             while guard.contains_key(&correlation_id) {
                                 correlation_id = correlation_id.wrapping_add(1);
                             }
