@@ -328,7 +328,8 @@ pub fn paid_spent_today_usd() -> f64 {
 }
 
 /// Test/maintenance hook: reset the in-memory + on-disk state.
-#[cfg(test)]
+/// Reset spend state. Used by unit tests and the eval harness (task 242);
+/// not for production use.
 pub fn reset_for_tests() {
     let lock = tracker();
     let mut state = lock.lock().unwrap_or_else(|e| e.into_inner());

@@ -424,7 +424,8 @@ pub async fn handle_ollama_message(
     // still carries the complete text (unchanged contract).
     let bus_clone = Arc::clone(bus);
     let backend_tag = format!("ollama_{}", backend_name);
-    let mut on_token = |token: String| {
+    // Task 238: Arc<dyn Fn> so the callback is Send (spawned task bound).
+    let on_token: Arc<dyn Fn(String) + Send + Sync> = Arc::new(move |token: String| {
         let token_msg = crate::bus::Message {
             to: "cpu".to_string(),
             from: backend_tag.clone(),
@@ -437,10 +438,10 @@ pub async fn handle_ollama_message(
             timestamp: now_ms(),
         };
         let _ = bus_clone.publish(token_msg);
-    };
+    });
 
     for attempt in 1..=MAX_RETRIES {
-        match call_ollama(&client, base_url, model, &prompt, bus, Some(&mut on_token)).await {
+        match call_ollama(&client, base_url, model, &prompt, bus, Some(on_token.clone())).await {
             // SUCCESS — Ollama returned a valid response
             Ok(response) => {
                 info!(
@@ -548,21 +549,17 @@ pub async fn handle_ollama_message(
 // ── internal HTTP helpers ─────────────────────────────────────────────────────
 
 /// Wrapper that assembles the default tool-list and delegates to the loop.
-/// `on_token` enables streaming (task 238); `None` = buffered (sub-agents).
+/// `on_token` (Arc, Send) enables streaming (task 238); `None` = buffered (sub-agents).
 async fn call_ollama(
     client: &Client,
     base_url: &str,
     model: &str,
     prompt: &str,
     bus: &Arc<Bus>,
-    mut on_token: Option<&mut dyn FnMut(String)>,
+    on_token: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let tool_defs = crate::tools::tool_definitions();
-    let cb: Option<&mut dyn FnMut(String)> = match &mut on_token {
-        Some(f) => Some(&mut **f),
-        None => None,
-    };
-    tools::call_ollama_tools(client, base_url, model, prompt, tool_defs, bus, cb).await
+    tools::call_ollama_tools(client, base_url, model, prompt, tool_defs, bus, on_token).await
 }
 
 // ── Task 238: streaming NDJSON support ─────────────────────────────────────
@@ -597,13 +594,13 @@ pub fn parse_stream_line(line: &str) -> Option<(String, bool)> {
 /// keeping task-236 metering working on the streaming path.
 async fn read_streaming_response(
     resp: reqwest::Response,
-    on_token: Option<&mut dyn FnMut(String)>,
+    on_token: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
 ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
     let mut content = String::new();
     let mut tool_calls: Option<Value> = None;
     let mut eval_counts = serde_json::Map::new();
     let mut buf = String::new();
-    let mut on_token = on_token;
+    let on_token = on_token;
 
     // Pull chunks with resp.chunk() (no `stream` feature needed) and split
     // NDJSON lines incrementally for time-to-first-token.
@@ -624,8 +621,8 @@ async fn read_streaming_response(
             };
             if !token.is_empty() {
                 content.push_str(&token);
-                if let Some(cb) = on_token.as_deref_mut() {
-                    cb(token);
+                if let Some(cb) = on_token.as_ref() {
+                    cb(token.clone());
                 }
             }
             if done {
@@ -652,8 +649,8 @@ async fn read_streaming_response(
         if let Some((token, _)) = parse_stream_line(&buf) {
             if !token.is_empty() {
                 content.push_str(&token);
-                if let Some(cb) = on_token.as_deref_mut() {
-                    cb(token);
+                if let Some(cb) = on_token.as_ref() {
+                    cb(token.clone());
                 }
             }
         }
@@ -720,7 +717,7 @@ pub mod tools {
         prompt: &str,
         tools: Value,
         bus: &Arc<Bus>,
-        mut on_token: Option<&mut dyn FnMut(String)>,
+        on_token: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Task 215: commander system prompt — the model needs to know it
         // should delegate via spawn_subagent instead of chatting.
@@ -781,11 +778,7 @@ pub mod tools {
             // Task 238: streaming NDJSON vs buffered single-JSON.
             // Reborrow the callback each round (short-lived, no cross-iteration borrow).
             let parsed: Value = if stream {
-                let cb: Option<&mut dyn FnMut(String)> = match &mut on_token {
-                    Some(f) => Some(&mut **f),
-                    None => None,
-                };
-                read_streaming_response(resp, cb).await?
+                    read_streaming_response(resp, on_token.clone()).await?
             } else {
                 resp.json().await.map_err(|e| {
                     let e: Box<dyn std::error::Error + Send + Sync> =

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Added (task 242 DONE — Ranger 1, eval harness; EVAL SET DRAFT)
+
+- **Eval harness** (`evals/` + `tests/evals.rs`, `cargo test --test evals`): 10 deterministic behavioral evals (injection block/warn, sub-agent spawn guard, tool-def cache, commander reminder, Gemini metering, cap warn-mode, chat_token contract, ops auth invariant). No live LLM required.
+- **Gate verified**: deliberately breaking the validator fails 3 evals; restored → 10/10 green.
+- **⚠️ FOR JOHN**: the eval set is DRAFT — he must supply/approve the representative task list. LLM-dependent evals (tool-calling accuracy, delegation, end-to-end injection refusal, persona compliance) are deferred pending his list. See `evals/eval-set.md`.
+
+---
+
 ### Added (task 238 DONE — Ranger 1, Ollama response streaming)
 
 - **Time-to-first-token**: the Ollama tool loop now streams (`"stream": true`) when given a token callback; `parse_stream_line` parses NDJSON lines, `read_streaming_response` reassembles the message (preserving `tool_calls` + eval counts for task-236 metering). `call_ollama_tools` takes `Option<&mut dyn FnMut(String)>` — `None` keeps buffered behavior for sub-agents.
