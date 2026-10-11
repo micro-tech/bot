@@ -17,12 +17,14 @@ use futures_util::{SinkExt, StreamExt};
 use log::info;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 // use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
 use tokio::sync::broadcast;
 use tokio::sync::RwLock;
@@ -51,6 +53,12 @@ struct AppState {
     /// spawned in main.rs — the WS routines API and the scheduler operate on
     /// the same registry, so toggles take effect without a restart.
     routines: Arc<RwLock<crate::cron::registry::RoutineRegistry>>,
+    /// In-flight chat requests (task 230): correlation_id -> (backend_id,
+    /// sent_at_ms). Inserted when a chat_request leaves the web UI, removed
+    /// when the matching llm_output/ollama_response crosses the bridge (or by
+    /// the 5-minute TTL sweep if the backend never answers). Drives the
+    /// per-backend working/idle indicator in the agent_status snapshot.
+    inflight: Arc<Mutex<HashMap<u64, (String, u64)>>>,
 }
 
 // ── Config structs ────────────────────────────────────────────────────────────
@@ -370,7 +378,48 @@ pub async fn start_web_server(
         logging: parsed_cfg.logging.clone(),
         auth_token,
         routines,
+        inflight: Arc::new(Mutex::new(HashMap::new())),
     };
+
+    // Task 230: sub-agent registry → WS status re-broadcast. Installed once
+    // here (not per-connection): every registry change (spawn/finish) pushes
+    // a fresh agent_status snapshot to all WS clients via the broadcast
+    // channel. Read-only status traffic, same auth model as backends/tool_call.
+    {
+        let listener_state = state.clone();
+        crate::agents::subagent_registry::set_status_listener(Arc::new(move || {
+            let _ = listener_state
+                .msg_tx
+                .send(agent_status_snapshot(&listener_state));
+        }));
+    }
+
+    // Task 230: reap in-flight entries whose backend never answered (5-minute
+    // TTL), so a lost response can't wedge a backend on "working" forever.
+    {
+        let sweep_state = state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                let cutoff = get_timestamp().saturating_sub(5 * 60 * 1000);
+                let reaped = match sweep_state.inflight.lock() {
+                    Ok(mut g) => {
+                        let before = g.len();
+                        g.retain(|_, (_, sent_at)| *sent_at >= cutoff);
+                        before - g.len()
+                    }
+                    Err(_) => 0,
+                };
+                if reaped > 0 {
+                    log::warn!("agent_status: reaped {} stale in-flight entries", reaped);
+                    let _ = sweep_state
+                        .msg_tx
+                        .send(agent_status_snapshot(&sweep_state));
+                }
+            }
+        });
+    }
 
     // Build Axum router for main app
     let main_app = Router::new()
@@ -641,7 +690,162 @@ fn get_timestamp() -> u64 {
         .as_millis() as u64
 }
 
-// ── WebSocket handler ─────────────────────────────────────────────────────────
+// ── agent_status snapshot (task 230) ──────────────────────────────────────────
+// The web UI left panel renders sub-agent rows and per-backend working/idle
+// indicators from this. Sent on every WS connect and re-broadcast on every
+// registry change (spawn/finish) and in-flight change (request/response).
+// Clients re-render from the snapshot wholesale — no incremental sync state.
+fn agent_status_snapshot(state: &AppState) -> String {
+    build_agent_status(&state.backends_json, &state.inflight)
+}
+
+// ── agent_status builder (task 230) ───────────────────────────────────────────
+// Split from agent_status_snapshot so the bridge thread (which only holds the
+// pieces, not AppState) can re-broadcast without cloning the whole state.
+fn build_agent_status(
+    backends_json: &str,
+    inflight: &Arc<Mutex<HashMap<u64, (String, u64)>>>,
+) -> String {
+    let backends: Vec<Value> = serde_json::from_str(backends_json).unwrap_or_default();
+    let working_backends: Vec<String> = inflight
+        .lock()
+        .map(|g| g.values().map(|(b, _)| b.clone()).collect())
+        .unwrap_or_default();
+    let backends_out: Vec<Value> = backends
+        .iter()
+        .map(|b| {
+            let id = b["id"].as_str().unwrap_or("");
+            json!({
+                "id": id,
+                "activity": if working_backends.iter().any(|w| w == id) { "working" } else { "idle" },
+            })
+        })
+        .collect();
+    let subagents: Vec<Value> = crate::agents::subagent_registry::snapshot()
+        .iter()
+        .map(crate::agents::subagent_registry::record_to_json)
+        .collect();
+    json!({
+        "type": "agent_status",
+        "backends": backends_out,
+        "subagents": subagents,
+    })
+    .to_string()
+}
+
+// ── Bus → WS message translation (task 230) ────────────────────────────────
+// Extracted from the bridge thread below so unit tests can drive it
+// directly. Returns (payload, agent_status_dirty): payload is None for
+// messages that produce no UI output; dirty is true when an in-flight
+// backend entry was retired and the caller should re-broadcast
+// agent_status so the working indicator flips promptly.
+fn bridge_out_message(
+    msg: &Message,
+    inflight: &Arc<Mutex<HashMap<u64, (String, u64)>>>,
+) -> (Option<String>, bool) {
+    // Parse the inner data to check its type field reliably.
+    let inner: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
+    let msg_type = inner["type"].as_str().unwrap_or("");
+
+    // A response carrying correlation_id retires the matching in-flight
+    // entry, flipping that backend back to idle in the next snapshot.
+    let retire_inflight = || -> bool {
+        match inner["correlation_id"].as_u64() {
+            Some(cid) if cid != 0 => inflight
+                .lock()
+                .map(|mut g| g.remove(&cid).is_some())
+                .unwrap_or(false),
+            _ => false,
+        }
+    };
+    let cid = inner["correlation_id"].as_u64().unwrap_or(0);
+
+    // Ultra-defensive text extraction shared by the response arms: always
+    // end up with a plain string or give up (None).
+    fn extract_text(inner: &serde_json::Value) -> String {
+        let mut text = String::new();
+        for key in ["msg", "data", "content", "text", "response"] {
+            if let Some(s) = inner[key].as_str() {
+                text = s.to_string();
+                break;
+            } else if let Some(v) = inner.get(key) {
+                if v.is_string() {
+                    text = v.as_str().unwrap_or("").to_string();
+                    break;
+                } else if v.is_object() {
+                    // drill one level
+                    if let Some(s) = v["msg"]
+                        .as_str()
+                        .or_else(|| v["data"].as_str())
+                        .or_else(|| v["content"].as_str())
+                    {
+                        text = s.to_string();
+                        break;
+                    }
+                }
+            }
+        }
+        if text.is_empty() {
+            // last resort: if the whole inner is just a string or has a top-level value
+            if let Some(s) = inner.as_str() {
+                text = s.to_string();
+            }
+        }
+        text
+    }
+
+    match msg_type {
+        "llm_output" | "llm_response" => {
+            let text = extract_text(&inner);
+            if text.is_empty() {
+                return (None, false);
+            }
+            let dirty = retire_inflight();
+            (
+                Some(
+                    json!({ "type": "llm_output", "from": msg.from, "data": text, "correlation_id": cid })
+                        .to_string(),
+                ),
+                dirty,
+            )
+        }
+        "ollama_response" => {
+            let text = extract_text(&inner);
+            if text.is_empty() {
+                return (None, false);
+            }
+            let from = inner["llm"].as_str().unwrap_or(&msg.from).to_string();
+            let dirty = retire_inflight();
+            (
+                Some(
+                    json!({ "type": "ollama_response", "from": from, "data": text, "correlation_id": cid })
+                        .to_string(),
+                ),
+                dirty,
+            )
+        }
+        // Well-formed UI messages — forward as-is (including errors so they are visible)
+        "user_msg" | "config" | "manifest" | "config_status" | "manifest_status"
+        | "log" | "error" | "warning" | "tool_call" | "heartbeat_status"
+        | "heartbeat_missed" | "subagent_event" => (Some(msg.data.clone()), false),
+        _ => {
+            // Unknown — wrap so nothing is silently dropped
+            (
+                Some(
+                    json!({
+                        "type": "bus_msg",
+                        "to": msg.to,
+                        "from": msg.from,
+                        "data": msg.data,
+                        "timestamp": msg.timestamp
+                    })
+                    .to_string(),
+                ),
+                false,
+            )
+        }
+    }
+}
 
 async fn handle_ws(socket: WebSocket, state: AppState) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
@@ -682,6 +886,13 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     })
     .to_string();
     let _ = ws_sender.send(WsMessage::Text(backends_msg.into())).await;
+
+    // 3b. Send agent_status snapshot (task 230): per-backend working/idle
+    // indicators plus the live sub-agent list, so the UI is correct from
+    // the first paint without waiting for an event.
+    let _ = ws_sender
+        .send(WsMessage::Text(agent_status_snapshot(&state).into()))
+        .await;
 
     // 4. Send a test log entry to confirm the WS pipe is working
     let test_log_msg = json!({
@@ -749,78 +960,24 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     let (bridge_tx, mut bridge_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
     // Blocking thread: subscribes to the bus and forwards to the bridge
+    let inflight_bridge = state.inflight.clone();
+    let backends_bridge = state.backends_json.clone();
+    let msg_tx_bridge = state.msg_tx.clone();
     std::thread::spawn(move || {
         let rx = bus_clone.subscribe("web_interface");
         while let Ok(msg) = rx.recv() {
-            // Parse the inner data to check its type field reliably.
-            let inner: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
-            let msg_type = inner["type"].as_str().unwrap_or("");
-
-            let out = match msg_type {
-                "llm_output" | "llm_response" => {
-                    // Ultra-defensive extraction: always end up with a plain string
-                    let mut text = String::new();
-                    for key in ["msg", "data", "content", "text", "response"] {
-                        if let Some(s) = inner[key].as_str() {
-                            text = s.to_string();
-                            break;
-                        } else if let Some(v) = inner.get(key) {
-                            if v.is_string() {
-                                text = v.as_str().unwrap_or("").to_string();
-                                break;
-                            } else if v.is_object() {
-                                // drill one level
-                                if let Some(s) = v["msg"].as_str().or_else(|| v["data"].as_str()).or_else(|| v["content"].as_str()) {
-                                    text = s.to_string();
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if text.is_empty() {
-                        // last resort: if the whole inner is just a string or has a top-level value
-                        if let Some(s) = inner.as_str() {
-                            text = s.to_string();
-                        }
-                    }
-                    if text.is_empty() {
-                        continue;
-                    }
-                    json!({ "type": "llm_output", "from": msg.from, "data": text }).to_string()
+            let (out, dirty) = bridge_out_message(&msg, &inflight_bridge);
+            if dirty {
+                // A backend just answered: push a fresh agent_status so its
+                // working indicator flips back to idle without waiting for
+                // the next registry event.
+                let _ =
+                    msg_tx_bridge.send(build_agent_status(&backends_bridge, &inflight_bridge));
+            }
+            if let Some(out) = out {
+                if bridge_tx.send(out).is_err() {
+                    break; // async side dropped (WS closed)
                 }
-                "ollama_response" => {
-                    let mut text = String::new();
-                    for key in ["msg", "data", "content", "text", "response"] {
-                        if let Some(s) = inner[key].as_str() {
-                            text = s.to_string();
-                            break;
-                        }
-                    }
-                    if text.is_empty() {
-                        continue;
-                    }
-                    let from = inner["llm"].as_str().unwrap_or(&msg.from).to_string();
-                    json!({ "type": "ollama_response", "from": from, "data": text }).to_string()
-                }
-                // Well-formed UI messages — forward as-is (including errors so they are visible)
-                "user_msg" | "config" | "manifest" | "config_status" | "manifest_status"
-                | "log" | "error" | "warning" | "tool_call" | "heartbeat_status"
-                | "heartbeat_missed" => msg.data.clone(),
-                _ => {
-                    // Unknown — wrap so nothing is silently dropped
-                    json!({
-                        "type": "bus_msg",
-                        "to": msg.to,
-                        "from": msg.from,
-                        "data": msg.data,
-                        "timestamp": msg.timestamp
-                    })
-                    .to_string()
-                }
-            };
-
-            if bridge_tx.send(out).is_err() {
-                break; // async side dropped (WS closed)
             }
         }
     });
@@ -1113,7 +1270,23 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             format!("ollama_{}", llm)
                         };
 
-                        let correlation_id = get_timestamp();
+                        // Task 230: mark this backend working until its response
+                        // crosses the bridge (or the TTL sweep reaps it). The
+                        // ms-timestamp key is bumped on the unlikely collision
+                        // so in-flight keys stay unique.
+                        let backend_id = bus_dest
+                            .strip_prefix("ollama_")
+                            .unwrap_or(&bus_dest)
+                            .to_string();
+                        let mut correlation_id = get_timestamp();
+                        {
+                            let mut guard = state.inflight.lock().unwrap();
+                            while guard.contains_key(&correlation_id) {
+                                correlation_id = correlation_id.wrapping_add(1);
+                            }
+                            guard.insert(correlation_id, (backend_id, get_timestamp()));
+                        }
+                        let _ = state.msg_tx.send(agent_status_snapshot(&state));
 
                         println!("[WEB] === SENDING BUS MESSAGE ===");
                         println!("[WEB]   to: {}", bus_dest);
@@ -2208,6 +2381,7 @@ mod tests {
             logging,
             auth_token: auth_token.to_string(),
             routines,
+            inflight: Arc::new(Mutex::new(HashMap::new())),
         };
         Router::new()
             .route("/ops/update", post(ops_update))
@@ -2325,5 +2499,174 @@ mod tests {
             "must answer with status or error JSON, got: {v}"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// AppState with a realistic backends list for agent_status tests.
+    fn status_test_state() -> AppState {
+        let bus = Arc::new(Bus::new());
+        let (msg_tx, _rx) = broadcast::channel(16);
+        let routines = Arc::new(RwLock::new(
+            crate::cron::registry::RoutineRegistry::load_or_seed(
+                std::env::temp_dir().join("helix-status-test-routines.json"),
+            ),
+        ));
+        AppState {
+            bus,
+            msg_tx,
+            config_str: String::new(),
+            config_path: String::new(),
+            backends_json: serde_json::json!([
+                {"id": "server", "label": "Ollama server", "kind": "ollama"},
+                {"id": "desktop", "label": "Ollama desktop", "kind": "ollama"},
+                {"id": "gemini", "label": "Gemini", "kind": "gemini"},
+            ])
+            .to_string(),
+            logging: LoggingConfig::default(),
+            auth_token: String::new(),
+            routines,
+            inflight: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    fn bus_msg(data: serde_json::Value) -> Message {
+        Message {
+            to: "web_interface".to_string(),
+            from: "cpu".to_string(),
+            data: data.to_string(),
+            timestamp: get_timestamp(),
+        }
+    }
+
+    #[test]
+    fn agent_status_snapshot_has_backends_activity_and_subagents() {
+        use crate::agents::subagent_registry as reg;
+        // GIVEN one working sub-agent and one in-flight request on "server":
+        reg::reset_for_tests();
+        reg::register(reg::SubagentRecord::new(
+            "test-ws-snap-1".to_string(),
+            "local",
+            "builder",
+            "build the widget",
+        ));
+        let state = status_test_state();
+        state
+            .inflight
+            .lock()
+            .unwrap()
+            .insert(4242, ("server".to_string(), get_timestamp()));
+
+        // WHEN we build the snapshot,
+        let v: serde_json::Value =
+            serde_json::from_str(&agent_status_snapshot(&state)).unwrap();
+
+        // THEN the shape matches the UI contract: every backend carries an
+        // activity flag and the live sub-agent row is present:
+        assert_eq!(v["type"], "agent_status");
+        let backends = v["backends"].as_array().unwrap();
+        assert_eq!(backends.len(), 3);
+        let activity = |id: &str| {
+            backends
+                .iter()
+                .find(|b| b["id"] == id)
+                .unwrap()["activity"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(activity("server"), "working");
+        assert_eq!(activity("desktop"), "idle");
+        assert_eq!(activity("gemini"), "idle");
+        let subs = v["subagents"].as_array().unwrap();
+        let me = subs.iter().find(|s| s["id"] == "test-ws-snap-1").unwrap();
+        assert_eq!(me["status"], "working");
+        assert_eq!(me["role_hint"], "builder");
+        assert_eq!(me["task_summary"], "build the widget");
+        reg::reset_for_tests();
+    }
+
+    #[test]
+    fn bridge_forwards_subagent_event_as_is() {
+        // GIVEN a subagent_event bus message,
+        let msg = bus_msg(serde_json::json!({
+            "type": "subagent_event",
+            "event": "spawned",
+            "subagent": {"id": "subagent-abc", "status": "working"},
+        }));
+        let inflight = Arc::new(Mutex::new(HashMap::new()));
+
+        // WHEN it crosses the bridge,
+        let (out, dirty) = bridge_out_message(&msg, &inflight);
+
+        // THEN it is forwarded byte-identical, with no side effects:
+        assert_eq!(out.as_deref(), Some(msg.data.as_str()));
+        assert!(!dirty);
+    }
+
+    #[test]
+    fn bridge_retires_inflight_on_response_and_flips_activity() {
+        use crate::agents::subagent_registry as reg;
+        // GIVEN backend "desktop" marked working by an in-flight request:
+        let state = status_test_state();
+        state
+            .inflight
+            .lock()
+            .unwrap()
+            .insert(777, ("desktop".to_string(), get_timestamp()));
+        let before: serde_json::Value =
+            serde_json::from_str(&agent_status_snapshot(&state)).unwrap();
+        let activity_of = |v: &serde_json::Value, id: &str| {
+            v["backends"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|b| b["id"] == id)
+                .unwrap()["activity"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(activity_of(&before, "desktop"), "working");
+
+        // WHEN its llm_output response (carrying the correlation_id) crosses
+        // the bridge,
+        let msg = bus_msg(serde_json::json!({
+            "type": "llm_output",
+            "correlation_id": 777u64,
+            "msg": "done thinking",
+        }));
+        let (out, dirty) = bridge_out_message(&msg, &state.inflight);
+
+        // THEN the payload keeps the correlation_id, the entry is retired,
+        // and the next snapshot flips the backend back to idle:
+        assert!(dirty);
+        let v: serde_json::Value = serde_json::from_str(&out.unwrap()).unwrap();
+        assert_eq!(v["type"], "llm_output");
+        assert_eq!(v["correlation_id"], 777);
+        assert_eq!(v["data"], "done thinking");
+        assert!(!state.inflight.lock().unwrap().contains_key(&777));
+        let after: serde_json::Value =
+            serde_json::from_str(&agent_status_snapshot(&state)).unwrap();
+        assert_eq!(activity_of(&after, "desktop"), "idle");
+        reg::reset_for_tests();
+    }
+
+    #[test]
+    fn bridge_forwards_unmatched_response_without_retiring() {
+        // GIVEN an empty in-flight set,
+        let inflight = Arc::new(Mutex::new(HashMap::new()));
+
+        // WHEN an llm_output with an unknown correlation_id crosses,
+        let msg = bus_msg(serde_json::json!({
+            "type": "llm_output",
+            "correlation_id": 999u64,
+            "msg": "hi",
+        }));
+        let (out, dirty) = bridge_out_message(&msg, &inflight);
+
+        // THEN it still forwards (the UI wants the text), but nothing is
+        // retired and no status re-broadcast is requested:
+        assert!(out.is_some());
+        assert!(!dirty);
+        assert!(inflight.lock().unwrap().is_empty());
     }
 }
