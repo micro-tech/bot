@@ -24,6 +24,7 @@ mod agents;
 mod okf;
 mod mcp_client;
 mod router;
+mod security;
 mod acp;
 mod a2a;
 mod ssh;
@@ -233,6 +234,13 @@ async fn run_helix() {
             crate::router::spend::set_daily_api_cap_usd(v);
             println!("daily API spend cap: ${:.2}", v);
         }
+        // ── Task 236: cap-exceed behavior ([router] cap_block_on_exceed,
+        // default false = warn + continue; true = block paid calls) ──
+        let block = toml::from_str::<toml::Value>(&config_str)
+            .ok()
+            .and_then(|v| v.get("router")?.get("cap_block_on_exceed")?.as_bool())
+            .unwrap_or(false);
+        crate::router::spend::set_cap_block_on_exceed(block);
     }
 
     // ── Task 214/217: register Ollama endpoints for the spawn_subagent tool ──

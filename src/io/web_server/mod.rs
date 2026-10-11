@@ -434,6 +434,7 @@ pub async fn start_web_server(
         .route("/ops/update", post(ops_update))
         .route("/ops/update/status", get(ops_update_status))
         .route("/ops/restart", post(ops_restart))
+        .route("/ops/usage", get(ops_usage))
         .with_state(state);
 
     // Merge OKF routes (they have their own state) with main app.
@@ -1862,6 +1863,22 @@ async fn ops_update_status(
     .into_response()
 }
 
+/// GET /ops/usage — per-day, per-backend token usage + spend (task 236).
+/// Answers "where are usage stats": real metered tokens, not estimates.
+async fn ops_usage(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !http_token_ok(&state.auth_token, &headers) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "missing or invalid web token"})),
+        )
+            .into_response();
+    }
+    Json(crate::router::spend::usage_summary_today()).into_response()
+}
+
 /// POST /ops/restart — restart the helix service (task 229).
 async fn ops_restart(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     if !http_token_ok(&state.auth_token, &headers) {
@@ -2463,6 +2480,7 @@ mod tests {
             .route("/ops/update", post(ops_update))
             .route("/ops/update/status", get(ops_update_status))
             .route("/ops/restart", post(ops_restart))
+            .route("/ops/usage", get(ops_usage))
             .with_state(state)
     }
 

@@ -773,6 +773,8 @@ mod tests {
         }
         crate::router::spend::reset_for_tests();
         crate::router::spend::set_daily_api_cap_usd(0.01);
+        // Task 236: cap blocks only in block mode (default is warn+continue).
+        crate::router::spend::set_cap_block_on_exceed(true);
         crate::router::spend::note_api_call(&LLMBackend::Gemini); // $0.02 > $0.01
         let err = pick_healthy_backend(LLMBackend::LocalOllama)
             .await

@@ -640,6 +640,20 @@ pub mod tools {
                 e
             })?;
 
+            // Task 236: real token metering from Ollama eval counts.
+            // Local backends are $0, but the counts feed usage stats.
+            if let Some(usage) = crate::router::spend::parse_ollama_usage(&parsed) {
+                let backend = if base_url.contains("127.0.0.1")
+                    || base_url.contains("localhost")
+                    || base_url.contains("::1")
+                {
+                    crate::router::LLMBackend::LocalOllama
+                } else {
+                    crate::router::LLMBackend::LanOllama
+                };
+                crate::router::spend::note_api_usage(&backend, usage);
+            }
+
             let msg = &parsed["message"];
             messages.push(msg.clone());
 
