@@ -11,7 +11,7 @@ use serde_json::Value;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::mpsc::{Receiver, Sender, channel};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
 /// Represents a message on the bus with source, destination, and data payload.
@@ -30,6 +30,23 @@ pub struct Bus {
 }
 
 pub type BusHandle = std::sync::mpsc::Receiver<Message>;
+
+// ── Process-global bus handle (task 230) ──────────────────────────────────────
+// The sub-agent registry lives in the tools layer and has no bus handle of its
+// own, but must publish `subagent_event` messages. main.rs installs the live
+// bus here at startup; publishers degrade to a silent no-op when it is absent
+// (unit tests, binaries that never start the bus).
+static GLOBAL_BUS: OnceLock<Arc<Bus>> = OnceLock::new();
+
+/// Install the process-global bus. Called once by main.rs; later calls are ignored.
+pub fn set_global_bus(bus: Arc<Bus>) {
+    let _ = GLOBAL_BUS.set(bus);
+}
+
+/// The process-global bus, if one was installed.
+pub fn global_bus() -> Option<Arc<Bus>> {
+    GLOBAL_BUS.get().cloned()
+}
 
 impl Bus {
     /// Creates a new bus instance with router thread.
