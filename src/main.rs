@@ -45,6 +45,9 @@ async fn main() {
     // Load .env early (for GEMINI_API_KEY etc.)
     let _ = dotenv::dotenv();
 
+    // Task 243: reload persisted chat history before the agent loop starts.
+    crate::chat_history::load_from_disk();
+
     // Permanently fix rustls CryptoProvider (ring) at the absolute earliest point.
     // This resolves conflicts caused by lettre + imap pulling in aws-lc-rs.
     rustls::crypto::ring::default_provider()

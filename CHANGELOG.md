@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Added (task 243 DONE — Ranger 1, persist chat history)
+
+- **History survives restarts**: each completed turn appends to `logs/chat_history.jsonl` (override: `HELIX_CHAT_HISTORY_FILE`); `load_from_disk()` at boot reloads the last 10 turns (respecting MAX_TURNS/MAX_TURN_CHARS). Corrupt lines are logged + skipped, never fatal. File compacts to retained turns on load.
+- **Verification**: 3 new tests (round-trip, corrupt-line tolerance, cap enforcement); 9/9 chat_history green. Test helper now serializes via test_env_lock (also fixes the pre-existing parallel flake).
+
+---
+
 ### Added (task 242 DONE — Ranger 1, eval harness; EVAL SET DRAFT)
 
 - **Eval harness** (`evals/` + `tests/evals.rs`, `cargo test --test evals`): 10 deterministic behavioral evals (injection block/warn, sub-agent spawn guard, tool-def cache, commander reminder, Gemini metering, cap warn-mode, chat_token contract, ops auth invariant). No live LLM required.
