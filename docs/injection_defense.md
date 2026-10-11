@@ -39,8 +39,8 @@ on injected instructions rather than the user's request:
 
 | Tool class | On match | Rationale |
 |---|---|---|
-| Write: `run_shell`, `write_note`, `send_email`, `set_belief`, `bayes_update` | **BLOCK** — call never executes | A silently executed injected shell command or email is game over |
-| Read-only: everything else | **WARN** — logged, call proceeds | Reads can't directly damage anything; blocking would break legit flows |
+| High-risk: `run_shell`, `write_note` | **BLOCK** — call never executes | Shell exec and file writes are the game-over actions |
+| Medium-risk + read-only: `send_email`, `set_belief`, `bayes_update`, everything else | **WARN** — logged, call proceeds | John's calibration (2026-10-11): aggressive but not too aggressive — Helix runs on his own trusted self-hosted box, so warn-and-log beats blocking legit flows |
 
 The model receives `Blocked by injection guard: ...` as the tool result and
 can rephrase / ask the user — a speed bump, not a brick wall.
