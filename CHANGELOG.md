@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Changed (task 237 DONE — Ranger 1, cache tool definitions)
+
+- **Per-spawn schema rebuild eliminated** (`src/tools/mod.rs`): the merged tool-definition list (statics + OKF + MCP) is now built once into a process-global `RwLock<Option<Value>>` cache. `tool_definitions()` clones the cached build on the fast path; `tool_definitions_excluding()` filters it. The expensive part was `mcp_client::tool_definitions()` blocking on the async manager every spawn — now runs only on cache miss.
+- **Invalidation hook**: `invalidate_tool_definitions()` — called from `okf::set_global_librarian` and the OKF bundle-reload path (replaces the old TODO). MCP topology changes should also call it (manager is init-once at startup, so this is rare).
+- **Verification**: 3 new tests green (build-once across 10 calls, invalidation triggers exactly one rebuild, excluding() reuses cache). Full lib: no new failures (chat_history flake confirmed pre-existing on pristine tree).
+
+---
+
 ### Added (task 235 DONE — Ranger 1, prompt-injection defense layer)
 
 - **New module** (`src/security.rs`): untrusted-data tagging + tool-argument validation. `is_untrusted_tool` covers `read_email`/`check_inbox` and all `mcp__*` tools; `tag_untrusted` wraps outputs in `<untrusted-data>` delimiters and records them in a bounded shingle corpus (20 entries × 2000 chars, 48-char threshold, incremental HashSet — O(arg length) lookups). `validate_tool_call` runs pre-execution in `tools::execute`: BLOCK for write tools (`run_shell`, `write_note`, `send_email`, `set_belief`, `bayes_update`), WARN + log for read-only.
