@@ -17,6 +17,7 @@ pub mod system_tools;
 
 use serde_json::Value;
 use std::sync::OnceLock;
+use std::sync::RwLock;
 
 // ── Public dispatch entry point ───────────────────────────────────────────────
 
@@ -536,8 +537,51 @@ fn static_tool_definitions() -> &'static Vec<Value> {
 /// Returns the JSON array of tool schemas sent to Ollama in every `/api/chat`
 /// request.  Keep in sync with the `execute` dispatch table above.
 ///
-/// Dynamically merges in any tools loaded from the OKF librarian.
+/// Task 237: the merged list is CACHED — schemas don't change at runtime, so
+/// rebuilding (including the MCP async bridge) on every spawn was pure
+/// overhead. The registry-change paths (OKF bundle load, MCP topology
+/// change) must call [`invalidate_tool_definitions`] afterward.
 pub fn tool_definitions() -> Value {
+    // Fast path: clone the cached build.
+    if let Ok(guard) = definitions_cache().read() {
+        if let Some(cached) = guard.as_ref() {
+            return cached.clone();
+        }
+    }
+    // Slow path: build once, store, return.
+    let built = build_tool_definitions();
+    if let Ok(mut guard) = definitions_cache().write() {
+        *guard = Some(built.clone());
+    }
+    #[cfg(test)]
+    {
+        BUILD_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+    built
+}
+
+/// Invalidate the cached tool definitions. MUST be called whenever the tool
+/// registry changes: OKF bundle loaded/unloaded, MCP server added/removed.
+/// Next `tool_definitions()` call rebuilds from scratch.
+pub fn invalidate_tool_definitions() {
+    if let Ok(mut guard) = definitions_cache().write() {
+        *guard = None;
+    }
+}
+
+static DEFINITIONS_CACHE: OnceLock<RwLock<Option<Value>>> = OnceLock::new();
+
+fn definitions_cache() -> &'static RwLock<Option<Value>> {
+    DEFINITIONS_CACHE.get_or_init(|| RwLock::new(None))
+}
+
+#[cfg(test)]
+static BUILD_COUNT: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// The actual schema assembly: statics + OKF librarian tools + MCP tools.
+/// Only runs on cache miss (or after invalidation).
+fn build_tool_definitions() -> Value {
     let mut defs = static_tool_definitions().clone();
 
     // Merge OKF tools (if any are loaded via the global librarian)
@@ -596,6 +640,76 @@ pub fn tool_definitions_excluding(exclude: &[&str]) -> Value {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    // ── Task 237: cached tool definitions ─────────────────────────────────
+
+    #[test]
+    fn cached_definitions_build_once_across_calls() {
+        // Task 237 acceptance: N calls -> exactly one build.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
+        invalidate_tool_definitions();
+        BUILD_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
+
+        let first = tool_definitions();
+        for _ in 0..9 {
+            let next = tool_definitions();
+            assert_eq!(next, first, "cached definitions must be identical");
+        }
+        assert_eq!(
+            BUILD_COUNT.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "builder must run exactly once across 10 calls"
+        );
+        assert!(
+            first.as_array().map(|a| !a.is_empty()).unwrap_or(false),
+            "definitions must not be empty"
+        );
+    }
+
+    #[test]
+    fn invalidation_triggers_rebuild() {
+        // Task 237 acceptance: invalidate -> next call rebuilds.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
+        let before = tool_definitions();
+        invalidate_tool_definitions();
+        BUILD_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
+
+        let after = tool_definitions();
+        assert_eq!(
+            BUILD_COUNT.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "invalidation must trigger exactly one rebuild"
+        );
+        // Same registry state -> same content (no OKF/MCP changes in test env).
+        assert_eq!(before, after, "rebuild with unchanged registry must match");
+    }
+
+    #[test]
+    fn tool_definitions_excluding_uses_cache() {
+        // The excluding variant filters the cached build, not a fresh one.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
+        invalidate_tool_definitions();
+        BUILD_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
+
+        let filtered = tool_definitions_excluding(&["spawn_subagent"]);
+        let full = tool_definitions();
+        assert_eq!(
+            BUILD_COUNT.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "excluding() must reuse the cached build"
+        );
+        let arr = full.as_array().cloned().unwrap_or_default();
+        let farr = filtered.as_array().cloned().unwrap_or_default();
+        assert_eq!(arr.len(), farr.len() + 1, "exactly one tool excluded");
+        assert!(
+            !farr.iter().any(|d| d
+                .get("function")
+                .and_then(|f| f.get("name"))
+                .and_then(|n| n.as_str())
+                == Some("spawn_subagent")),
+            "spawn_subagent must be excluded"
+        );
+    }
 
     #[test]
     fn test_unknown_tool() {

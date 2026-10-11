@@ -1684,13 +1684,14 @@
       "id": 237,
       "title": "P1: Cache tool definitions instead of rebuilding per spawn",
       "description": "Cache the built MCP-tool JSON schema list in a OnceLock; rebuild only when the tool registry changes.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "GOAL: remove per-spawn schema-rebuild overhead from the commander hot path (John's #1 priority area: performance).\n\nDetails: the full tool JSON schema list is currently reconstructed from scratch on every dispatch_spawn, but schemas don't change at runtime. Build once into a process-global OnceLock (same pattern as the subagent registry in src/agents/subagent_registry.rs); add an explicit invalidate hook called only when the tool registry changes. Touch points: src/tools/mod.rs (tool_definitions / tool_definitions_excluding), src/persona.rs (subagent_tool_definitions consumes them).\n\nAcceptance: second and subsequent spawns reuse the cached definitions (verify with a unit test asserting the builder runs once across N spawns); registry-change path invalidates correctly.",
       "testStrategy": "cargo check clean. New unit test: build-once assertion across multiple spawns; invalidation test triggers rebuild after a simulated registry change. Full lib suite: no new failures.",
       "subtasks": [],
-      "review_type": "perf"
+      "review_type": "perf",
+      "results": "P1 tool-definition cache shipped. tool_definitions() now serves from a process-global RwLock<Option<Value>> (fast-path clone); build_tool_definitions() runs once on miss. The real cost was mcp_client::tool_definitions() blocking on the async manager per spawn. invalidate_tool_definitions() wired into okf::set_global_librarian and the OKF bundle-reload path (replaces TODO). 3 new tests green (build-once x10, invalidation rebuild, excluding reuses cache). Full lib: no new failures \u2014 chat_history flake confirmed pre-existing (fails on pristine tree)."
     },
     {
       "id": 238,
