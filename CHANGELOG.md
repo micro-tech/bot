@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Added (task 244 DONE — Ranger 1, backup/restore)
+
+- **Nightly state snapshots** (`scripts/backup-state.sh`): timestamped dirs in `backups/` with beliefs.json, episodes.jsonl, spend_state.json, agent.md, agents/*.md, logs/chat_history.jsonl + MANIFEST.txt. Keeps 7, rotates older. Cron entry documented for the R630.
+- **Restore doc** (`docs/backup-restore.md`): which files, in what order, how to verify.
+- **Verification**: manual drill (snapshot → delete → restore → verify) green; rotation confirmed at 7.
+
+---
+
 ### Added (task 243 DONE — Ranger 1, persist chat history)
 
 - **History survives restarts**: each completed turn appends to `logs/chat_history.jsonl` (override: `HELIX_CHAT_HISTORY_FILE`); `load_from_disk()` at boot reloads the last 10 turns (respecting MAX_TURNS/MAX_TURN_CHARS). Corrupt lines are logged + skipped, never fatal. File compacts to retained turns on load.
