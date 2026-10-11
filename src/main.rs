@@ -166,6 +166,8 @@ async fn run_helix() {
     }
 
     let bus = std::sync::Arc::new(crate::bus::Bus::new());
+    // Task 230: let bus-less layers (sub-agent registry) publish UI events.
+    crate::bus::set_global_bus(bus.clone());
 
     // Parse port from config
     let port: u16 = toml::from_str::<toml::Value>(&config_str)
@@ -506,6 +508,9 @@ async fn run_helix() {
                         from: display_from.clone(),
                         data: serde_json::json!({
                             "type": "llm_output",
+                            // Task 230: keep the correlation so the web
+                            // server can retire the in-flight backend entry.
+                            "correlation_id": payload["correlation_id"].as_u64().unwrap_or(0),
                             "data": text
                         })
                         .to_string(),
