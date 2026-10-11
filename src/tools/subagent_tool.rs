@@ -289,6 +289,18 @@ fn test_stub_report(spec: &SpawnSpec) -> Option<String> {
     }
 }
 
+/// Short backend label for the sub-agent registry / web UI. The commander
+/// report keeps the historical `{:?}`-lowercased form; the UI gets this.
+fn backend_short_name(backend: &LLMBackend) -> &'static str {
+    match backend {
+        LLMBackend::LocalOllama => "local",
+        LLMBackend::LanOllama => "lan",
+        LLMBackend::Gemini => "gemini",
+        LLMBackend::Grok => "grok",
+        LLMBackend::Fallback => "fallback",
+    }
+}
+
 /// Backend ladder, fastest/cheapest first. Health-aware fallback walks DOWN
 /// this list from the requested backend (task 217.3). Grok is parked at the
 /// bottom as not-implemented — the walker never selects it.
@@ -346,6 +358,20 @@ pub async fn dispatch_spawn(spec: &SpawnSpec) -> String {
         return refused;
     }
     if let Some(stub) = test_stub_report(spec) {
+        // The stub path still runs the registry lifecycle: integration tests
+        // (and the UI) observe spawn→finish without needing a live LLM.
+        let task_id = format!("subagent-{}", uuid::Uuid::new_v4().simple());
+        let reg = crate::agents::subagent_registry::SubagentRecord::new(
+            task_id.clone(),
+            "test_stub",
+            &spec.role_hint,
+            &spec.task,
+        );
+        crate::agents::subagent_registry::register(reg);
+        crate::agents::subagent_registry::finish(
+            &task_id,
+            crate::agents::subagent_registry::SubagentStatus::Done,
+        );
         return stub;
     }
     let depth = SPAWN_DEPTH.try_with(|c| c.get()).unwrap_or(0);
@@ -363,6 +389,16 @@ pub async fn dispatch_spawn(spec: &SpawnSpec) -> String {
 
     let task_id = format!("subagent-{}", uuid::Uuid::new_v4().simple());
     let backend_name = format!("{:?}", backend).to_lowercase();
+    // Task 230: register the moment the id exists, so the UI can show a live
+    // sub-agent instead of only learning about it after it finishes.
+    crate::agents::subagent_registry::register(
+        crate::agents::subagent_registry::SubagentRecord::new(
+            task_id.clone(),
+            backend_short_name(&backend),
+            &spec.role_hint,
+            &spec.task,
+        ),
+    );
     log::info!(
         "spawn_subagent {} -> backend={} role='{}' timeout={}s",
         task_id,
@@ -383,24 +419,42 @@ pub async fn dispatch_spawn(spec: &SpawnSpec) -> String {
         .map(|n| format!("note: {}\n", n))
         .unwrap_or_default();
     match tokio::time::timeout(timeout, run).await {
-        Ok(Ok(final_text)) => format!(
-            "Sub-agent complete\ntask_id: {}\nbackend: {}\nrole: {}\n{}final:\n{}",
-            task_id,
-            backend_name,
-            role_hint_or_any(&spec.role_hint),
-            fb_line,
-            final_text
-        ),
-        Ok(Err(err)) => format!(
-            "Sub-agent failed\ntask_id: {}\nbackend: {}\nerror: {}",
-            task_id, backend_name, err
-        ),
-        Err(_) => format!(
-            "Sub-agent timed out after {}s and was cancelled.\n\
+        Ok(Ok(final_text)) => {
+            crate::agents::subagent_registry::finish(
+                &task_id,
+                crate::agents::subagent_registry::SubagentStatus::Done,
+            );
+            format!(
+                "Sub-agent complete\ntask_id: {}\nbackend: {}\nrole: {}\n{}final:\n{}",
+                task_id,
+                backend_name,
+                role_hint_or_any(&spec.role_hint),
+                fb_line,
+                final_text
+            )
+        }
+        Ok(Err(err)) => {
+            crate::agents::subagent_registry::finish(
+                &task_id,
+                crate::agents::subagent_registry::SubagentStatus::Failed,
+            );
+            format!(
+                "Sub-agent failed\ntask_id: {}\nbackend: {}\nerror: {}",
+                task_id, backend_name, err
+            )
+        }
+        Err(_) => {
+            crate::agents::subagent_registry::finish(
+                &task_id,
+                crate::agents::subagent_registry::SubagentStatus::TimedOut,
+            );
+            format!(
+                "Sub-agent timed out after {}s and was cancelled.\n\
              task_id: {}\nbackend: {}\n\
              The task may have been too big — retry with a smaller task or a larger timeout_secs.",
-            spec.timeout_secs, task_id, backend_name
-        ),
+                spec.timeout_secs, task_id, backend_name
+            )
+        }
     }
 }
 
@@ -716,5 +770,63 @@ mod tests {
         }
         assert_eq!(ep.url, "http://test:11434");
         assert_eq!(ep.model, "test-model");
+    }
+
+    #[tokio::test]
+    async fn stubbed_dispatch_emits_spawned_then_finished_bus_events() {
+        let _tl = super::test_env_lock();
+        // GIVEN a global bus with a web_interface subscriber and the test stub armed:
+        let bus = std::sync::Arc::new(crate::bus::Bus::new());
+        let rx = bus.subscribe("web_interface");
+        let _ = crate::bus::set_global_bus(bus.clone());
+        crate::agents::subagent_registry::reset_for_tests();
+        // SAFETY: single-threaded test env manipulation; stub only affects this process.
+        unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
+
+        // WHEN dispatch_spawn runs through the stub path,
+        let spec = SpawnSpec {
+            task: "test the event order".to_string(),
+            backend: "local_ollama".to_string(),
+            role_hint: "tester".to_string(),
+            timeout_secs: 30,
+        };
+        let out = dispatch_spawn(&spec).await;
+        unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
+
+        // THEN the report is the stub,
+        assert!(out.contains("subagent-test-stub"), "got: {}", out);
+
+        // AND spawned+finished subagent_events arrived in order on the bus.
+        // (recv_timeout: publish hands off to the bus router thread, so
+        // delivery is not synchronous with the publish call.)
+        let mut events = Vec::new();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while events.len() < 2 && std::time::Instant::now() < deadline {
+            match rx.recv_timeout(std::time::Duration::from_millis(200)) {
+                Ok(msg) => {
+                    let v: serde_json::Value =
+                        serde_json::from_str(&msg.data).unwrap_or_default();
+                    if v["type"] == "subagent_event" {
+                        events.push(v["event"].as_str().unwrap_or("").to_string());
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+        assert_eq!(
+            events,
+            vec!["spawned".to_string(), "finished".to_string()],
+            "expected spawned->finished in order, got: {:?}",
+            events
+        );
+
+        // AND the registry shows the finished entry (prune keeps it):
+        let snap = crate::agents::subagent_registry::snapshot();
+        assert!(
+            snap.iter().any(|r| r.backend == "test_stub"
+                && r.status == crate::agents::subagent_registry::SubagentStatus::Done),
+            "stub run should leave a Done record"
+        );
+        crate::agents::subagent_registry::reset_for_tests();
     }
 }
