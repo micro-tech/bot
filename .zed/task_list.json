@@ -1856,13 +1856,14 @@
       "id": 246,
       "title": "D1: Rewrite stale README feature section",
       "description": "README's 'What's new' references PR #5 (Oct 6) \u2014 rewrite the feature section to describe the actual project.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "GOAL: a new reader currently gets a description of a different project.\n\nDetails: rewrite the README feature section (keep to one page, link into docs/ for depth). Must cover: commander pattern, sub-agent delegation, persona system (agent.md), ops buttons (update/restart), MCP/Gmail integration, the email channel, and the web UI. Keep the build/install instructions accurate against the current tree.\n\nAcceptance: README mentions no shipped feature older than the current release as 'new'; every major subsystem has one line + a docs link.",
       "testStrategy": "No code changes. Self-review the diff for accuracy against the tree.",
       "subtasks": [],
-      "review_type": "docs"
+      "review_type": "docs",
+      "results": "readme.md rewritten (one page): commander pattern, sub-agent delegation, persona system, injection defense, usage metering, ops buttons, MCP/Gmail, email channel, web UI \u2014 each one line + docs link. Stale 'What's new (PR #5)' section removed. Build/install verified accurate (no config.toml.example \u2014 ships with defaults). All doc links verified."
     },
     {
       "id": 247,
