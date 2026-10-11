@@ -27,6 +27,7 @@ mod router;
 mod acp;
 mod a2a;
 mod ssh;
+mod persona;
 mod cron;
 mod chat_history;
 
@@ -205,6 +206,22 @@ async fn run_helix() {
             .unwrap_or(true);
         crate::tools::subagent_tool::set_commander_enabled(enabled);
         println!("commander mode: {}", if enabled { "enabled" } else { "disabled" });
+    }
+
+    // ── Task 233: persona files ([helix.persona] self_author, default false) ──
+    // The persona dir is the runtime dir (parent of the loaded config.toml);
+    // agent.md / agents/<role>.md resolve there. Self-authoring is strictly
+    // opt-in and never writes live files (drafts land as .pending).
+    {
+        let self_author = toml::from_str::<toml::Value>(&config_str)
+            .ok()
+            .and_then(|v| v.get("helix")?.get("persona")?.get("self_author")?.as_bool())
+            .unwrap_or(false);
+        crate::persona::set_self_author_enabled(self_author);
+        println!(
+            "persona self-authoring: {}",
+            if self_author { "enabled" } else { "disabled" }
+        );
     }
 
     // ── Task 217: daily API spend cap ([router] daily_api_cap_usd, default 5.00) ──
@@ -645,6 +662,24 @@ async fn run_helix() {
     // own schedules (no global 5s tick). The same Arc is handed to the web
     // server so the routines WS API toggles the live registry.
     let rt_dir = runtime_dir(config_path_used);
+    // Task 233: persona files resolve under the runtime dir.
+    crate::persona::set_persona_dir(rt_dir.clone());
+    // Task 233: initial self-authoring — if agent.md is missing and the
+    // operator opted in, Helix drafts its own persona in the background.
+    // Fire-and-forget: the draft lands as .pending, never live, and a
+    // failed draft must never block boot.
+    tokio::spawn(async {
+        match crate::persona::ensure_persona_file(None).await {
+            Ok(p) if p.extension().and_then(|x| x.to_str()) == Some("pending") => {
+                println!(
+                    "persona: drafted initial agent.md -> {} (awaiting /persona approve)",
+                    p.display()
+                );
+            }
+            Ok(_) => {}
+            Err(e) => log::debug!("persona: initial draft skipped: {}", e),
+        }
+    });
     let routines = std::sync::Arc::new(tokio::sync::RwLock::new(
         crate::cron::registry::RoutineRegistry::load_or_seed(rt_dir.join("routines.json")),
     ));
