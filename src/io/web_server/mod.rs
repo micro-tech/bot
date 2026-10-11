@@ -806,6 +806,23 @@ fn bridge_out_message(
     }
 
     match msg_type {
+        // Task 238: streaming tokens — forwarded as incremental WS messages.
+        // The UI appends `token` to the in-progress reply identified by
+        // `correlation_id`; the final `llm_output` still delivers the
+        // complete text (unchanged contract).
+        "chat_token" => {
+            let token = inner["token"].as_str().unwrap_or("");
+            if token.is_empty() {
+                return (None, false);
+            }
+            (
+                Some(
+                    json!({ "type": "chat_token", "from": msg.from, "token": token, "correlation_id": cid })
+                        .to_string(),
+                ),
+                false,
+            )
+        }
         "llm_output" | "llm_response" => {
             let text = extract_text(&inner);
             if text.is_empty() {
@@ -2616,6 +2633,33 @@ mod tests {
             data: data.to_string(),
             timestamp: get_timestamp(),
         }
+    }
+
+    #[test]
+    fn bridge_forwards_chat_token_incremental() {
+        // Task 238: GIVEN a streaming token from the CPU,
+        let state = status_test_state();
+        let msg = bus_msg(serde_json::json!({
+            "type": "chat_token",
+            "correlation_id": 4242,
+            "token": "Hello",
+        }));
+        // WHEN it crosses the bridge,
+        let (out, dirty) = bridge_out_message(&msg, &state.inflight);
+        // THEN it becomes an incremental WS message (no inflight churn):
+        let text = out.expect("chat_token must forward");
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["type"], "chat_token");
+        assert_eq!(v["token"], "Hello");
+        assert_eq!(v["correlation_id"], 4242);
+        assert!(!dirty);
+        // AND empty tokens are dropped:
+        let empty = bus_msg(serde_json::json!({
+            "type": "chat_token",
+            "correlation_id": 4242,
+            "token": "",
+        }));
+        assert!(bridge_out_message(&empty, &state.inflight).0.is_none());
     }
 
     #[test]
