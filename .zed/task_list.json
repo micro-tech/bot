@@ -1830,13 +1830,14 @@
       "id": 244,
       "title": "G4: Backup/restore for agent state",
       "description": "Nightly snapshots of beliefs.json, episodic memory, and persona files to a timestamped backup dir, plus documented restore.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "GOAL: one bad self-authoring session or disk hiccup must not vaporize the agent's accumulated self.\n\nDetails: nightly snapshot (timestamped dir) of: beliefs.json, episodic memory store, agent.md + agents/*.md (note: persona files already get .bak rotation \u2014 the snapshot is the off-site equivalent). Document the restore procedure in docs/ (one page: which files, in what order, how to verify). Keep N most recent snapshots (suggest 7, say what you picked).\n\nAcceptance: snapshot job runs; restore doc lets a fresh checkout recover state; old snapshots rotate.",
       "testStrategy": "cargo check clean (if Rust) or script --check. Manual drill: snapshot, delete a state file, restore per docs, verify. Full lib suite: no new failures.",
       "subtasks": [],
-      "review_type": "gap"
+      "review_type": "gap",
+      "results": "Backup/restore shipped: scripts/backup-state.sh (nightly snapshot of beliefs.json, episodes.jsonl, spend_state.json, agent.md, agents/*.md, logs/chat_history.jsonl; keeps 7, rotates older) + docs/backup-restore.md (restore procedure with order + verify). Drill verified: snapshot -> delete -> restore -> verify OK; rotation keeps 7. Cron entry documented for John to install on R630 (03:00 daily)."
     },
     {
       "id": 245,
