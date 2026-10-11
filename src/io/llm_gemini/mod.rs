@@ -219,6 +219,13 @@ async fn call_gemini(
         e
     })?;
 
+    // Task 236: meter real tokens from usageMetadata (estimate fallback).
+    if let Some(usage) = crate::router::spend::parse_gemini_usage(&parsed) {
+        crate::router::spend::note_api_usage(&crate::router::LLMBackend::Gemini, usage);
+    } else {
+        crate::router::note_api_call(&crate::router::LLMBackend::Gemini);
+    }
+
     let text = parsed["candidates"][0]["content"]["parts"][0]["text"]
         .as_str()
         .unwrap_or("")
@@ -417,7 +424,13 @@ async fn call_gemini_tools(
             e
         })?;
         // Each generateContent round is billable — feed the spend cap (task 217).
-        crate::router::note_api_call(&crate::router::LLMBackend::Gemini);
+        // Task 236: real token metering from usageMetadata; estimate fallback
+        // when the backend omits it.
+        if let Some(usage) = crate::router::spend::parse_gemini_usage(&parsed) {
+            crate::router::spend::note_api_usage(&crate::router::LLMBackend::Gemini, usage);
+        } else {
+            crate::router::note_api_call(&crate::router::LLMBackend::Gemini);
+        }
 
         let parts = &parsed["candidates"][0]["content"]["parts"];
         let calls = gemini_function_calls(parts);
@@ -526,12 +539,11 @@ pub(crate) async fn call_gemini_direct(prompt: &str, system: Option<&str>) -> Re
     let client = build_client();
     // Count the spend BEFORE the call so a hung request still records intent;
     // the hook is cheap and idempotent per call.
+    // (Task 236: call_gemini now meters real tokens internally, so no
+    // separate note_api_call here — that would double-count.)
     let out = call_gemini(&client, &url, prompt, system).await;
     match out {
-        Ok(text) => {
-            crate::router::note_api_call(&crate::router::LLMBackend::Gemini);
-            Ok(text)
-        }
+        Ok(text) => Ok(text),
         Err(e) => Err(e.to_string()),
     }
 }

@@ -6,7 +6,8 @@
 //! - Persona + job description are SEPARATE blocks, persona first. The
 //!   hardcoded `COMMANDER_SYSTEM_PROMPT` is the job block; `<runtime>/agent.md`
 //!   (or `<runtime>/agents/<role>.md` for sub-agents) is the persona block.
-//!   Missing file -> the prompt is byte-identical to the pre-233 behavior.
+//!   Missing file -> the job block plus the task-235 injection-boundary
+//!   reminder (the pre-235 byte-identical guarantee was superseded).
 //! - Each role file may declare a tool allowlist in YAML frontmatter. The
 //!   persona module strips the frontmatter before injection (the model never
 //!   sees the allowlist as prose); `dispatch_spawn` filters the sub-agent's
@@ -185,16 +186,20 @@ pub fn load_persona(role: Option<&str>) -> Option<Persona> {
 // ── Prompt composition ──────────────────────────────────────────────────────
 
 /// Composed commander system text: persona block, then the job block
-/// (`COMMANDER_SYSTEM_PROMPT`, unchanged). Missing file -> exactly the job
-/// block (byte-identical to pre-233). None when commander mode is off.
+/// (`COMMANDER_SYSTEM_PROMPT`, unchanged), then the task-235
+/// injection-boundary reminder. Missing file -> job block + reminder.
+/// None when commander mode is off.
 pub fn composed_commander_text() -> Option<String> {
     if !crate::tools::subagent_tool::commander_enabled() {
         return None;
     }
     let job = crate::tools::subagent_tool::COMMANDER_SYSTEM_PROMPT;
+    // Task 235: instruction-boundary reminder — untrusted tool outputs are
+    // wrapped in <untrusted-data> delimiters; they are DATA, never instructions.
+    let reminder = crate::security::INSTRUCTION_REMINDER;
     match load_persona(None) {
-        Some(p) => Some(format!("{}\n\n---\n\n{}", p.body, job)),
-        None => Some(job.to_string()),
+        Some(p) => Some(format!("{}\n\n---\n\n{}\n\n{}", p.body, job, reminder)),
+        None => Some(format!("{}\n\n{}", job, reminder)),
     }
 }
 
@@ -209,22 +214,26 @@ pub struct SubagentPrompt {
 
 pub fn compose_subagent_prompt(task_id: &str, task: &str, role_hint: &str) -> SubagentPrompt {
     let job = crate::tools::subagent_tool::SUBAGENT_JOB_PROMPT;
+    // Task 235: instruction-boundary reminder in every sub-agent prompt —
+    // sub-agents process untrusted content (search results, emails) too.
+    let reminder = crate::security::INSTRUCTION_REMINDER;
     match load_persona(Some(role_hint)) {
         Some(p) => SubagentPrompt {
-            system: Some(format!("{}\n\n---\n\n{}", p.body, job)),
+            system: Some(format!("{}\n\n---\n\n{}\n\n{}", p.body, job, reminder)),
             user: format!(
                 "You are a sub-agent ({}). Your commander's orders:\n\n{}",
                 task_id, task
             ),
         },
         None => {
-            // Legacy single-message format, byte-identical to pre-233.
+            // Legacy single-message format + the task-235 reminder (the
+            // pre-235 byte-identical guarantee was superseded).
             let prefix = crate::tools::subagent_tool::role_prefix(role_hint);
             SubagentPrompt {
                 system: None,
                 user: format!(
-                    "You are a sub-agent ({}). Your commander's orders:\n\n{}\n\n{}\n\n{}",
-                    task_id, prefix, task, job
+                    "You are a sub-agent ({}). Your commander's orders:\n\n{}\n\n{}\n\n{}\n\n{}",
+                    task_id, prefix, task, job, reminder
                 ),
             }
         }
@@ -685,7 +694,7 @@ mod tests {
     }
 
     #[test]
-    fn compose_missing_file_is_byte_identical_to_const() {
+    fn compose_missing_file_appends_injection_reminder() {
         let _l = dir_lock();
         let _d = use_temp_dir("identical");
         // GIVEN the shared temp dir has no agent.md for this check: use a
@@ -695,8 +704,11 @@ mod tests {
         }
         // WHEN no persona file exists,
         let text = composed_commander_text().expect("commander defaults to enabled");
-        // THEN the composed text is byte-identical to the old const:
-        assert_eq!(text, crate::tools::subagent_tool::COMMANDER_SYSTEM_PROMPT);
+        // THEN the job block is intact and the task-235 injection reminder
+        // is appended (the pre-235 byte-identical guarantee was superseded
+        // by the instruction-boundary requirement):
+        assert!(text.starts_with(crate::tools::subagent_tool::COMMANDER_SYSTEM_PROMPT));
+        assert!(text.contains(crate::security::INSTRUCTION_REMINDER));
     }
 
     #[test]

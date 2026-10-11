@@ -27,6 +27,20 @@ use std::sync::OnceLock;
 ///
 /// OKF tools (loaded from remote bundles) are tried after the built-in set.
 pub fn execute(name: &str, args: &Value) -> String {
+    // Task 235: validate arguments against the untrusted-content corpus
+    // BEFORE dispatch. A Block verdict means the args look lifted verbatim
+    // from external content (likely prompt injection) — never execute.
+    match crate::security::validate_tool_call(name, args) {
+        crate::security::Verdict::Block(reason) => {
+            log::warn!("Injection guard BLOCKED tool '{}': {}", name, reason);
+            return format!("Blocked by injection guard: {}", reason);
+        }
+        crate::security::Verdict::Warn(reason) => {
+            log::warn!("Injection guard warning for tool '{}': {}", name, reason);
+        }
+        crate::security::Verdict::Allow => {}
+    }
+
     // Built-in tools first
     let result = match name {
         "read_log" => file_tools::read_log(args),
@@ -83,13 +97,16 @@ pub fn execute(name: &str, args: &Value) -> String {
     };
 
     if !result.is_empty() {
-        return result;
+        // Task 235: tag outputs from untrusted external sources so the model
+        // treats them as DATA, never instructions.
+        return crate::security::maybe_tag(name, &result);
     }
 
     // MCP tools (external Model Context Protocol servers, e.g. google-mcp).
     // Silent no-op when [mcp] is disabled; falls through otherwise.
     if let Some(mcp_result) = crate::mcp_client::try_execute(name, args) {
-        return mcp_result;
+        // Task 235: MCP servers are external — their outputs are untrusted.
+        return crate::security::maybe_tag(name, &mcp_result);
     }
 
     // Try OKF-provided tools (from global librarian)
