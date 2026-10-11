@@ -2011,6 +2011,78 @@ fn handle_slash_command(cmd: &str) -> String {
                 ),
             }
         }
+        "persona" => {
+            // /persona [status|approve [role]|discard [role]|draft [role]]
+            // Task 233: review self-authored persona drafts. Drafts land as
+            // .pending and never go live without John's explicit approval.
+            let sub = parts.get(1).copied().unwrap_or("status").to_lowercase();
+            let role_arg = parts.get(2).copied().unwrap_or("").trim();
+            // "agent" (or empty) means Helix's own agent.md; anything else is a role.
+            let role_lower = role_arg.to_lowercase();
+            let role: Option<&str> = match role_lower.as_str() {
+                "" | "agent" | "helix" => None,
+                r => Some(r),
+            };
+            let live_path = match crate::persona::persona_path(role) {
+                Some(p) => p,
+                None => return format!("Invalid role name '{}'.", role_arg),
+            };
+            match sub.as_str() {
+                "status" => {
+                    let mut lines = vec![format!(
+                        "Persona self-authoring: {}",
+                        if crate::persona::self_author_enabled() { "enabled" } else { "disabled" }
+                    )];
+                    let live = if live_path.is_file() { "present" } else { "missing" };
+                    lines.push(format!("{}: {}", live_path.display(), live));
+                    let pending = crate::persona::list_pending();
+                    if pending.is_empty() {
+                        lines.push("No pending drafts.".to_string());
+                    } else {
+                        lines.push("Pending drafts (awaiting /persona approve):".to_string());
+                        for p in pending {
+                            lines.push(format!("  {}", p.display()));
+                        }
+                    }
+                    lines.join("\n")
+                }
+                "approve" => match crate::persona::apply_pending_persona(&live_path) {
+                    Ok(msg) => msg,
+                    Err(e) => format!("Cannot approve: {}", e),
+                },
+                "discard" => match crate::persona::discard_pending_persona(&live_path) {
+                    Ok(msg) => msg,
+                    Err(e) => format!("Cannot discard: {}", e),
+                },
+                "draft" => {
+                    if !crate::persona::self_author_enabled() {
+                        "Persona self-authoring is disabled ([helix.persona] self_author).".to_string()
+                    } else {
+                        // Block this worker thread until the draft lands, same
+                        // pattern as spawn_subagent's sync entry point.
+                        let handle = match tokio::runtime::Handle::try_current() {
+                            Ok(h) => h,
+                            Err(_) => return "Drafting needs a Tokio runtime.".to_string(),
+                        };
+                        let role_owned = role.map(|r| r.to_string());
+                        let out = tokio::task::block_in_place(|| {
+                            handle.block_on(crate::persona::ensure_persona_file(
+                                role_owned.as_deref(),
+                            ))
+                        });
+                        match out {
+                            Ok(p) => format!(
+                                "Draft staged at {} — review with /persona status, then /persona approve{}.",
+                                p.display(),
+                                role.map(|r| format!(" {}", r)).unwrap_or_default()
+                            ),
+                            Err(e) => format!("Draft failed: {}", e),
+                        }
+                    }
+                }
+                _ => "Usage: /persona [status|approve [role]|discard [role]|draft [role]]".to_string(),
+            }
+        }
         "help" => format!(
             "Slash commands:\n\
              /status              — system health\n\
@@ -2023,6 +2095,10 @@ fn handle_slash_command(cmd: &str) -> String {
              /bayes show          — show Bayesian belief state\n\
              /bayes update <ev>   — apply Bayesian evidence update\n\
              /bayes reset         — reset to default priors\n\
+             /persona [status]    — persona files + pending drafts\n\
+             /persona approve [r] — apply a pending persona draft\n\
+             /persona discard [r] — discard a pending persona draft\n\
+             /persona draft [r]   — draft a persona now (self-authoring)\n\
              /help                — this message"
         ),
         other => format!("Unknown command '/{}'  — type /help for a list", other),

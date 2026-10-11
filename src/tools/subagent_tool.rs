@@ -40,6 +40,14 @@ per piece (local_ollama: fast and free; lan_ollama: overflow; gemini: heavy reas
 API budget). Do the orchestration yourself; do not do the pieces inline. Do not ask clarifying \
 questions when the request is actionable -- act, then report a concise summary when sub-agents finish.";
 
+/// Sub-agent job block (task 233): the standing orders every worker gets.
+/// Extracted from run_subagent()'s old inline format string so the persona
+/// module can compose it after the persona block. Byte-identical to the
+/// pre-233 text — do not "improve" the wording without checking the
+/// byte-identical fallback test in persona.rs.
+pub const SUBAGENT_JOB_PROMPT: &str = "Complete the task with your tools. Do not ask clarifying questions — act. \
+Finish with a concise summary of what you did.";
+
 static COMMANDER_ENABLED_OVERRIDE: OnceLock<bool> = OnceLock::new();
 
 /// Set at startup from `[helix.commander] enabled` in config.toml (main.rs).
@@ -50,15 +58,15 @@ pub fn set_commander_enabled(enabled: bool) {
 /// Build the system message for chat paths, or None when commander mode is off.
 /// Chat loops prepend this to the message list (Ollama) or map it to the
 /// backend's native system-instruction field (Gemini).
+/// Task 233: the text is composed by the persona module (persona block +
+/// job block); with no agent.md it is byte-identical to COMMANDER_SYSTEM_PROMPT.
 pub fn commander_system_message() -> Option<Value> {
-    if commander_enabled() {
-        Some(serde_json::json!({
+    crate::persona::composed_commander_text().map(|text| {
+        serde_json::json!({
             "role": "system",
-            "content": COMMANDER_SYSTEM_PROMPT
-        }))
-    } else {
-        None
-    }
+            "content": text
+        })
+    })
 }
 
 /// Whether the commander prompt block is active. Default true (task 214
@@ -96,7 +104,7 @@ pub fn set_ollama_endpoints(local: Option<OllamaEndpoint>, lan: Option<OllamaEnd
     let _ = ENDPOINTS.set(BackendEndpoints { local, lan });
 }
 
-fn resolve_ollama_endpoint(backend: &LLMBackend) -> Result<OllamaEndpoint, String> {
+pub(crate) fn resolve_ollama_endpoint(backend: &LLMBackend) -> Result<OllamaEndpoint, String> {
     if let Some(reg) = ENDPOINTS.get() {
         let hit = match backend {
             LLMBackend::LocalOllama => reg.local.as_ref(),
@@ -175,7 +183,7 @@ fn resolve_backend_auto(task: &str) -> LLMBackend {
     }
 }
 
-fn role_prefix(role_hint: &str) -> String {
+pub(crate) fn role_prefix(role_hint: &str) -> String {
     let hint = role_hint.trim();
     if hint.is_empty() {
         return String::new();
@@ -438,6 +446,19 @@ pub async fn dispatch_spawn(spec: &SpawnSpec) -> String {
                 &task_id,
                 crate::agents::subagent_registry::SubagentStatus::Failed,
             );
+            // Task 233: revision loop — a failed worker may teach its role
+            // file a lesson. Best-effort, .pending only, rate-limited; a
+            // refused proposal must never break the failure report.
+            if crate::persona::self_author_enabled() && !spec.role_hint.trim().is_empty() {
+                let lesson = format!(
+                    "task failed on backend {}: {}",
+                    backend_name,
+                    err.chars().take(200).collect::<String>()
+                );
+                if let Err(e) = crate::persona::propose_lesson(&spec.role_hint, &lesson) {
+                    log::debug!("persona: lesson proposal skipped: {}", e);
+                }
+            }
             format!(
                 "Sub-agent failed\ntask_id: {}\nbackend: {}\nerror: {}",
                 task_id, backend_name, err
@@ -448,6 +469,16 @@ pub async fn dispatch_spawn(spec: &SpawnSpec) -> String {
                 &task_id,
                 crate::agents::subagent_registry::SubagentStatus::TimedOut,
             );
+            // Task 233: same lesson trigger for timeouts.
+            if crate::persona::self_author_enabled() && !spec.role_hint.trim().is_empty() {
+                let lesson = format!(
+                    "task timed out after {}s on backend {}; consider smaller tasks or larger timeouts",
+                    spec.timeout_secs, backend_name
+                );
+                if let Err(e) = crate::persona::propose_lesson(&spec.role_hint, &lesson) {
+                    log::debug!("persona: lesson proposal skipped: {}", e);
+                }
+            }
             format!(
                 "Sub-agent timed out after {}s and was cancelled.\n\
              task_id: {}\nbackend: {}\n\
@@ -512,28 +543,39 @@ async fn run_subagent(
     backend: &LLMBackend,
     role_hint: &str,
 ) -> Result<String, String> {
-    let prompt = format!(
-        "You are a sub-agent ({}). Your commander's orders:\n\n{}\n\n{}\
-         Complete the task with your tools. Do not ask clarifying questions — act. \
-         Finish with a concise summary of what you did.",
-        task_id,
-        role_prefix(role_hint),
-        task,
-    );
+    // Task 233: pre-spawn draft — when the role has no persona file and
+    // self-authoring is on, the commander drafts one now (lands as .pending,
+    // never live). Best-effort: a failed draft must not block the spawn.
+    if !role_hint.trim().is_empty() {
+        if let Err(e) = crate::persona::ensure_persona_file(Some(role_hint)).await {
+            log::debug!("persona: pre-spawn draft skipped for role '{}': {}", role_hint, e);
+        }
+    }
+    let composed = crate::persona::compose_subagent_prompt(task_id, task, role_hint);
+    // Task 233: the role's frontmatter allowlist filters the toolset
+    // (spawn_subagent is always excluded — the depth guard is absolute).
+    let tools = crate::persona::subagent_tool_definitions(role_hint);
 
     match backend {
         LLMBackend::LocalOllama | LLMBackend::LanOllama => {
             let ep = resolve_ollama_endpoint(backend)?;
             let client = crate::io::ollama::llm_impl::OllamaLlmImpl::new(ep.url.clone(), ep.model.clone());
-            // Depth guard by construction: the sub-agent never sees spawn_subagent.
-            let tools = crate::tools::tool_definitions_excluding(&["spawn_subagent"]);
-            let messages = vec![serde_json::json!({"role": "user", "content": prompt})];
+            // Task 233: sub-agents get a REAL system message when a persona
+            // file exists; otherwise the legacy single user message
+            // (byte-identical to pre-233).
+            let messages: Vec<serde_json::Value> = match composed.system {
+                Some(sys) => vec![
+                    serde_json::json!({"role": "system", "content": sys}),
+                    serde_json::json!({"role": "user", "content": composed.user}),
+                ],
+                None => vec![serde_json::json!({"role": "user", "content": composed.user})],
+            };
             client
                 .chat_with_tools(&messages, tools)
                 .await
                 .map_err(|e| format!("Ollama sub-agent on {:?} failed: {}", backend, e))
         }
-        LLMBackend::Gemini => crate::io::llm_gemini::call_gemini_direct(&prompt)
+        LLMBackend::Gemini => crate::io::llm_gemini::call_gemini_direct(&composed.user, composed.system.as_deref())
             .await
             .map_err(|e| format!("Gemini sub-agent failed: {}", e)),
         LLMBackend::Grok => Err("Grok backend is not implemented yet.".to_string()),
