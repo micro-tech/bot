@@ -186,14 +186,20 @@ async fn call_gemini(
     client: &Client,
     url: &str,
     prompt: &str,
+    system_override: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    // Task 215: commander system prompt via Gemini's system_instruction.
+    // Task 215/233: system instruction. An explicit override (e.g. a
+    // sub-agent's composed persona+job) wins; otherwise the commander's
+    // composed text applies when commander mode is on.
+    let system_text: Option<String> = system_override
+        .map(|s| s.to_string())
+        .or_else(crate::persona::composed_commander_text);
     let mut body = json!({
         "contents": [{"parts": [{"text": prompt}]}]
     });
-    if crate::tools::subagent_tool::commander_enabled() {
+    if let Some(text) = system_text {
         body["system_instruction"] = json!({
-            "parts": [{"text": crate::tools::subagent_tool::COMMANDER_SYSTEM_PROMPT}]
+            "parts": [{"text": text}]
         });
     }
 
@@ -383,10 +389,12 @@ async fn call_gemini_tools(
             "contents": contents,
             "tools": [{"functionDeclarations": gemini_function_declarations()}],
         });
-        // Task 215: commander system prompt via Gemini's system_instruction.
-        if crate::tools::subagent_tool::commander_enabled() {
+        // Task 215/233: commander system prompt via Gemini's system_instruction.
+        // Composed by the persona module (persona block + job block); None
+        // when commander mode is off or no persona applies.
+        if let Some(text) = crate::persona::composed_commander_text() {
             body["system_instruction"] = json!({
-                "parts": [{"text": crate::tools::subagent_tool::COMMANDER_SYSTEM_PROMPT}]
+                "parts": [{"text": text}]
             });
         }
 
@@ -502,7 +510,9 @@ fn map_reqwest_err(e: reqwest::Error) -> Box<dyn std::error::Error + Send + Sync
 ///
 /// Reads `GEMINI_API_KEY` / `GEMINI_MODEL` from the environment, same as the
 /// bus path. Single-shot (no tool loop) — the sub-agent gets one strong answer.
-pub(crate) async fn call_gemini_direct(prompt: &str) -> Result<String, String> {
+/// Task 233: `system` carries the composed persona+job block when a role
+/// persona file exists; None keeps the legacy prompt-only behavior.
+pub(crate) async fn call_gemini_direct(prompt: &str, system: Option<&str>) -> Result<String, String> {
     let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
     if api_key.is_empty() {
         return Err("GEMINI_API_KEY is not set — cannot run a sub-agent on Gemini.                     Set it in the environment or .env, or pick a local backend."
@@ -516,7 +526,7 @@ pub(crate) async fn call_gemini_direct(prompt: &str) -> Result<String, String> {
     let client = build_client();
     // Count the spend BEFORE the call so a hung request still records intent;
     // the hook is cheap and idempotent per call.
-    let out = call_gemini(&client, &url, prompt).await;
+    let out = call_gemini(&client, &url, prompt, system).await;
     match out {
         Ok(text) => {
             crate::router::note_api_call(&crate::router::LLMBackend::Gemini);
@@ -546,7 +556,7 @@ pub fn call_gemini_sync(prompt: &str) -> Result<String, Box<dyn std::error::Erro
         "{}/{}:generateContent?key={}",
         GEMINI_URL_BASE, resolved_model, api_key
     );
-    rt.block_on(call_gemini(&client, &url, prompt))
+    rt.block_on(call_gemini(&client, &url, prompt, None))
         .map_err(|e| e.to_string().into())
 }
 
