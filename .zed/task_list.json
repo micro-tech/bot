@@ -1732,13 +1732,14 @@
       "id": 239,
       "title": "B1: Mutex poison recovery in web handler",
       "description": "Replace state.inflight.lock().unwrap() with the poison-recovery pattern used everywhere else in the tree.",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "GOAL: a poisoned mutex must degrade, not panic the request handler.\n\nDetails: src/io/web_server/mod.rs:1283 does `state.inflight.lock().unwrap()` in the request path. Replace with `unwrap_or_else(|e| e.into_inner())`, matching the pattern used throughout the rest of the codebase. Five-minute fix \u2014 grep for any other .lock().unwrap() in the request path while in there and fix those too.\n\nAcceptance: no .lock().unwrap() remains in src/io/web_server request-path code.",
       "testStrategy": "cargo check clean. Existing web_server tests green. Full lib suite: no new failures.",
       "subtasks": [],
-      "review_type": "bug"
+      "review_type": "bug",
+      "results": "Fixed src/io/web_server/mod.rs request-path inflight lock (was .lock().unwrap(), now unwrap_or_else(|e| e.into_inner())). Also fixed the same pattern in the bus router thread (src/bus/mod.rs) \u2014 a poisoned mutex there would silently kill message routing. Remaining .lock().unwrap() hits are test-only (web_server tests, memory manager test lock) and unix_cli (CLI binary path, panics acceptable). web_server tests 31/31 green."
     },
     {
       "id": 240,
