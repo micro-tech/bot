@@ -1843,13 +1843,14 @@
       "id": 245,
       "title": "D2: Document all config sections",
       "description": "docs/configuration.md is missing [mcp.servers], [helix.commander], [helix.persona], [router], and [web] auth_token \u2014 document every section.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "GOAL: John had to ask in chat what goes in config.toml; the answer belongs in this file.\n\nDetails: document every config section in docs/configuration.md: [mcp.servers], [helix.commander], [helix.persona] (incl. self_author flag), [router] (incl. spend cap), [web] auth_token, plus the already-documented ones \u2014 verify each against the actual serde structs (src/config/*, src/persona.rs) and the shipped config.toml. Generate the skeleton from the shipped config.toml so it can't drift again; note which keys are required vs defaulted.\n\nAcceptance: every [section] in the shipped config.toml appears in configuration.md with accurate defaults.",
       "testStrategy": "Review diff: each documented default matches the serde default in code. No code changes; no test run needed beyond a docs build if one exists.",
       "subtasks": [],
-      "review_type": "docs"
+      "review_type": "docs",
+      "results": "docs/configuration.md rewritten: all 14 sections documented with required/defaulted keys and verified defaults (incl. [helix.commander], [helix.persona] self_author, [router] spend cap + block flag). Section list generated from shipped config.toml."
     },
     {
       "id": 246,

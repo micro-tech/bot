@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Changed (task 245 DONE — Ranger 1, config docs)
+
+- **Rewrote `docs/configuration.md`**: every section in the shipped `config.toml` documented (`[helix]`, `[[ollama]]`, `[gemini]`, `[web]`, `[logging]`, `[heartbeat]`, `[ollama_keepalive]`, `[reasoning]`, `[helix.okf]`, `[mcp]`/`[[mcp.servers]]`) plus code-only sections (`[helix.commander]`, `[helix.persona]`, `[router]`, `[shell]`). Required vs defaulted keys marked; defaults verified against serde structs/parsing code.
+
+---
+
 ### Added (task 244 DONE — Ranger 1, backup/restore)
 
 - **Nightly state snapshots** (`scripts/backup-state.sh`): timestamped dirs in `backups/` with beliefs.json, episodes.jsonl, spend_state.json, agent.md, agents/*.md, logs/chat_history.jsonl + MANIFEST.txt. Keeps 7, rotates older. Cron entry documented for the R630.
