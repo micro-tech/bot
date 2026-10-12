@@ -18,6 +18,7 @@ pub mod bayesian;
 pub mod agents;
 pub mod okf;
 pub mod router;
+pub mod security;
 pub mod acp;
 pub mod a2a;
 pub mod ssh;

@@ -6,6 +6,110 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Changed (task 245 DONE — Ranger 1, config docs)
+
+- **Rewrote `docs/configuration.md`**: every section in the shipped `config.toml` documented (`[helix]`, `[[ollama]]`, `[gemini]`, `[web]`, `[logging]`, `[heartbeat]`, `[ollama_keepalive]`, `[reasoning]`, `[helix.okf]`, `[mcp]`/`[[mcp.servers]]`) plus code-only sections (`[helix.commander]`, `[helix.persona]`, `[router]`, `[shell]`). Required vs defaulted keys marked; defaults verified against serde structs/parsing code.
+
+---
+
+### Added (task 244 DONE — Ranger 1, backup/restore)
+
+- **Nightly state snapshots** (`scripts/backup-state.sh`): timestamped dirs in `backups/` with beliefs.json, episodes.jsonl, spend_state.json, agent.md, agents/*.md, logs/chat_history.jsonl + MANIFEST.txt. Keeps 7, rotates older. Cron entry documented for the R630.
+- **Restore doc** (`docs/backup-restore.md`): which files, in what order, how to verify.
+- **Verification**: manual drill (snapshot → delete → restore → verify) green; rotation confirmed at 7.
+
+---
+
+### Added (task 243 DONE — Ranger 1, persist chat history)
+
+- **History survives restarts**: each completed turn appends to `logs/chat_history.jsonl` (override: `HELIX_CHAT_HISTORY_FILE`); `load_from_disk()` at boot reloads the last 10 turns (respecting MAX_TURNS/MAX_TURN_CHARS). Corrupt lines are logged + skipped, never fatal. File compacts to retained turns on load.
+- **Verification**: 3 new tests (round-trip, corrupt-line tolerance, cap enforcement); 9/9 chat_history green. Test helper now serializes via test_env_lock (also fixes the pre-existing parallel flake).
+
+---
+
+### Added (task 242 DONE — Ranger 1, eval harness; EVAL SET DRAFT)
+
+- **Eval harness** (`evals/` + `tests/evals.rs`, `cargo test --test evals`): 10 deterministic behavioral evals (injection block/warn, sub-agent spawn guard, tool-def cache, commander reminder, Gemini metering, cap warn-mode, chat_token contract, ops auth invariant). No live LLM required.
+- **Gate verified**: deliberately breaking the validator fails 3 evals; restored → 10/10 green.
+- **⚠️ FOR JOHN**: the eval set is DRAFT — he must supply/approve the representative task list. LLM-dependent evals (tool-calling accuracy, delegation, end-to-end injection refusal, persona compliance) are deferred pending his list. See `evals/eval-set.md`.
+
+---
+
+### Added (task 238 DONE — Ranger 1, Ollama response streaming)
+
+- **Time-to-first-token**: the Ollama tool loop now streams (`"stream": true`) when given a token callback; `parse_stream_line` parses NDJSON lines, `read_streaming_response` reassembles the message (preserving `tool_calls` + eval counts for task-236 metering). `call_ollama_tools` takes `Option<&mut dyn FnMut(String)>` — `None` keeps buffered behavior for sub-agents.
+- **Token flow**: Ollama handler → `llm_token` bus msg → CPU → `chat_token` bus msg → bridge → WS. Minimal per-token overhead (no memory writes).
+- **⚠️ WS CONTRACT CHANGE** (for John/Sapper 1 — UI side not yet wired): new message shape
+  `{"type": "chat_token", "from": "cpu", "token": "<chunk>", "correlation_id": 12345}`.
+  UI should append `token` to the in-progress bubble for that `correlation_id`; the final `llm_output` still delivers the complete text. Unknown to old UIs = safely ignored.
+- **Verification**: 3 parser tests + 1 bridge test green; ollama/web_server/cpu suites 63/63.
+
+---
+
+### Changed (task 240 DONE — Ranger 1, require_web_token on mutating routes)
+
+- **Forgotten-check bug class eliminated**: the 6 mutating endpoints (`/logs/chat/clear`, `/logs/error/clear`, `/ops/update`, `/ops/update/status`, `/ops/restart`, `/ops/usage`) moved onto a protected sub-router with `require_web_token` middleware; inline `http_token_ok` checks removed from their handlers. Remaining `http_token_ok` call sites are only inside the two middleware fns themselves (require_web_token, require_okf_write_token) plus unit tests — each justified.
+- **Verification**: 31/31 web_server tests green, including `ops_endpoints_reject_missing_token` (now exercises the middleware path) and the authed polling-contract test (valid Bearer <redacted> passes through).
+
+---
+
+### Changed (task 237 DONE — Ranger 1, cache tool definitions)
+
+- **Per-spawn schema rebuild eliminated** (`src/tools/mod.rs`): the merged tool-definition list (statics + OKF + MCP) is now built once into a process-global `RwLock<Option<Value>>` cache. `tool_definitions()` clones the cached build on the fast path; `tool_definitions_excluding()` filters it. The expensive part was `mcp_client::tool_definitions()` blocking on the async manager every spawn — now runs only on cache miss.
+- **Invalidation hook**: `invalidate_tool_definitions()` — called from `okf::set_global_librarian` and the OKF bundle-reload path (replaces the old TODO). MCP topology changes should also call it (manager is init-once at startup, so this is rare).
+- **Verification**: 3 new tests green (build-once across 10 calls, invalidation triggers exactly one rebuild, excluding() reuses cache). Full lib: no new failures (chat_history flake confirmed pre-existing on pristine tree).
+
+---
+
+### Added (task 235 DONE — Ranger 1, prompt-injection defense layer)
+
+- **New module** (`src/security.rs`): untrusted-data tagging + tool-argument validation. `is_untrusted_tool` covers `read_email`/`check_inbox` and all `mcp__*` tools; `tag_untrusted` wraps outputs in `<untrusted-data>` delimiters and records them in a bounded shingle corpus (20 entries × 2000 chars, 48-char threshold, incremental HashSet — O(arg length) lookups). `validate_tool_call` runs pre-execution in `tools::execute`: BLOCK for write tools (`run_shell`, `write_note`, `send_email`, `set_belief`, `bayes_update`), WARN + log for read-only.
+- **Instruction boundary**: `INSTRUCTION_REMINDER` appended in `persona.rs` `composed_commander_text` + `compose_subagent_prompt` (both branches). This supersedes task-233's byte-identical prompt guarantee — updated the 233 test + docs accordingly.
+- **Ingress audit**: `read_email`/`check_inbox` (IMAP bodies), MCP tool outputs, email-channel bodies (via the same tools). No `web_fetch` tool exists in the tree. Single choke point: `tools::execute`.
+- **Docs**: `docs/injection_defense.md` (policy, tuning, tradeoffs).
+- **Verification**: 9 new security tests green; persona 18/18; tools 78/78; full lib no new failures vs task-213 baseline.
+- **Follow-ups for John**: block-vs-warn posture per tool (`BLOCK_TOOLS` in `src/security.rs`); note the deliberate false-positive tradeoff on user-directed summarize-then-write flows.
+
+### Added (task 236 DONE — Ranger 1, real token usage metering)
+
+- **Metered spend** (`src/router/spend.rs` rework): Gemini `usageMetadata` (`promptTokenCount`/`candidatesTokenCount`) and Ollama `prompt_eval_count`/`eval_count` are now parsed at the response sites (`src/io/llm_gemini/mod.rs` ×2, `src/io/ollama/mod.rs`) and priced at approximate Flash-tier rates ($0.10/$0.40 per 1M in/out). Flat $0.02/$0.05 estimates survive only as fallback when a backend omits usage fields. Per-day, per-backend aggregation now stores tokens + USD + call counts (not just USD).
+- **Cap behavior** (John's decision point): warn-by-default when the daily cap is hit (log + continue); `[router] cap_block_on_exceed = true` restores the old block. Wired in `src/main.rs` config parsing.
+- **Exposure**: new auth-gated `GET /ops/usage` returning `{date, daily_cap_usd, paid_total_usd, backends: {name: {usd, prompt_tokens, completion_tokens, calls}}}` — answers "where are usage stats".
+- **Migration**: legacy `spend_state.json` (date → backend → flat f64) auto-migrates on load; token counts start at zero.
+- **Verification**: 10 spend tests green (metered pricing, estimate fallback, warn/block modes, parsers, legacy migration, persistence); `io::llm_gemini` 6/6; `io::web_server` 31/31. Note: `subagent_tool` fallback test updated to enable block mode explicitly.
+- **Follow-up for John**: confirm warn-vs-block default for the spend cap; update pricing constants when the Gemini model changes.
+
+### Added (task 235 DONE — Ranger 1, prompt-injection defense layer)
+
+### Added (task 233 DONE — Ranger 1, agent.md persona files + per-role tool allowlists + self-authoring)
+
+- **Persona module** (`src/persona.rs`, new): `agent.md` in the runtime dir (parent of the loaded config.toml) is Helix's persona block; `agents/<role>.md` per sub-agent role. Role names sanitized to `[a-z0-9-_]`; traversal rejected to fallback. Missing file -> prompts byte-identical to pre-233.
+- **Prompt composition**: persona block first, then the job block (`COMMANDER_SYSTEM_PROMPT`, unchanged). All three injection sites unified through `persona::composed_commander_text()` — the Gemini path's two direct const refs now go through it (previously Gemini silently kept the old prompt). `SUBAGENT_JOB_PROMPT` extracted byte-identical from the old inline format string.
+- **Sub-agent system prompts**: Ollama sub-agents now get a REAL prepended system message when a persona file exists (previously user-only); Gemini sub-agents get `system_instruction` via the new `call_gemini_direct(prompt, system)` parameter.
+- **Tool allowlists** (John's containment requirement): role files declare allowed tools in YAML frontmatter (`tools: [read_email, check_inbox]`, inline or dash-list); frontmatter is stripped before injection. `dispatch_spawn` filters to `allowlist ∩ (all − spawn_subagent)` — `spawn_subagent` can NEVER be re-added (depth guard absolute). Unknown names warn + ignore; zero known names fall back to the full set with a loud warning (a typo never bricks a role). No file / no `tools:` key -> current behavior (default-deny stays John's future call).
+- **Self-authoring** (opt-in `[helix.persona] self_author`, default false): initial drafts (Helix at boot, roles pre-spawn) and lesson revisions on Failed/TimedOut all land as `.pending`, NEVER live. `/persona` slash commands: `status`, `approve [role]`, `discard [role]`, `draft [role]`. Guards: 4KB cap, `.bak.1-3` rotation, 1 revision/file/hour, runaway tripwire (3 proposals/hour disables self-authoring process-wide + alerts).
+- **Verification**: 18 new persona unit tests green; `tools::subagent_tool` 14/14; `io::llm_gemini` 6/6; `io::web_server` 31/31; full lib 332 passed, 6 failed = the pre-existing task-213 failures (verified unrelated). `cargo check` clean apart from pre-existing warnings.
+- **Follow-ups for John**: default-deny allowlist flip (his call, recommended not yet); web UI editor for agent.md (Sapper 1, reuse task-213 config-editor modal); chat announcement of pending drafts.
+
+### Added (task 231 DONE — Sapper 1, sub-agent rows + working/idle indicators in the web UI left panel)
+
+- **Sub-agents section** (`src/io/web_server/static/index.html`): new `#subagent-section` under `#backend-list` in the left sidebar (hidden until records exist). Each row shows Artificer 1's `subagent-icon-v2.png` inlined as a base64 data URI (`BACKEND_ICONS.subagent`, byte-identical to the delivered PNG), the `role_hint` name, `task_summary` truncated via CSS ellipsis (full text in the `title` tooltip), a pulsing cyan dot while `status == "working"`, and a greyed-out row when done/failed/timed_out.
+- **Backend activity dots**: the existing `.status-dot` spans are now driven by `agent_status` — pulsing cyan (`dot-working`) = working, solid green (`dot-idle`) = idle, muted grey = unknown (before the first snapshot). `refreshBackendDots()` repaints dots without rebuilding buttons, preserving backend selection.
+- **WS handlers**: `handleAgentStatus(msg)` re-renders wholesale from each `agent_status` snapshot (backend activity map + full sub-agent list); `handleSubagentEvent(msg)` upserts the delta record and re-renders. Inline branches were refactored into these named functions for testability.
+- **Verification**: `node --check` clean; a functional harness with a minimal DOM stub exercised the exact task-230 contract payloads (neutral dots pre-status → working/idle dots on snapshot; 2 rows render with working-pulsing/done-greyed; finish event upserts in place; spawn adds a row; empty snapshot clears rows and hides the section). One real bug found by the harness (empty snapshot left stale hidden rows) and fixed.
+- **Deliverable**: the file cannot be pushed via CLI — the complete updated `index.html` is at `~/workspace/your_files/web-subagents-index.html` for John's GitHub web upload to PreRelese. Rust backend untouched; scroll fix and ops-button code intact.
+
+### Added (task 230 DONE — Ranger 1, sub-agent registry + agent_status feed for the web UI)
+
+- **Sub-agent registry** (`src/agents/subagent_registry.rs`, new): process-global `Arc<RwLock<HashMap<String, SubagentRecord>>>` (OnceLock). Records carry `id` (`subagent-<uuid>`), `backend`, `role_hint` (`(any)` fallback), `task_summary` (120-char truncation), `status` (Working|Done|Failed|TimedOut), `started_at_ms`, `finished_at_ms`. `dispatch_spawn` registers the moment the task id exists and marks finish in all three completion arms (Done/Failed/TimedOut); the `HELIX_SUBAGENT_TEST_STUB` path runs the same lifecycle. Prune policy: all Working entries plus the last 10 finished (bounded memory). Write locks are dropped before bus publish and before the status-listener callback fires (the listener re-locks for its snapshot — notifying under the write lock would deadlock).
+- **Lifecycle bus events**: register/finish publish `{"type":"subagent_event","event":"spawned|finished","subagent":{...}}` to bus address `web_interface`, same contract as the task-219 `tool_call` event. Published through a new process-global bus handle (`crate::bus::set_global_bus`/`global_bus`, installed in `main.rs`); silent no-op when no bus exists. `subagent_event` added to the bridge forward-as-is list so it fans out to WS clients untouched.
+- **`agent_status` snapshot** (`src/io/web_server/mod.rs`): `{"type":"agent_status","backends":[{id, activity: idle|working}],"subagents":[{...}]}`. Sent on every WS connect right after the backends message, and re-broadcast via `state.msg_tx` on every registry change through a `set_status_listener` hook installed once at server startup. Clients re-render wholesale — no incremental-sync state.
+- **Backend activity tracking**: `AppState.inflight` is `Arc<Mutex<HashMap<u64, (String, u64)>>>` (correlation_id → backend_id, sent_at_ms) — a deviation from the spec'd `HashSet<(String, u64)>` so the 5-minute TTL sweep can reap without a second structure. Inserted at the chat_request publish site (backend id derived from the bus destination, ms-timestamp key bumped on collision); the bridge (extracted to unit-testable `bridge_out_message()`) extends forwarded `llm_output`/`ollama_response` JSON with `correlation_id` when present and retires the matching entry, then re-broadcasts. Supporting fix in `src/main.rs`: the CPU forwarder now preserves `correlation_id` from `llm_response` into `llm_output` (it was silently dropped, which would have wedged every backend on "working"). A 60s-interval task reaps entries older than 5 minutes. The spec'd per-backend-boolean fallback was not needed.
+- **Auth model unchanged**: read-only status broadcasts on the existing broadcast channel, same as backends/tool_call. No new HTTP endpoints.
+- **Tests**: 9 new, all green — registry lifecycle, prune (3 working + 14 finished → 3 + 10), 8-thread concurrent register/finish without deadlock, record JSON shape; stubbed `dispatch_spawn` emits spawned→finished on a bus subscriber in order; snapshot shape (per-backend activity flags + subagent row); `subagent_event` forwarded as-is; bridge retires in-flight on response and flips activity working→idle; unmatched responses forward without retiring. `cargo check --lib --tests` clean apart from pre-existing warnings. Full lib suite: 314 passed, 6 failed — the 6 are pre-existing task-213 failures (a2a ×2, acp::agent ×2, mcp_client ×2), verified identical on the pristine tree.
+- **Open decision points for John** (spec's, still his call): sub-agent list global across chats (shipped) vs per-session; keep last 10 finished greyed (shipped) vs remove on finish; rows display-only (shipped) vs clickable for the full report. Recommendation: global, keep-10, display-only.
+- **Refactor suggestion** (per Ranger spec): the bridge thread is currently spawned per WS connection inside `handle_ws` — every client gets its own bus subscription and forwarder. Hoisting the bridge to a single server-wide task would cut redundant bus traffic and remove the per-connection in-flight double-retire (harmless today: only the first `remove` wins). Also consider folding the per-arm `require_token()`-style auth boilerplate noted in earlier reviews — same file, same cleanup appetite.
+
 ### Added (task 221 DONE — Ranger 1, Gemini tool-calling loop)
 
 - **Function calling on the Gemini backend** (`src/io/llm_gemini/mod.rs`): the commander pattern can now delegate on Gemini — John's fast pick. Shared tool definitions are converted to Gemini `functionDeclarations`; the agentic loop sends `functionResponse` parts back and iterates (10-round cap) until the model returns text; every invocation publishes `{type:"tool_call"}` on the bus with the same contract as the Ollama path, so the UI delegation cards render there too. The 215 commander `system_instruction` block is carried into the loop. Each billable round feeds the 217 spend cap via `note_api_call`. `call_gemini_direct` (spawn runner) and `call_gemini_sync` stay single-shot on purpose; the reqwest error diagnosis was extracted to a shared `map_reqwest_err` helper.
