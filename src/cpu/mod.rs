@@ -1097,6 +1097,28 @@ where
                     }
                 }
 
+                // Task 238: streaming tokens pass through to the UI with
+                // minimal overhead (no memory writes, no logging per token).
+                "llm_token" => {
+                    let token = payload["token"].as_str().unwrap_or("");
+                    if !token.is_empty() {
+                        let ui_msg = Message {
+                            to: "web_interface".to_string(),
+                            from: "cpu".to_string(),
+                            data: serde_json::json!({
+                                "type": "chat_token",
+                                "correlation_id": payload["correlation_id"].as_u64().unwrap_or(0),
+                                "token": token,
+                            })
+                            .to_string(),
+                            timestamp: now_ms(),
+                        };
+                        if let Err(e) = self.bus.publish(ui_msg) {
+                            log_to_file(&format!("CPU failed to forward chat token: {}", e));
+                        }
+                    }
+                }
+
                 "reasoning_command" => {
                     let cmd = payload["command"].as_str().unwrap_or("");
                     match cmd {

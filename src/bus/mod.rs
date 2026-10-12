@@ -57,7 +57,8 @@ impl Bus {
         thread::spawn(move || {
             println!("[Bus] Router thread started");
             while let Ok(message) = receiver.recv() {
-                let subs_guard = subs_clone.lock().unwrap();
+                // Task 239: recover from poison instead of killing the router thread.
+                let subs_guard = subs_clone.lock().unwrap_or_else(|e| e.into_inner());
                 let mut delivered = false;
                 for (component, sub_sender) in subs_guard.iter() {
                     if component == &message.to {

@@ -56,8 +56,11 @@ pub struct OkfLibrarian {
 static GLOBAL_OKF: OnceLock<std::sync::Arc<TokioMutex<OkfLibrarian>>> = OnceLock::new();
 
 /// Install the shared OKF librarian (called once at startup from the web server).
+/// Task 237: installing a new librarian changes the tool registry, so the
+/// cached tool definitions must be invalidated.
 pub fn set_global_librarian(librarian: std::sync::Arc<TokioMutex<OkfLibrarian>>) {
     let _ = GLOBAL_OKF.set(librarian);
+    crate::tools::invalidate_tool_definitions();
 }
 
 /// Get a handle to the global OKF librarian (if OKF is enabled and initialized).
@@ -294,7 +297,10 @@ impl OkfLibrarian {
                         self.last_etag
                     );
 
-                    // TODO(165 future): Notify running agents / invalidate tool cache here
+                    // Task 237: tool registry changed — invalidate the cached
+                    // tool definitions so the next spawn picks up the new tools.
+                    crate::tools::invalidate_tool_definitions();
+                    // TODO(165 future): Notify running agents here
                     // e.g. broadcast a "okf_tools_updated" bus message
                 } else {
                     eprintln!(

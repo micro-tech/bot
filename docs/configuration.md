@@ -1,108 +1,169 @@
-# Configuration (`config.toml`)
+# Configuration (`config.toml`) — task 245
 
-Helix is configured via `config.toml` in the project root.
+Helix is configured via `config.toml` in the runtime directory (default:
+the directory Helix is launched from; the R630 runs from `/home/cobble/helix`).
 
-## Main Sections
+**Conventions used below:**
+- **Required** = Helix fails or misbehaves without it.
+- **Defaulted** = safe default applies when omitted (shown in `Default` column).
+- Every default was verified against the serde structs / parsing code; the
+  section list was generated from the shipped `config.toml` so it can't drift.
 
-### `[ollama]`
-Controls the connection to the local or remote LLM.
+**Secrets:** `config.toml` is git-tracked with `skip-worktree` on the R630
+so pulls never clobber it. File should be mode `0600`. `HELIX_WEB_TOKEN`
+env var overrides `[web] auth_token`.
+
+---
+
+## `[helix]`
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `name` | No | `"Helix"` | Agent display name |
+
+## `[[ollama]]` (repeatable — one per Ollama instance)
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `name` | **Yes** | — | Instance id (`server`, `desktop`); used in backend ids `ollama_<name>` |
+| `url` | **Yes** | — | Base URL, e.g. `http://192.168.1.149:11434` |
+| `model` | **Yes** | — | Model tag, e.g. `gemma4:e4b` |
+
+## `[gemini]`
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `model` | No | `"gemini-3.6-flash"` | Gemini model. `GEMINI_MODEL` env var overrides. API key from `GEMINI_API_KEY` (`.env`) |
+
+## `[web]`
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `bind` | No | `"127.0.0.1"` | Bind address. `0.0.0.0` only with `auth_token` set |
+| `port` | No | `8443` | HTTPS port |
+| `auth_token` | No (but set it if bound beyond localhost) | `""` (open) | Token for mutating endpoints; `HELIX_WEB_TOKEN` overrides |
+| `tls_enabled` | No | `false` | TLS on/off |
+| `cert_path` | No | `"cert.pem"` | TLS cert |
+| `key_path` | No | `"key.pem"` | TLS key |
+
+## `[logging]`
+
+All paths must be relative starting with `logs/`.
+
+| Key | Required? | Default |
+|-----|-----------|---------|
+| `chat_log` | No | `"logs/chat_log.md"` |
+| `error_log` | No | `"logs/error_log.md"` |
+| `bus_log` | No | `"logs/bus_log.md"` |
+| `hartbeat_log` | No | `"logs/hartbeat_log.md"` |
+
+## `[heartbeat]`
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `interval_seconds` | No | `300` | Heartbeat tick interval |
+
+## `[ollama_keepalive]` (task 89)
+
+Keeps the Ollama model warm in GPU memory.
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `preload` | No | `true` | Dummy request at startup to pre-warm |
+| `interval_secs` | No | `240` | Heartbeat interval (0 = disable). Env: `OLLAMA_KEEP_ALIVE_SECS` |
+
+## `[reasoning]`
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `enabled` | No | `true` | Reasoning engine on/off |
+| `default_goal` | No | `"Improve agent reliability, safety, and self-correction"` | Fallback goal |
+| `cycle_interval_ticks` | No | `20` | Reasoning cycle cadence |
+| `metrics_interval_ticks` | No | `40` | Metrics cadence |
+| `health_check_interval_ticks` | No | `100` | Health-check cadence |
+
+## `[helix.okf]` (task 164)
+
+Helix as its own OKF server.
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `enabled` | No | `false` | Master switch |
+| `server_url` | No | `"http://localhost:8080"` | Self-fetch URL |
+| `auto_reload` | No | `true` | Reload on webhook |
+| `index_file` | No | `"okf_index.json"` | Index path |
+| `poll_interval_secs` | No | `60` | Poll cadence |
+| `request_timeout_secs` | No | `30` | Fetch timeout |
+| `trace_file` | No | `"okf_traces.jsonl"` | Trace append target |
+| `auth_token` | No | `""` | Optional Bearer <redacted> write endpoints |
+
+## `[mcp]` / `[[mcp.servers]]`
+
+External MCP servers over stdio. Disabled unless `[mcp] enabled = true`.
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `[mcp] enabled` | No | `false` | Master switch |
+| `name` | **Yes** (per server) | — | Namespace: tools appear as `mcp__<name>__<tool>` |
+| `command` | **Yes** (per server) | — | Executable to spawn |
+| `args` | No | `[]` | Extra argv |
+| `[mcp.servers.env]` | No | — | Extra env vars (e.g. `GOOGLE_CLIENT_ID`) |
+
+## `[helix.commander]` (task 215)
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `enabled` | No | `true` | Commander delegation mode. `HELIX_COMMANDER_ENABLED=0/1` overrides |
+
+## `[helix.persona]` (task 233)
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `self_author` | No | `false` | **Opt-in.** Lets sub-agents draft persona updates (land as `.pending`, John approves) |
+
+## `[router]` (tasks 217, 236)
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `daily_api_cap_usd` | No | `5.00` | Daily paid-API spend cap (metered tokens, task 236) |
+| `cap_block_on_exceed` | No | `false` | `true` = block paid calls over cap; `false` = warn + continue (default; John's call to flip) |
+
+## `[shell]`
+
+Local shell tool (`run_shell`). **Disabled by default**; explicit opt-in.
+
+| Key | Required? | Default | Description |
+|-----|-----------|---------|-------------|
+| `enabled` | No | `false` | Master switch |
+| `default_timeout_secs` | No | `60` | Per-command timeout (1–3600) |
+| `workdir` | No | `"."` | Base dir for commands |
+| `allow_absolute_paths` | No | `false` | When false, paths must stay under `workdir` |
+| `max_output_bytes` | No | `32768` | Per-stream capture cap |
+
+---
+
+## Minimal working example
 
 ```toml
-[ollama]
-host = "192.168.1.149"
-port = 11434
-model = "llama3"
-timeout = 30
-retry_count = 3
-```
+[helix]
+name = "Helix"
 
-| Key | Description | Default |
-|-----|-------------|---------|
-| `host` | Ollama server address | `127.0.0.1` |
-| `port` | Ollama API port | `11434` |
-| `model` | Default model name | `llama3` |
-| `timeout` | Request timeout in seconds | `30` |
-| `retry_count` | Number of retries on failure | `3` |
+[[ollama]]
+name = "server"
+url = "http://192.168.1.149:11434"
+model = "llama3.2:1b"
 
-### `[web_interface]`
-HTTPS web server settings.
+[gemini]
+model = "gemini-3.6-flash"
 
-```toml
-[web_interface]
-https_port = 8443
-```
+[web]
+bind = "127.0.0.1"
+port = 8443
+auth_token = "set-me"
 
-### `[socket]`
-UNIX domain socket CLI settings.
-
-```toml
-[socket]
-path = "/tmp/helix.sock"
-mode = 0o660
-```
-
-| Key | Description | Default |
-|-----|-------------|---------|
-| `path` | Socket file location | `/tmp/helix.sock` |
-| `mode` | File permissions (octal) | `0o660` |
-
-### `[logging]`
-Controls where logs are written.
-
-```toml
 [logging]
-error_log = "logs/error_log.md"
 chat_log = "logs/chat_log.md"
+error_log = "logs/error_log.md"
 bus_log = "logs/bus_log.md"
+hartbeat_log = "logs/hartbeat_log.md"
 ```
-
-### `[memory]`
-Memory system limits.
-
-```toml
-[memory]
-working_max = 50
-episodic_max = 1000
-```
-
-### `[shell]`
-Local shell tool (`run_shell`) — lets the agent run commands on its own
-server via `/bin/sh -c`. **Disabled by default**; explicit opt-in required.
-The SSH server (task 192) executes sessions through this same policy and
-fails closed when it is off.
-
-```toml
-[shell]
-enabled = false            # master switch — the tool refuses to run unless true
-default_timeout_secs = 60  # per-command timeout when the caller doesn't set one (1-3600)
-workdir = "."              # base directory commands run in (relative to Helix's CWD)
-allow_absolute_paths = false  # when false, workdir args must stay under `workdir`
-max_output_bytes = 32768   # per-stream (stdout/stderr) capture cap
-```
-
-Protections (all enforced, not just the denylist): two-layer
-destructive-shell analysis (argv[0] program-name matching + substring
-denylist — shared with the ACP surface, implemented once in
-`src/tools/shell_security.rs`); timeout kills the whole process group;
-stdout/stderr truncated with notice; stdin is `/dev/null` (no TTY, so
-interactive prompts fail fast); working directory confined to `workdir`.
-Defense-in-depth framing: the denylist sits *behind* the agent's own
-judgment, never as the sole protection.
-
-## Cross-Platform Paths
-
-Some paths are expanded automatically:
-
-| Platform | Example Expanded Path |
-|----------|-----------------------|
-| Windows | `%APPDATA%\helix\logs\error_log.md` |
-| Linux/macOS | `~/.helix/logs/error_log.md` |
-
-## Example Full File
-
-See the root `config.toml` for a complete working example.
-
-## Related
-- [UNIX Socket CLI](unix_socket.md)
-- [Logging System](logging.md)
-- [Web Interface](web_interface.md)
