@@ -332,7 +332,7 @@ pub fn record_check(
 }
 
 /// Read the live `[support]` config. Missing file/section → defaults.
-fn live_config() -> SupportConfig {
+pub(crate) fn live_config() -> SupportConfig {
     let path = RUNTIME_DIR
         .get()
         .map(|d| d.join("config.toml"))
