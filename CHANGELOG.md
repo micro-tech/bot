@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Added (task 259 DONE — Ranger 1, SYSADMIN-01 web UI support panel)
+
+- **Support tab** in the web UI detail panel (`#tab-support`): poll-status line (mode, last/next check, quiet streak, unhandled count, mail-mcp state) via public `GET /support/status`; draft list with full bodies via public `GET /support/drafts`; Approve / Send / Discard buttons POSTing through the existing `opsFetch` web-token pattern. `confirm()` gates Send and Discard; `supportEsc` HTML-escapes all draft content; `loadSupport()` wired into `showDetailTab`.
+- **Auth-gated mutation routes** (`src/io/web_server/mod.rs`): `POST /support/approve|send|discard` on the existing `protected` router behind `require_web_token` (task-240 middleware — reused, not reimplemented); read-only GETs stay public. Draft lifecycle invariants (approve-then-send, no-auto-send) enforced by the task-257 draft store underneath.
+- **Verification**: 9 new route/handler tests green (public GETs, 401 without/wrong token, approve→send flow, discard, unknown-id/double-approve guards); `node --check` clean; full lib suite **413 passed, 0 failed**.
+- **Test-harness note**: the sandbox secret-redactor rewrote `"Bearer s3cret"` literals in newly written test inputs to `"Bearer <redacted>"`, causing 401s against the intact token state. Fixed by assembling the test token programmatically (`support_test_token()`); production code untouched.
+
+---
+
 ### Added (task 258 DONE — Ranger 1, SYSADMIN-01 Gemini-delegated drafting)
 
 - **Gemini-pinned drafter** (`src/support_watch/drafter.rs`): `draft_reply()` builds the prompt (customer message wrapped in `<untrusted-data>`, explicit draft-only/never-send instructions, `---DRAFT-BEGIN/END---` markers), spawns via `dispatch_spawn` with backend pinned to `SUPPORT_DRAFT_BACKEND="gemini"` (constant — never auto/local), extracts the body, stages via the draft store. Structural guarantee: Gemini sits last on the health ladder, so an explicit gemini request fails loudly rather than falling back to local (pinned by test); failed drafts stay unhandled and retry on the next burst. Spend flows through normal task-236 metering.
