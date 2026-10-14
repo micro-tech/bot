@@ -25,6 +25,7 @@ pub mod ssh;
 pub mod cron;
 pub mod chat_history;
 pub mod persona;
+pub mod support_watch; // task 256: SYSADMIN-01 adaptive support-mail poll loop
 
 // Re-export commonly used types
 pub use bus::{Bus, Message};

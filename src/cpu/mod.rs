@@ -439,8 +439,21 @@ where
         match routine_id {
             "nightly_memory_consolidation" => self.routine_memory_consolidation().await,
             "error_log_review" => self.routine_error_log_review().await,
+            // Task 256 (SYSADMIN-01): support@ poll tick — in-process state
+            // machine, deliberately no LLM (polling needs no model; John's
+            // call is that drafting delegates to a capable backend, task 258).
+            "support-mail-watch" => self.routine_support_mail_watch().await,
             other => log_to_file(&format!("CPU received unknown routine_run: {}", other)),
         }
+    }
+
+    /// Task 256 (SYSADMIN-01): one support@ poll tick. Runs the adaptive
+    /// state machine in-process — no LLM is spawned for polling (John's
+    /// call). New mail is handed to the draft flow's sink (task 257/258);
+    /// until that's wired, LogOnlySink records it without losing it: the
+    /// ids stay in `unhandled_ids` so the draft flow picks them up later.
+    async fn routine_support_mail_watch(&mut self) {
+        crate::support_watch::tick(&crate::support_watch::LogOnlySink);
     }
 
     /// Append a section to the nightly report

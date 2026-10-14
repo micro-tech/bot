@@ -390,6 +390,19 @@ async fn start_stream(
 mod tests {
     use super::*;
 
+    /// Task 256: agent-prompt tests must not depend on the ambient
+    /// config.toml. John's live config enables [mcp], and the MCP bridge
+    /// panics on the current-thread test runtime — install a hermetic
+    /// disabled config instead. Bind the return value to hold the lock for
+    /// the whole test body.
+    fn hermetic_mcp_disabled() -> std::sync::MutexGuard<'static, ()> {
+        let guard = crate::tools::subagent_tool::test_env_lock();
+        crate::mcp_client::clear_test_overrides();
+        crate::mcp_client::override_config_for_tests(crate::config::mcp::McpConfig::default());
+        crate::tools::invalidate_tool_definitions();
+        guard
+    }
+
     fn test_state() -> A2aState {
         A2aState::new("http://127.0.0.1:8443".to_string(), 5)
     }
@@ -431,6 +444,7 @@ mod tests {
 
     #[tokio::test]
     async fn message_send_creates_and_completes_task() {
+        let _lock = hermetic_mcp_disabled();
         let state = test_state();
         let params = serde_json::json!({
             "message": {"role": "user", "parts": [{"kind": "text", "text": "hello a2a"}]},
@@ -456,6 +470,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_terminal_task_is_noop() {
+        let _lock = hermetic_mcp_disabled();
         let state = test_state();
         let params = serde_json::json!({
             "message": {"role": "user", "parts": [{"kind": "text", "text": "x"}]},
