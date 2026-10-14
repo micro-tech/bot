@@ -24,6 +24,7 @@ mod agents;
 mod okf;
 mod mcp_client;
 mod router;
+mod security;
 mod acp;
 mod a2a;
 mod ssh;
@@ -43,6 +44,9 @@ async fn main() {
 
     // Load .env early (for GEMINI_API_KEY etc.)
     let _ = dotenv::dotenv();
+
+    // Task 243: reload persisted chat history before the agent loop starts.
+    crate::chat_history::load_from_disk();
 
     // Permanently fix rustls CryptoProvider (ring) at the absolute earliest point.
     // This resolves conflicts caused by lettre + imap pulling in aws-lc-rs.
@@ -233,6 +237,13 @@ async fn run_helix() {
             crate::router::spend::set_daily_api_cap_usd(v);
             println!("daily API spend cap: ${:.2}", v);
         }
+        // ── Task 236: cap-exceed behavior ([router] cap_block_on_exceed,
+        // default false = warn + continue; true = block paid calls) ──
+        let block = toml::from_str::<toml::Value>(&config_str)
+            .ok()
+            .and_then(|v| v.get("router")?.get("cap_block_on_exceed")?.as_bool())
+            .unwrap_or(false);
+        crate::router::spend::set_cap_block_on_exceed(block);
     }
 
     // ── Task 214/217: register Ollama endpoints for the spawn_subagent tool ──
@@ -664,6 +675,9 @@ async fn run_helix() {
     let rt_dir = runtime_dir(config_path_used);
     // Task 233: persona files resolve under the runtime dir.
     crate::persona::set_persona_dir(rt_dir.clone());
+    // Task 256: support-watch state, drafts, and playbook resolve under the
+    // runtime dir too.
+    crate::support_watch::set_runtime_dir(rt_dir.clone());
     // Task 233: initial self-authoring — if agent.md is missing and the
     // operator opted in, Helix drafts its own persona in the background.
     // Fire-and-forget: the draft lands as .pending, never live, and a

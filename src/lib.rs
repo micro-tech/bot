@@ -18,12 +18,14 @@ pub mod bayesian;
 pub mod agents;
 pub mod okf;
 pub mod router;
+pub mod security;
 pub mod acp;
 pub mod a2a;
 pub mod ssh;
 pub mod cron;
 pub mod chat_history;
 pub mod persona;
+pub mod support_watch; // task 256: SYSADMIN-01 adaptive support-mail poll loop
 
 // Re-export commonly used types
 pub use bus::{Bus, Message};
