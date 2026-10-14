@@ -1952,6 +1952,271 @@
       "testStrategy": "cargo check clean. New unit tests: burst throttled, refill over time, normal traffic passes. Full lib suite: no new failures.",
       "subtasks": [],
       "review_type": "gap"
+    },
+    {
+      "id": 254,
+      "title": "Clear new unused warnings from tasks 235-246 + uncovered pre-existing router re-exports",
+      "description": "cargo check --lib --bins on PreRelese @ 439617d (PR #19) emits warnings in two groups. NEW (introduced by tasks 235-246, filed by QM 2026-10-12): src/router/mod.rs:23 unused names `TokenUsage`, `note_api_usage`, `usage_summary_today` in the task-235/236 spend re-export (bb32f59a); src/io/web_server/mod.rs:1888 unused variable `state` in ops_restart(State(state): State<AppState>) left over after task 240 moved auth to require_web_token middleware. PRE-EXISTING but not covered by tasks 212/222/224/234 (verified present in the 2026-10-10 and 2026-10-11 QM check logs; pre-October blame): src/router/mod.rs:16 `ComplexityConfig, HealthThresholds, LoadThresholds, ScheduleConfig` (cb9aa41c), :17 `DefaultStrategy, RoutingStrategy` (b57f00ec), :20 `OverrideCommand, OverrideTier` (686129b9), :22 `telemetry::TelemetryCollector` (686129b9). All consumers use full paths (crate::router::spend::..., crate::router::override_mod::..., crate::router::health::...); the mod.rs re-exports are dead convenience aliases. Note: DEFAULT_DAILY_API_CAP_USD/paid_spent_today_usd on line 23 were already warned pre-PR#19; the task-235/236 commit added the three new names to the same line.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "low",
+      "details": "FILED BY QUARTERMASTER 2026-10-12 ~04:45 EDT during nightly run on PreRelese @ 439617d. Verified: warnings emitted by cargo check --lib --bins; git blame pins the new ones to PR #19 commits (bb32f59a task 235/236, 35f7711b task 240); consumer grep shows zero users of the router:: re-export paths. RULED OUT: not behavior-affecting (build exits 0, lib tests 356 passed with only the 6 known task-213 failures, no new failures); ops_restart's unused `state` is auth-middleware fallout, not a missing auth check (middleware require_web_token now guards the route). Suggested fix: drop the dead re-export names from src/router/mod.rs (or wire consumers to them); change ops_restart to State(_state) or drop the extractor. If John's metering follow-ups (task 235) plan to consume TokenUsage/note_api_usage/usage_summary_today via the short path, say so and keep those names.",
+      "testStrategy": "cargo check --lib --bins emits zero warnings; cargo build clean; cargo test --lib unchanged (6 pre-existing task-213 failures only); the 10 integration targets still green.",
+      "subtasks": [],
+      "results": ""
+    },
+    {
+      "id": 255,
+      "title": "mail-mcp MCP wiring + graceful degradation when binary missing",
+      "description": "Helix-side wiring for the support@ mailbox watcher: config template + docs for a mail-mcp MCP server entry (mirroring the google-mcp pattern), and verified graceful behavior when the binary is not installed. The mail-mcp INSTALL itself is John's ops step, not this task.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "FILED BY SURVEYOR 1, 2026-10-13. SYSADMIN-01 support-mail system, phase 1.\n\nEXTERNAL DEPENDENCY (John, NOT a build task): mail-mcp binary must land at /home/cobble/.local/bin/mail-mcp on the R630 with mailbox credentials in its environment (mail-mcp is one-mailbox-per-process, env-var config). Everything in tasks 255-260 builds and unit-tests WITHOUT the binary (mocks/stubs); only task 260's live drill needs it installed.\n\n1. config.toml: add a commented [[mcp.servers]] template block right after the google entry (config.toml:106-108):\n   [[mcp.servers]]\n   name = \"mail\"   # tools appear as mcp__mail__<tool>\n   command = \"/home/cobble/.local/bin/mail-mcp\"\n   # [mcp.servers.env]\n   # MAIL_MCP_... = \"...\"   # exact var names per mail-mcp README; do NOT commit real values\n   Mirror the pattern in src/config/mcp.rs doc comment.\n2. docs/mcp.md: add a \"mail-mcp (support@ watcher)\" section: install pointer, env vars, tool namespace, one-mailbox-per-process note (a second mailbox = second server entry).\n3. Graceful degradation: verify what mcp_client/manager.rs does today when a configured command does not exist (it should log a clear warning and simply not advertise that server's tools, never crash boot). If it crashes or spams, fix it. Add/extend a unit test with a bogus command path.\n4. Tool-name verification procedure (runs on the R630 once John installs): list tools via the manager and record the exact mcp__mail__* tool names (expected: some form of check_inbox/list_messages + send_message, but mail-mcp's surface is NOT known in this sandbox \u2014 do not hardcode guesses; the poll loop in task 256 must resolve names at runtime or from config). Document the confirmed names in docs/mcp.md.",
+      "testStrategy": "cargo test mcp_client + config: new/updated tests green. With binary absent: boot clean, warning logged, no mcp__mail__* tools advertised (assert in test). Config template parses via McpConfig::load_from_toml. docs/mcp.md updated. Tool names confirmed on R630 and documented (or task left open with the verification command recorded).",
+      "subtasks": [
+        {
+          "id": 255.1,
+          "title": "Config template + docs for mail-mcp server entry",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 255.2,
+          "title": "Graceful degradation when mail-mcp binary missing",
+          "status": "done",
+          "dependencies": [
+            255.1
+          ]
+        },
+        {
+          "id": 255.3,
+          "title": "Confirm exact mcp__mail__* tool names on R630 (DEFERRED: gated on John installing mail-mcp; verification command recorded in docs/mcp.md)",
+          "status": "deferred",
+          "dependencies": [
+            255.2
+          ]
+        }
+      ],
+      "results": "DONE 2026-10-13 (Ranger 1, branch ranger-255-260). 255.1: commented [[mcp.servers]] 'mail' template added to config.toml after the google entry (+ stale 'everything commented out' comment fixed \u2014 John's live config has [mcp] enabled); doc-comment example added in src/config/mcp.rs; new 'mail-mcp (support@ watcher)' section in docs/mcp.md. 255.2: graceful degradation VERIFIED \u2014 manager already skipped unspawnable servers with a warning; extended coverage with mail_template_without_binary_advertises_no_tools test. Also fixed 2 PRE-EXISTING test failures: mcp_client tests assumed the worktree config leaves [mcp] commented out (John's live config enables it) \u2014 tests now install a hermetic disabled config via override_config_for_tests (task-255 test seam in src/mcp_client/mod.rs). 255.3 DEFERRED: mail-mcp's tool surface is unknown in the sandbox; verification command (list_tools in web UI chat, grep mcp__mail__) recorded in docs/mcp.md; poll loop (256) resolves names defensively at runtime. Tests: cargo test --lib mcp_client 17 passed, config::mcp 4 passed; config.toml parse verified (enabled, servers=[google], mail template commented)."
+    },
+    {
+      "id": 256,
+      "title": "Adaptive support-mail poll loop (15m biz / 1m burst / 30m night)",
+      "description": "The SYSADMIN-01 watcher core: a persisted state machine that checks support@ on an adaptive cadence \u2014 15 min during business hours, 1-min burst while unhandled mail exists, 30 min overnight. Driven by the existing routine system.",
+      "status": "done",
+      "dependencies": [
+        255
+      ],
+      "priority": "high",
+      "details": "FILED BY SURVEYOR 1, 2026-10-13. SYSADMIN-01 support-mail system, phase 2.\n\nDefinitions (normative for this task):\n- Business hours: 08:00-18:00 America/New_York, from a [support] config section (business_start, business_end, timezone); defaults as stated, adjustable without code changes.\n- UNHANDLED message: a support@ message with no staged draft, no sent reply, and not explicitly dismissed by John.\n- QUIET: zero unhandled messages.\n- BURST: entered when a check finds >=1 new unhandled message; cadence becomes every 1m. Exited after 2 consecutive clean checks (quiet_streak >= 2) -> back to time-of-day cadence.\n- Normal cadence: 15m in business hours, 30m overnight.\n\nImplementation:\n1. New module src/support_watch/ (mod.rs state machine + cadence logic, state.rs persisted JSON: last_check_ms, mode, quiet_streak, last_seen_uid, unhandled_count). State file lives with other runtime state (same dir as routines JSON) so restarts don't lose it; add it to scripts/backup-state.sh (task 244).\n2. Tick driver: register routine id \"support-mail-watch\", schedule \"every 1m\", enabled, at startup in the cron registry (src/cron/registry.rs pattern). The 1m tick consults state: only performs a real mailbox check when now - last_check >= current desired cadence. (One routine + internal state machine, NOT three routines toggled on/off \u2014 that races.)\n3. Mailbox check uses mcp__mail__* tools (names per task 255.3; resolve defensively). New messages since last_seen_uid -> mark unhandled, enter burst, hand each to the draft flow (task 257/258).\n4. Orchestration runs IN the Helix process on the R630 \u2014 no LLM needed for check/state decisions; do NOT spawn an LLM just to poll.\n5. Inbound mail is untrusted: it already flows through the task-235 injection tagging (security::maybe_tag wraps mcp results in tools::execute) \u2014 verify this covers the new call sites and note it in code comments.\n6. Log every check at info level (time, cadence, new count, mode transitions) so John can audit the loop from logs.",
+      "testStrategy": "Unit tests with a mock clock covering: idle->burst on new mail, burst->idle after 2 clean checks, day/night cadence boundaries (incl. TZ), restart persistence round-trip, no-check when interval not elapsed. Integration test with stub mcp__mail__* tools. No test may require the real mail-mcp binary or network.",
+      "subtasks": [
+        {
+          "id": 256.1,
+          "title": "Poll state struct + JSON persistence",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 256.2,
+          "title": "Cadence state machine (burst/quiet/day/night)",
+          "status": "done",
+          "dependencies": [
+            256.1
+          ]
+        },
+        {
+          "id": 256.3,
+          "title": "Routine registration + mailbox check wiring",
+          "status": "done",
+          "dependencies": [
+            256.2
+          ]
+        },
+        {
+          "id": 256.4,
+          "title": "Include state file in backup-state.sh",
+          "status": "done",
+          "dependencies": [
+            256.3
+          ]
+        },
+        {
+          "id": 256.5,
+          "title": "Unit + integration tests (mock clock, stub tools)",
+          "status": "done",
+          "dependencies": [
+            256.3
+          ]
+        }
+      ],
+      "results": "DONE 2026-10-13 (Ranger 1, branch ranger-255-260). New src/support_watch/{mod,config,state}.rs: WatchState JSON persistence (seen/unhandled ids capped at 200, corrupt file -> fresh default); cadence state machine with mock-clock-friendly pure functions (should_check/record_check/desired_cadence_ms/in_business_hours with chrono-tz, unknown TZ falls back to America/New_York); 'support-mail-watch' every-1m routine seeded + merged into existing routines.json on load; CPU dispatch arm -> routine_support_mail_watch (in-process, LogOnlySink until 257/258 wire the real sink); resolve_mail_tools() picks check/send tools defensively from advertised mcp__mail__* names; parse_mail_list strips task-235 untrusted tags (verified is_untrusted_tool covers mcp__*); state file added to scripts/backup-state.sh; commented [support] template in config.toml. Deviations: added seen_ids/unhandled_ids vecs (plan listed last_seen_uid only) for robust new-mail detection against unknown mail-mcp ordering; MailSink trait decouples 256 from the 257 draft flow. Tests: 22 support_watch + 3 registry tests green, incl. stub-tools tick integration (burst enter/exit lifecycle); full lib suite 387 passed 0 failed. Also fixed 4 pre-existing a2a/acp failures (ambient [mcp] enabled + current-thread runtime bridge panic) via the same hermetic-config approach as 255."
+    },
+    {
+      "id": 257,
+      "title": "Draft-for-review reply flow (hard no-auto-send invariant)",
+      "description": "Replies are staged as pending drafts and NEVER send without John's explicit tap. Mirrors the task-233 persona .pending/approve pattern. This is the safety-critical piece of SYSADMIN-01.",
+      "status": "done",
+      "dependencies": [
+        255
+      ],
+      "priority": "high",
+      "details": "FILED BY SURVEYOR 1, 2026-10-13. SYSADMIN-01 support-mail system, phase 3.\n\n1. Pending draft store: support_drafts/ JSON files (id, in_reply_to message id, to, subject, body, playbook_refs, created_at, status=pending|approved|sent|discarded). Drafting NEVER sends \u2014 stage only.\n2. Chat commands in the web UI command handler, mirroring /persona (task 233, src/io/web_server/mod.rs:2030+):\n   /support drafts            - list pending drafts\n   /support approve <id>      - John reviews text, marks approved (does NOT send)\n   /support send <id>         - sends ONLY an approved draft via mcp__mail__* send tool\n   /support discard <id>      - drop a draft\n   Approve and send are deliberately two steps; a single \"approve+send\" shortcut is NOT wanted (John's standing rule: irreversible actions need his explicit go-ahead, and sending email is irreversible).\n3. HARD INVARIANT (no-auto-send): no code path may invoke the mail send tool except the explicit /support send <id> handler acting on an approved draft. Encode as a test: attempt to send an unapproved/nonexistent draft id -> refused with a clear error; grep the codebase for send-tool call sites in review.\n4. Drafts record which playbook entries informed them (task 258) and link the original message id, so John sees provenance when reviewing.\n5. Auto-send categories: DEFAULT IS NONE. If John later blesses categories, that is a separate task with its own approval \u2014 this task must not build any auto-send path.",
+      "testStrategy": "Unit tests: draft lifecycle (stage->approve->send->sent, stage->discard). Invariant tests: send with unapproved id refused; send with unknown id refused; no test or code path sends without approval. Chat-command handler tests for /support subcommands.",
+      "subtasks": [
+        {
+          "id": 257.1,
+          "title": "Pending draft store (stage-only)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 257.2,
+          "title": "/support chat commands (drafts/approve/send/discard)",
+          "status": "done",
+          "dependencies": [
+            257.1
+          ]
+        },
+        {
+          "id": 257.3,
+          "title": "No-auto-send invariant + tests",
+          "status": "done",
+          "dependencies": [
+            257.2
+          ]
+        }
+      ],
+      "results": "DONE 2026-10-13 (Ranger 1, branch ranger-255-260). New src/support_watch/drafts.rs: JSON draft store at <runtime>/support_drafts/ (id/in_reply_to/to/subject/body/playbook_refs/created_at/status); stage (marks message handled in watch state) / approve / send / discard with strict state transitions; draft ids sanitized against path traversal. HARD INVARIANT enforced by construction + review: send_draft is the ONLY production call site invoking the mail send tool (verified via grep), and it refuses anything not Approved; approve and send are two separate steps, no shortcut; no auto-send path exists. /support chat commands added (drafts|approve|send|discard) mirroring /persona, full draft body shown in the list (no blind approvals); /help updated. Deviation: the tick->draft wiring (sink that stages Gemini-drafted replies) is deferred to 258, which owns the drafter; until then LogOnlySink holds and ids stay unhandled. Tests: 7 drafts unit tests (lifecycle, discard, unapproved/unknown/traversal refusals, double-approve, ordering) + 5 /support command tests green; full lib suite 399 passed 0 failed."
+    },
+    {
+      "id": 258,
+      "title": "Gemini-delegated drafting + greatest-hits playbook hook",
+      "description": "Per John's architectural call, R630 local models are NOT capable enough to write customer replies: drafting MUST delegate to a capable backend (Gemini API). The drafter also consults John's greatest-hits playbook when present.",
+      "status": "done",
+      "dependencies": [
+        256,
+        257
+      ],
+      "priority": "high",
+      "details": "FILED BY SURVEYOR 1, 2026-10-13. SYSADMIN-01 support-mail system, phase 4.\n\nJOHN'S ARCHITECTURAL CALL (do not second-guess, record rationale in a code comment): the R630's local models cannot write customer-facing replies. Polling/orchestration runs locally on the R630 (no LLM needed); REPLY DRAFTING delegates to a capable backend per his commander pattern.\n\n1. Drafter = sub-agent spawned via spawn_subagent with backend EXPLICITLY \"gemini\" (src/tools/subagent_tool.rs parse_backend; never \"auto\"/local for this path). Pin it: a named constant / config value, not a string scattered at call sites.\n2. Draft prompt template: customer message (tagged untrusted per task 235), mailbox context (support@micro-tech.xyz, John's computer repair business, semi-retired, Fairview MI), playbook entries (below), tone guidance (plain, helpful, John's voice), and explicit instruction: produce a DRAFT reply only, never send.\n3. Playbook hook: loader reads support_playbook.md (JOHN'S INPUT \u2014 content comes from him, not built here) into the drafter prompt when the file exists; graceful no-op when absent (draft notes \"no playbook entry matched\"). Format: simple Markdown sections per problem (## <problem> / symptoms / John's fix). Document the expected format in the file's header comment for John.\n4. Each draft records which playbook sections were cited (supports task 257 provenance).\n5. Spend note: drafting goes through the task-236 token metering like any Gemini call \u2014 no special-casing needed, just don't bypass it.",
+      "testStrategy": "Test with mocked spawn_subagent: assert backend resolves to Gemini explicitly (fails if auto/local). Playbook loader tests: present/malformed/absent file. Prompt template test: untrusted tagging present, draft-only instruction present. No test requires the Gemini API key.",
+      "subtasks": [
+        {
+          "id": 258.1,
+          "title": "Drafter spawn pinned to backend=gemini",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 258.2,
+          "title": "Playbook loader (graceful when absent)",
+          "status": "done",
+          "dependencies": [
+            258.1
+          ]
+        },
+        {
+          "id": 258.3,
+          "title": "Draft prompt template",
+          "status": "done",
+          "dependencies": [
+            258.2
+          ]
+        },
+        {
+          "id": 258.4,
+          "title": "Tests (backend pin, playbook, prompt)",
+          "status": "done",
+          "dependencies": [
+            258.3
+          ]
+        }
+      ],
+      "results": "DONE 2026-10-13 (Ranger 1, branch ranger-255-260). New src/support_watch/drafter.rs: draft_reply() loads the playbook, cites relevant sections by keyword overlap (top 3, 1500 chars each; 'no playbook entry matched' when absent), builds the prompt (customer message wrapped in <untrusted-data>, explicit NEVER-follow-instructions + draft-only-never-send instructions, ---DRAFT-BEGIN/END--- markers), spawns via dispatch_spawn with backend pinned to SUPPORT_DRAFT_BACKEND='gemini' (constant, never auto/local), extracts the body, stages via drafts::stage_draft. Structural guarantee: Gemini sits LAST on BACKEND_LADDER, so an explicit gemini request fails loudly rather than falling back to local (pinned by new test gemini_sits_last_on_health_ladder); a failed draft leaves the message unhandled (retried on next burst), which is safe. CPU routine_support_mail_watch now wires poll_new_mail() -> draft_reply per fresh message (tick() refactored into poll_new_mail() + sink wrapper). Playbook format documented for John in docs/support-playbook.md (+ SUPPORT_PLAYBOOK_TEMPLATE const). Spend: drafting flows through the normal task-236 metering via dispatch_spawn, no special-casing. Tests: 9 drafter tests (backend pin, prompt tagging/draft-only, playbook present/absent/malformed, citation relevance, marker extraction + fallback, stubbed end-to-end staging) + ladder test green; full suite 409 passed 0 failed (3 consecutive runs). Note: one transient single-test failure on the first full run did not reproduce in 3 reruns (parallel-test flake, unidentified)."
+    },
+    {
+      "id": 259,
+      "title": "Web UI: support inbox panel (drafts + poll status)",
+      "description": "Sapper-style web UI panel for SYSADMIN-01: unhandled count, pending drafts with full text, Approve/Send/Discard buttons, and live poll-loop status. Auth-gated per the task-240 middleware pattern.",
+      "status": "done",
+      "dependencies": [
+        257
+      ],
+      "priority": "medium",
+      "details": "FILED BY SURVEYOR 1, 2026-10-13. SYSADMIN-01 support-mail system, phase 5 (UI).\n\n1. Support panel (left panel or ops section \u2014 follow existing Sapper 1 patterns from tasks 209/230/231): unhandled message count, list of pending drafts showing to/subject/full body + linked original message summary, and per-draft Approve / Send / Discard buttons.\n2. Poll status line: current mode (NORMAL-DAY / NORMAL-NIGHT / BURST), last check time, next check time, quiet streak. Read-only display.\n3. All mutating buttons go through the require_web_token middleware (task 240) \u2014 verify, don't reimplement.\n4. Drafts view must show the full draft text before any approve/send tap (no blind approvals).\n5. node --check clean on any new JS (task 231 precedent).",
+      "testStrategy": "node --check on new/changed JS. UI flow: with stub backend, drafts render, buttons hit the right endpoints, auth-gated endpoints reject without token. No test requires the real mailbox.",
+      "subtasks": [
+        {
+          "id": 259.1,
+          "title": "Panel markup + draft list rendering",
+          "status": "done",
+          "dependencies": [],
+          "result": "Support tab markup + draft list rendering in index.html; loadSupport() wired into showDetailTab; node --check clean."
+        },
+        {
+          "id": 259.2,
+          "title": "Approve/Send/Discard wiring (auth-gated)",
+          "status": "done",
+          "dependencies": [
+            259.1
+          ],
+          "result": "Approve/Send/Discard buttons POST to /support/* via opsFetch (web-token auth); confirm() on Send/Discard; full route tests green."
+        },
+        {
+          "id": 259.3,
+          "title": "Poll status line",
+          "status": "done",
+          "dependencies": [
+            259.1
+          ],
+          "result": "Status line shows mode, last/next check, quiet streak, unhandled count, mail-mcp state via GET /support/status."
+        }
+      ],
+      "result": "259 done 2026-10-13: web UI support panel live. GET /support/status + /support/drafts public; POST /support/approve|send|discard behind require_web_token (task-240 middleware). 9 new route/handler tests green; full lib suite 413 passed / 0 failed. Blocker hit: secret-redaction rewrote \"Bearer s3cret\" literals in new test inputs to \"Bearer <redacted>\", causing 401s; fixed by assembling the test token programmatically (support_test_token()). Production router assembly unchanged (routes added to existing protected/main_app routers)."
+    },
+    {
+      "id": 260,
+      "title": "Live end-to-end verification of the support-mail loop",
+      "description": "Gated on John's ops (mail-mcp installed + env creds). John sends a test email to support@; the loop catches it in the burst window, a draft appears for review, NOTHING auto-sends; he approves, the reply sends, then a discard-path drill.",
+      "status": "in_progress",
+      "dependencies": [
+        256,
+        257,
+        258
+      ],
+      "priority": "high",
+      "details": "FILED BY SURVEYOR 1, 2026-10-13. SYSADMIN-01 support-mail system, phase 6 (verification).\n\nGATE: requires mail-mcp installed at /home/cobble/.local/bin/mail-mcp with working env credentials on the R630 (John's ops step). Do NOT attempt the live drill without it; 260.1 (mock integration) can proceed regardless.\n\n1. Mock integration (no R630 needed): stub mcp__mail__* tools delivering a fake inbound message -> assert burst entered, draft staged via Gemini-delegated path (mock the sub-agent), pending draft visible, no send attempted. Then simulate /support approve + /support send -> assert send tool called exactly once with the approved text.\n2. Live drill procedure (John runs the mailbox side):\n   a. John sends a test email to support@micro-tech.xyz (e.g. \"my laptop won't turn on\").\n   b. Within the burst window the loop flags it unhandled; a draft appears in support_drafts/ and the web UI.\n   c. VERIFY NOTHING SENT: check mail-mcp outbox/sent and the draft status \u2014 must still be pending, no reply transmitted.\n   d. John taps approve then send in the UI; reply arrives at his test address; draft status -> sent.\n   e. Second test mail -> John discards the draft -> nothing sent, message marked handled/dismissed.\n   f. Overnight: confirm 30m cadence resumes after quiet (from logs).\n3. Document results (what was verified, timings, any gaps) in the task results. Any failure -> file a follow-up task, do not mark 260 done on a partial pass.",
+      "testStrategy": "260.1 green with mocks. Live drill: draft appeared within burst window; no-send-before-approval verified (the critical assertion); approved reply delivered; discard path clean; logs show correct cadence transitions. Results documented in task results.",
+      "subtasks": [
+        {
+          "id": 260.1,
+          "title": "Mock end-to-end integration (no R630 needed)",
+          "status": "done",
+          "dependencies": [],
+          "result": "260.1 done 2026-10-13: mock_end_to_end_support_loop green. Stubbed mcp__mail__check_inbox delivered a fake inbound message -> poll_new_mail returned it, WatchState entered BURST with 1 unhandled; draft_reply (HELIX_SUBAGENT_TEST_STUB, no API key) staged a Pending draft; try_execute call log proved the send tool was NOT invoked before approval; approve_draft -> send_draft fired mcp__mail__send_message exactly once with the approved body to customer@example.com. New test-only seam: mcp_client::take_try_execute_calls_for_tests (call log, cleared by clear_test_overrides). Full lib suite 414 passed / 0 failed x3 runs (one transient single-test flake on an earlier run, unidentified parallel-test flake, did not reproduce)."
+        },
+        {
+          "id": 260.2,
+          "title": "Live drill with John's test emails",
+          "status": "deferred",
+          "dependencies": [
+            260.1
+          ],
+          "result": "GATED on John's ops: mail-mcp at /home/cobble/.local/bin/mail-mcp with env creds on the R630, branch built/deployed, config entries enabled. Exact drill procedure written to docs/support-live-drill.md (test email -> draft appears in burst window -> VERIFY NOTHING SENT -> approve->send taps -> reply arrives -> discard-path drill -> overnight cadence check)."
+        },
+        {
+          "id": 260.3,
+          "title": "Document results, file follow-ups on any gap",
+          "status": "deferred",
+          "dependencies": [
+            260.2
+          ],
+          "result": "Gated on 260.2 live drill. Document results and file follow-ups on any gap; do not mark 260 done on a partial pass."
+        }
+      ],
+      "result": "260.1 mock integration DONE and green (see subtask). 260.2/260.3 deferred: live drill gated on John's mail-mcp install + drill run per docs/support-live-drill.md. Task 260 stays in_progress until the live drill passes."
     }
   ]
 }

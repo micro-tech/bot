@@ -34,7 +34,7 @@ mkdir -p "$DEST"
 # skipped (fresh installs won't have all of these yet) — but at least one
 # must exist, or something is wrong with HELIX_DIR.
 copied=0
-for f in beliefs.json episodes.jsonl spend_state.json agent.md logs/chat_history.jsonl; do
+for f in beliefs.json episodes.jsonl spend_state.json agent.md logs/chat_history.jsonl support_watch/state.json; do
     if [ -f "$f" ]; then
         mkdir -p "$DEST/$(dirname "$f")"
         cp -p "$f" "$DEST/$f"

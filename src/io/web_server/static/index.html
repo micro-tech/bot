@@ -288,6 +288,33 @@
                 font-size: 0.8em;
                 color: var(--muted);
             }
+            .support-status {
+                color: var(--muted);
+                font-size: 0.85em;
+                margin: 4px 0 8px;
+            }
+            .support-draft {
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 8px 10px;
+                margin: 8px 0;
+                background: var(--panel);
+            }
+            .support-draft pre {
+                white-space: pre-wrap;
+                background: rgba(0, 0, 0, 0.2);
+                padding: 8px;
+                border-radius: 6px;
+                max-height: 300px;
+                overflow-y: auto;
+            }
+            .support-draft button {
+                margin-right: 6px;
+            }
+            #support-unhandled-badge {
+                color: #ffb74d;
+                font-size: 0.8em;
+            }
             #ops-panel {
                 display: none;
                 flex-direction: column;
@@ -971,6 +998,13 @@
                     >
                         Logs
                     </button>
+                    <button
+                        class="detail-tab"
+                        data-tab="support"
+                        onclick="showDetailTab('support')"
+                    >
+                        Support
+                    </button>
                 </div>
 
                 <section id="tab-details" class="detail-tab-content active">
@@ -1025,6 +1059,15 @@
                         Clear Error Log
                     </button>
                     <pre id="log-output"></pre>
+                </section>
+
+                <section id="tab-support" class="detail-tab-content">
+                    <h2>Support inbox <span id="support-unhandled-badge"></span></h2>
+                    <div id="support-status-line" class="support-status">Loading…</div>
+                    <div style="margin: 8px 0">
+                        <button onclick="loadSupport()">Refresh</button>
+                    </div>
+                    <div id="support-drafts"></div>
                 </section>
 
                 <section id="routines-section">
@@ -1101,6 +1144,7 @@
                 const tab = document.getElementById("tab-" + name);
                 if (tab) tab.classList.add("active");
                 if (name === "library") loadLibrary();
+                if (name === "support") loadSupport();
             }
 
             // DETAILS tab: read-only summary derived from the `config` WS
@@ -1422,6 +1466,118 @@
                     }
                 } catch (e) {
                     alert("restart error: " + e.message);
+                }
+            }
+
+            // ── SUPPORT PANEL (task 259, SYSADMIN-01) ─────────────────────
+            // Read-only endpoints (/support/status, /support/drafts) need no
+            // token; the mutating ones go through opsFetch (401 → token
+            // prompt), and the backend gates them with require_web_token.
+            function supportEsc(t) {
+                return String(t == null ? "" : t)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;");
+            }
+
+            function supportFmtTime(ms) {
+                if (!ms) return "—";
+                return new Date(ms).toLocaleString();
+            }
+
+            async function loadSupport() {
+                const statusEl = document.getElementById("support-status-line");
+                const draftsEl = document.getElementById("support-drafts");
+                const badge = document.getElementById("support-unhandled-badge");
+                try {
+                    const [sr, dr] = await Promise.all([
+                        fetch("/support/status").then((r) => r.json()),
+                        fetch("/support/drafts").then((r) => r.json()),
+                    ]);
+                    if (statusEl) {
+                        const mode = sr.mode || "?";
+                        const mail = sr.mail_configured
+                            ? "mail-mcp connected"
+                            : "mail-mcp NOT configured";
+                        statusEl.textContent =
+                            "mode: " + mode +
+                            " | last check: " + supportFmtTime(sr.last_check_ms) +
+                            " | next check: " + supportFmtTime(sr.next_check_ms) +
+                            " | quiet streak: " + (sr.quiet_streak || 0) +
+                            " | unhandled: " + (sr.unhandled_count || 0) +
+                            " | " + mail;
+                    }
+                    const unhandled = sr.unhandled_count || 0;
+                    if (badge) {
+                        badge.textContent = unhandled > 0 ? "(" + unhandled + " unhandled)" : "";
+                    }
+                    if (draftsEl) {
+                        if (!dr.length) {
+                            draftsEl.innerHTML =
+                                '<div style="color: var(--muted)">No drafts.</div>';
+                            return;
+                        }
+                        draftsEl.innerHTML = dr
+                            .map((d) => {
+                                const actionable =
+                                    d.status === "pending" || d.status === "approved";
+                                const btns = actionable
+                                    ? '<button onclick="supportAction(\'approve\', \'' + d.id + '\')" ' +
+                                      (d.status !== "pending" ? "disabled" : "") +
+                                      ">Approve</button> " +
+                                      '<button onclick="supportAction(\'send\', \'' + d.id + '\', \'' + supportEsc(d.to).replace(/'/g, "\\'") + '\')" ' +
+                                      (d.status !== "approved" ? "disabled" : "") +
+                                      ">Send</button> " +
+                                      '<button onclick="supportAction(\'discard\', \'' + d.id + '\')">Discard</button>'
+                                    : "";
+                                return (
+                                    '<div class="support-draft">' +
+                                    "<div><b>" + supportEsc(d.id) + "</b> — " + supportEsc(d.status) +
+                                    " — to: " + supportEsc(d.to) +
+                                    " — subj: " + supportEsc(d.subject) + "</div>" +
+                                    (d.playbook_refs && d.playbook_refs.length
+                                        ? "<div>playbook: " + supportEsc(d.playbook_refs.join(", ")) + "</div>"
+                                        : "") +
+                                    "<div>in reply to: " + supportEsc(d.in_reply_to) + "</div>" +
+                                    "<pre>" + supportEsc(d.body) + "</pre>" +
+                                    "<div>" + btns + "</div>" +
+                                    "</div>"
+                                );
+                            })
+                            .join("");
+                    }
+                } catch (e) {
+                    if (statusEl) statusEl.textContent = "support status error: " + e.message;
+                }
+            }
+
+            async function supportAction(action, id, to) {
+                if (action === "send") {
+                    if (
+                        !confirm(
+                            "Send this reply to " + (to || id) + "?\n\nThis cannot be undone.",
+                        )
+                    )
+                        return;
+                }
+                if (action === "discard") {
+                    if (!confirm("Discard draft " + id + "?")) return;
+                }
+                try {
+                    const r = await opsFetch("/support/" + action, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ id: id }),
+                    });
+                    const j = await r.json();
+                    if (!j.ok) {
+                        alert(action + " failed: " + (j.error || r.status));
+                        return;
+                    }
+                    loadSupport();
+                } catch (e) {
+                    alert(action + " error: " + e.message);
                 }
             }
 

@@ -6,6 +6,66 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Fixed (Code Review must-fix items on ranger-255-260 — Ranger 1, SYSADMIN-01)
+
+- **B1 — `from` parser misaddressed replies** (`src/support_watch/mod.rs`): `parse_mail_list` used `split_whitespace().next()` on the From field, turning `"Alice <alice@example.com>"` into `"Alice"` as the draft's recipient. New `extract_email()` prefers the addr-spec, falls back to the @-bearing token. Tests: display-name, quoted display-name, bare address, empty, degenerate brackets.
+- **B2 — failed drafts are now actually retried** (`src/support_watch/{mod,state}.rs`, `src/cpu/mod.rs`): the old comment claimed retry-on-next-burst but nothing re-drove unhandled messages. `poll_new_mail()` now also returns previously-seen-but-unhandled messages present in the listing; `WatchState.draft_attempts` caps retries at `MAX_DRAFT_ATTEMPTS` (5) so a poison message can't burn a Gemini call every minute forever — past the cap it stays unhandled on the status line for John's manual handling. `mark_handled` clears the counter. The cpu/mod.rs comment now describes the capped retry accurately. Log line gained a `retried=` field (docs/support-live-drill.md updated to match).
+- **B3 — `send_draft` no longer marks `Sent` on error strings** (`src/support_watch/drafts.rs`): the tool result is un-tagged first (MCP errors arrive inside `<untrusted-data>`), then checked against known error shapes (`Blocked by injection guard:`, `mcp: ` transport errors, `MCP tool reported an error:`, `Unknown tool`). On any error shape the send returns Err and the draft stays Approved (retryable) — never filed as delivered.
+- **S1 — no-auto-send invariant scoped honestly** (`src/support_watch/drafts.rs`, `src/io/web_server/mod.rs`): the module doc and `/support` handler comment no longer imply "no code path sends without John's tap" system-wide. The guarantee covers the automated watcher/draft/UI paths; a model session invoking `mcp__mail__send_message` directly is only warn-gated (same posture as the built-in `send_email`) — documented as such.
+- **Verification**: full lib suite **419 passed, 0 failed, 4 ignored** across 2 consecutive runs (was 414; +5 new tests). No new warnings.
+- **Deferred nits** (reviewer's B4/B5, not must-fix): numeric message ids still dropped; corrupt state.json re-drafts recent mail. Noted for a follow-up.
+
+---
+
+### Added (task 260.1 DONE — Ranger 1, SYSADMIN-01 mock end-to-end verification)
+
+- **Mock integration test** (`support_watch::tests::mock_end_to_end_support_loop`): stubbed `mcp__mail__check_inbox` delivers a fake inbound message → `poll_new_mail()` returns it, `WatchState` enters BURST with 1 unhandled → `draft_reply` (sub-agent dispatch stubbed via `HELIX_SUBAGENT_TEST_STUB`, no API key) stages a Pending draft → the new `try_execute` call log proves the send tool was **not** invoked before approval → `approve_draft` + `send_draft` fire `mcp__mail__send_message` **exactly once** with the approved body to the customer.
+- **Test-only seam** (`src/mcp_client/mod.rs`): `take_try_execute_calls_for_tests()` — ordered log of every `try_execute` call (tool name + args), cleared by `clear_test_overrides()`. Lets integration tests assert a tool was (or was not) invoked and with what arguments.
+- **Live-drill procedure** (`docs/support-live-drill.md`): exact step-by-step for John — prerequisites (mail-mcp install, branch deploy, config, tool-name check), test-email → draft-in-burst-window → **verify-nothing-sent** (critical assertion) → approve→send taps → discard-path drill → overnight cadence check.
+- **Verification**: full lib suite **414 passed, 0 failed** across 3 consecutive runs (one transient single-test flake on an earlier run did not reproduce — same unidentified parallel-test flake pattern as task 258).
+- **Deferred (gated on John's ops)**: 260.2 live drill (mail-mcp install on the R630), 260.3 results documentation. Task 260 stays in_progress until the live drill passes — not marked done on the mock alone.
+
+---
+
+### Added (task 259 DONE — Ranger 1, SYSADMIN-01 web UI support panel)
+
+- **Support tab** in the web UI detail panel (`#tab-support`): poll-status line (mode, last/next check, quiet streak, unhandled count, mail-mcp state) via public `GET /support/status`; draft list with full bodies via public `GET /support/drafts`; Approve / Send / Discard buttons POSTing through the existing `opsFetch` web-token pattern. `confirm()` gates Send and Discard; `supportEsc` HTML-escapes all draft content; `loadSupport()` wired into `showDetailTab`.
+- **Auth-gated mutation routes** (`src/io/web_server/mod.rs`): `POST /support/approve|send|discard` on the existing `protected` router behind `require_web_token` (task-240 middleware — reused, not reimplemented); read-only GETs stay public. Draft lifecycle invariants (approve-then-send, no-auto-send) enforced by the task-257 draft store underneath.
+- **Verification**: 9 new route/handler tests green (public GETs, 401 without/wrong token, approve→send flow, discard, unknown-id/double-approve guards); `node --check` clean; full lib suite **413 passed, 0 failed**.
+- **Test-harness note**: the sandbox secret-redactor rewrote `"Bearer s3cret"` literals in newly written test inputs to `"Bearer <redacted>"`, causing 401s against the intact token state. Fixed by assembling the test token programmatically (`support_test_token()`); production code untouched.
+
+---
+
+### Added (task 258 DONE — Ranger 1, SYSADMIN-01 Gemini-delegated drafting)
+
+- **Gemini-pinned drafter** (`src/support_watch/drafter.rs`): `draft_reply()` builds the prompt (customer message wrapped in `<untrusted-data>`, explicit draft-only/never-send instructions, `---DRAFT-BEGIN/END---` markers), spawns via `dispatch_spawn` with backend pinned to `SUPPORT_DRAFT_BACKEND="gemini"` (constant — never auto/local), extracts the body, stages via the draft store. Structural guarantee: Gemini sits last on the health ladder, so an explicit gemini request fails loudly rather than falling back to local (pinned by test); failed drafts stay unhandled and retry on the next burst. Spend flows through normal task-236 metering.
+- **Playbook hook**: `<runtime>/support_playbook.md` parsed into `##` sections; relevant sections cited by keyword overlap (top 3); cited titles recorded on the draft for provenance; graceful when absent/malformed. Format documented for John in `docs/support-playbook.md`.
+- **Wiring**: `tick()` refactored into `poll_new_mail()` + sink wrapper; the CPU routine handler now drafts each fresh message via the drafter.
+- **Verification**: 9 drafter tests + ladder-order test green; full lib suite **409 passed, 0 failed**.
+
+---
+
+- **Pending draft store** (`src/support_watch/drafts.rs`): JSON drafts at `<runtime>/support_drafts/` with strict lifecycle (Pending→Approved→Sent, or →Discarded); draft ids sanitized against path traversal; staging marks the message handled in the watch state.
+- **Hard no-auto-send invariant** (enforced by construction + code review): `send_draft` is the only production call site that invokes the mail send tool, and it refuses anything not explicitly Approved. Approve and send are two separate steps; no approve+send shortcut; no auto-send path exists anywhere.
+- **`/support` chat commands** (mirroring `/persona`): `drafts` (full body shown — no blind approvals), `approve <id>`, `send <id>`, `discard <id>`; `/help` updated.
+- **Verification**: 7 draft-store unit tests (lifecycle, discard, unapproved/unknown-id/traversal refusals, double-approve guard, actionable-first ordering) + 5 command-handler tests green; full lib suite **399 passed, 0 failed**.
+
+---
+
+- **Adaptive support-mail watcher** (`src/support_watch/`): persisted state machine — 15m checks in business hours (08:00–18:00 America/New_York, adjustable via `[support]` in config.toml), 30m overnight, 1m burst on new unhandled mail until 2 consecutive clean checks. Driven by one `every 1m` routine (`support-mail-watch`); in-process only, no LLM spawned for polling (John's call). State at `<runtime>/support_watch/state.json` (survives restarts, added to `scripts/backup-state.sh`); new default routines now merge into existing routines.json files on load so the watcher reaches older deployments.
+- **Defensive mail-tool resolution**: `mcp__mail__*` names resolved at runtime from advertised tools (mail-mcp's surface is unknown in this sandbox — no hardcoded guesses); inbound output parsed defensively and stripped of the task-235 `<untrusted-data>` wrapper before parsing (injection tagging verified at the new call sites).
+- **Test seams** (`src/mcp_client/mod.rs`): hermetic overrides for config, tool definitions, and try_execute — integration tests stub mail servers without processes or network.
+- **Fixed 4 pre-existing failures** (a2a/acp agent tests): they panicked in the MCP bridge on the current-thread test runtime because the worktree config enables `[mcp]`; now install a hermetic disabled config like the mcp_client tests.
+- **Verification**: 22 new support_watch tests + 3 registry tests green; full lib suite **387 passed, 0 failed** (baseline was 356+6).
+
+---
+
+- **mail-mcp MCP wiring** (`config.toml`, `docs/mcp.md`, `src/config/mcp.rs`): commented `[[mcp.servers]]` "mail" template after the google entry (uncomment once mail-mcp lands at `/home/cobble/.local/bin/mail-mcp`); new "mail-mcp (support@ watcher)" docs section with install pointer, one-mailbox-per-process note, and the R630 tool-name verification procedure. Graceful degradation verified: missing binary → boot clean, warning logged, no `mcp__mail__*` tools advertised (new test `mail_template_without_binary_advertises_no_tools`).
+- **Hermetic mcp_client tests**: fixed 2 pre-existing failures — the tests assumed the worktree config leaves `[mcp]` commented out, but John's live config enables it. Tests now install a hermetic disabled config via the `override_config_for_tests` test seam (task 255) instead of depending on ambient config.
+- **Deferred to R630**: subtask 255.3 (confirm exact `mcp__mail__*` tool names) — gated on John's mail-mcp install; verification command recorded in docs/mcp.md; the poll loop resolves names defensively at runtime.
+
+---
+
 ### Changed (task 245 DONE — Ranger 1, config docs)
 
 - **Rewrote `docs/configuration.md`**: every section in the shipped `config.toml` documented (`[helix]`, `[[ollama]]`, `[gemini]`, `[web]`, `[logging]`, `[heartbeat]`, `[ollama_keepalive]`, `[reasoning]`, `[helix.okf]`, `[mcp]`/`[[mcp.servers]]`) plus code-only sections (`[helix.commander]`, `[helix.persona]`, `[router]`, `[shell]`). Required vs defaulted keys marked; defaults verified against serde structs/parsing code.

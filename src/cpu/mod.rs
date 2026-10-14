@@ -439,7 +439,33 @@ where
         match routine_id {
             "nightly_memory_consolidation" => self.routine_memory_consolidation().await,
             "error_log_review" => self.routine_error_log_review().await,
+            // Task 256 (SYSADMIN-01): support@ poll tick — in-process state
+            // machine, deliberately no LLM (polling needs no model; John's
+            // call is that drafting delegates to a capable backend, task 258).
+            "support-mail-watch" => self.routine_support_mail_watch().await,
             other => log_to_file(&format!("CPU received unknown routine_run: {}", other)),
+        }
+    }
+
+    /// Task 256 (SYSADMIN-01): one support@ poll tick. Runs the adaptive
+    /// state machine in-process — no LLM is spawned for polling (John's
+    /// call). Task 258: each fresh message is handed to the Gemini-pinned
+    /// drafter; a failed draft stays unhandled (visible on the status line)
+    /// and is re-driven on subsequent checks, capped at MAX_DRAFT_ATTEMPTS
+    /// attempts per message — past the cap it waits for John's manual
+    /// handling instead of burning a Gemini call every minute forever.
+    async fn routine_support_mail_watch(&mut self) {
+        for msg in crate::support_watch::poll_new_mail() {
+            match crate::support_watch::drafter::draft_reply(&msg).await {
+                Ok(d) => log_to_file(&format!(
+                    "support: staged draft {} for message {} (from {})",
+                    d.id, msg.id, msg.from
+                )),
+                Err(e) => log_to_file(&format!(
+                    "support: draft failed for message {}: {} (stays unhandled)",
+                    msg.id, e
+                )),
+            }
         }
     }
 

@@ -35,6 +35,40 @@ Gmail + Google Calendar.
    server inherits the normal environment.)
 4. Restart Helix. The agent now sees tools like `mcp__google__gmail_search`.
 
+## mail-mcp (support@ watcher) — task 255, SYSADMIN-01
+
+The support-mail watcher polls `support@micro-tech.xyz` through the
+standalone `mail-mcp` server, one mailbox per process (watching a second
+mailbox means a second `[[mcp.servers]]` entry).
+
+1. Install `mail-mcp` on the R630 at `/home/cobble/.local/bin/mail-mcp`
+   (John's ops step) with the mailbox credentials in its environment —
+   exact variable names per the mail-mcp README. Never commit real values.
+2. In Helix's `config.toml`, uncomment the `[[mcp.servers]]` "mail"
+   template (sits right after the google entry). Tools appear as
+   `mcp__mail__<tool>`.
+3. Restart Helix.
+
+**Graceful degradation:** if the binary is missing (or the entry is still
+commented out), Helix boots cleanly, logs
+`mcp: failed to spawn server 'mail': ...`, and simply advertises no
+`mcp__mail__*` tools. The poll loop (task 256) no-ops in that state.
+
+**Tool-name verification (runs on the R630 once mail-mcp is installed):**
+mail-mcp's exact tool surface is not known in this sandbox, so the poll
+loop resolves tool names defensively at runtime. Confirm the real names
+with:
+
+```
+# In the Helix web UI chat (or any tool-calling session), run:
+list_tools
+# then note every tool starting with mcp__mail__ — record the exact
+# check/list tool and the exact send/reply tool names below.
+```
+
+Record the confirmed `mcp__mail__*` names in this section when known
+(expected: some form of check_inbox/list_messages plus a send/reply tool).
+
 ## Config reference
 
 ```toml

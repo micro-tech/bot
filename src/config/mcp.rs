@@ -18,6 +18,15 @@ use std::collections::HashMap;
 ///
 /// [mcp.servers.env]
 /// GOOGLE_CLIENT_ID = "..."
+///
+/// # Task 255 (SYSADMIN-01): the support@ watcher adds a second entry once
+/// # mail-mcp is installed. One mailbox per process — a second mailbox is a
+/// # second [[mcp.servers]] block.
+/// # [[mcp.servers]]
+/// # name = "mail"
+/// # command = "/home/cobble/.local/bin/mail-mcp"
+/// # [mcp.servers.env]
+/// # MAIL_MCP_... = "..."   # exact var names per the mail-mcp README
 /// ```
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct McpConfig {
