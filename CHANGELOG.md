@@ -6,7 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-### Added (task 255 DONE — Ranger 1, SYSADMIN-01 mail-mcp wiring)
+### Added (task 256 DONE — Ranger 1, SYSADMIN-01 adaptive poll loop)
+
+- **Adaptive support-mail watcher** (`src/support_watch/`): persisted state machine — 15m checks in business hours (08:00–18:00 America/New_York, adjustable via `[support]` in config.toml), 30m overnight, 1m burst on new unhandled mail until 2 consecutive clean checks. Driven by one `every 1m` routine (`support-mail-watch`); in-process only, no LLM spawned for polling (John's call). State at `<runtime>/support_watch/state.json` (survives restarts, added to `scripts/backup-state.sh`); new default routines now merge into existing routines.json files on load so the watcher reaches older deployments.
+- **Defensive mail-tool resolution**: `mcp__mail__*` names resolved at runtime from advertised tools (mail-mcp's surface is unknown in this sandbox — no hardcoded guesses); inbound output parsed defensively and stripped of the task-235 `<untrusted-data>` wrapper before parsing (injection tagging verified at the new call sites).
+- **Test seams** (`src/mcp_client/mod.rs`): hermetic overrides for config, tool definitions, and try_execute — integration tests stub mail servers without processes or network.
+- **Fixed 4 pre-existing failures** (a2a/acp agent tests): they panicked in the MCP bridge on the current-thread test runtime because the worktree config enables `[mcp]`; now install a hermetic disabled config like the mcp_client tests.
+- **Verification**: 22 new support_watch tests + 3 registry tests green; full lib suite **387 passed, 0 failed** (baseline was 356+6).
+
+---
 
 - **mail-mcp MCP wiring** (`config.toml`, `docs/mcp.md`, `src/config/mcp.rs`): commented `[[mcp.servers]]` "mail" template after the google entry (uncomment once mail-mcp lands at `/home/cobble/.local/bin/mail-mcp`); new "mail-mcp (support@ watcher)" docs section with install pointer, one-mailbox-per-process note, and the R630 tool-name verification procedure. Graceful degradation verified: missing binary → boot clean, warning logged, no `mcp__mail__*` tools advertised (new test `mail_template_without_binary_advertises_no_tools`).
 - **Hermetic mcp_client tests**: fixed 2 pre-existing failures — the tests assumed the worktree config leaves `[mcp]` commented out, but John's live config enables it. Tests now install a hermetic disabled config via the `override_config_for_tests` test seam (task 255) instead of depending on ambient config.

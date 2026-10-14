@@ -2004,7 +2004,7 @@
       "id": 256,
       "title": "Adaptive support-mail poll loop (15m biz / 1m burst / 30m night)",
       "description": "The SYSADMIN-01 watcher core: a persisted state machine that checks support@ on an adaptive cadence \u2014 15 min during business hours, 1-min burst while unhandled mail exists, 30 min overnight. Driven by the existing routine system.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [
         255
       ],
@@ -2015,13 +2015,13 @@
         {
           "id": 256.1,
           "title": "Poll state struct + JSON persistence",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 256.2,
           "title": "Cadence state machine (burst/quiet/day/night)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             256.1
           ]
@@ -2029,7 +2029,7 @@
         {
           "id": 256.3,
           "title": "Routine registration + mailbox check wiring",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             256.2
           ]
@@ -2037,7 +2037,7 @@
         {
           "id": 256.4,
           "title": "Include state file in backup-state.sh",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             256.3
           ]
@@ -2045,12 +2045,13 @@
         {
           "id": 256.5,
           "title": "Unit + integration tests (mock clock, stub tools)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             256.3
           ]
         }
-      ]
+      ],
+      "results": "DONE 2026-10-13 (Ranger 1, branch ranger-255-260). New src/support_watch/{mod,config,state}.rs: WatchState JSON persistence (seen/unhandled ids capped at 200, corrupt file -> fresh default); cadence state machine with mock-clock-friendly pure functions (should_check/record_check/desired_cadence_ms/in_business_hours with chrono-tz, unknown TZ falls back to America/New_York); 'support-mail-watch' every-1m routine seeded + merged into existing routines.json on load; CPU dispatch arm -> routine_support_mail_watch (in-process, LogOnlySink until 257/258 wire the real sink); resolve_mail_tools() picks check/send tools defensively from advertised mcp__mail__* names; parse_mail_list strips task-235 untrusted tags (verified is_untrusted_tool covers mcp__*); state file added to scripts/backup-state.sh; commented [support] template in config.toml. Deviations: added seen_ids/unhandled_ids vecs (plan listed last_seen_uid only) for robust new-mail detection against unknown mail-mcp ordering; MailSink trait decouples 256 from the 257 draft flow. Tests: 22 support_watch + 3 registry tests green, incl. stub-tools tick integration (burst enter/exit lifecycle); full lib suite 387 passed 0 failed. Also fixed 4 pre-existing a2a/acp failures (ambient [mcp] enabled + current-thread runtime bridge panic) via the same hermetic-config approach as 255."
     },
     {
       "id": 257,
