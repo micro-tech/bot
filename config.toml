@@ -140,3 +140,7 @@ command = "/home/cobble/.local/bin/google-mcp"  # e.g. ~/workspace/google-mcp/ta
 # business_end = "18:00"        # ... 30m outside it, 1m burst on new mail
 # timezone = "America/New_York" # IANA name for the window above
 # auto_send = false             # true: drafted replies send immediately (John's 2026-10-14 call)
+
+
+[support]
+auto_send = true
