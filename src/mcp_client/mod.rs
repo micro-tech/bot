@@ -67,7 +67,30 @@ fn load_config() -> McpConfig {
 
 /// The parsed `[mcp]` config (process-wide, loaded once).
 pub fn config() -> &'static McpConfig {
+    // Task 255: tests must not depend on the developer's ambient config.toml.
+    // John's live config has [mcp] enabled, which broke the old assumption
+    // that the worktree config leaves the section commented out.
+    #[cfg(test)]
+    if let Some(c) = test_config_override() {
+        return c;
+    }
     MCP_CONFIG.get_or_init(load_config)
+}
+
+/// Test seam: hermetic override for the global config. Set-once per test
+/// process; every test in this module that needs a known config installs the
+/// same disabled value, so parallel execution is safe.
+#[cfg(test)]
+static TEST_CONFIG_OVERRIDE: std::sync::OnceLock<McpConfig> = std::sync::OnceLock::new();
+
+#[cfg(test)]
+fn test_config_override() -> Option<&'static McpConfig> {
+    TEST_CONFIG_OVERRIDE.get()
+}
+
+#[cfg(test)]
+pub fn override_config_for_tests(cfg: McpConfig) {
+    let _ = TEST_CONFIG_OVERRIDE.set(cfg);
 }
 
 /// True when the `[mcp]` section enables the client.
@@ -156,17 +179,26 @@ pub fn try_execute(name: &str, args: &Value) -> Option<String> {
 mod tests {
     use super::*;
 
-    // NOTE: these tests rely on the worktree's config.toml leaving the
-    // example `[mcp]` section commented out, i.e. MCP disabled. No test in
-    // this module enables the global client.
+    // NOTE: these tests install a hermetic disabled config via
+    // override_config_for_tests — they never depend on the developer's
+    // ambient config.toml (task 255). No test in this module enables the
+    // global client.
+
+    fn disabled_test_config() {
+        // Set-once per test process; every caller installs the same value,
+        // so parallel execution is safe.
+        override_config_for_tests(McpConfig::default());
+    }
 
     #[test]
-    fn disabled_by_default_from_worktree_config() {
+    fn disabled_config_is_not_enabled() {
+        disabled_test_config();
         assert!(!is_enabled());
     }
 
     #[test]
     fn tool_definitions_empty_when_disabled() {
+        disabled_test_config();
         assert!(tool_definitions().is_empty());
     }
 
@@ -177,6 +209,7 @@ mod tests {
 
     #[test]
     fn try_execute_returns_none_for_mcp_names_when_disabled() {
+        disabled_test_config();
         // Well-formed MCP name, but the client is disabled -> fall through.
         assert_eq!(
             try_execute("mcp__google__gmail_search", &Value::Null),
@@ -186,6 +219,7 @@ mod tests {
 
     #[test]
     fn tools_mod_definitions_have_no_mcp_tools_when_disabled() {
+        disabled_test_config();
         let defs = crate::tools::tool_definitions();
         let arr = defs.as_array().expect("tool_definitions must be an array");
         assert!(
