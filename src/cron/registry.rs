@@ -231,6 +231,22 @@ fn default_routines() -> Vec<Routine> {
                 .to_string(),
             backend: "auto".to_string(),
         },
+        // Task 256 (SYSADMIN-01): the support@ watcher tick. Fires every
+        // minute; the support_watch state machine inside decides whether a
+        // real mailbox check is due (15m day / 30m night / 1m burst).
+        // Empty agent_role/task: handled in-process by the CPU, no LLM is
+        // ever spawned just to poll (John's call).
+        Routine {
+            id: "support-mail-watch".to_string(),
+            name: "Support mailbox watch (SYSADMIN-01)".to_string(),
+            schedule: "every 1m".to_string(),
+            enabled: true,
+            last_run_ms: None,
+            next_run_ms: None,
+            agent_role: String::new(),
+            task: String::new(),
+            backend: default_routine_backend(),
+        },
     ]
 }
 
@@ -256,6 +272,21 @@ impl RoutineRegistry {
             }
         };
         reg.refresh_next_runs(crate::utils::now_ms());
+        // Task 256: merge in seeded defaults missing from an existing file,
+        // so new built-in jobs (e.g. support-mail-watch) reach deployments
+        // seeded by an older binary. Existing entries — including John's
+        // enable/disable choices — are never touched.
+        let mut added = 0;
+        for default in default_routines() {
+            if !reg.routines.iter().any(|r| r.id == default.id) {
+                println!("cron: adding new default routine '{}'", default.id);
+                reg.routines.push(default);
+                added += 1;
+            }
+        }
+        if added > 0 {
+            reg.refresh_next_runs(crate::utils::now_ms());
+        }
         if let Err(e) = reg.save() {
             eprintln!("cron: failed to persist routines: {}", e);
         }
@@ -680,6 +711,48 @@ mod registry_tests {
         assert!(mc.has_agent_job());
         assert!(!mc.enabled, "mail check ships disabled; John enables it");
         assert_eq!(mc.schedule, "every 12h");
+    }
+
+    #[test]
+    fn seeded_support_mail_watch_exists() {
+        // Task 256: the SYSADMIN-01 watcher tick is seeded, enabled, every
+        // 1m, with NO agent payload (in-process handler, no LLM for polling).
+        let routines = default_routines();
+        let w = routines
+            .iter()
+            .find(|r| r.id == "support-mail-watch")
+            .expect("support-mail-watch seed");
+        assert!(w.enabled);
+        assert_eq!(w.schedule, "every 1m");
+        assert!(!w.has_agent_job(), "watcher must not spawn an LLM to poll");
+    }
+
+    #[test]
+    fn load_merges_new_defaults_into_existing_file() {
+        // Task 256: a routines file seeded by an older binary gains new
+        // default routines on load; existing entries keep their settings.
+        let path = tmp_path("merge_defaults.json");
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(
+            &path,
+            r#"[{"id":"nightly_memory_consolidation","name":"N","schedule":"daily 02:00","enabled":false}]"#,
+        )
+        .unwrap();
+        let reg = RoutineRegistry::load_or_seed(path.clone());
+        let w = reg
+            .list()
+            .iter()
+            .find(|r| r.id == "support-mail-watch")
+            .expect("new default merged in");
+        assert!(w.enabled);
+        // John's existing choice (disabled) is untouched.
+        let n = reg
+            .list()
+            .iter()
+            .find(|r| r.id == "nightly_memory_consolidation")
+            .unwrap();
+        assert!(!n.enabled);
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

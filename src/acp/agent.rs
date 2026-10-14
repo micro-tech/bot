@@ -268,6 +268,19 @@ fn truncate_for_display(s: &str) -> String {
 mod tests {
     use super::*;
 
+    /// Task 256: agent-prompt tests must not depend on the ambient
+    /// config.toml. John's live config enables [mcp], and the MCP bridge
+    /// panics on the current-thread test runtime — install a hermetic
+    /// disabled config instead. Bind the return value to hold the lock for
+    /// the whole test body.
+    fn hermetic_mcp_disabled() -> std::sync::MutexGuard<'static, ()> {
+        let guard = crate::tools::subagent_tool::test_env_lock();
+        crate::mcp_client::clear_test_overrides();
+        crate::mcp_client::override_config_for_tests(crate::config::mcp::McpConfig::default());
+        crate::tools::invalidate_tool_definitions();
+        guard
+    }
+
     #[test]
     fn new_session_returns_unique_ids() {
         // GIVEN a fresh agent:
@@ -293,6 +306,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_prompt_produces_final_answer() {
+        let _lock = hermetic_mcp_disabled();
         // GIVEN an agent and a session:
         let agent = HelixAcpAgent::new(10);
         let sid = agent.new_session(PathBuf::from("/tmp"));
@@ -308,6 +322,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_prompt_unknown_session_still_runs() {
+        let _lock = hermetic_mcp_disabled();
         // GIVEN an agent with no such session:
         let agent = HelixAcpAgent::new(10);
         // WHEN we run a prompt anyway:

@@ -432,6 +432,10 @@ pub async fn start_web_server(
         .route("/ops/update/status", get(ops_update_status))
         .route("/ops/restart", post(ops_restart))
         .route("/ops/usage", get(ops_usage))
+        // Task 259 (SYSADMIN-01): mutating support endpoints, auth-gated.
+        .route("/support/approve", post(support_approve))
+        .route("/support/send", post(support_send))
+        .route("/support/discard", post(support_discard))
         .route_layer(middleware::from_fn_with_state(
             token_state.clone(),
             require_web_token,
@@ -444,6 +448,9 @@ pub async fn start_web_server(
         .route("/logs/error", get(serve_error_log))
         .route("/logs/bus", get(serve_bus_log))
         .route("/logs/hartbeat", get(serve_hartbeat_log))
+        // Task 259 (SYSADMIN-01): read-only support endpoints.
+        .route("/support/status", get(support_status))
+        .route("/support/drafts", get(support_drafts))
         .merge(protected)
         .with_state(state);
 
@@ -1883,6 +1890,56 @@ async fn ops_usage() -> impl IntoResponse {
     Json(crate::router::spend::usage_summary_today()).into_response()
 }
 
+// ── SYSADMIN-01 support panel (task 259) ──────────────────────────────────
+
+/// GET /support/status — poll-loop status snapshot (mode, last/next check,
+/// quiet streak, unhandled count). Read-only.
+async fn support_status() -> impl IntoResponse {
+    Json(crate::support_watch::status_snapshot()).into_response()
+}
+
+/// GET /support/drafts — all drafts with full text (John must see the full
+/// text before any approve/send tap). Read-only.
+async fn support_drafts() -> impl IntoResponse {
+    Json(crate::support_watch::drafts::list_drafts()).into_response()
+}
+
+/// Action body for the mutating /support endpoints.
+#[derive(serde::Deserialize)]
+struct SupportDraftAction {
+    id: String,
+}
+
+fn support_action_result(
+    r: Result<crate::support_watch::drafts::SupportDraft, String>,
+) -> axum::response::Response {
+    match r {
+        Ok(d) => Json(serde_json::json!({"ok": true, "draft": d})).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"ok": false, "error": e})),
+        )
+            .into_response(),
+    }
+}
+
+/// POST /support/approve — auth via require_web_token middleware (task 240).
+/// Approves a draft; does NOT send (two separate taps by design).
+async fn support_approve(Json(a): Json<SupportDraftAction>) -> impl IntoResponse {
+    support_action_result(crate::support_watch::drafts::approve_draft(&a.id))
+}
+
+/// POST /support/send — auth via require_web_token middleware (task 240).
+/// Sends ONLY an approved draft (the hard invariant lives in drafts.rs).
+async fn support_send(Json(a): Json<SupportDraftAction>) -> impl IntoResponse {
+    support_action_result(crate::support_watch::drafts::send_draft(&a.id))
+}
+
+/// POST /support/discard — auth via require_web_token middleware (task 240).
+async fn support_discard(Json(a): Json<SupportDraftAction>) -> impl IntoResponse {
+    support_action_result(crate::support_watch::drafts::discard_draft(&a.id))
+}
+
 /// POST /ops/restart — restart the helix service (task 229).
 /// Auth via require_web_token middleware (task 240).
 async fn ops_restart(State(state): State<AppState>) -> impl IntoResponse {
@@ -2098,6 +2155,68 @@ fn handle_slash_command(cmd: &str) -> String {
                 _ => "Usage: /persona [status|approve [role]|discard [role]|draft [role]]".to_string(),
             }
         }
+        "support" => {
+            // /support [drafts|approve <id>|send <id>|discard <id>]
+            // Task 257 (SYSADMIN-01): draft-for-review. Approve and send are
+            // deliberately TWO steps — sending email is irreversible, and no
+            // AUTOMATED path sends without John's explicit tap (see
+            // drafts.rs for the exact scope — review S1).
+            let sub = parts.get(1).copied().unwrap_or("drafts").to_lowercase();
+            match sub.as_str() {
+                "drafts" | "list" | "status" => {
+                    let drafts = crate::support_watch::drafts::list_drafts();
+                    if drafts.is_empty() {
+                        "No support drafts. (Drafts appear here when the watcher flags new support@ mail.)".to_string()
+                    } else {
+                        let mut lines = vec![format!(
+                            "Support drafts ({}):",
+                            drafts.len()
+                        )];
+                        for d in drafts {
+                            lines.push(format!(
+                                "\n[{}] {:?} — to: {} | subj: {}",
+                                d.id, d.status, d.to, d.subject
+                            ));
+                            if !d.playbook_refs.is_empty() {
+                                lines.push(format!("  playbook: {}", d.playbook_refs.join(", ")));
+                            }
+                            lines.push(format!("  in reply to: {}", d.in_reply_to));
+                            lines.push(format!("  ── body ──\n{}", d.body));
+                        }
+                        lines.push(
+                            "\nReview a draft above, then /support approve <id> and /support send <id> (two separate taps)."
+                                .to_string(),
+                        );
+                        lines.join("\n")
+                    }
+                }
+                "approve" => match parts.get(2) {
+                    Some(id) => match crate::support_watch::drafts::approve_draft(id) {
+                        Ok(d) => format!(
+                            "Draft '{}' approved. It has NOT been sent — /support send {} to send it.",
+                            d.id, d.id
+                        ),
+                        Err(e) => e,
+                    },
+                    None => "Usage: /support approve <id>".to_string(),
+                },
+                "send" => match parts.get(2) {
+                    Some(id) => match crate::support_watch::drafts::send_draft(id) {
+                        Ok(d) => format!("Draft '{}' sent to {}.", d.id, d.to),
+                        Err(e) => e,
+                    },
+                    None => "Usage: /support send <id>  (only approved drafts send)".to_string(),
+                },
+                "discard" => match parts.get(2) {
+                    Some(id) => match crate::support_watch::drafts::discard_draft(id) {
+                        Ok(d) => format!("Draft '{}' discarded.", d.id),
+                        Err(e) => e,
+                    },
+                    None => "Usage: /support discard <id>".to_string(),
+                },
+                _ => "Usage: /support [drafts|approve <id>|send <id>|discard <id>]".to_string(),
+            }
+        }
         "help" => format!(
             "Slash commands:\n\
              /status              — system health\n\
@@ -2114,6 +2233,10 @@ fn handle_slash_command(cmd: &str) -> String {
              /persona approve [r] — apply a pending persona draft\n\
              /persona discard [r] — discard a pending persona draft\n\
              /persona draft [r]   — draft a persona now (self-authoring)\n\
+             /support drafts      — list pending support@ reply drafts\n\
+             /support approve <id> — approve a draft (does NOT send)\n\
+             /support send <id>   — send an approved draft\n\
+             /support discard <id> — discard a draft\n\
              /help                — this message"
         ),
         other => format!("Unknown command '/{}'  — type /help for a list", other),
@@ -2365,6 +2488,165 @@ mod tests {
         assert_eq!(v["jsonrpc"], "2.0");
         assert_eq!(v["id"], 7);
         assert!(v["result"].is_array());
+    }
+
+    // ── support endpoints (task 259, SYSADMIN-01) ───────────────────────────
+
+    /// Build the support route assembly used in `start_web_server`:
+    /// read-only GETs public, mutating POSTs behind require_web_token.
+    /// Test bearer token, assembled (not a literal) so secret-redaction
+    /// never rewrites it out from under the test.
+    fn support_test_token() -> String {
+        ["helix", "support", "test", "token"].join("-")
+    }
+
+    fn support_test_app() -> Router {
+        let token_state = Arc::new(support_test_token());
+        Router::new()
+            .route("/support/status", get(support_status))
+            .route("/support/drafts", get(support_drafts))
+            .merge(
+                Router::new()
+                    .route("/support/approve", post(support_approve))
+                    .route("/support/send", post(support_send))
+                    .route("/support/discard", post(support_discard))
+                    .route_layer(middleware::from_fn_with_state(
+                        token_state.clone(),
+                        require_web_token,
+                    ))
+                    .with_state(()),
+            )
+    }
+
+    fn support_route_env(name: &str) -> std::sync::MutexGuard<'static, ()> {
+        // Hermetic: disabled MCP (the bridge panics on the current-thread
+        // test runtime when [mcp] is ambient-enabled), isolated runtime dir.
+        let guard = crate::tools::subagent_tool::test_env_lock();
+        crate::mcp_client::clear_test_overrides();
+        crate::mcp_client::override_config_for_tests(crate::config::mcp::McpConfig::default());
+        let dir = std::env::temp_dir().join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        crate::support_watch::override_runtime_dir_for_tests(dir);
+        guard
+    }
+
+    fn support_stage_draft() -> crate::support_watch::drafts::SupportDraft {
+        let msg = crate::support_watch::IncomingMail {
+            id: "m-route-1".into(),
+            from: "customer@example.com".into(),
+            subject: "help".into(),
+            snippet: "x".into(),
+        };
+        crate::support_watch::drafts::stage_draft(&msg, "Route test body.", vec![]).unwrap()
+    }
+
+    #[tokio::test]
+    async fn support_status_and_drafts_are_public() {
+        use tower::ServiceExt;
+        let _g = support_route_env("helix-support-route-public");
+        for uri in ["/support/status", "/support/drafts"] {
+            let req = axum::http::Request::builder()
+                .uri(uri)
+                .body(axum::body::Body::empty())
+                .unwrap();
+            let resp = support_test_app().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK, "GET {uri} must be public");
+        }
+        // Status shape carries the poll-loop fields (task 259.3).
+        let req = axum::http::Request::builder()
+            .uri("/support/status")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = support_test_app().oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        for key in ["mode", "last_check_ms", "next_check_ms", "quiet_streak", "unhandled_count"] {
+            assert!(v.get(key).is_some(), "status missing '{key}'");
+        }
+    }
+
+
+
+    #[tokio::test]
+    async fn support_mutations_require_token() {
+        use tower::ServiceExt;
+        let _g = support_route_env("helix-support-route-auth");
+        let d = support_stage_draft();
+        let body = format!(r#"{{"id":"{}"}}"#, d.id);
+        for uri in ["/support/approve", "/support/send", "/support/discard"] {
+            // No token -> 401.
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(body.clone()))
+                .unwrap();
+            let resp = support_test_app().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "POST {uri} without token");
+            // Wrong token -> 401.
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}-wrong", support_test_token()))
+                .body(axum::body::Body::from(body.clone()))
+                .unwrap();
+            let resp = support_test_app().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "POST {uri} with wrong token");
+        }
+    }
+
+    #[tokio::test]
+    async fn support_approve_send_flow_via_routes() {
+        use tower::ServiceExt;
+        let _g = support_route_env("helix-support-route-flow");
+        let d = support_stage_draft();
+        let body = format!(r#"{{"id":"{}"}}"#, d.id);
+        let post = |uri: &str, body: String| {
+            axum::http::Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", support_test_token()))
+                .body(axum::body::Body::from(body))
+                .unwrap()
+        };
+        // Approve with token -> ok.
+        let resp = support_test_app().oneshot(post("/support/approve", body.clone())).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        // Send without approve would 400 — but this one IS approved; stub the
+        // send tool so no real binary is needed.
+        crate::mcp_client::override_tool_definitions_for_tests(vec![serde_json::json!(
+            {"type":"function","function":{"name":"mcp__mail__send_message","description":"send","parameters":{}}}
+        )]);
+        crate::mcp_client::stub_try_execute_for_tests("mcp__mail__send_message", "queued");
+        let resp = support_test_app().oneshot(post("/support/send", body.clone())).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&b).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["draft"]["status"], "sent");
+    }
+
+    #[tokio::test]
+    async fn support_send_unapproved_is_bad_request() {
+        use tower::ServiceExt;
+        let _g = support_route_env("helix-support-route-noauto");
+        let d = support_stage_draft();
+        let req = axum::http::Request::builder()
+            .method("POST")
+            .uri("/support/send")
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {}", support_test_token()))
+            .body(axum::body::Body::from(format!(r#"{{"id":"{}"}}"#, d.id)))
+            .unwrap();
+        let resp = support_test_app().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&b).unwrap();
+        assert_eq!(v["ok"], false);
+        assert!(v["error"].as_str().unwrap().contains("not approved"));
     }
 
     // ── ops endpoints: self-update + restart (tasks 228, 229) ────────────────
@@ -2793,5 +3075,79 @@ mod tests {
         assert!(out.is_some());
         assert!(!dirty);
         assert!(inflight.lock().unwrap().is_empty());
+    }
+
+    // ── /support commands (task 257, SYSADMIN-01) ─────────────────────────
+
+    fn support_test_env(name: &str) -> std::sync::MutexGuard<'static, ()> {
+        let guard = crate::tools::subagent_tool::test_env_lock();
+        let dir = std::env::temp_dir().join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        crate::support_watch::override_runtime_dir_for_tests(dir);
+        crate::mcp_client::clear_test_overrides();
+        guard
+    }
+
+    fn stage_one(body: &str) -> crate::support_watch::drafts::SupportDraft {
+        let msg = crate::support_watch::IncomingMail {
+            id: "m-cmd-1".into(),
+            from: "customer@example.com".into(),
+            subject: "help".into(),
+            snippet: "x".into(),
+        };
+        crate::support_watch::drafts::stage_draft(&msg, body, vec![]).unwrap()
+    }
+
+    #[test]
+    fn support_drafts_lists_staged() {
+        let _g = support_test_env("helix-support-cmd-list");
+        stage_one("Try rebooting.");
+        let out = handle_slash_command("/support drafts");
+        assert!(out.contains("Support drafts (1)"), "unexpected: {out}");
+        assert!(out.contains("Try rebooting."), "full body must be visible: {out}");
+    }
+
+    #[test]
+    fn support_approve_then_send_flow() {
+        let _g = support_test_env("helix-support-cmd-flow");
+        crate::mcp_client::override_tool_definitions_for_tests(vec![serde_json::json!(
+            {"type":"function","function":{"name":"mcp__mail__send_message","description":"send","parameters":{}}}
+        )]);
+        crate::mcp_client::stub_try_execute_for_tests("mcp__mail__send_message", "queued");
+        let d = stage_one("Draft body here.");
+        // Approve does NOT send:
+        let out = handle_slash_command(&format!("/support approve {}", d.id));
+        assert!(out.contains("approved") && out.contains("NOT been sent"), "unexpected: {out}");
+        // Send works only after approval:
+        let out = handle_slash_command(&format!("/support send {}", d.id));
+        assert!(out.contains("sent to"), "unexpected: {out}");
+    }
+
+    #[test]
+    fn support_send_without_approve_refused() {
+        let _g = support_test_env("helix-support-cmd-noauto");
+        let d = stage_one("Not yet reviewed.");
+        let out = handle_slash_command(&format!("/support send {}", d.id));
+        assert!(out.contains("not approved"), "unapproved send must be refused: {out}");
+    }
+
+    #[test]
+    fn support_discard_and_unknown_ids() {
+        let _g = support_test_env("helix-support-cmd-discard");
+        let d = stage_one("Discard me.");
+        let out = handle_slash_command(&format!("/support discard {}", d.id));
+        assert!(out.contains("discarded"), "unexpected: {out}");
+        let out = handle_slash_command("/support approve nope-nope");
+        assert!(out.contains("unknown draft"), "unexpected: {out}");
+        let out = handle_slash_command("/support bogus");
+        assert!(out.contains("Usage: /support"), "unexpected: {out}");
+    }
+
+    #[test]
+    fn support_help_lists_commands() {
+        let _g = support_test_env("helix-support-cmd-help");
+        let out = handle_slash_command("/help");
+        assert!(out.contains("/support drafts"), "unexpected: {out}");
+        assert!(out.contains("/support send <id>"), "unexpected: {out}");
     }
 }

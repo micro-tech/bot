@@ -675,6 +675,9 @@ async fn run_helix() {
     let rt_dir = runtime_dir(config_path_used);
     // Task 233: persona files resolve under the runtime dir.
     crate::persona::set_persona_dir(rt_dir.clone());
+    // Task 256: support-watch state, drafts, and playbook resolve under the
+    // runtime dir too.
+    crate::support_watch::set_runtime_dir(rt_dir.clone());
     // Task 233: initial self-authoring — if agent.md is missing and the
     // operator opted in, Helix drafts its own persona in the background.
     // Fire-and-forget: the draft lands as .pending, never live, and a

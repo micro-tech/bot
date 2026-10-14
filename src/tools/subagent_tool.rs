@@ -799,6 +799,21 @@ mod tests {
     }
 
     #[test]
+    fn gemini_sits_last_on_health_ladder() {
+        // Task 258: the support drafter pins backend="gemini". dispatch_spawn
+        // walks BACKEND_LADDER *downward* from the requested backend, so an
+        // explicit Gemini request either runs on Gemini or fails loudly — it
+        // can never silently fall back to a local model. Pin that property:
+        // Gemini must stay last on the ladder.
+        assert_eq!(
+            BACKEND_LADDER.last(),
+            Some(&LLMBackend::Gemini),
+            "Gemini must remain last on the health ladder (task 258 invariant)"
+        );
+        assert!(!BACKEND_LADDER.contains(&LLMBackend::Grok));
+    }
+
+    #[test]
     fn endpoint_env_fallback_works() {
         let _tl = super::test_env_lock();
         // SAFETY: single-threaded test env manipulation.
