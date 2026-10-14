@@ -116,6 +116,9 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
                     response.len()
                 );
 
+                // Task 223: record the completed turn for conversation history.
+                crate::chat_history::record_turn(&prompt, &response);
+
                 // Forward ONLY to CPU as llm_response (single source of truth)
                 if correlation_id != 0 {
                     let _ = bus.publish(Message {
@@ -171,6 +174,9 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
         MAX_RETRIES, last_err
     );
     error!("{}", err);
+    // Task 223: keep the failed turn so "try again" still resolves against
+    // the original request.
+    crate::chat_history::record_turn(&prompt, "");
     publish_error(bus, &err);
 }
 
@@ -180,14 +186,20 @@ async fn call_gemini(
     client: &Client,
     url: &str,
     prompt: &str,
+    system_override: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    // Task 215: commander system prompt via Gemini's system_instruction.
+    // Task 215/233: system instruction. An explicit override (e.g. a
+    // sub-agent's composed persona+job) wins; otherwise the commander's
+    // composed text applies when commander mode is on.
+    let system_text: Option<String> = system_override
+        .map(|s| s.to_string())
+        .or_else(crate::persona::composed_commander_text);
     let mut body = json!({
         "contents": [{"parts": [{"text": prompt}]}]
     });
-    if crate::tools::subagent_tool::commander_enabled() {
+    if let Some(text) = system_text {
         body["system_instruction"] = json!({
-            "parts": [{"text": crate::tools::subagent_tool::COMMANDER_SYSTEM_PROMPT}]
+            "parts": [{"text": text}]
         });
     }
 
@@ -206,6 +218,13 @@ async fn call_gemini(
             format!("failed to parse Gemini JSON response: {}", e).into();
         e
     })?;
+
+    // Task 236: meter real tokens from usageMetadata (estimate fallback).
+    if let Some(usage) = crate::router::spend::parse_gemini_usage(&parsed) {
+        crate::router::spend::note_api_usage(&crate::router::LLMBackend::Gemini, usage);
+    } else {
+        crate::router::note_api_call(&crate::router::LLMBackend::Gemini);
+    }
 
     let text = parsed["candidates"][0]["content"]["parts"][0]["text"]
         .as_str()
@@ -228,6 +247,11 @@ const MAX_GEMINI_TOOL_RESULT_CHARS: usize = 8_000;
 
 /// Convert the shared tool definitions (Ollama/OpenAI shape) into Gemini
 /// `functionDeclarations`. Task 221.1.
+///
+/// MCP servers hand us full JSON Schema (schemars output) as `parameters`,
+/// but Gemini's API only accepts its restricted subset and 400s otherwise
+/// (seen 2026-10-10: `Unknown name "$schema"`, and `"type"` as a list:
+/// "Proto field is not repeating"). Every schema is sanitized on the way in.
 fn gemini_function_declarations() -> Value {
     let defs = crate::tools::tool_definitions();
     let decls: Vec<Value> = defs
@@ -246,12 +270,71 @@ fn gemini_function_declarations() -> Value {
                 "description": f.get("description")?.as_str().unwrap_or(""),
             });
             if let Some(params) = f.get("parameters") {
-                decl["parameters"] = params.clone();
+                let mut sanitized = params.clone();
+                sanitize_gemini_schema(&mut sanitized);
+                decl["parameters"] = sanitized;
             }
             Some(decl)
         })
         .collect();
     json!(decls)
+}
+
+/// Sanitize one JSON Schema into the subset Gemini's `functionDeclarations`
+/// accept. Recurses through `properties` / `items` / union combinators.
+fn sanitize_gemini_schema(schema: &mut Value) {
+    let obj = match schema.as_object_mut() {
+        Some(o) => o,
+        None => return,
+    };
+    // Gemini has no `$schema` / `$id` fields.
+    obj.remove("$schema");
+    obj.remove("$id");
+    // schemars `Option<T>` pattern: `anyOf: [{...}, {"type": "null"}]`
+    // → inner schema + `nullable: true` (the OpenAPI way).
+    if let Some(any_of) = obj.get("anyOf").and_then(|v| v.as_array()).cloned() {
+        if any_of.len() == 2
+            && let Some(null_idx) = any_of
+                .iter()
+                .position(|v| v.get("type").and_then(|t| t.as_str()) == Some("null"))
+        {
+            let mut inner = any_of[1 - null_idx].clone();
+            sanitize_gemini_schema(&mut inner);
+            if let Some(inner_obj) = inner.as_object_mut() {
+                inner_obj.insert("nullable".to_string(), Value::Bool(true));
+            }
+            *schema = inner;
+            return;
+        }
+    }
+    // `"type": ["string", "null"]` → `"type": "string", "nullable": true`.
+    // A bare union without null keeps its first entry.
+    if let Some(types) = obj.get("type").and_then(|v| v.as_array()).cloned() {
+        let names: Vec<&str> = types.iter().filter_map(|t| t.as_str()).collect();
+        let nullable = names.contains(&"null");
+        if let Some(first) = names.iter().find(|t| **t != "null").or(names.first()) {
+            obj.insert("type".to_string(), Value::String(first.to_string()));
+            if nullable {
+                obj.insert("nullable".to_string(), Value::Bool(true));
+            }
+        }
+    }
+    // Recurse into subschemas.
+    if let Some(props) = obj.get_mut("properties").and_then(|v| v.as_object_mut()) {
+        for v in props.values_mut() {
+            sanitize_gemini_schema(v);
+        }
+    }
+    if let Some(items) = obj.get_mut("items") {
+        sanitize_gemini_schema(items);
+    }
+    for key in ["anyOf", "oneOf", "allOf", "prefixItems"] {
+        if let Some(arr) = obj.get_mut(key).and_then(|v| v.as_array_mut()) {
+            for v in arr.iter_mut() {
+                sanitize_gemini_schema(v);
+            }
+        }
+    }
 }
 
 /// Extract (name, args) pairs from a Gemini response's `parts` array.
@@ -295,7 +378,17 @@ async fn call_gemini_tools(
     prompt: &str,
     bus: &Arc<Bus>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let mut contents = vec![json!({"role": "user", "parts": [{"text": prompt}]})];
+    // Task 223: conversation history as proper user/model turns, so
+    // follow-ups ("try again") resolve against prior turns. History is
+    // always clean pairs (failed turns carry a marker), which satisfies
+    // Gemini's user/model role alternation. The in-flight turn is recorded
+    // only after its reply, so it never appears here twice.
+    let mut contents: Vec<Value> = Vec::new();
+    for turn in crate::chat_history::recent_turns() {
+        contents.push(json!({"role": "user", "parts": [{"text": turn.user}]}));
+        contents.push(json!({"role": "model", "parts": [{"text": turn.assistant}]}));
+    }
+    contents.push(json!({"role": "user", "parts": [{"text": prompt}]}));
     let mut rounds = 0usize;
 
     loop {
@@ -303,10 +396,12 @@ async fn call_gemini_tools(
             "contents": contents,
             "tools": [{"functionDeclarations": gemini_function_declarations()}],
         });
-        // Task 215: commander system prompt via Gemini's system_instruction.
-        if crate::tools::subagent_tool::commander_enabled() {
+        // Task 215/233: commander system prompt via Gemini's system_instruction.
+        // Composed by the persona module (persona block + job block); None
+        // when commander mode is off or no persona applies.
+        if let Some(text) = crate::persona::composed_commander_text() {
             body["system_instruction"] = json!({
-                "parts": [{"text": crate::tools::subagent_tool::COMMANDER_SYSTEM_PROMPT}]
+                "parts": [{"text": text}]
             });
         }
 
@@ -329,7 +424,13 @@ async fn call_gemini_tools(
             e
         })?;
         // Each generateContent round is billable — feed the spend cap (task 217).
-        crate::router::note_api_call(&crate::router::LLMBackend::Gemini);
+        // Task 236: real token metering from usageMetadata; estimate fallback
+        // when the backend omits it.
+        if let Some(usage) = crate::router::spend::parse_gemini_usage(&parsed) {
+            crate::router::spend::note_api_usage(&crate::router::LLMBackend::Gemini, usage);
+        } else {
+            crate::router::note_api_call(&crate::router::LLMBackend::Gemini);
+        }
 
         let parts = &parsed["candidates"][0]["content"]["parts"];
         let calls = gemini_function_calls(parts);
@@ -422,7 +523,9 @@ fn map_reqwest_err(e: reqwest::Error) -> Box<dyn std::error::Error + Send + Sync
 ///
 /// Reads `GEMINI_API_KEY` / `GEMINI_MODEL` from the environment, same as the
 /// bus path. Single-shot (no tool loop) — the sub-agent gets one strong answer.
-pub(crate) async fn call_gemini_direct(prompt: &str) -> Result<String, String> {
+/// Task 233: `system` carries the composed persona+job block when a role
+/// persona file exists; None keeps the legacy prompt-only behavior.
+pub(crate) async fn call_gemini_direct(prompt: &str, system: Option<&str>) -> Result<String, String> {
     let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
     if api_key.is_empty() {
         return Err("GEMINI_API_KEY is not set — cannot run a sub-agent on Gemini.                     Set it in the environment or .env, or pick a local backend."
@@ -436,12 +539,11 @@ pub(crate) async fn call_gemini_direct(prompt: &str) -> Result<String, String> {
     let client = build_client();
     // Count the spend BEFORE the call so a hung request still records intent;
     // the hook is cheap and idempotent per call.
-    let out = call_gemini(&client, &url, prompt).await;
+    // (Task 236: call_gemini now meters real tokens internally, so no
+    // separate note_api_call here — that would double-count.)
+    let out = call_gemini(&client, &url, prompt, system).await;
     match out {
-        Ok(text) => {
-            crate::router::note_api_call(&crate::router::LLMBackend::Gemini);
-            Ok(text)
-        }
+        Ok(text) => Ok(text),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -466,7 +568,7 @@ pub fn call_gemini_sync(prompt: &str) -> Result<String, Box<dyn std::error::Erro
         "{}/{}:generateContent?key={}",
         GEMINI_URL_BASE, resolved_model, api_key
     );
-    rt.block_on(call_gemini(&client, &url, prompt))
+    rt.block_on(call_gemini(&client, &url, prompt, None))
         .map_err(|e| e.to_string().into())
 }
 
@@ -528,6 +630,35 @@ mod tests {
             spawn.get("function").is_none(),
             "must be Gemini shape, not the Ollama wrapper"
         );
+    }
+
+    #[test]
+    fn gemini_declarations_sanitize_mcp_schemas() {
+        // MCP servers (schemars) emit full JSON Schema: `$schema` at the top,
+        // union `type` lists, and `anyOf` null-unions for `Option<T>`.
+        // Gemini's functionDeclarations API 400s on all three (2026-10-10).
+        let mut schema = serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "query": { "type": ["string", "null"], "description": "search query" },
+                "limit": { "anyOf": [{"type": "integer"}, {"type": "null"}] },
+                "tags": { "type": "array", "items": { "type": ["string", "null"] } }
+            },
+            "required": ["query"]
+        });
+        sanitize_gemini_schema(&mut schema);
+        assert!(schema.get("$schema").is_none(), "$schema must go");
+        assert_eq!(schema["properties"]["query"]["type"], "string");
+        assert_eq!(schema["properties"]["query"]["nullable"], true);
+        assert_eq!(schema["properties"]["limit"]["type"], "integer");
+        assert_eq!(schema["properties"]["limit"]["nullable"], true);
+        assert!(schema["properties"]["limit"].get("anyOf").is_none());
+        assert_eq!(schema["properties"]["tags"]["items"]["type"], "string");
+        assert_eq!(schema["properties"]["tags"]["items"]["nullable"], true);
+        // Non-union schemas pass through untouched.
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["required"][0], "query");
     }
 
     #[test]

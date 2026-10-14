@@ -67,7 +67,83 @@ fn load_config() -> McpConfig {
 
 /// The parsed `[mcp]` config (process-wide, loaded once).
 pub fn config() -> &'static McpConfig {
+    // Task 255: tests must not depend on the developer's ambient config.toml.
+    // John's live config has [mcp] enabled, which broke the old assumption
+    // that the worktree config leaves the section commented out.
+    #[cfg(test)]
+    if let Some(c) = *test_config_override().lock().unwrap() {
+        return c;
+    }
     MCP_CONFIG.get_or_init(load_config)
+}
+
+// ── Task 256 test seams ──────────────────────────────────────────────
+// Hermetic overrides so integration tests can stub MCP servers without
+// spawning processes or depending on ambient config. Guarded by
+// `test_env_lock()` in tests that use them (they are process-global).
+
+/// Test seam: hermetic override for the global config.
+#[cfg(test)]
+static TEST_CONFIG_OVERRIDE: std::sync::Mutex<Option<&'static McpConfig>> =
+    std::sync::Mutex::new(None);
+
+#[cfg(test)]
+fn test_config_override() -> &'static std::sync::Mutex<Option<&'static McpConfig>> {
+    &TEST_CONFIG_OVERRIDE
+}
+
+#[cfg(test)]
+pub fn override_config_for_tests(cfg: McpConfig) {
+    // Box::leak: one tiny intentional leak per override install; test-only.
+    let leaked: &'static McpConfig = Box::leak(Box::new(cfg));
+    *test_config_override().lock().unwrap() = Some(leaked);
+}
+
+/// Test seam: canned `tool_definitions()` output.
+#[cfg(test)]
+static TEST_DEFS_OVERRIDE: std::sync::Mutex<Option<Vec<Value>>> = std::sync::Mutex::new(None);
+
+#[cfg(test)]
+pub fn override_tool_definitions_for_tests(defs: Vec<Value>) {
+    *TEST_DEFS_OVERRIDE.lock().unwrap() = Some(defs);
+}
+
+/// Test seam: canned `try_execute` outputs keyed by exact tool name.
+/// Checked before any real manager/spawn work.
+#[cfg(test)]
+static TEST_TRY_EXECUTE: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, String>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+/// Test seam: ordered log of every `try_execute` call (tool name + args).
+/// Lets integration tests assert a tool was (or was not) invoked, and with
+/// what arguments. Drained via `take_try_execute_calls_for_tests`.
+#[cfg(test)]
+static TEST_TRY_EXECUTE_CALLS: std::sync::Mutex<Vec<(String, Value)>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// Drain the recorded `try_execute` call log.
+#[cfg(test)]
+pub fn take_try_execute_calls_for_tests() -> Vec<(String, Value)> {
+    std::mem::take(&mut *TEST_TRY_EXECUTE_CALLS.lock().unwrap())
+}
+
+#[cfg(test)]
+pub fn stub_try_execute_for_tests(tool_name: &str, output: &str) {
+    TEST_TRY_EXECUTE
+        .lock()
+        .unwrap()
+        .insert(tool_name.to_string(), output.to_string());
+}
+
+/// Clear all test overrides. Tests that install overrides must call this
+/// (holding `test_env_lock`) when done so later tests see a clean slate.
+#[cfg(test)]
+pub fn clear_test_overrides() {
+    TEST_TRY_EXECUTE.lock().unwrap().clear();
+    TEST_TRY_EXECUTE_CALLS.lock().unwrap().clear();
+    *TEST_DEFS_OVERRIDE.lock().unwrap() = None;
+    *test_config_override().lock().unwrap() = None;
 }
 
 /// True when the `[mcp]` section enables the client.
@@ -121,6 +197,10 @@ fn manager() -> Option<std::sync::Arc<TokioMutex<McpManager>>> {
 /// Ollama-style tool definitions for every MCP tool (empty when disabled).
 /// Results are cached after the first fetch; servers are spawned lazily.
 pub fn tool_definitions() -> Vec<Value> {
+    #[cfg(test)]
+    if let Some(d) = TEST_DEFS_OVERRIDE.lock().unwrap().clone() {
+        return d;
+    }
     let mgr = match manager() {
         Some(m) => m,
         None => return Vec::new(),
@@ -137,6 +217,15 @@ pub fn tool_definitions() -> Vec<Value> {
 /// (the caller should then fall through to other tool sources). Otherwise
 /// returns `Some(output)`, where the output may itself describe a failure.
 pub fn try_execute(name: &str, args: &Value) -> Option<String> {
+    #[cfg(test)]
+    TEST_TRY_EXECUTE_CALLS
+        .lock()
+        .unwrap()
+        .push((name.to_string(), args.clone()));
+    #[cfg(test)]
+    if let Some(out) = TEST_TRY_EXECUTE.lock().unwrap().get(name) {
+        return Some(out.clone());
+    }
     let (server, tool) = naming::parse(name)?;
     let mgr = manager()?;
     let args = args.clone();
@@ -156,17 +245,31 @@ pub fn try_execute(name: &str, args: &Value) -> Option<String> {
 mod tests {
     use super::*;
 
-    // NOTE: these tests rely on the worktree's config.toml leaving the
-    // example `[mcp]` section commented out, i.e. MCP disabled. No test in
-    // this module enables the global client.
+    // NOTE: these tests install a hermetic disabled config via
+    // override_config_for_tests — they never depend on the developer's
+    // ambient config.toml (task 255). No test in this module enables the
+    // global client.
+
+    /// Install the hermetic disabled config. Returns the test-env lock
+    /// guard: overrides are process-global (task 256 seams), so tests that
+    /// install them must serialize. Bind the return value (`let _lock =`)
+    /// to hold it for the whole test body.
+    fn disabled_test_config() -> std::sync::MutexGuard<'static, ()> {
+        let guard = crate::tools::subagent_tool::test_env_lock();
+        clear_test_overrides();
+        override_config_for_tests(McpConfig::default());
+        guard
+    }
 
     #[test]
-    fn disabled_by_default_from_worktree_config() {
+    fn disabled_config_is_not_enabled() {
+        let _lock = disabled_test_config();
         assert!(!is_enabled());
     }
 
     #[test]
     fn tool_definitions_empty_when_disabled() {
+        let _lock = disabled_test_config();
         assert!(tool_definitions().is_empty());
     }
 
@@ -177,6 +280,7 @@ mod tests {
 
     #[test]
     fn try_execute_returns_none_for_mcp_names_when_disabled() {
+        let _lock = disabled_test_config();
         // Well-formed MCP name, but the client is disabled -> fall through.
         assert_eq!(
             try_execute("mcp__google__gmail_search", &Value::Null),
@@ -186,6 +290,10 @@ mod tests {
 
     #[test]
     fn tools_mod_definitions_have_no_mcp_tools_when_disabled() {
+        let _lock = disabled_test_config();
+        // tools::tool_definitions() is cached (task 237) — rebuild so the
+        // assertion sees the current (disabled) MCP state.
+        crate::tools::invalidate_tool_definitions();
         let defs = crate::tools::tool_definitions();
         let arr = defs.as_array().expect("tool_definitions must be an array");
         assert!(
