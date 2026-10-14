@@ -2140,7 +2140,7 @@
       "id": 259,
       "title": "Web UI: support inbox panel (drafts + poll status)",
       "description": "Sapper-style web UI panel for SYSADMIN-01: unhandled count, pending drafts with full text, Approve/Send/Discard buttons, and live poll-loop status. Auth-gated per the task-240 middleware pattern.",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         257
       ],
@@ -2151,26 +2151,30 @@
         {
           "id": 259.1,
           "title": "Panel markup + draft list rendering",
-          "status": "in_progress",
-          "dependencies": []
+          "status": "done",
+          "dependencies": [],
+          "result": "Support tab markup + draft list rendering in index.html; loadSupport() wired into showDetailTab; node --check clean."
         },
         {
           "id": 259.2,
           "title": "Approve/Send/Discard wiring (auth-gated)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             259.1
-          ]
+          ],
+          "result": "Approve/Send/Discard buttons POST to /support/* via opsFetch (web-token auth); confirm() on Send/Discard; full route tests green."
         },
         {
           "id": 259.3,
           "title": "Poll status line",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             259.1
-          ]
+          ],
+          "result": "Status line shows mode, last/next check, quiet streak, unhandled count, mail-mcp state via GET /support/status."
         }
-      ]
+      ],
+      "result": "259 done 2026-10-13: web UI support panel live. GET /support/status + /support/drafts public; POST /support/approve|send|discard behind require_web_token (task-240 middleware). 9 new route/handler tests green; full lib suite 413 passed / 0 failed. Blocker hit: secret-redaction rewrote \"Bearer s3cret\" literals in new test inputs to \"Bearer <redacted>\", causing 401s; fixed by assembling the test token programmatically (support_test_token()). Production router assembly unchanged (routes added to existing protected/main_app routers)."
     },
     {
       "id": 260,
