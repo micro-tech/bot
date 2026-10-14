@@ -136,6 +136,7 @@ command = "/home/cobble/.local/bin/google-mcp"  # e.g. ~/workspace/google-mcp/ta
 # omitting the section (or the whole block) selects the defaults.
 # [support]
 # enabled = true               # master switch for the watcher tick
-# business_start = "08:00"      # 15m cadence inside this window ...
+# business_start = "08:00"      # 5m cadence inside this window ...
 # business_end = "18:00"        # ... 30m outside it, 1m burst on new mail
 # timezone = "America/New_York" # IANA name for the window above
+# auto_send = false             # true: drafted replies send immediately (John's 2026-10-14 call)
