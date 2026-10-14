@@ -2057,7 +2057,7 @@
       "id": 257,
       "title": "Draft-for-review reply flow (hard no-auto-send invariant)",
       "description": "Replies are staged as pending drafts and NEVER send without John's explicit tap. Mirrors the task-233 persona .pending/approve pattern. This is the safety-critical piece of SYSADMIN-01.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [
         255
       ],
@@ -2068,13 +2068,13 @@
         {
           "id": 257.1,
           "title": "Pending draft store (stage-only)",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 257.2,
           "title": "/support chat commands (drafts/approve/send/discard)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             257.1
           ]
@@ -2082,18 +2082,19 @@
         {
           "id": 257.3,
           "title": "No-auto-send invariant + tests",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             257.2
           ]
         }
-      ]
+      ],
+      "results": "DONE 2026-10-13 (Ranger 1, branch ranger-255-260). New src/support_watch/drafts.rs: JSON draft store at <runtime>/support_drafts/ (id/in_reply_to/to/subject/body/playbook_refs/created_at/status); stage (marks message handled in watch state) / approve / send / discard with strict state transitions; draft ids sanitized against path traversal. HARD INVARIANT enforced by construction + review: send_draft is the ONLY production call site invoking the mail send tool (verified via grep), and it refuses anything not Approved; approve and send are two separate steps, no shortcut; no auto-send path exists. /support chat commands added (drafts|approve|send|discard) mirroring /persona, full draft body shown in the list (no blind approvals); /help updated. Deviation: the tick->draft wiring (sink that stages Gemini-drafted replies) is deferred to 258, which owns the drafter; until then LogOnlySink holds and ids stay unhandled. Tests: 7 drafts unit tests (lifecycle, discard, unapproved/unknown/traversal refusals, double-approve, ordering) + 5 /support command tests green; full lib suite 399 passed 0 failed."
     },
     {
       "id": 258,
       "title": "Gemini-delegated drafting + greatest-hits playbook hook",
       "description": "Per John's architectural call, R630 local models are NOT capable enough to write customer replies: drafting MUST delegate to a capable backend (Gemini API). The drafter also consults John's greatest-hits playbook when present.",
-      "status": "pending",
+      "status": "in_progress",
       "dependencies": [
         256,
         257
@@ -2105,7 +2106,7 @@
         {
           "id": 258.1,
           "title": "Drafter spawn pinned to backend=gemini",
-          "status": "pending",
+          "status": "in_progress",
           "dependencies": []
         },
         {
