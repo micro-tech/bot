@@ -22,6 +22,13 @@ pub struct SupportConfig {
     /// IANA timezone name for business hours. Default America/New_York.
     #[serde(default = "default_tz")]
     pub timezone: String,
+
+    /// Auto-send drafted replies without John's approval. Default false.
+    /// John's 2026-10-14 call: the support desk auto-sends. When true, a
+    /// successfully drafted reply is approved and sent immediately by the
+    /// poll tick; the draft stays visible in the store afterward.
+    #[serde(default)]
+    pub auto_send: bool,
 }
 
 fn default_true() -> bool {
@@ -44,6 +51,7 @@ impl Default for SupportConfig {
             business_start: default_biz_start(),
             business_end: default_biz_end(),
             timezone: default_tz(),
+            auto_send: false,
         }
     }
 }
@@ -92,6 +100,15 @@ mod tests {
         assert_eq!(cfg.business_start, "08:00");
         assert_eq!(cfg.business_end, "18:00");
         assert_eq!(cfg.timezone, "America/New_York");
+        assert!(!cfg.auto_send, "auto-send must default to off");
+    }
+
+    #[test]
+    fn auto_send_parses_when_set() {
+        let cfg = SupportConfig::load_from_toml("[support]\nauto_send = true\n");
+        assert!(cfg.auto_send);
+        let cfg = SupportConfig::load_from_toml("[support]\n");
+        assert!(!cfg.auto_send);
     }
 
     #[test]
