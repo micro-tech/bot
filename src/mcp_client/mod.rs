@@ -115,6 +115,19 @@ static TEST_TRY_EXECUTE: std::sync::LazyLock<
     std::sync::Mutex<std::collections::HashMap<String, String>>,
 > = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
+/// Test seam: ordered log of every `try_execute` call (tool name + args).
+/// Lets integration tests assert a tool was (or was not) invoked, and with
+/// what arguments. Drained via `take_try_execute_calls_for_tests`.
+#[cfg(test)]
+static TEST_TRY_EXECUTE_CALLS: std::sync::Mutex<Vec<(String, Value)>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// Drain the recorded `try_execute` call log.
+#[cfg(test)]
+pub fn take_try_execute_calls_for_tests() -> Vec<(String, Value)> {
+    std::mem::take(&mut *TEST_TRY_EXECUTE_CALLS.lock().unwrap())
+}
+
 #[cfg(test)]
 pub fn stub_try_execute_for_tests(tool_name: &str, output: &str) {
     TEST_TRY_EXECUTE
@@ -128,6 +141,7 @@ pub fn stub_try_execute_for_tests(tool_name: &str, output: &str) {
 #[cfg(test)]
 pub fn clear_test_overrides() {
     TEST_TRY_EXECUTE.lock().unwrap().clear();
+    TEST_TRY_EXECUTE_CALLS.lock().unwrap().clear();
     *TEST_DEFS_OVERRIDE.lock().unwrap() = None;
     *test_config_override().lock().unwrap() = None;
 }
@@ -203,6 +217,11 @@ pub fn tool_definitions() -> Vec<Value> {
 /// (the caller should then fall through to other tool sources). Otherwise
 /// returns `Some(output)`, where the output may itself describe a failure.
 pub fn try_execute(name: &str, args: &Value) -> Option<String> {
+    #[cfg(test)]
+    TEST_TRY_EXECUTE_CALLS
+        .lock()
+        .unwrap()
+        .push((name.to_string(), args.clone()));
     #[cfg(test)]
     if let Some(out) = TEST_TRY_EXECUTE.lock().unwrap().get(name) {
         return Some(out.clone());
