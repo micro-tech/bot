@@ -455,12 +455,29 @@ where
     /// attempts per message — past the cap it waits for John's manual
     /// handling instead of burning a Gemini call every minute forever.
     async fn routine_support_mail_watch(&mut self) {
+        let auto_send = crate::support_watch::live_config().auto_send;
         for msg in crate::support_watch::poll_new_mail() {
             match crate::support_watch::drafter::draft_reply(&msg).await {
-                Ok(d) => log_to_file(&format!(
-                    "support: staged draft {} for message {} (from {})",
-                    d.id, msg.id, msg.from
-                )),
+                Ok(d) => {
+                    log_to_file(&format!(
+                        "support: staged draft {} for message {} (from {})",
+                        d.id, msg.id, msg.from
+                    ));
+                    // John's 2026-10-14 call: [support] auto_send ships the
+                    // reply immediately instead of waiting for his tap.
+                    if auto_send {
+                        match crate::support_watch::drafts::auto_send_draft(&d.id) {
+                            Ok(_) => log_to_file(&format!(
+                                "support: auto-sent reply for draft {} (message {})",
+                                d.id, msg.id
+                            )),
+                            Err(e) => log_to_file(&format!(
+                                "support: auto-send failed for draft {}: {} (draft stays approved, no auto-retry)",
+                                d.id, e
+                            )),
+                        }
+                    }
+                }
                 Err(e) => log_to_file(&format!(
                     "support: draft failed for message {}: {} (stays unhandled)",
                     msg.id, e
