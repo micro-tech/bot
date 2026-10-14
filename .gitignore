@@ -66,3 +66,4 @@ key.pem
 .zed/settings.json
 .tmp.driveupload
 .tmp.drivedownload
+config.toml
