@@ -45,7 +45,7 @@ pub const SUPPORT_DRAFT_BACKEND: &str = "gemini";
 pub const MAIL_SERVER_NAME: &str = "mail";
 
 const BURST_CADENCE_MS: u64 = 60_000;
-const DAY_CADENCE_MS: u64 = 15 * 60_000;
+const DAY_CADENCE_MS: u64 = 5 * 60_000; // John: 5-min business-hours checks
 const NIGHT_CADENCE_MS: u64 = 30 * 60_000;
 /// Clean checks required to leave BURST (task 256 normative).
 const BURST_EXIT_STREAK: u32 = 2;
@@ -516,11 +516,11 @@ mod tests {
     }
 
     #[test]
-    fn cadence_is_15m_by_day_30m_by_night_1m_in_burst() {
+    fn cadence_is_5m_by_day_30m_by_night_1m_in_burst() {
         let c = cfg();
         assert_eq!(
             desired_cadence_ms(wednesday_afternoon_ms(), WatchMode::NormalDay, &c),
-            15 * 60_000
+            5 * 60_000
         );
         assert_eq!(
             desired_cadence_ms(wednesday_night_ms(), WatchMode::NormalNight, &c),
@@ -543,10 +543,10 @@ mod tests {
         let mut st = WatchState::default();
         st.last_check_ms = Some(wednesday_afternoon_ms());
         st.mode = WatchMode::NormalDay;
-        // 5 minutes later: not yet.
-        assert!(!should_check(wednesday_afternoon_ms() + 5 * 60_000, &st, &cfg()));
-        // 16 minutes later: yes.
-        assert!(should_check(wednesday_afternoon_ms() + 16 * 60_000, &st, &cfg()));
+        // 4 minutes later: not yet.
+        assert!(!should_check(wednesday_afternoon_ms() + 4 * 60_000, &st, &cfg()));
+        // 6 minutes later: yes.
+        assert!(should_check(wednesday_afternoon_ms() + 6 * 60_000, &st, &cfg()));
     }
 
     #[test]
