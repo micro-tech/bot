@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Added (task 255 DONE — Ranger 1, SYSADMIN-01 mail-mcp wiring)
+
+- **mail-mcp MCP wiring** (`config.toml`, `docs/mcp.md`, `src/config/mcp.rs`): commented `[[mcp.servers]]` "mail" template after the google entry (uncomment once mail-mcp lands at `/home/cobble/.local/bin/mail-mcp`); new "mail-mcp (support@ watcher)" docs section with install pointer, one-mailbox-per-process note, and the R630 tool-name verification procedure. Graceful degradation verified: missing binary → boot clean, warning logged, no `mcp__mail__*` tools advertised (new test `mail_template_without_binary_advertises_no_tools`).
+- **Hermetic mcp_client tests**: fixed 2 pre-existing failures — the tests assumed the worktree config leaves `[mcp]` commented out, but John's live config enables it. Tests now install a hermetic disabled config via the `override_config_for_tests` test seam (task 255) instead of depending on ambient config.
+- **Deferred to R630**: subtask 255.3 (confirm exact `mcp__mail__*` tool names) — gated on John's mail-mcp install; verification command recorded in docs/mcp.md; the poll loop resolves names defensively at runtime.
+
+---
+
 ### Changed (task 245 DONE — Ranger 1, config docs)
 
 - **Rewrote `docs/configuration.md`**: every section in the shipped `config.toml` documented (`[helix]`, `[[ollama]]`, `[gemini]`, `[web]`, `[logging]`, `[heartbeat]`, `[ollama_keepalive]`, `[reasoning]`, `[helix.okf]`, `[mcp]`/`[[mcp.servers]]`) plus code-only sections (`[helix.commander]`, `[helix.persona]`, `[router]`, `[shell]`). Required vs defaulted keys marked; defaults verified against serde structs/parsing code.

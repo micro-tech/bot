@@ -237,6 +237,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mail_template_without_binary_advertises_no_tools() {
+        // Task 255: the support@ watcher's mail-mcp entry degrades gracefully
+        // when the binary is not installed (the sandbox never has it).
+        // No mcp__mail__* tool may be advertised, and nothing may panic.
+        let mut mgr = McpManager::new(McpConfig {
+            enabled: true,
+            servers: vec![McpServerConfig {
+                name: "mail".into(),
+                command: "/home/cobble/.local/bin/mail-mcp".into(),
+                ..Default::default()
+            }],
+        });
+        let defs = mgr.tool_definitions().await;
+        assert!(defs.is_empty(), "missing mail-mcp binary must advertise no tools");
+        for d in &defs {
+            let name = d
+                .get("function")
+                .and_then(|f| f.get("name"))
+                .and_then(|n| n.as_str())
+                .unwrap_or("");
+            assert!(!name.starts_with("mcp__mail__"), "leaked tool: {name}");
+        }
+    }
+
+    #[tokio::test]
     async fn call_reports_spawn_failure_as_error() {
         let mut mgr = McpManager::new(bad_server_config());
         let err = mgr
