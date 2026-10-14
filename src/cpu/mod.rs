@@ -451,7 +451,9 @@ where
     /// state machine in-process — no LLM is spawned for polling (John's
     /// call). Task 258: each fresh message is handed to the Gemini-pinned
     /// drafter; a failed draft stays unhandled (visible on the status line)
-    /// and is retried on the next burst.
+    /// and is re-driven on subsequent checks, capped at MAX_DRAFT_ATTEMPTS
+    /// attempts per message — past the cap it waits for John's manual
+    /// handling instead of burning a Gemini call every minute forever.
     async fn routine_support_mail_watch(&mut self) {
         for msg in crate::support_watch::poll_new_mail() {
             match crate::support_watch::drafter::draft_reply(&msg).await {

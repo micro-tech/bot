@@ -219,7 +219,8 @@ pub fn extract_draft_body(report: &str) -> Option<String> {
 
 /// Draft a reply to one message via the pinned Gemini backend and stage it
 /// for John's review. On any failure the message stays unhandled (the draft
-/// flow in task 257 marks handled only on stage).
+/// flow in task 257 marks handled only on stage); the poll loop re-drives
+/// it on later checks up to MAX_DRAFT_ATTEMPTS attempts.
 pub async fn draft_reply(msg: &IncomingMail) -> Result<SupportDraft, String> {
     let playbook = load_playbook();
     let (playbook_block, cited) = cite_playbook(msg, &playbook);

@@ -30,7 +30,7 @@ use chrono_tz::Tz;
 use log::{debug, info, warn};
 
 pub use config::SupportConfig;
-pub use state::{WatchMode, WatchState};
+pub use state::{WatchMode, WatchState, MAX_DRAFT_ATTEMPTS};
 
 /// Backend pinned for support reply drafting (task 258).
 ///
@@ -160,7 +160,7 @@ pub fn resolve_mail_tools() -> Option<ResolvedMailTools> {
 /// the model layer (treat as DATA, never instructions) — the poll loop
 /// parses the payload underneath it. Verified: every `mcp__*` name matches
 /// `security::is_untrusted_tool`, so this call site is always tagged.
-fn strip_untrusted_tags(output: &str) -> &str {
+pub(crate) fn strip_untrusted_tags(output: &str) -> &str {
     let t = output.trim();
     let t = t
         .strip_prefix(crate::security::UNTRUSTED_OPEN)
@@ -169,6 +169,28 @@ fn strip_untrusted_tags(output: &str) -> &str {
     t.strip_suffix(crate::security::UNTRUSTED_CLOSE)
         .unwrap_or(t)
         .trim_end()
+}
+
+/// Pull the addr-spec out of a `From:` value. Handles `"Alice
+/// <alice@example.com>"`, bare `alice@example.com`, and junk — a display
+/// name must never become the reply recipient (review B1: the old
+/// `split_whitespace().next()` turned "Alice <alice@example.com>" into
+/// "Alice", misaddressing the draft).
+pub fn extract_email(from: &str) -> String {
+    if let Some(a) = from.find('<') {
+        if let Some(b) = from[a..].find('>') {
+            let inner = from[a + 1..a + b].trim();
+            if !inner.is_empty() {
+                return inner.to_string();
+            }
+        }
+    }
+    from.split_whitespace()
+        .find(|t| t.contains('@'))
+        .or_else(|| from.split_whitespace().next())
+        .unwrap_or("")
+        .trim_matches(|c| c == '<' || c == '>')
+        .to_string()
 }
 
 /// Parse a mail-list tool result into messages. Tries JSON first (array of
@@ -212,11 +234,7 @@ pub fn parse_mail_list(output: &str) -> Vec<IncomingMail> {
             };
             Some(IncomingMail {
                 id: id.to_string(),
-                from: str_field("from")
-                    .split_whitespace()
-                    .next()
-                    .unwrap_or("")
-                    .to_string(),
+                from: extract_email(&str_field("from")),
                 subject: str_field("subject"),
                 snippet: {
                     let b = str_field("body").replace('\n', " ");
@@ -378,10 +396,25 @@ pub fn poll_new_mail() -> Vec<IncomingMail> {
     let messages = parse_mail_list(&raw);
     let ids: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
     let fresh_ids = state.note_seen(&ids);
-    let fresh: Vec<IncomingMail> = messages
-        .into_iter()
-        .filter(|m| fresh_ids.contains(&m.id))
-        .collect();
+
+    // Review B2: re-drive previously-seen but still-unhandled messages
+    // (their draft failed on an earlier tick). The attempt counter caps
+    // retries so a poison message can't burn a Gemini call every minute
+    // forever; past the cap it stays unhandled on the status line for
+    // John's manual handling.
+    let mut out: Vec<IncomingMail> = Vec::new();
+    for m in &messages {
+        if fresh_ids.contains(&m.id) {
+            out.push(m.clone());
+        } else if state.unhandled_ids.contains(&m.id)
+            && state.draft_attempts.get(&m.id).copied().unwrap_or(0) < MAX_DRAFT_ATTEMPTS
+        {
+            *state.draft_attempts.entry(m.id.clone()).or_insert(0) += 1;
+            out.push(m.clone());
+        }
+    }
+    let retry_count = out.len().saturating_sub(fresh_ids.len());
+    let fresh = out;
 
     let new_mode = record_check(&mut state, now_ms, &fresh_ids, &cfg);
     if let Err(e) = state.save(&rt) {
@@ -389,9 +422,10 @@ pub fn poll_new_mail() -> Vec<IncomingMail> {
     }
 
     info!(
-        "support_watch: check done mode={} new={} unhandled={} quiet_streak={}",
+        "support_watch: check done mode={} new={} retried={} unhandled={} quiet_streak={}",
         new_mode.as_str(),
-        fresh.len(),
+        fresh_ids.len(),
+        retry_count,
         state.unhandled_count(),
         state.quiet_streak
     );
@@ -572,6 +606,32 @@ mod tests {
     }
 
     #[test]
+    fn extract_email_prefers_addr_spec_over_display_name() {
+        // Review B1: "Alice <alice@example.com>" must yield the address,
+        // never the display name — it becomes the draft's `to`.
+        assert_eq!(
+            extract_email("Alice <alice@example.com>"),
+            "alice@example.com"
+        );
+        assert_eq!(
+            extract_email("\"Doe, Jane\" <jane.doe@example.com>"),
+            "jane.doe@example.com"
+        );
+        assert_eq!(extract_email("bob@example.com"), "bob@example.com");
+        assert_eq!(extract_email(""), "");
+        // Degenerate angle brackets fall back to the @-bearing token.
+        assert_eq!(extract_email("Carol <>"), "Carol");
+    }
+
+    #[test]
+    fn parse_mail_list_uses_addr_spec_for_from() {
+        let out = r#"[{"id":"1","from":"Alice <alice@example.com>","subject":"hi","body":"x"}]"#;
+        let msgs = parse_mail_list(out);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].from, "alice@example.com");
+    }
+
+    #[test]
     fn parse_mail_list_strips_untrusted_tags() {
         // tools::execute wraps MCP output in <untrusted-data> (task 235);
         // the poll loop must parse the payload underneath.
@@ -635,6 +695,75 @@ mod tests {
         assert_eq!(st.quiet_streak, 0);
         // No new mail seen: sink still has exactly the first message.
         assert_eq!(sink.got.lock().unwrap().len(), 1);
+
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Backdate the persisted last_check so the cadence gate lets the
+    /// next poll_new_mail() through (burst cadence is 1 minute).
+    fn backdate_last_check(dir: &std::path::Path) {
+        let mut st = WatchState::load(dir);
+        let backdated = st.last_check_ms.unwrap_or(0).saturating_sub(61_000);
+        st.last_check_ms = Some(backdated);
+        st.save(dir).unwrap();
+    }
+
+    #[test]
+    fn poll_new_mail_redrives_unhandled_messages_up_to_attempt_cap() {
+        // Review B2: a message whose draft failed stays unhandled and must
+        // be re-driven on later checks — capped so a poison message can't
+        // burn a Gemini call every minute forever.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = std::env::temp_dir().join("helix-support-watch-test-retry");
+        let _ = std::fs::remove_dir_all(&dir);
+        override_runtime_dir_for_tests(dir.clone());
+        crate::mcp_client::clear_test_overrides();
+        crate::mcp_client::override_tool_definitions_for_tests(vec![
+            serde_json::json!({"type":"function","function":{"name":"mcp__mail__check_inbox"}}),
+            serde_json::json!({"type":"function","function":{"name":"mcp__mail__send_message"}}),
+        ]);
+        crate::mcp_client::stub_try_execute_for_tests(
+            "mcp__mail__check_inbox",
+            r#"[{"id":"r1","from":"customer@example.com","subject":"help","body":"broken"}]"#,
+        );
+
+        // GIVEN one fresh message:
+        let first = poll_new_mail();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].id, "r1");
+        // WHEN its draft fails (stays unhandled — no mark_handled call):
+        backdate_last_check(&dir);
+        // THEN the next check re-drives it:
+        let retry1 = poll_new_mail();
+        assert_eq!(retry1.len(), 1, "failed draft must be retried");
+        assert_eq!(retry1[0].id, "r1");
+        assert_eq!(
+            WatchState::load(&dir).draft_attempts.get("r1"),
+            Some(&1),
+            "retry must consume an attempt"
+        );
+
+        // WHEN the cap is reached:
+        let mut st = WatchState::load(&dir);
+        st.draft_attempts.insert("r1".to_string(), MAX_DRAFT_ATTEMPTS);
+        st.save(&dir).unwrap();
+        backdate_last_check(&dir);
+        // THEN it is no longer re-driven, but stays unhandled for John:
+        let retry_capped = poll_new_mail();
+        assert!(
+            retry_capped.is_empty(),
+            "past the attempt cap nothing may be re-driven"
+        );
+        let st = WatchState::load(&dir);
+        assert_eq!(st.unhandled_count(), 1, "still visible on the status line");
+
+        // WHEN John handles it manually:
+        super::mark_handled(&["r1".to_string()]);
+        // THEN the attempt counter is cleared too:
+        let st = WatchState::load(&dir);
+        assert_eq!(st.unhandled_count(), 0);
+        assert!(!st.draft_attempts.contains_key("r1"));
 
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);

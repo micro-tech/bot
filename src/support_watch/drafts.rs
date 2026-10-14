@@ -1,13 +1,23 @@
 //! Pending draft store for SYSADMIN-01 replies (task 257).
 //!
-//! Safety-critical module: replies are STAGED here and NEVER sent without
-//! John's explicit tap. The hard invariant, enforced by construction:
+//! Safety-critical module: replies are STAGED here and the automated flow
+//! NEVER sends without John's explicit tap. The invariant, enforced by
+//! construction within the watcher/draft/UI paths:
 //!
-//!   ONLY `send_draft` invokes the mail send tool, and it refuses anything
-//!   that is not an APPROVED draft. Approve and send are deliberately two
-//!   separate steps — there is no approve+send shortcut, because sending
-//!   email is irreversible and John's standing rule demands his explicit
-//!   go-ahead for irreversible actions.
+//!   ONLY `send_draft` invokes the mail send tool from automation, and it
+//!   refuses anything that is not an APPROVED draft. Approve and send are
+//!   deliberately two separate steps — there is no approve+send shortcut,
+//!   because sending email is irreversible and John's standing rule demands
+//!   his explicit go-ahead for irreversible actions.
+//!
+//! SCOPE (review S1 — read this before quoting the guarantee): the invariant
+//! covers the automated paths — the poll loop, this draft store, and the
+//! web UI buttons. It does NOT cover a model session invoking
+//! `mcp__mail__send_message` directly through the tool loop: the task-235
+//! validator only WARNS on it (same posture as the built-in `send_email`),
+//! so a nudged or injected model could send with at most a log line. Do not
+//! claim "no code path sends without John's tap" system-wide — the promise
+//! is "no AUTOMATED path sends without John's tap."
 //!
 //! Auto-send categories: NONE. If John ever blesses categories, that is a
 //! separate task with its own approval — this module builds no auto-send
@@ -189,9 +199,12 @@ pub fn discard_draft(id: &str) -> Result<SupportDraft, String> {
     }
 }
 
-/// Send an APPROVED draft. This is the ONLY function in the codebase that
-/// invokes the mail send tool — the hard no-auto-send invariant lives here.
-/// Refuses unapproved, unknown, or already-sent/discarded drafts.
+/// Send an APPROVED draft. This is the ONLY automated path that invokes
+/// the mail send tool — the no-auto-send invariant for the watcher/draft/UI
+/// flow lives here (see the module doc for the exact scope: it does not
+/// cover direct model tool calls). Refuses unapproved, unknown, or
+/// already-sent/discarded drafts, and refuses to mark Sent on
+/// error-shaped tool results (review B3).
 pub fn send_draft(id: &str) -> Result<SupportDraft, String> {
     let dir = drafts_dir();
     let mut draft = load_draft(&dir, id)?;
@@ -216,13 +229,41 @@ pub fn send_draft(id: &str) -> Result<SupportDraft, String> {
     // the result; a Warn verdict is logged, a Block verdict returns an
     // error string instead of sending.
     let result = crate::tools::execute(&tools.send, &args);
-    if result.starts_with("Blocked by injection guard:") {
-        return Err(format!("send blocked by injection guard: {}", result));
+    // MCP results arrive wrapped in <untrusted-data> tags — strip them
+    // before shape-checking, or a tagged transport error would slip
+    // through as "sent" (review B3).
+    let stripped = super::strip_untrusted_tags(&result);
+    if send_failed(stripped) {
+        // Review B3: an error-shaped result means the reply was NOT
+        // delivered — never file it as Sent. The draft stays Approved so
+        // John can retry with /support send once mail-mcp is healthy.
+        log::warn!(
+            "support: send of draft '{}' failed via {}: {}",
+            draft.id,
+            tools.send,
+            stripped.chars().take(200).collect::<String>()
+        );
+        return Err(format!("send failed (not delivered): {}", stripped));
     }
     draft.status = DraftStatus::Sent;
     save_draft(&dir, &draft)?;
     log::info!("support: sent draft '{}' via {}: {}", draft.id, tools.send, result.chars().take(200).collect::<String>());
     Ok(draft)
+}
+
+/// True when a `tools::execute` result for the mail send tool is
+/// error-shaped rather than a delivery confirmation (review B3).
+///
+/// Deny-list, not allow-list: mail-mcp's exact success shape is unknown
+/// until task 255.3 confirms it on the R630, but every failure mode we
+/// know produces one of these prefixes — the injection-guard block, the
+/// `mcp:` transport/call errors (`call_tool` returns them as strings),
+/// the server-flagged `is_error` marker, or an unknown-tool fallthrough.
+fn send_failed(result: &str) -> bool {
+    result.starts_with("Blocked by injection guard:")
+        || result.starts_with("mcp: ")
+        || result.starts_with("MCP tool reported an error:")
+        || result.starts_with("Unknown tool '")
 }
 
 #[cfg(test)]
@@ -276,6 +317,51 @@ mod tests {
         // AND it shows up in the list:
         assert!(list_drafts().iter().any(|x| x.id == d.id && x.status == DraftStatus::Sent));
         crate::mcp_client::clear_test_overrides();
+    }
+
+    #[test]
+    fn send_draft_refuses_to_mark_sent_on_error_shaped_results() {
+        // Review B3: a transport error, a server-flagged error, or an
+        // injection-guard block must NOT be filed as delivered. The draft
+        // stays Approved so John can retry.
+        for (name, stub_output) in [
+            ("transport_error", "mcp: tool call 'send_message' failed: connection reset"),
+            ("server_error", "MCP tool reported an error:\nSMTP 550 rejected"),
+            ("unknown_tool", "Unknown tool 'mcp__mail__send_message' — not registered."),
+        ] {
+            let _g = with_drafts_dir(&format!("helix-drafts-test-sendfail-{name}"));
+            crate::mcp_client::clear_test_overrides();
+            crate::mcp_client::override_tool_definitions_for_tests(vec![serde_json::json!(
+                {"type":"function","function":{"name":"mcp__mail__send_message","description":"send","parameters":{}}}
+            )]);
+            crate::mcp_client::stub_try_execute_for_tests("mcp__mail__send_message", stub_output);
+
+            let d = stage_draft(&test_msg(), "body", vec![]).unwrap();
+            let d = approve_draft(&d.id).unwrap();
+            // WHEN the send tool reports an error:
+            let err = send_draft(&d.id).expect_err("error-shaped result must not send");
+            assert!(
+                err.contains("not delivered") || err.contains("failed"),
+                "unexpected error text: {err}"
+            );
+            // THEN the draft is still Approved (retryable), never Sent:
+            let dir = drafts_dir();
+            let back = load_draft(&dir, &d.id).unwrap();
+            assert_eq!(back.status, DraftStatus::Approved, "case {name}");
+            crate::mcp_client::clear_test_overrides();
+        }
+    }
+
+    #[test]
+    fn send_failed_matches_known_error_shapes_only() {
+        assert!(send_failed("Blocked by injection guard: verbatim lift"));
+        assert!(send_failed("mcp: tool 'send_message' on server 'mail' timed out after 30s"));
+        assert!(send_failed("MCP tool reported an error:\nboom"));
+        assert!(send_failed("Unknown tool 'mcp__mail__send_message' — not registered."));
+        // A plausible delivery confirmation passes through:
+        assert!(!send_failed(r#"{"ok":true,"message_id":"abc"}"#));
+        assert!(!send_failed("message queued"));
+        assert!(!send_failed(""));
     }
 
     #[test]

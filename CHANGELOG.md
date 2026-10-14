@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Fixed (Code Review must-fix items on ranger-255-260 — Ranger 1, SYSADMIN-01)
+
+- **B1 — `from` parser misaddressed replies** (`src/support_watch/mod.rs`): `parse_mail_list` used `split_whitespace().next()` on the From field, turning `"Alice <alice@example.com>"` into `"Alice"` as the draft's recipient. New `extract_email()` prefers the addr-spec, falls back to the @-bearing token. Tests: display-name, quoted display-name, bare address, empty, degenerate brackets.
+- **B2 — failed drafts are now actually retried** (`src/support_watch/{mod,state}.rs`, `src/cpu/mod.rs`): the old comment claimed retry-on-next-burst but nothing re-drove unhandled messages. `poll_new_mail()` now also returns previously-seen-but-unhandled messages present in the listing; `WatchState.draft_attempts` caps retries at `MAX_DRAFT_ATTEMPTS` (5) so a poison message can't burn a Gemini call every minute forever — past the cap it stays unhandled on the status line for John's manual handling. `mark_handled` clears the counter. The cpu/mod.rs comment now describes the capped retry accurately. Log line gained a `retried=` field (docs/support-live-drill.md updated to match).
+- **B3 — `send_draft` no longer marks `Sent` on error strings** (`src/support_watch/drafts.rs`): the tool result is un-tagged first (MCP errors arrive inside `<untrusted-data>`), then checked against known error shapes (`Blocked by injection guard:`, `mcp: ` transport errors, `MCP tool reported an error:`, `Unknown tool`). On any error shape the send returns Err and the draft stays Approved (retryable) — never filed as delivered.
+- **S1 — no-auto-send invariant scoped honestly** (`src/support_watch/drafts.rs`, `src/io/web_server/mod.rs`): the module doc and `/support` handler comment no longer imply "no code path sends without John's tap" system-wide. The guarantee covers the automated watcher/draft/UI paths; a model session invoking `mcp__mail__send_message` directly is only warn-gated (same posture as the built-in `send_email`) — documented as such.
+- **Verification**: full lib suite **419 passed, 0 failed, 4 ignored** across 2 consecutive runs (was 414; +5 new tests). No new warnings.
+- **Deferred nits** (reviewer's B4/B5, not must-fix): numeric message ids still dropped; corrupt state.json re-drafts recent mail. Noted for a follow-up.
+
+---
+
 ### Added (task 260.1 DONE — Ranger 1, SYSADMIN-01 mock end-to-end verification)
 
 - **Mock integration test** (`support_watch::tests::mock_end_to_end_support_loop`): stubbed `mcp__mail__check_inbox` delivers a fake inbound message → `poll_new_mail()` returns it, `WatchState` enters BURST with 1 unhandled → `draft_reply` (sub-agent dispatch stubbed via `HELIX_SUBAGENT_TEST_STUB`, no API key) stages a Pending draft → the new `try_execute` call log proves the send tool was **not** invoked before approval → `approve_draft` + `send_draft` fire `mcp__mail__send_message` **exactly once** with the approved body to the customer.
