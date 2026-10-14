@@ -2098,6 +2098,67 @@ fn handle_slash_command(cmd: &str) -> String {
                 _ => "Usage: /persona [status|approve [role]|discard [role]|draft [role]]".to_string(),
             }
         }
+        "support" => {
+            // /support [drafts|approve <id>|send <id>|discard <id>]
+            // Task 257 (SYSADMIN-01): draft-for-review. Approve and send are
+            // deliberately TWO steps — sending email is irreversible, and
+            // nothing sends without John's explicit tap (see drafts.rs).
+            let sub = parts.get(1).copied().unwrap_or("drafts").to_lowercase();
+            match sub.as_str() {
+                "drafts" | "list" | "status" => {
+                    let drafts = crate::support_watch::drafts::list_drafts();
+                    if drafts.is_empty() {
+                        "No support drafts. (Drafts appear here when the watcher flags new support@ mail.)".to_string()
+                    } else {
+                        let mut lines = vec![format!(
+                            "Support drafts ({}):",
+                            drafts.len()
+                        )];
+                        for d in drafts {
+                            lines.push(format!(
+                                "\n[{}] {:?} — to: {} | subj: {}",
+                                d.id, d.status, d.to, d.subject
+                            ));
+                            if !d.playbook_refs.is_empty() {
+                                lines.push(format!("  playbook: {}", d.playbook_refs.join(", ")));
+                            }
+                            lines.push(format!("  in reply to: {}", d.in_reply_to));
+                            lines.push(format!("  ── body ──\n{}", d.body));
+                        }
+                        lines.push(
+                            "\nReview a draft above, then /support approve <id> and /support send <id> (two separate taps)."
+                                .to_string(),
+                        );
+                        lines.join("\n")
+                    }
+                }
+                "approve" => match parts.get(2) {
+                    Some(id) => match crate::support_watch::drafts::approve_draft(id) {
+                        Ok(d) => format!(
+                            "Draft '{}' approved. It has NOT been sent — /support send {} to send it.",
+                            d.id, d.id
+                        ),
+                        Err(e) => e,
+                    },
+                    None => "Usage: /support approve <id>".to_string(),
+                },
+                "send" => match parts.get(2) {
+                    Some(id) => match crate::support_watch::drafts::send_draft(id) {
+                        Ok(d) => format!("Draft '{}' sent to {}.", d.id, d.to),
+                        Err(e) => e,
+                    },
+                    None => "Usage: /support send <id>  (only approved drafts send)".to_string(),
+                },
+                "discard" => match parts.get(2) {
+                    Some(id) => match crate::support_watch::drafts::discard_draft(id) {
+                        Ok(d) => format!("Draft '{}' discarded.", d.id),
+                        Err(e) => e,
+                    },
+                    None => "Usage: /support discard <id>".to_string(),
+                },
+                _ => "Usage: /support [drafts|approve <id>|send <id>|discard <id>]".to_string(),
+            }
+        }
         "help" => format!(
             "Slash commands:\n\
              /status              — system health\n\
@@ -2114,6 +2175,10 @@ fn handle_slash_command(cmd: &str) -> String {
              /persona approve [r] — apply a pending persona draft\n\
              /persona discard [r] — discard a pending persona draft\n\
              /persona draft [r]   — draft a persona now (self-authoring)\n\
+             /support drafts      — list pending support@ reply drafts\n\
+             /support approve <id> — approve a draft (does NOT send)\n\
+             /support send <id>   — send an approved draft\n\
+             /support discard <id> — discard a draft\n\
              /help                — this message"
         ),
         other => format!("Unknown command '/{}'  — type /help for a list", other),
@@ -2793,5 +2858,79 @@ mod tests {
         assert!(out.is_some());
         assert!(!dirty);
         assert!(inflight.lock().unwrap().is_empty());
+    }
+
+    // ── /support commands (task 257, SYSADMIN-01) ─────────────────────────
+
+    fn support_test_env(name: &str) -> std::sync::MutexGuard<'static, ()> {
+        let guard = crate::tools::subagent_tool::test_env_lock();
+        let dir = std::env::temp_dir().join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        crate::support_watch::override_runtime_dir_for_tests(dir);
+        crate::mcp_client::clear_test_overrides();
+        guard
+    }
+
+    fn stage_one(body: &str) -> crate::support_watch::drafts::SupportDraft {
+        let msg = crate::support_watch::IncomingMail {
+            id: "m-cmd-1".into(),
+            from: "customer@example.com".into(),
+            subject: "help".into(),
+            snippet: "x".into(),
+        };
+        crate::support_watch::drafts::stage_draft(&msg, body, vec![]).unwrap()
+    }
+
+    #[test]
+    fn support_drafts_lists_staged() {
+        let _g = support_test_env("helix-support-cmd-list");
+        stage_one("Try rebooting.");
+        let out = handle_slash_command("/support drafts");
+        assert!(out.contains("Support drafts (1)"), "unexpected: {out}");
+        assert!(out.contains("Try rebooting."), "full body must be visible: {out}");
+    }
+
+    #[test]
+    fn support_approve_then_send_flow() {
+        let _g = support_test_env("helix-support-cmd-flow");
+        crate::mcp_client::override_tool_definitions_for_tests(vec![serde_json::json!(
+            {"type":"function","function":{"name":"mcp__mail__send_message","description":"send","parameters":{}}}
+        )]);
+        crate::mcp_client::stub_try_execute_for_tests("mcp__mail__send_message", "queued");
+        let d = stage_one("Draft body here.");
+        // Approve does NOT send:
+        let out = handle_slash_command(&format!("/support approve {}", d.id));
+        assert!(out.contains("approved") && out.contains("NOT been sent"), "unexpected: {out}");
+        // Send works only after approval:
+        let out = handle_slash_command(&format!("/support send {}", d.id));
+        assert!(out.contains("sent to"), "unexpected: {out}");
+    }
+
+    #[test]
+    fn support_send_without_approve_refused() {
+        let _g = support_test_env("helix-support-cmd-noauto");
+        let d = stage_one("Not yet reviewed.");
+        let out = handle_slash_command(&format!("/support send {}", d.id));
+        assert!(out.contains("not approved"), "unapproved send must be refused: {out}");
+    }
+
+    #[test]
+    fn support_discard_and_unknown_ids() {
+        let _g = support_test_env("helix-support-cmd-discard");
+        let d = stage_one("Discard me.");
+        let out = handle_slash_command(&format!("/support discard {}", d.id));
+        assert!(out.contains("discarded"), "unexpected: {out}");
+        let out = handle_slash_command("/support approve nope-nope");
+        assert!(out.contains("unknown draft"), "unexpected: {out}");
+        let out = handle_slash_command("/support bogus");
+        assert!(out.contains("Usage: /support"), "unexpected: {out}");
+    }
+
+    #[test]
+    fn support_help_lists_commands() {
+        let _g = support_test_env("helix-support-cmd-help");
+        let out = handle_slash_command("/help");
+        assert!(out.contains("/support drafts"), "unexpected: {out}");
+        assert!(out.contains("/support send <id>"), "unexpected: {out}");
     }
 }

@@ -6,7 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-### Added (task 256 DONE — Ranger 1, SYSADMIN-01 adaptive poll loop)
+### Added (task 257 DONE — Ranger 1, SYSADMIN-01 draft-for-review)
+
+- **Pending draft store** (`src/support_watch/drafts.rs`): JSON drafts at `<runtime>/support_drafts/` with strict lifecycle (Pending→Approved→Sent, or →Discarded); draft ids sanitized against path traversal; staging marks the message handled in the watch state.
+- **Hard no-auto-send invariant** (enforced by construction + code review): `send_draft` is the only production call site that invokes the mail send tool, and it refuses anything not explicitly Approved. Approve and send are two separate steps; no approve+send shortcut; no auto-send path exists anywhere.
+- **`/support` chat commands** (mirroring `/persona`): `drafts` (full body shown — no blind approvals), `approve <id>`, `send <id>`, `discard <id>`; `/help` updated.
+- **Verification**: 7 draft-store unit tests (lifecycle, discard, unapproved/unknown-id/traversal refusals, double-approve guard, actionable-first ordering) + 5 command-handler tests green; full lib suite **399 passed, 0 failed**.
+
+---
 
 - **Adaptive support-mail watcher** (`src/support_watch/`): persisted state machine — 15m checks in business hours (08:00–18:00 America/New_York, adjustable via `[support]` in config.toml), 30m overnight, 1m burst on new unhandled mail until 2 consecutive clean checks. Driven by one `every 1m` routine (`support-mail-watch`); in-process only, no LLM spawned for polling (John's call). State at `<runtime>/support_watch/state.json` (survives restarts, added to `scripts/backup-state.sh`); new default routines now merge into existing routines.json files on load so the watcher reaches older deployments.
 - **Defensive mail-tool resolution**: `mcp__mail__*` names resolved at runtime from advertised tools (mail-mcp's surface is unknown in this sandbox — no hardcoded guesses); inbound output parsed defensively and stripped of the task-235 `<untrusted-data>` wrapper before parsing (injection tagging verified at the new call sites).

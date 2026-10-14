@@ -20,6 +20,7 @@
 
 pub mod config;
 pub mod state;
+pub mod drafts;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -51,12 +52,26 @@ const BURST_EXIT_STREAK: u32 = 2;
 static RUNTIME_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// Set at startup from main.rs (next to `persona::set_persona_dir`).
-/// Falls back to the process CWD (unit tests, ad-hoc runs).
+/// First call wins (production); falls back to the process CWD.
 pub fn set_runtime_dir(dir: PathBuf) {
     let _ = RUNTIME_DIR.set(dir);
 }
 
+/// Test seam: override the runtime dir. Tests that use it must hold
+/// `test_env_lock()` — the override is process-global.
+#[cfg(test)]
+static TEST_RUNTIME_DIR: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+#[cfg(test)]
+pub fn override_runtime_dir_for_tests(dir: PathBuf) {
+    *TEST_RUNTIME_DIR.lock().unwrap() = Some(dir);
+}
+
 fn runtime_dir() -> PathBuf {
+    #[cfg(test)]
+    if let Some(d) = TEST_RUNTIME_DIR.lock().unwrap().clone() {
+        return d;
+    }
     RUNTIME_DIR
         .get()
         .cloned()
@@ -565,11 +580,11 @@ mod tests {
         // including tools::execute + the task-235 untrusted tagging.
         let _lock = crate::tools::subagent_tool::test_env_lock();
 
-        // Isolated runtime dir (set-once per test process; only this test
-        // sets it, so no other test may call set_runtime_dir).
+        // Isolated runtime dir (test override; the test_env_lock above
+        // serializes with the other override users).
         let dir = std::env::temp_dir().join("helix-support-watch-test-tick");
         let _ = std::fs::remove_dir_all(&dir);
-        set_runtime_dir(dir.clone());
+        override_runtime_dir_for_tests(dir.clone());
 
         crate::mcp_client::clear_test_overrides();
         crate::mcp_client::override_tool_definitions_for_tests(vec![
