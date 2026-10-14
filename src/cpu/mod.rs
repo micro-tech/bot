@@ -449,11 +449,22 @@ where
 
     /// Task 256 (SYSADMIN-01): one support@ poll tick. Runs the adaptive
     /// state machine in-process — no LLM is spawned for polling (John's
-    /// call). New mail is handed to the draft flow's sink (task 257/258);
-    /// until that's wired, LogOnlySink records it without losing it: the
-    /// ids stay in `unhandled_ids` so the draft flow picks them up later.
+    /// call). Task 258: each fresh message is handed to the Gemini-pinned
+    /// drafter; a failed draft stays unhandled (visible on the status line)
+    /// and is retried on the next burst.
     async fn routine_support_mail_watch(&mut self) {
-        crate::support_watch::tick(&crate::support_watch::LogOnlySink);
+        for msg in crate::support_watch::poll_new_mail() {
+            match crate::support_watch::drafter::draft_reply(&msg).await {
+                Ok(d) => log_to_file(&format!(
+                    "support: staged draft {} for message {} (from {})",
+                    d.id, msg.id, msg.from
+                )),
+                Err(e) => log_to_file(&format!(
+                    "support: draft failed for message {}: {} (stays unhandled)",
+                    msg.id, e
+                )),
+            }
+        }
     }
 
     /// Append a section to the nightly report

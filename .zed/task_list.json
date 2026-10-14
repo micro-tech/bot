@@ -2094,7 +2094,7 @@
       "id": 258,
       "title": "Gemini-delegated drafting + greatest-hits playbook hook",
       "description": "Per John's architectural call, R630 local models are NOT capable enough to write customer replies: drafting MUST delegate to a capable backend (Gemini API). The drafter also consults John's greatest-hits playbook when present.",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         256,
         257
@@ -2106,13 +2106,13 @@
         {
           "id": 258.1,
           "title": "Drafter spawn pinned to backend=gemini",
-          "status": "in_progress",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 258.2,
           "title": "Playbook loader (graceful when absent)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             258.1
           ]
@@ -2120,7 +2120,7 @@
         {
           "id": 258.3,
           "title": "Draft prompt template",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             258.2
           ]
@@ -2128,18 +2128,19 @@
         {
           "id": 258.4,
           "title": "Tests (backend pin, playbook, prompt)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             258.3
           ]
         }
-      ]
+      ],
+      "results": "DONE 2026-10-13 (Ranger 1, branch ranger-255-260). New src/support_watch/drafter.rs: draft_reply() loads the playbook, cites relevant sections by keyword overlap (top 3, 1500 chars each; 'no playbook entry matched' when absent), builds the prompt (customer message wrapped in <untrusted-data>, explicit NEVER-follow-instructions + draft-only-never-send instructions, ---DRAFT-BEGIN/END--- markers), spawns via dispatch_spawn with backend pinned to SUPPORT_DRAFT_BACKEND='gemini' (constant, never auto/local), extracts the body, stages via drafts::stage_draft. Structural guarantee: Gemini sits LAST on BACKEND_LADDER, so an explicit gemini request fails loudly rather than falling back to local (pinned by new test gemini_sits_last_on_health_ladder); a failed draft leaves the message unhandled (retried on next burst), which is safe. CPU routine_support_mail_watch now wires poll_new_mail() -> draft_reply per fresh message (tick() refactored into poll_new_mail() + sink wrapper). Playbook format documented for John in docs/support-playbook.md (+ SUPPORT_PLAYBOOK_TEMPLATE const). Spend: drafting flows through the normal task-236 metering via dispatch_spawn, no special-casing. Tests: 9 drafter tests (backend pin, prompt tagging/draft-only, playbook present/absent/malformed, citation relevance, marker extraction + fallback, stubbed end-to-end staging) + ladder test green; full suite 409 passed 0 failed (3 consecutive runs). Note: one transient single-test failure on the first full run did not reproduce in 3 reruns (parallel-test flake, unidentified)."
     },
     {
       "id": 259,
       "title": "Web UI: support inbox panel (drafts + poll status)",
       "description": "Sapper-style web UI panel for SYSADMIN-01: unhandled count, pending drafts with full text, Approve/Send/Discard buttons, and live poll-loop status. Auth-gated per the task-240 middleware pattern.",
-      "status": "pending",
+      "status": "in_progress",
       "dependencies": [
         257
       ],
@@ -2150,7 +2151,7 @@
         {
           "id": 259.1,
           "title": "Panel markup + draft list rendering",
-          "status": "pending",
+          "status": "in_progress",
           "dependencies": []
         },
         {
