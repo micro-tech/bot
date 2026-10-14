@@ -40,6 +40,14 @@ per piece (local_ollama: fast and free; lan_ollama: overflow; gemini: heavy reas
 API budget). Do the orchestration yourself; do not do the pieces inline. Do not ask clarifying \
 questions when the request is actionable -- act, then report a concise summary when sub-agents finish.";
 
+/// Sub-agent job block (task 233): the standing orders every worker gets.
+/// Extracted from run_subagent()'s old inline format string so the persona
+/// module can compose it after the persona block. Byte-identical to the
+/// pre-233 text — do not "improve" the wording without checking the
+/// byte-identical fallback test in persona.rs.
+pub const SUBAGENT_JOB_PROMPT: &str = "Complete the task with your tools. Do not ask clarifying questions — act. \
+Finish with a concise summary of what you did.";
+
 static COMMANDER_ENABLED_OVERRIDE: OnceLock<bool> = OnceLock::new();
 
 /// Set at startup from `[helix.commander] enabled` in config.toml (main.rs).
@@ -50,15 +58,15 @@ pub fn set_commander_enabled(enabled: bool) {
 /// Build the system message for chat paths, or None when commander mode is off.
 /// Chat loops prepend this to the message list (Ollama) or map it to the
 /// backend's native system-instruction field (Gemini).
+/// Task 233: the text is composed by the persona module (persona block +
+/// job block); with no agent.md it is byte-identical to COMMANDER_SYSTEM_PROMPT.
 pub fn commander_system_message() -> Option<Value> {
-    if commander_enabled() {
-        Some(serde_json::json!({
+    crate::persona::composed_commander_text().map(|text| {
+        serde_json::json!({
             "role": "system",
-            "content": COMMANDER_SYSTEM_PROMPT
-        }))
-    } else {
-        None
-    }
+            "content": text
+        })
+    })
 }
 
 /// Whether the commander prompt block is active. Default true (task 214
@@ -96,7 +104,7 @@ pub fn set_ollama_endpoints(local: Option<OllamaEndpoint>, lan: Option<OllamaEnd
     let _ = ENDPOINTS.set(BackendEndpoints { local, lan });
 }
 
-fn resolve_ollama_endpoint(backend: &LLMBackend) -> Result<OllamaEndpoint, String> {
+pub(crate) fn resolve_ollama_endpoint(backend: &LLMBackend) -> Result<OllamaEndpoint, String> {
     if let Some(reg) = ENDPOINTS.get() {
         let hit = match backend {
             LLMBackend::LocalOllama => reg.local.as_ref(),
@@ -175,7 +183,7 @@ fn resolve_backend_auto(task: &str) -> LLMBackend {
     }
 }
 
-fn role_prefix(role_hint: &str) -> String {
+pub(crate) fn role_prefix(role_hint: &str) -> String {
     let hint = role_hint.trim();
     if hint.is_empty() {
         return String::new();
@@ -289,6 +297,18 @@ fn test_stub_report(spec: &SpawnSpec) -> Option<String> {
     }
 }
 
+/// Short backend label for the sub-agent registry / web UI. The commander
+/// report keeps the historical `{:?}`-lowercased form; the UI gets this.
+fn backend_short_name(backend: &LLMBackend) -> &'static str {
+    match backend {
+        LLMBackend::LocalOllama => "local",
+        LLMBackend::LanOllama => "lan",
+        LLMBackend::Gemini => "gemini",
+        LLMBackend::Grok => "grok",
+        LLMBackend::Fallback => "fallback",
+    }
+}
+
 /// Backend ladder, fastest/cheapest first. Health-aware fallback walks DOWN
 /// this list from the requested backend (task 217.3). Grok is parked at the
 /// bottom as not-implemented — the walker never selects it.
@@ -346,6 +366,20 @@ pub async fn dispatch_spawn(spec: &SpawnSpec) -> String {
         return refused;
     }
     if let Some(stub) = test_stub_report(spec) {
+        // The stub path still runs the registry lifecycle: integration tests
+        // (and the UI) observe spawn→finish without needing a live LLM.
+        let task_id = format!("subagent-{}", uuid::Uuid::new_v4().simple());
+        let reg = crate::agents::subagent_registry::SubagentRecord::new(
+            task_id.clone(),
+            "test_stub",
+            &spec.role_hint,
+            &spec.task,
+        );
+        crate::agents::subagent_registry::register(reg);
+        crate::agents::subagent_registry::finish(
+            &task_id,
+            crate::agents::subagent_registry::SubagentStatus::Done,
+        );
         return stub;
     }
     let depth = SPAWN_DEPTH.try_with(|c| c.get()).unwrap_or(0);
@@ -363,6 +397,16 @@ pub async fn dispatch_spawn(spec: &SpawnSpec) -> String {
 
     let task_id = format!("subagent-{}", uuid::Uuid::new_v4().simple());
     let backend_name = format!("{:?}", backend).to_lowercase();
+    // Task 230: register the moment the id exists, so the UI can show a live
+    // sub-agent instead of only learning about it after it finishes.
+    crate::agents::subagent_registry::register(
+        crate::agents::subagent_registry::SubagentRecord::new(
+            task_id.clone(),
+            backend_short_name(&backend),
+            &spec.role_hint,
+            &spec.task,
+        ),
+    );
     log::info!(
         "spawn_subagent {} -> backend={} role='{}' timeout={}s",
         task_id,
@@ -383,24 +427,65 @@ pub async fn dispatch_spawn(spec: &SpawnSpec) -> String {
         .map(|n| format!("note: {}\n", n))
         .unwrap_or_default();
     match tokio::time::timeout(timeout, run).await {
-        Ok(Ok(final_text)) => format!(
-            "Sub-agent complete\ntask_id: {}\nbackend: {}\nrole: {}\n{}final:\n{}",
-            task_id,
-            backend_name,
-            role_hint_or_any(&spec.role_hint),
-            fb_line,
-            final_text
-        ),
-        Ok(Err(err)) => format!(
-            "Sub-agent failed\ntask_id: {}\nbackend: {}\nerror: {}",
-            task_id, backend_name, err
-        ),
-        Err(_) => format!(
-            "Sub-agent timed out after {}s and was cancelled.\n\
+        Ok(Ok(final_text)) => {
+            crate::agents::subagent_registry::finish(
+                &task_id,
+                crate::agents::subagent_registry::SubagentStatus::Done,
+            );
+            format!(
+                "Sub-agent complete\ntask_id: {}\nbackend: {}\nrole: {}\n{}final:\n{}",
+                task_id,
+                backend_name,
+                role_hint_or_any(&spec.role_hint),
+                fb_line,
+                final_text
+            )
+        }
+        Ok(Err(err)) => {
+            crate::agents::subagent_registry::finish(
+                &task_id,
+                crate::agents::subagent_registry::SubagentStatus::Failed,
+            );
+            // Task 233: revision loop — a failed worker may teach its role
+            // file a lesson. Best-effort, .pending only, rate-limited; a
+            // refused proposal must never break the failure report.
+            if crate::persona::self_author_enabled() && !spec.role_hint.trim().is_empty() {
+                let lesson = format!(
+                    "task failed on backend {}: {}",
+                    backend_name,
+                    err.chars().take(200).collect::<String>()
+                );
+                if let Err(e) = crate::persona::propose_lesson(&spec.role_hint, &lesson) {
+                    log::debug!("persona: lesson proposal skipped: {}", e);
+                }
+            }
+            format!(
+                "Sub-agent failed\ntask_id: {}\nbackend: {}\nerror: {}",
+                task_id, backend_name, err
+            )
+        }
+        Err(_) => {
+            crate::agents::subagent_registry::finish(
+                &task_id,
+                crate::agents::subagent_registry::SubagentStatus::TimedOut,
+            );
+            // Task 233: same lesson trigger for timeouts.
+            if crate::persona::self_author_enabled() && !spec.role_hint.trim().is_empty() {
+                let lesson = format!(
+                    "task timed out after {}s on backend {}; consider smaller tasks or larger timeouts",
+                    spec.timeout_secs, backend_name
+                );
+                if let Err(e) = crate::persona::propose_lesson(&spec.role_hint, &lesson) {
+                    log::debug!("persona: lesson proposal skipped: {}", e);
+                }
+            }
+            format!(
+                "Sub-agent timed out after {}s and was cancelled.\n\
              task_id: {}\nbackend: {}\n\
              The task may have been too big — retry with a smaller task or a larger timeout_secs.",
-            spec.timeout_secs, task_id, backend_name
-        ),
+                spec.timeout_secs, task_id, backend_name
+            )
+        }
     }
 }
 
@@ -458,28 +543,39 @@ async fn run_subagent(
     backend: &LLMBackend,
     role_hint: &str,
 ) -> Result<String, String> {
-    let prompt = format!(
-        "You are a sub-agent ({}). Your commander's orders:\n\n{}\n\n{}\
-         Complete the task with your tools. Do not ask clarifying questions — act. \
-         Finish with a concise summary of what you did.",
-        task_id,
-        role_prefix(role_hint),
-        task,
-    );
+    // Task 233: pre-spawn draft — when the role has no persona file and
+    // self-authoring is on, the commander drafts one now (lands as .pending,
+    // never live). Best-effort: a failed draft must not block the spawn.
+    if !role_hint.trim().is_empty() {
+        if let Err(e) = crate::persona::ensure_persona_file(Some(role_hint)).await {
+            log::debug!("persona: pre-spawn draft skipped for role '{}': {}", role_hint, e);
+        }
+    }
+    let composed = crate::persona::compose_subagent_prompt(task_id, task, role_hint);
+    // Task 233: the role's frontmatter allowlist filters the toolset
+    // (spawn_subagent is always excluded — the depth guard is absolute).
+    let tools = crate::persona::subagent_tool_definitions(role_hint);
 
     match backend {
         LLMBackend::LocalOllama | LLMBackend::LanOllama => {
             let ep = resolve_ollama_endpoint(backend)?;
             let client = crate::io::ollama::llm_impl::OllamaLlmImpl::new(ep.url.clone(), ep.model.clone());
-            // Depth guard by construction: the sub-agent never sees spawn_subagent.
-            let tools = crate::tools::tool_definitions_excluding(&["spawn_subagent"]);
-            let messages = vec![serde_json::json!({"role": "user", "content": prompt})];
+            // Task 233: sub-agents get a REAL system message when a persona
+            // file exists; otherwise the legacy single user message
+            // (byte-identical to pre-233).
+            let messages: Vec<serde_json::Value> = match composed.system {
+                Some(sys) => vec![
+                    serde_json::json!({"role": "system", "content": sys}),
+                    serde_json::json!({"role": "user", "content": composed.user}),
+                ],
+                None => vec![serde_json::json!({"role": "user", "content": composed.user})],
+            };
             client
                 .chat_with_tools(&messages, tools)
                 .await
                 .map_err(|e| format!("Ollama sub-agent on {:?} failed: {}", backend, e))
         }
-        LLMBackend::Gemini => crate::io::llm_gemini::call_gemini_direct(&prompt)
+        LLMBackend::Gemini => crate::io::llm_gemini::call_gemini_direct(&composed.user, composed.system.as_deref())
             .await
             .map_err(|e| format!("Gemini sub-agent failed: {}", e)),
         LLMBackend::Grok => Err("Grok backend is not implemented yet.".to_string()),
@@ -677,6 +773,8 @@ mod tests {
         }
         crate::router::spend::reset_for_tests();
         crate::router::spend::set_daily_api_cap_usd(0.01);
+        // Task 236: cap blocks only in block mode (default is warn+continue).
+        crate::router::spend::set_cap_block_on_exceed(true);
         crate::router::spend::note_api_call(&LLMBackend::Gemini); // $0.02 > $0.01
         let err = pick_healthy_backend(LLMBackend::LocalOllama)
             .await
@@ -701,6 +799,21 @@ mod tests {
     }
 
     #[test]
+    fn gemini_sits_last_on_health_ladder() {
+        // Task 258: the support drafter pins backend="gemini". dispatch_spawn
+        // walks BACKEND_LADDER *downward* from the requested backend, so an
+        // explicit Gemini request either runs on Gemini or fails loudly — it
+        // can never silently fall back to a local model. Pin that property:
+        // Gemini must stay last on the ladder.
+        assert_eq!(
+            BACKEND_LADDER.last(),
+            Some(&LLMBackend::Gemini),
+            "Gemini must remain last on the health ladder (task 258 invariant)"
+        );
+        assert!(!BACKEND_LADDER.contains(&LLMBackend::Grok));
+    }
+
+    #[test]
     fn endpoint_env_fallback_works() {
         let _tl = super::test_env_lock();
         // SAFETY: single-threaded test env manipulation.
@@ -716,5 +829,63 @@ mod tests {
         }
         assert_eq!(ep.url, "http://test:11434");
         assert_eq!(ep.model, "test-model");
+    }
+
+    #[tokio::test]
+    async fn stubbed_dispatch_emits_spawned_then_finished_bus_events() {
+        let _tl = super::test_env_lock();
+        // GIVEN a global bus with a web_interface subscriber and the test stub armed:
+        let bus = std::sync::Arc::new(crate::bus::Bus::new());
+        let rx = bus.subscribe("web_interface");
+        let _ = crate::bus::set_global_bus(bus.clone());
+        crate::agents::subagent_registry::reset_for_tests();
+        // SAFETY: single-threaded test env manipulation; stub only affects this process.
+        unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
+
+        // WHEN dispatch_spawn runs through the stub path,
+        let spec = SpawnSpec {
+            task: "test the event order".to_string(),
+            backend: "local_ollama".to_string(),
+            role_hint: "tester".to_string(),
+            timeout_secs: 30,
+        };
+        let out = dispatch_spawn(&spec).await;
+        unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
+
+        // THEN the report is the stub,
+        assert!(out.contains("subagent-test-stub"), "got: {}", out);
+
+        // AND spawned+finished subagent_events arrived in order on the bus.
+        // (recv_timeout: publish hands off to the bus router thread, so
+        // delivery is not synchronous with the publish call.)
+        let mut events = Vec::new();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while events.len() < 2 && std::time::Instant::now() < deadline {
+            match rx.recv_timeout(std::time::Duration::from_millis(200)) {
+                Ok(msg) => {
+                    let v: serde_json::Value =
+                        serde_json::from_str(&msg.data).unwrap_or_default();
+                    if v["type"] == "subagent_event" {
+                        events.push(v["event"].as_str().unwrap_or("").to_string());
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+        assert_eq!(
+            events,
+            vec!["spawned".to_string(), "finished".to_string()],
+            "expected spawned->finished in order, got: {:?}",
+            events
+        );
+
+        // AND the registry shows the finished entry (prune keeps it):
+        let snap = crate::agents::subagent_registry::snapshot();
+        assert!(
+            snap.iter().any(|r| r.backend == "test_stub"
+                && r.status == crate::agents::subagent_registry::SubagentStatus::Done),
+            "stub run should leave a Done record"
+        );
+        crate::agents::subagent_registry::reset_for_tests();
     }
 }

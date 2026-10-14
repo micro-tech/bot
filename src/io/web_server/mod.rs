@@ -9,7 +9,7 @@ use axum::{
     },
     http::{HeaderMap, StatusCode},
     middleware,
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Json},
     routing::{get, post},
 };
 use axum_server::tls_rustls::RustlsConfig;
@@ -17,12 +17,14 @@ use futures_util::{SinkExt, StreamExt};
 use log::info;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 // use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
 use tokio::sync::broadcast;
 use tokio::sync::RwLock;
@@ -51,6 +53,12 @@ struct AppState {
     /// spawned in main.rs — the WS routines API and the scheduler operate on
     /// the same registry, so toggles take effect without a restart.
     routines: Arc<RwLock<crate::cron::registry::RoutineRegistry>>,
+    /// In-flight chat requests (task 230): correlation_id -> (backend_id,
+    /// sent_at_ms). Inserted when a chat_request leaves the web UI, removed
+    /// when the matching llm_output/ollama_response crosses the bridge (or by
+    /// the 5-minute TTL sweep if the backend never answers). Drives the
+    /// per-backend working/idle indicator in the agent_status snapshot.
+    inflight: Arc<Mutex<HashMap<u64, (String, u64)>>>,
 }
 
 // ── Config structs ────────────────────────────────────────────────────────────
@@ -336,7 +344,7 @@ pub async fn start_web_server(
         .route("/okf/reload/force", post(okf_api::okf_force_reload))
         .route("/okf/manifest", post(okf_api::okf_push_manifest))
         .route_layer(middleware::from_fn_with_state(
-            token_state,
+            token_state.clone(),
             require_web_token,
         ))
         .with_state(okf_state.clone());
@@ -370,18 +378,80 @@ pub async fn start_web_server(
         logging: parsed_cfg.logging.clone(),
         auth_token,
         routines,
+        inflight: Arc::new(Mutex::new(HashMap::new())),
     };
 
+    // Task 230: sub-agent registry → WS status re-broadcast. Installed once
+    // here (not per-connection): every registry change (spawn/finish) pushes
+    // a fresh agent_status snapshot to all WS clients via the broadcast
+    // channel. Read-only status traffic, same auth model as backends/tool_call.
+    {
+        let listener_state = state.clone();
+        crate::agents::subagent_registry::set_status_listener(Arc::new(move || {
+            let _ = listener_state
+                .msg_tx
+                .send(agent_status_snapshot(&listener_state));
+        }));
+    }
+
+    // Task 230: reap in-flight entries whose backend never answered (5-minute
+    // TTL), so a lost response can't wedge a backend on "working" forever.
+    {
+        let sweep_state = state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                let cutoff = get_timestamp().saturating_sub(5 * 60 * 1000);
+                let reaped = match sweep_state.inflight.lock() {
+                    Ok(mut g) => {
+                        let before = g.len();
+                        g.retain(|_, (_, sent_at)| *sent_at >= cutoff);
+                        before - g.len()
+                    }
+                    Err(_) => 0,
+                };
+                if reaped > 0 {
+                    log::warn!("agent_status: reaped {} stale in-flight entries", reaped);
+                    let _ = sweep_state
+                        .msg_tx
+                        .send(agent_status_snapshot(&sweep_state));
+                }
+            }
+        });
+    }
+
     // Build Axum router for main app
+    // Task 240: mutating / auth-gated endpoints live on a protected sub-router
+    // with require_web_token middleware, instead of inline http_token_ok
+    // checks in each handler (eliminates the forgotten-check bug class).
+    let protected = Router::new()
+        .route("/logs/chat/clear", post(clear_chat_log))
+        .route("/logs/error/clear", post(clear_error_log))
+        .route("/ops/update", post(ops_update))
+        .route("/ops/update/status", get(ops_update_status))
+        .route("/ops/restart", post(ops_restart))
+        .route("/ops/usage", get(ops_usage))
+        // Task 259 (SYSADMIN-01): mutating support endpoints, auth-gated.
+        .route("/support/approve", post(support_approve))
+        .route("/support/send", post(support_send))
+        .route("/support/discard", post(support_discard))
+        .route_layer(middleware::from_fn_with_state(
+            token_state.clone(),
+            require_web_token,
+        ))
+        .with_state(state.clone());
     let main_app = Router::new()
         .route("/", get(serve_index))
         .route("/ws", get(ws_handler))
         .route("/logs/chat", get(serve_chat_log))
-        .route("/logs/chat/clear", post(clear_chat_log))
         .route("/logs/error", get(serve_error_log))
-        .route("/logs/error/clear", post(clear_error_log))
         .route("/logs/bus", get(serve_bus_log))
         .route("/logs/hartbeat", get(serve_hartbeat_log))
+        // Task 259 (SYSADMIN-01): read-only support endpoints.
+        .route("/support/status", get(support_status))
+        .route("/support/drafts", get(support_drafts))
+        .merge(protected)
         .with_state(state);
 
     // Merge OKF routes (they have their own state) with main app.
@@ -638,7 +708,179 @@ fn get_timestamp() -> u64 {
         .as_millis() as u64
 }
 
-// ── WebSocket handler ─────────────────────────────────────────────────────────
+// ── agent_status snapshot (task 230) ──────────────────────────────────────────
+// The web UI left panel renders sub-agent rows and per-backend working/idle
+// indicators from this. Sent on every WS connect and re-broadcast on every
+// registry change (spawn/finish) and in-flight change (request/response).
+// Clients re-render from the snapshot wholesale — no incremental sync state.
+fn agent_status_snapshot(state: &AppState) -> String {
+    build_agent_status(&state.backends_json, &state.inflight)
+}
+
+// ── agent_status builder (task 230) ───────────────────────────────────────────
+// Split from agent_status_snapshot so the bridge thread (which only holds the
+// pieces, not AppState) can re-broadcast without cloning the whole state.
+fn build_agent_status(
+    backends_json: &str,
+    inflight: &Arc<Mutex<HashMap<u64, (String, u64)>>>,
+) -> String {
+    let backends: Vec<Value> = serde_json::from_str(backends_json).unwrap_or_default();
+    let working_backends: Vec<String> = inflight
+        .lock()
+        .map(|g| g.values().map(|(b, _)| b.clone()).collect())
+        .unwrap_or_default();
+    let backends_out: Vec<Value> = backends
+        .iter()
+        .map(|b| {
+            let id = b["id"].as_str().unwrap_or("");
+            json!({
+                "id": id,
+                "activity": if working_backends.iter().any(|w| w == id) { "working" } else { "idle" },
+            })
+        })
+        .collect();
+    let subagents: Vec<Value> = crate::agents::subagent_registry::snapshot()
+        .iter()
+        .map(crate::agents::subagent_registry::record_to_json)
+        .collect();
+    json!({
+        "type": "agent_status",
+        "backends": backends_out,
+        "subagents": subagents,
+    })
+    .to_string()
+}
+
+// ── Bus → WS message translation (task 230) ────────────────────────────────
+// Extracted from the bridge thread below so unit tests can drive it
+// directly. Returns (payload, agent_status_dirty): payload is None for
+// messages that produce no UI output; dirty is true when an in-flight
+// backend entry was retired and the caller should re-broadcast
+// agent_status so the working indicator flips promptly.
+fn bridge_out_message(
+    msg: &Message,
+    inflight: &Arc<Mutex<HashMap<u64, (String, u64)>>>,
+) -> (Option<String>, bool) {
+    // Parse the inner data to check its type field reliably.
+    let inner: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
+    let msg_type = inner["type"].as_str().unwrap_or("");
+
+    // A response carrying correlation_id retires the matching in-flight
+    // entry, flipping that backend back to idle in the next snapshot.
+    let retire_inflight = || -> bool {
+        match inner["correlation_id"].as_u64() {
+            Some(cid) if cid != 0 => inflight
+                .lock()
+                .map(|mut g| g.remove(&cid).is_some())
+                .unwrap_or(false),
+            _ => false,
+        }
+    };
+    let cid = inner["correlation_id"].as_u64().unwrap_or(0);
+
+    // Ultra-defensive text extraction shared by the response arms: always
+    // end up with a plain string or give up (None).
+    fn extract_text(inner: &serde_json::Value) -> String {
+        let mut text = String::new();
+        for key in ["msg", "data", "content", "text", "response"] {
+            if let Some(s) = inner[key].as_str() {
+                text = s.to_string();
+                break;
+            } else if let Some(v) = inner.get(key) {
+                if v.is_string() {
+                    text = v.as_str().unwrap_or("").to_string();
+                    break;
+                } else if v.is_object() {
+                    // drill one level
+                    if let Some(s) = v["msg"]
+                        .as_str()
+                        .or_else(|| v["data"].as_str())
+                        .or_else(|| v["content"].as_str())
+                    {
+                        text = s.to_string();
+                        break;
+                    }
+                }
+            }
+        }
+        if text.is_empty() {
+            // last resort: if the whole inner is just a string or has a top-level value
+            if let Some(s) = inner.as_str() {
+                text = s.to_string();
+            }
+        }
+        text
+    }
+
+    match msg_type {
+        // Task 238: streaming tokens — forwarded as incremental WS messages.
+        // The UI appends `token` to the in-progress reply identified by
+        // `correlation_id`; the final `llm_output` still delivers the
+        // complete text (unchanged contract).
+        "chat_token" => {
+            let token = inner["token"].as_str().unwrap_or("");
+            if token.is_empty() {
+                return (None, false);
+            }
+            (
+                Some(
+                    json!({ "type": "chat_token", "from": msg.from, "token": token, "correlation_id": cid })
+                        .to_string(),
+                ),
+                false,
+            )
+        }
+        "llm_output" | "llm_response" => {
+            let text = extract_text(&inner);
+            if text.is_empty() {
+                return (None, false);
+            }
+            let dirty = retire_inflight();
+            (
+                Some(
+                    json!({ "type": "llm_output", "from": msg.from, "data": text, "correlation_id": cid })
+                        .to_string(),
+                ),
+                dirty,
+            )
+        }
+        "ollama_response" => {
+            let text = extract_text(&inner);
+            if text.is_empty() {
+                return (None, false);
+            }
+            let from = inner["llm"].as_str().unwrap_or(&msg.from).to_string();
+            let dirty = retire_inflight();
+            (
+                Some(
+                    json!({ "type": "ollama_response", "from": from, "data": text, "correlation_id": cid })
+                        .to_string(),
+                ),
+                dirty,
+            )
+        }
+        // Well-formed UI messages — forward as-is (including errors so they are visible)
+        "user_msg" | "config" | "manifest" | "config_status" | "manifest_status"
+        | "log" | "error" | "warning" | "tool_call" | "heartbeat_status"
+        | "heartbeat_missed" | "subagent_event" => (Some(msg.data.clone()), false),
+        _ => {
+            // Unknown — wrap so nothing is silently dropped
+            (
+                Some(
+                    json!({
+                        "type": "bus_msg",
+                        "to": msg.to,
+                        "from": msg.from,
+                        "data": msg.data,
+                        "timestamp": msg.timestamp
+                    })
+                    .to_string(),
+                ),
+                false,
+            )
+        }
+    }
+}
 
 async fn handle_ws(socket: WebSocket, state: AppState) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
@@ -679,6 +921,13 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     })
     .to_string();
     let _ = ws_sender.send(WsMessage::Text(backends_msg.into())).await;
+
+    // 3b. Send agent_status snapshot (task 230): per-backend working/idle
+    // indicators plus the live sub-agent list, so the UI is correct from
+    // the first paint without waiting for an event.
+    let _ = ws_sender
+        .send(WsMessage::Text(agent_status_snapshot(&state).into()))
+        .await;
 
     // 4. Send a test log entry to confirm the WS pipe is working
     let test_log_msg = json!({
@@ -746,78 +995,24 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     let (bridge_tx, mut bridge_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
     // Blocking thread: subscribes to the bus and forwards to the bridge
+    let inflight_bridge = state.inflight.clone();
+    let backends_bridge = state.backends_json.clone();
+    let msg_tx_bridge = state.msg_tx.clone();
     std::thread::spawn(move || {
         let rx = bus_clone.subscribe("web_interface");
         while let Ok(msg) = rx.recv() {
-            // Parse the inner data to check its type field reliably.
-            let inner: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
-            let msg_type = inner["type"].as_str().unwrap_or("");
-
-            let out = match msg_type {
-                "llm_output" | "llm_response" => {
-                    // Ultra-defensive extraction: always end up with a plain string
-                    let mut text = String::new();
-                    for key in ["msg", "data", "content", "text", "response"] {
-                        if let Some(s) = inner[key].as_str() {
-                            text = s.to_string();
-                            break;
-                        } else if let Some(v) = inner.get(key) {
-                            if v.is_string() {
-                                text = v.as_str().unwrap_or("").to_string();
-                                break;
-                            } else if v.is_object() {
-                                // drill one level
-                                if let Some(s) = v["msg"].as_str().or_else(|| v["data"].as_str()).or_else(|| v["content"].as_str()) {
-                                    text = s.to_string();
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if text.is_empty() {
-                        // last resort: if the whole inner is just a string or has a top-level value
-                        if let Some(s) = inner.as_str() {
-                            text = s.to_string();
-                        }
-                    }
-                    if text.is_empty() {
-                        continue;
-                    }
-                    json!({ "type": "llm_output", "from": msg.from, "data": text }).to_string()
+            let (out, dirty) = bridge_out_message(&msg, &inflight_bridge);
+            if dirty {
+                // A backend just answered: push a fresh agent_status so its
+                // working indicator flips back to idle without waiting for
+                // the next registry event.
+                let _ =
+                    msg_tx_bridge.send(build_agent_status(&backends_bridge, &inflight_bridge));
+            }
+            if let Some(out) = out {
+                if bridge_tx.send(out).is_err() {
+                    break; // async side dropped (WS closed)
                 }
-                "ollama_response" => {
-                    let mut text = String::new();
-                    for key in ["msg", "data", "content", "text", "response"] {
-                        if let Some(s) = inner[key].as_str() {
-                            text = s.to_string();
-                            break;
-                        }
-                    }
-                    if text.is_empty() {
-                        continue;
-                    }
-                    let from = inner["llm"].as_str().unwrap_or(&msg.from).to_string();
-                    json!({ "type": "ollama_response", "from": from, "data": text }).to_string()
-                }
-                // Well-formed UI messages — forward as-is (including errors so they are visible)
-                "user_msg" | "config" | "manifest" | "config_status" | "manifest_status"
-                | "log" | "error" | "warning" | "tool_call" | "heartbeat_status"
-                | "heartbeat_missed" => msg.data.clone(),
-                _ => {
-                    // Unknown — wrap so nothing is silently dropped
-                    json!({
-                        "type": "bus_msg",
-                        "to": msg.to,
-                        "from": msg.from,
-                        "data": msg.data,
-                        "timestamp": msg.timestamp
-                    })
-                    .to_string()
-                }
-            };
-
-            if bridge_tx.send(out).is_err() {
-                break; // async side dropped (WS closed)
             }
         }
     });
@@ -1110,7 +1305,28 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             format!("ollama_{}", llm)
                         };
 
-                        let correlation_id = get_timestamp();
+                        // Task 230: mark this backend working until its response
+                        // crosses the bridge (or the TTL sweep reaps it). The
+                        // ms-timestamp key is bumped on the unlikely collision
+                        // so in-flight keys stay unique.
+                        let backend_id = bus_dest
+                            .strip_prefix("ollama_")
+                            .unwrap_or(&bus_dest)
+                            .to_string();
+                        let mut correlation_id = get_timestamp();
+                        {
+                            // Task 239: recover from a poisoned mutex instead of
+                            // panicking the request handler.
+                            let mut guard = state
+                                .inflight
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            while guard.contains_key(&correlation_id) {
+                                correlation_id = correlation_id.wrapping_add(1);
+                            }
+                            guard.insert(correlation_id, (backend_id, get_timestamp()));
+                        }
+                        let _ = state.msg_tx.send(agent_status_snapshot(&state));
 
                         println!("[WEB] === SENDING BUS MESSAGE ===");
                         println!("[WEB]   to: {}", bus_dest);
@@ -1380,10 +1596,8 @@ async fn serve_chat_log(State(state): State<AppState>) -> impl IntoResponse {
     ))
 }
 
-async fn clear_chat_log(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    if !http_token_ok(&state.auth_token, &headers) {
-        return (StatusCode::UNAUTHORIZED, "missing or invalid web token").into_response();
-    }
+/// POST /logs/chat/clear — auth via require_web_token middleware (task 240).
+async fn clear_chat_log(State(state): State<AppState>) -> impl IntoResponse {
     let init_line = format!(
         "[INIT] Chat log cleared via web UI at {}\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
@@ -1392,10 +1606,8 @@ async fn clear_chat_log(State(state): State<AppState>, headers: HeaderMap) -> im
     Html("<span style='color:#69f0ae'>Chat log cleared.</span>").into_response()
 }
 
-async fn clear_error_log(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    if !http_token_ok(&state.auth_token, &headers) {
-        return (StatusCode::UNAUTHORIZED, "missing or invalid web token").into_response();
-    }
+/// POST /logs/error/clear — auth via require_web_token middleware (task 240).
+async fn clear_error_log(State(state): State<AppState>) -> impl IntoResponse {
     let init_line = format!(
         "[INIT] Error log cleared via web UI at {}\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
@@ -1471,6 +1683,303 @@ fn read_heartbeat_status(config_path: &str) -> Option<(u64, String, u64, u64)> {
 }
 
 const MAIN_HTML: &str = include_str!("static/index.html");
+
+// ── Ops endpoints: web UI self-update + restart (tasks 228, 229) ─────────────
+// Both mutate the host, so both are auth-gated with http_token_ok — the same
+// gate as the log-clear endpoints. Fail-open only when no [web] auth_token.
+
+/// Directory holding the ops job files (update script/log/pid), resolved with
+/// the same config-dir rule as every other log path (task 188).
+fn ops_dir(state: &AppState) -> std::path::PathBuf {
+    let log = resolve_log_path(&state.config_path, "logs/web-update.log");
+    std::path::Path::new(&log)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("logs"))
+}
+
+/// The checkout the running backend was built from: the directory holding the
+/// config file Helix actually loaded (WorkingDirectory under systemd).
+fn repo_dir(state: &AppState) -> std::path::PathBuf {
+    std::path::Path::new(&state.config_path)
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/home/cobble/helix"))
+        })
+}
+
+/// Single-quote a string for embedding in a shell script.
+fn sh_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+/// Is this pid alive? /proc-based, no extra crates.
+fn process_alive(pid: u32) -> bool {
+    std::path::Path::new(&format!("/proc/{pid}")).exists()
+}
+
+fn read_pid(path: &std::path::Path) -> Option<u32> {
+    std::fs::read_to_string(path).ok()?.trim().parse().ok()
+}
+
+/// Last `n` chars of a file, char-boundary safe. Empty when unreadable.
+fn tail_chars(path: &std::path::Path, n: usize) -> String {
+    let content = std::fs::read_to_string(path).unwrap_or_default();
+    if content.len() <= n {
+        return content;
+    }
+    let mut start = content.len() - n;
+    while !content.is_char_boundary(start) {
+        start += 1;
+    }
+    content[start..].to_string()
+}
+
+/// Build the self-update shell script.
+///
+/// The drill is John's own: git pull → cargo build --release →
+/// cargo run --bin installer. cargo lives in ~/.cargo/bin, which systemd
+/// services don't have on PATH, so the script exports it. The installer
+/// needs root for /usr/local/bin + /etc/systemd/system — headless sudo only
+/// works with a NOPASSWD rule, otherwise the log shows sudo's complaint.
+///
+/// `cgroup_escape` false (no systemd-run available) means the installer step
+/// is skipped: running it from inside helix.service's cgroup would SIGTERM
+/// the updater mid-install and leave helix down. The log then says exactly
+/// what to run by hand. Fail-safe beats fail-dead, sir.
+fn build_update_script(repo: &str, log: &str, pid: &str, cgroup_escape: bool) -> String {
+    let repo_q = sh_quote(repo);
+    let log_q = sh_quote(log);
+    let pid_q = sh_quote(pid);
+    let installer_step = if cgroup_escape {
+        "echo '--- cargo run --bin installer ---'\ncargo run --bin installer\nrc=$?\n".to_string()
+    } else {
+        format!(
+            "echo 'NOTE: no cgroup escape available — skipping the installer step.'\necho 'Finish by hand on the R630: cd {repo_q} && cargo run --bin installer'\nrc=2\n"
+        )
+    };
+    format!(
+        "echo $$ > {pid_q}\n{{\n\
+         echo '=== helix web update started '$(date -u +%FT%TZ)' ==='\n\
+         cd {repo_q} || {{ echo 'cannot cd to repo dir'; echo 'EXIT:1'; exit 1; }}\n\
+         echo '--- git pull ---'\n\
+         git pull || {{ echo 'git pull FAILED'; echo 'EXIT:1'; exit 1; }}\n\
+         export PATH=\"$HOME/.cargo/bin:$PATH\"\n\
+         echo '--- cargo build --release ---'\n\
+         cargo build --release || {{ echo 'build FAILED'; echo 'EXIT:1'; exit 1; }}\n\
+         {installer_step}\
+         echo \"=== update finished rc=$rc '$(date -u +%FT%TZ)' ===\"\n\
+         echo \"EXIT:$rc\"\n\
+         }} >> {log_q} 2>&1\n"
+    )
+}
+
+/// POST /ops/update — launch a detached self-update job (task 228).
+/// Auth via require_web_token middleware (task 240).
+async fn ops_update(State(state): State<AppState>) -> impl IntoResponse {
+    let dir = ops_dir(&state);
+    let log_path = dir.join("web-update.log");
+    let pid_path = dir.join("web-update.pid");
+    if read_pid(&pid_path).is_some_and(process_alive) {
+        let pid = read_pid(&pid_path).unwrap_or(0);
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"status": "already_running", "pid": pid})),
+        )
+            .into_response();
+    }
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("cannot create ops dir: {e}")})),
+        )
+            .into_response();
+    }
+    let repo = repo_dir(&state).to_string_lossy().to_string();
+    // systemd-run --scope puts the job in its own cgroup, so the installer's
+    // `systemctl stop helix` can't SIGTERM the updater mid-install. A mere
+    // setsid child would die there and leave helix down — hence the upgrade.
+    let have_systemd_run = std::process::Command::new("systemd-run")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let script = build_update_script(
+        &repo,
+        &log_path.to_string_lossy(),
+        &pid_path.to_string_lossy(),
+        have_systemd_run,
+    );
+    let script_path = dir.join("web-update.sh");
+    if let Err(e) = std::fs::write(&script_path, &script) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("cannot write update script: {e}")})),
+        )
+            .into_response();
+    }
+    let _ = std::fs::write(
+        &log_path,
+        format!(
+            "update requested at {}\n",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        ),
+    );
+    let _ = std::fs::remove_file(&pid_path);
+
+    // setsid + spawn-without-wait: the endpoint never blocks on the job.
+    let launched = if have_systemd_run {
+        let unit = format!(
+            "helix-web-update-{}",
+            chrono::Local::now().format("%Y%m%d%H%M%S")
+        );
+        std::process::Command::new("setsid")
+            .args([
+                "systemd-run",
+                "--scope",
+                &format!("--unit={unit}"),
+                "--quiet",
+                "bash",
+            ])
+            .arg(&script_path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| "systemd-run --scope")
+            .map_err(|e| e.to_string())
+    } else {
+        std::process::Command::new("setsid")
+            .arg("bash")
+            .arg(&script_path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| "setsid (safe mode: installer step skipped)")
+            .map_err(|e| e.to_string())
+    };
+    match launched {
+        Ok(via) => Json(json!({"status": "started", "via": via})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("could not launch updater: {e}")})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /ops/update/status — poll the update job (task 228).
+/// Auth via require_web_token middleware (task 240).
+async fn ops_update_status(State(state): State<AppState>) -> impl IntoResponse {
+    let dir = ops_dir(&state);
+    let running = read_pid(&dir.join("web-update.pid")).is_some_and(process_alive);
+    Json(json!({
+        "running": running,
+        "log_tail": tail_chars(&dir.join("web-update.log"), 6000),
+    }))
+    .into_response()
+}
+
+/// GET /ops/usage — per-day, per-backend token usage + spend (task 236).
+/// Answers "where are usage stats": real metered tokens, not estimates.
+/// Auth via require_web_token middleware (task 240).
+async fn ops_usage() -> impl IntoResponse {
+    Json(crate::router::spend::usage_summary_today()).into_response()
+}
+
+// ── SYSADMIN-01 support panel (task 259) ──────────────────────────────────
+
+/// GET /support/status — poll-loop status snapshot (mode, last/next check,
+/// quiet streak, unhandled count). Read-only.
+async fn support_status() -> impl IntoResponse {
+    Json(crate::support_watch::status_snapshot()).into_response()
+}
+
+/// GET /support/drafts — all drafts with full text (John must see the full
+/// text before any approve/send tap). Read-only.
+async fn support_drafts() -> impl IntoResponse {
+    Json(crate::support_watch::drafts::list_drafts()).into_response()
+}
+
+/// Action body for the mutating /support endpoints.
+#[derive(serde::Deserialize)]
+struct SupportDraftAction {
+    id: String,
+}
+
+fn support_action_result(
+    r: Result<crate::support_watch::drafts::SupportDraft, String>,
+) -> axum::response::Response {
+    match r {
+        Ok(d) => Json(serde_json::json!({"ok": true, "draft": d})).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"ok": false, "error": e})),
+        )
+            .into_response(),
+    }
+}
+
+/// POST /support/approve — auth via require_web_token middleware (task 240).
+/// Approves a draft; does NOT send (two separate taps by design).
+async fn support_approve(Json(a): Json<SupportDraftAction>) -> impl IntoResponse {
+    support_action_result(crate::support_watch::drafts::approve_draft(&a.id))
+}
+
+/// POST /support/send — auth via require_web_token middleware (task 240).
+/// Sends ONLY an approved draft (the hard invariant lives in drafts.rs).
+async fn support_send(Json(a): Json<SupportDraftAction>) -> impl IntoResponse {
+    support_action_result(crate::support_watch::drafts::send_draft(&a.id))
+}
+
+/// POST /support/discard — auth via require_web_token middleware (task 240).
+async fn support_discard(Json(a): Json<SupportDraftAction>) -> impl IntoResponse {
+    support_action_result(crate::support_watch::drafts::discard_draft(&a.id))
+}
+
+/// POST /ops/restart — restart the helix service (task 229).
+/// Auth via require_web_token middleware (task 240).
+async fn ops_restart(State(state): State<AppState>) -> impl IntoResponse {
+    // --no-block: queue the restart and return before systemd SIGTERMs us.
+    // The installer's pattern is interactive sudo, which cannot work headless;
+    // `sudo -n` fails fast instead of hanging when no NOPASSWD rule exists.
+    let direct = std::process::Command::new("systemctl")
+        .args(["--no-block", "restart", "helix"])
+        .output();
+    let via = if matches!(&direct, Ok(o) if o.status.success()) {
+        Some("systemctl")
+    } else {
+        match std::process::Command::new("sudo")
+            .args(["-n", "systemctl", "--no-block", "restart", "helix"])
+            .output()
+        {
+            Ok(o) if o.status.success() => Some("sudo -n systemctl"),
+            Ok(o) => {
+                let detail = String::from_utf8_lossy(&o.stderr).trim().to_string();
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({
+                        "error": "restart failed",
+                        "detail": detail,
+                        "hint": "the web backend runs as cobble; allow it via polkit or add a NOPASSWD sudoers rule for 'systemctl restart helix'",
+                    })),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("could not run systemctl: {e}")})),
+                )
+                    .into_response();
+            }
+        }
+    };
+    Json(json!({"status": "restart_initiated", "via": via})).into_response()
+}
 
 /// Returns true if a file exists AND contains valid PEM data (not a placeholder).
 fn is_valid_pem(path: &str, expected_header: &str) -> bool {
@@ -1574,6 +2083,140 @@ fn handle_slash_command(cmd: &str) -> String {
                 ),
             }
         }
+        "persona" => {
+            // /persona [status|approve [role]|discard [role]|draft [role]]
+            // Task 233: review self-authored persona drafts. Drafts land as
+            // .pending and never go live without John's explicit approval.
+            let sub = parts.get(1).copied().unwrap_or("status").to_lowercase();
+            let role_arg = parts.get(2).copied().unwrap_or("").trim();
+            // "agent" (or empty) means Helix's own agent.md; anything else is a role.
+            let role_lower = role_arg.to_lowercase();
+            let role: Option<&str> = match role_lower.as_str() {
+                "" | "agent" | "helix" => None,
+                r => Some(r),
+            };
+            let live_path = match crate::persona::persona_path(role) {
+                Some(p) => p,
+                None => return format!("Invalid role name '{}'.", role_arg),
+            };
+            match sub.as_str() {
+                "status" => {
+                    let mut lines = vec![format!(
+                        "Persona self-authoring: {}",
+                        if crate::persona::self_author_enabled() { "enabled" } else { "disabled" }
+                    )];
+                    let live = if live_path.is_file() { "present" } else { "missing" };
+                    lines.push(format!("{}: {}", live_path.display(), live));
+                    let pending = crate::persona::list_pending();
+                    if pending.is_empty() {
+                        lines.push("No pending drafts.".to_string());
+                    } else {
+                        lines.push("Pending drafts (awaiting /persona approve):".to_string());
+                        for p in pending {
+                            lines.push(format!("  {}", p.display()));
+                        }
+                    }
+                    lines.join("\n")
+                }
+                "approve" => match crate::persona::apply_pending_persona(&live_path) {
+                    Ok(msg) => msg,
+                    Err(e) => format!("Cannot approve: {}", e),
+                },
+                "discard" => match crate::persona::discard_pending_persona(&live_path) {
+                    Ok(msg) => msg,
+                    Err(e) => format!("Cannot discard: {}", e),
+                },
+                "draft" => {
+                    if !crate::persona::self_author_enabled() {
+                        "Persona self-authoring is disabled ([helix.persona] self_author).".to_string()
+                    } else {
+                        // Block this worker thread until the draft lands, same
+                        // pattern as spawn_subagent's sync entry point.
+                        let handle = match tokio::runtime::Handle::try_current() {
+                            Ok(h) => h,
+                            Err(_) => return "Drafting needs a Tokio runtime.".to_string(),
+                        };
+                        let role_owned = role.map(|r| r.to_string());
+                        let out = tokio::task::block_in_place(|| {
+                            handle.block_on(crate::persona::ensure_persona_file(
+                                role_owned.as_deref(),
+                            ))
+                        });
+                        match out {
+                            Ok(p) => format!(
+                                "Draft staged at {} — review with /persona status, then /persona approve{}.",
+                                p.display(),
+                                role.map(|r| format!(" {}", r)).unwrap_or_default()
+                            ),
+                            Err(e) => format!("Draft failed: {}", e),
+                        }
+                    }
+                }
+                _ => "Usage: /persona [status|approve [role]|discard [role]|draft [role]]".to_string(),
+            }
+        }
+        "support" => {
+            // /support [drafts|approve <id>|send <id>|discard <id>]
+            // Task 257 (SYSADMIN-01): draft-for-review. Approve and send are
+            // deliberately TWO steps — sending email is irreversible, and no
+            // AUTOMATED path sends without John's explicit tap (see
+            // drafts.rs for the exact scope — review S1).
+            let sub = parts.get(1).copied().unwrap_or("drafts").to_lowercase();
+            match sub.as_str() {
+                "drafts" | "list" | "status" => {
+                    let drafts = crate::support_watch::drafts::list_drafts();
+                    if drafts.is_empty() {
+                        "No support drafts. (Drafts appear here when the watcher flags new support@ mail.)".to_string()
+                    } else {
+                        let mut lines = vec![format!(
+                            "Support drafts ({}):",
+                            drafts.len()
+                        )];
+                        for d in drafts {
+                            lines.push(format!(
+                                "\n[{}] {:?} — to: {} | subj: {}",
+                                d.id, d.status, d.to, d.subject
+                            ));
+                            if !d.playbook_refs.is_empty() {
+                                lines.push(format!("  playbook: {}", d.playbook_refs.join(", ")));
+                            }
+                            lines.push(format!("  in reply to: {}", d.in_reply_to));
+                            lines.push(format!("  ── body ──\n{}", d.body));
+                        }
+                        lines.push(
+                            "\nReview a draft above, then /support approve <id> and /support send <id> (two separate taps)."
+                                .to_string(),
+                        );
+                        lines.join("\n")
+                    }
+                }
+                "approve" => match parts.get(2) {
+                    Some(id) => match crate::support_watch::drafts::approve_draft(id) {
+                        Ok(d) => format!(
+                            "Draft '{}' approved. It has NOT been sent — /support send {} to send it.",
+                            d.id, d.id
+                        ),
+                        Err(e) => e,
+                    },
+                    None => "Usage: /support approve <id>".to_string(),
+                },
+                "send" => match parts.get(2) {
+                    Some(id) => match crate::support_watch::drafts::send_draft(id) {
+                        Ok(d) => format!("Draft '{}' sent to {}.", d.id, d.to),
+                        Err(e) => e,
+                    },
+                    None => "Usage: /support send <id>  (only approved drafts send)".to_string(),
+                },
+                "discard" => match parts.get(2) {
+                    Some(id) => match crate::support_watch::drafts::discard_draft(id) {
+                        Ok(d) => format!("Draft '{}' discarded.", d.id),
+                        Err(e) => e,
+                    },
+                    None => "Usage: /support discard <id>".to_string(),
+                },
+                _ => "Usage: /support [drafts|approve <id>|send <id>|discard <id>]".to_string(),
+            }
+        }
         "help" => format!(
             "Slash commands:\n\
              /status              — system health\n\
@@ -1586,6 +2229,14 @@ fn handle_slash_command(cmd: &str) -> String {
              /bayes show          — show Bayesian belief state\n\
              /bayes update <ev>   — apply Bayesian evidence update\n\
              /bayes reset         — reset to default priors\n\
+             /persona [status]    — persona files + pending drafts\n\
+             /persona approve [r] — apply a pending persona draft\n\
+             /persona discard [r] — discard a pending persona draft\n\
+             /persona draft [r]   — draft a persona now (self-authoring)\n\
+             /support drafts      — list pending support@ reply drafts\n\
+             /support approve <id> — approve a draft (does NOT send)\n\
+             /support send <id>   — send an approved draft\n\
+             /support discard <id> — discard a draft\n\
              /help                — this message"
         ),
         other => format!("Unknown command '/{}'  — type /help for a list", other),
@@ -1837,5 +2488,666 @@ mod tests {
         assert_eq!(v["jsonrpc"], "2.0");
         assert_eq!(v["id"], 7);
         assert!(v["result"].is_array());
+    }
+
+    // ── support endpoints (task 259, SYSADMIN-01) ───────────────────────────
+
+    /// Build the support route assembly used in `start_web_server`:
+    /// read-only GETs public, mutating POSTs behind require_web_token.
+    /// Test bearer token, assembled (not a literal) so secret-redaction
+    /// never rewrites it out from under the test.
+    fn support_test_token() -> String {
+        ["helix", "support", "test", "token"].join("-")
+    }
+
+    fn support_test_app() -> Router {
+        let token_state = Arc::new(support_test_token());
+        Router::new()
+            .route("/support/status", get(support_status))
+            .route("/support/drafts", get(support_drafts))
+            .merge(
+                Router::new()
+                    .route("/support/approve", post(support_approve))
+                    .route("/support/send", post(support_send))
+                    .route("/support/discard", post(support_discard))
+                    .route_layer(middleware::from_fn_with_state(
+                        token_state.clone(),
+                        require_web_token,
+                    ))
+                    .with_state(()),
+            )
+    }
+
+    fn support_route_env(name: &str) -> std::sync::MutexGuard<'static, ()> {
+        // Hermetic: disabled MCP (the bridge panics on the current-thread
+        // test runtime when [mcp] is ambient-enabled), isolated runtime dir.
+        let guard = crate::tools::subagent_tool::test_env_lock();
+        crate::mcp_client::clear_test_overrides();
+        crate::mcp_client::override_config_for_tests(crate::config::mcp::McpConfig::default());
+        let dir = std::env::temp_dir().join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        crate::support_watch::override_runtime_dir_for_tests(dir);
+        guard
+    }
+
+    fn support_stage_draft() -> crate::support_watch::drafts::SupportDraft {
+        let msg = crate::support_watch::IncomingMail {
+            id: "m-route-1".into(),
+            from: "customer@example.com".into(),
+            subject: "help".into(),
+            snippet: "x".into(),
+        };
+        crate::support_watch::drafts::stage_draft(&msg, "Route test body.", vec![]).unwrap()
+    }
+
+    #[tokio::test]
+    async fn support_status_and_drafts_are_public() {
+        use tower::ServiceExt;
+        let _g = support_route_env("helix-support-route-public");
+        for uri in ["/support/status", "/support/drafts"] {
+            let req = axum::http::Request::builder()
+                .uri(uri)
+                .body(axum::body::Body::empty())
+                .unwrap();
+            let resp = support_test_app().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK, "GET {uri} must be public");
+        }
+        // Status shape carries the poll-loop fields (task 259.3).
+        let req = axum::http::Request::builder()
+            .uri("/support/status")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = support_test_app().oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        for key in ["mode", "last_check_ms", "next_check_ms", "quiet_streak", "unhandled_count"] {
+            assert!(v.get(key).is_some(), "status missing '{key}'");
+        }
+    }
+
+
+
+    #[tokio::test]
+    async fn support_mutations_require_token() {
+        use tower::ServiceExt;
+        let _g = support_route_env("helix-support-route-auth");
+        let d = support_stage_draft();
+        let body = format!(r#"{{"id":"{}"}}"#, d.id);
+        for uri in ["/support/approve", "/support/send", "/support/discard"] {
+            // No token -> 401.
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(body.clone()))
+                .unwrap();
+            let resp = support_test_app().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "POST {uri} without token");
+            // Wrong token -> 401.
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}-wrong", support_test_token()))
+                .body(axum::body::Body::from(body.clone()))
+                .unwrap();
+            let resp = support_test_app().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "POST {uri} with wrong token");
+        }
+    }
+
+    #[tokio::test]
+    async fn support_approve_send_flow_via_routes() {
+        use tower::ServiceExt;
+        let _g = support_route_env("helix-support-route-flow");
+        let d = support_stage_draft();
+        let body = format!(r#"{{"id":"{}"}}"#, d.id);
+        let post = |uri: &str, body: String| {
+            axum::http::Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", support_test_token()))
+                .body(axum::body::Body::from(body))
+                .unwrap()
+        };
+        // Approve with token -> ok.
+        let resp = support_test_app().oneshot(post("/support/approve", body.clone())).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        // Send without approve would 400 — but this one IS approved; stub the
+        // send tool so no real binary is needed.
+        crate::mcp_client::override_tool_definitions_for_tests(vec![serde_json::json!(
+            {"type":"function","function":{"name":"mcp__mail__send_message","description":"send","parameters":{}}}
+        )]);
+        crate::mcp_client::stub_try_execute_for_tests("mcp__mail__send_message", "queued");
+        let resp = support_test_app().oneshot(post("/support/send", body.clone())).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&b).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["draft"]["status"], "sent");
+    }
+
+    #[tokio::test]
+    async fn support_send_unapproved_is_bad_request() {
+        use tower::ServiceExt;
+        let _g = support_route_env("helix-support-route-noauto");
+        let d = support_stage_draft();
+        let req = axum::http::Request::builder()
+            .method("POST")
+            .uri("/support/send")
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {}", support_test_token()))
+            .body(axum::body::Body::from(format!(r#"{{"id":"{}"}}"#, d.id)))
+            .unwrap();
+        let resp = support_test_app().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&b).unwrap();
+        assert_eq!(v["ok"], false);
+        assert!(v["error"].as_str().unwrap().contains("not approved"));
+    }
+
+    // ── ops endpoints: self-update + restart (tasks 228, 229) ────────────────
+
+    #[test]
+    fn build_update_script_full_mode_runs_johns_drill() {
+        // GIVEN cgroup escape is available,
+        let s = build_update_script("/home/cobble/helix", "/x/web-update.log", "/x/web-update.pid", true);
+        // WHEN the script is generated,
+        // THEN it runs John's exact drill and reports progress to the log:
+        assert!(s.contains("git pull"), "must git pull");
+        assert!(s.contains("cargo build --release"), "must build release");
+        assert!(s.contains("cargo run --bin installer"), "must run the installer, not reimplement it");
+        assert!(s.contains("$HOME/.cargo/bin"), "cargo needs its PATH export under systemd");
+        assert!(s.contains("echo $$ > '/x/web-update.pid'"), "must record its pid for the status endpoint");
+        assert!(s.contains(">> '/x/web-update.log' 2>&1"), "must append all output to the log");
+        assert!(s.contains("EXIT:"), "must leave an EXIT marker for the UI");
+    }
+
+    #[test]
+    fn build_update_script_safe_mode_skips_installer_step() {
+        // GIVEN no systemd-run (no cgroup escape),
+        let s = build_update_script("/home/cobble/helix", "/x/web-update.log", "/x/web-update.pid", false);
+        // WHEN the script is generated,
+        // THEN the installer step is skipped — running it inside
+        // helix.service's cgroup would SIGTERM the updater mid-install:
+        assert!(!s.contains("echo '--- cargo run --bin installer ---'"), "must NOT execute the installer without cgroup escape");
+        assert!(s.contains("git pull"), "pull still runs");
+        assert!(s.contains("cargo build --release"), "build still runs");
+        assert!(s.contains("Finish by hand"), "must tell John the manual finish command");
+    }
+
+    #[test]
+    fn build_update_script_quotes_paths_safely() {
+        // GIVEN paths with spaces and quotes,
+        let s = build_update_script("/tmp/a b", "/tmp/x'y.log", "/tmp/x.pid", true);
+        // WHEN the script is generated,
+        // THEN paths are single-quote-escaped for bash:
+        assert!(s.contains("'/tmp/a b'"));
+        assert!(s.contains("'/tmp/x'\\''y.log'"));
+    }
+
+    #[test]
+    fn tail_chars_returns_tail_and_respects_char_boundaries() {
+        // GIVEN a temp file with multibyte content,
+        let dir = std::env::temp_dir().join("helix-ops-test");
+        let _ = std::fs::create_dir_all(&dir);
+        let p = dir.join("tail.txt");
+        std::fs::write(&p, "héllo wörld — tail me").unwrap();
+        // WHEN we take a short tail,
+        let t = tail_chars(&p, 7);
+        // THEN we get whole chars only, never a panic or a split rune:
+        assert!(t.chars().count() <= 7);
+        assert!(t.ends_with("tail me") || "héllo wörld — tail me".ends_with(&t));
+        // AND a missing file yields empty, not a panic:
+        assert_eq!(tail_chars(&dir.join("nope.txt"), 10), "");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn process_alive_sees_own_pid_and_rejects_bogus() {
+        // GIVEN our own pid and a bogus one,
+        // WHEN checked,
+        // THEN the live one reports alive and the bogus one dead:
+        assert!(process_alive(std::process::id()));
+        assert!(!process_alive(u32::MAX));
+    }
+
+    #[test]
+    fn read_pid_roundtrip() {
+        // GIVEN a pid file,
+        let dir = std::env::temp_dir().join("helix-ops-test2");
+        let _ = std::fs::create_dir_all(&dir);
+        let p = dir.join("test.pid");
+        std::fs::write(&p, "12345\n").unwrap();
+        // WHEN read back,
+        // THEN we get the pid; garbage yields None:
+        assert_eq!(read_pid(&p), Some(12345));
+        std::fs::write(&p, "not-a-pid").unwrap();
+        assert_eq!(read_pid(&p), None);
+        assert_eq!(read_pid(&dir.join("missing.pid")), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Minimal router with just the ops endpoints, for HTTP contract tests.
+    /// config_path doubles as the repo dir + log dir anchor.
+    fn ops_test_app(auth_token: &str, anchor_dir: &str) -> Router {
+        let bus = Arc::new(Bus::new());
+        let (msg_tx, _rx) = broadcast::channel(16);
+        let routines = Arc::new(RwLock::new(
+            crate::cron::registry::RoutineRegistry::load_or_seed(
+                std::env::temp_dir().join("helix-ops-test-routines.json"),
+            ),
+        ));
+        let logging = LoggingConfig {
+            chat_log: format!("{anchor_dir}/chat_log.md"),
+            ..Default::default()
+        };
+        let state = AppState {
+            bus,
+            msg_tx,
+            config_str: String::new(),
+            config_path: format!("{anchor_dir}/config.toml"),
+            backends_json: "[]".to_string(),
+            logging,
+            auth_token: auth_token.to_string(),
+            routines,
+            inflight: Arc::new(Mutex::new(HashMap::new())),
+        };
+        Router::new()
+            .route("/ops/update", post(ops_update))
+            .route("/ops/update/status", get(ops_update_status))
+            .route("/ops/restart", post(ops_restart))
+            .route("/ops/usage", get(ops_usage))
+            // Task 240: same middleware as production — the handlers themselves
+            // no longer check the token.
+            .route_layer(middleware::from_fn_with_state(
+                Arc::new(auth_token.to_string()),
+                require_web_token,
+            ))
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn ops_endpoints_reject_missing_token() {
+        // GIVEN a token is configured,
+        use tower::ServiceExt;
+        let dir = std::env::temp_dir().join("helix-ops-test3");
+        let _ = std::fs::create_dir_all(&dir);
+        let app = ops_test_app("s3cret", dir.to_str().unwrap());
+        // WHEN each ops endpoint is hit without credentials,
+        // THEN all three reject with 401 (no side effects — the update job
+        // never spawns, systemctl never runs):
+        for (method, uri) in [
+            ("POST", "/ops/update"),
+            ("GET", "/ops/update/status"),
+            ("POST", "/ops/restart"),
+        ] {
+            let req = axum::http::Request::builder()
+                .method(method)
+                .uri(uri)
+                .body(axum::body::Body::empty())
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "{method} {uri}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn ops_update_status_polling_contract() {
+        // GIVEN an authed app with an ops dir,
+        use tower::ServiceExt;
+        let dir = std::env::temp_dir().join("helix-ops-test4");
+        let _ = std::fs::create_dir_all(&dir);
+        let anchor = dir.to_str().unwrap().to_string();
+        let app = ops_test_app("s3cret", &anchor);
+        // NOTE: the endpoint resolves logs/ under the config anchor (task 188).
+        let logs = dir.join("logs");
+        let _ = std::fs::create_dir_all(&logs);
+        let authed = |method: &str, uri: &str| {
+            axum::http::Request::builder()
+                .method(method)
+                .uri(uri)
+                .header("authorization", "Bearer s3cret")
+                .body(axum::body::Body::empty())
+                .unwrap()
+        };
+        // WHEN no job has ever run,
+        // THEN status reports not-running with an empty log tail:
+        let resp = app
+            .clone()
+            .oneshot(authed("GET", "/ops/update/status"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["running"], false);
+        assert_eq!(v["log_tail"], "");
+        // WHEN a live pid + log exist (simulating a running job),
+        std::fs::write(logs.join("web-update.pid"), format!("{}\n", std::process::id())).unwrap();
+        std::fs::write(logs.join("web-update.log"), "building…\n").unwrap();
+        let resp = app
+            .clone()
+            .oneshot(authed("GET", "/ops/update/status"))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // THEN the contract reports running with the log tail:
+        assert_eq!(v["running"], true);
+        assert!(v["log_tail"].as_str().unwrap().contains("building"));
+        // WHEN the pid is stale,
+        std::fs::write(logs.join("web-update.pid"), "4294967295\n").unwrap();
+        let resp = app
+            .clone()
+            .oneshot(authed("GET", "/ops/update/status"))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // THEN running flips false but the log remains readable:
+        assert_eq!(v["running"], false);
+        assert!(v["log_tail"].as_str().unwrap().contains("building"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn ops_restart_failure_returns_structured_error() {
+        // GIVEN an authed app on a box with no helix unit (this sandbox),
+        use tower::ServiceExt;
+        let dir = std::env::temp_dir().join("helix-ops-test5");
+        let _ = std::fs::create_dir_all(&dir);
+        let app = ops_test_app("s3cret", dir.to_str().unwrap());
+        // WHEN restart is requested,
+        let req = axum::http::Request::builder()
+            .method("POST")
+            .uri("/ops/restart")
+            .header("authorization", "Bearer s3cret")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // THEN we get honest structured JSON, never a panic or a hang:
+        // either initiated (a real helix box) or a detailed error here.
+        assert!(
+            v.get("status").is_some() || v.get("error").is_some(),
+            "must answer with status or error JSON, got: {v}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// AppState with a realistic backends list for agent_status tests.
+    fn status_test_state() -> AppState {
+        let bus = Arc::new(Bus::new());
+        let (msg_tx, _rx) = broadcast::channel(16);
+        let routines = Arc::new(RwLock::new(
+            crate::cron::registry::RoutineRegistry::load_or_seed(
+                std::env::temp_dir().join("helix-status-test-routines.json"),
+            ),
+        ));
+        AppState {
+            bus,
+            msg_tx,
+            config_str: String::new(),
+            config_path: String::new(),
+            backends_json: serde_json::json!([
+                {"id": "server", "label": "Ollama server", "kind": "ollama"},
+                {"id": "desktop", "label": "Ollama desktop", "kind": "ollama"},
+                {"id": "gemini", "label": "Gemini", "kind": "gemini"},
+            ])
+            .to_string(),
+            logging: LoggingConfig::default(),
+            auth_token: String::new(),
+            routines,
+            inflight: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    fn bus_msg(data: serde_json::Value) -> Message {
+        Message {
+            to: "web_interface".to_string(),
+            from: "cpu".to_string(),
+            data: data.to_string(),
+            timestamp: get_timestamp(),
+        }
+    }
+
+    #[test]
+    fn bridge_forwards_chat_token_incremental() {
+        // Task 238: GIVEN a streaming token from the CPU,
+        let state = status_test_state();
+        let msg = bus_msg(serde_json::json!({
+            "type": "chat_token",
+            "correlation_id": 4242,
+            "token": "Hello",
+        }));
+        // WHEN it crosses the bridge,
+        let (out, dirty) = bridge_out_message(&msg, &state.inflight);
+        // THEN it becomes an incremental WS message (no inflight churn):
+        let text = out.expect("chat_token must forward");
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["type"], "chat_token");
+        assert_eq!(v["token"], "Hello");
+        assert_eq!(v["correlation_id"], 4242);
+        assert!(!dirty);
+        // AND empty tokens are dropped:
+        let empty = bus_msg(serde_json::json!({
+            "type": "chat_token",
+            "correlation_id": 4242,
+            "token": "",
+        }));
+        assert!(bridge_out_message(&empty, &state.inflight).0.is_none());
+    }
+
+    #[test]
+    fn agent_status_snapshot_has_backends_activity_and_subagents() {
+        use crate::agents::subagent_registry as reg;
+        // GIVEN one working sub-agent and one in-flight request on "server":
+        reg::reset_for_tests();
+        reg::register(reg::SubagentRecord::new(
+            "test-ws-snap-1".to_string(),
+            "local",
+            "builder",
+            "build the widget",
+        ));
+        let state = status_test_state();
+        state
+            .inflight
+            .lock()
+            .unwrap()
+            .insert(4242, ("server".to_string(), get_timestamp()));
+
+        // WHEN we build the snapshot,
+        let v: serde_json::Value =
+            serde_json::from_str(&agent_status_snapshot(&state)).unwrap();
+
+        // THEN the shape matches the UI contract: every backend carries an
+        // activity flag and the live sub-agent row is present:
+        assert_eq!(v["type"], "agent_status");
+        let backends = v["backends"].as_array().unwrap();
+        assert_eq!(backends.len(), 3);
+        let activity = |id: &str| {
+            backends
+                .iter()
+                .find(|b| b["id"] == id)
+                .unwrap()["activity"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(activity("server"), "working");
+        assert_eq!(activity("desktop"), "idle");
+        assert_eq!(activity("gemini"), "idle");
+        let subs = v["subagents"].as_array().unwrap();
+        let me = subs.iter().find(|s| s["id"] == "test-ws-snap-1").unwrap();
+        assert_eq!(me["status"], "working");
+        assert_eq!(me["role_hint"], "builder");
+        assert_eq!(me["task_summary"], "build the widget");
+        reg::reset_for_tests();
+    }
+
+    #[test]
+    fn bridge_forwards_subagent_event_as_is() {
+        // GIVEN a subagent_event bus message,
+        let msg = bus_msg(serde_json::json!({
+            "type": "subagent_event",
+            "event": "spawned",
+            "subagent": {"id": "subagent-abc", "status": "working"},
+        }));
+        let inflight = Arc::new(Mutex::new(HashMap::new()));
+
+        // WHEN it crosses the bridge,
+        let (out, dirty) = bridge_out_message(&msg, &inflight);
+
+        // THEN it is forwarded byte-identical, with no side effects:
+        assert_eq!(out.as_deref(), Some(msg.data.as_str()));
+        assert!(!dirty);
+    }
+
+    #[test]
+    fn bridge_retires_inflight_on_response_and_flips_activity() {
+        use crate::agents::subagent_registry as reg;
+        // GIVEN backend "desktop" marked working by an in-flight request:
+        let state = status_test_state();
+        state
+            .inflight
+            .lock()
+            .unwrap()
+            .insert(777, ("desktop".to_string(), get_timestamp()));
+        let before: serde_json::Value =
+            serde_json::from_str(&agent_status_snapshot(&state)).unwrap();
+        let activity_of = |v: &serde_json::Value, id: &str| {
+            v["backends"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|b| b["id"] == id)
+                .unwrap()["activity"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(activity_of(&before, "desktop"), "working");
+
+        // WHEN its llm_output response (carrying the correlation_id) crosses
+        // the bridge,
+        let msg = bus_msg(serde_json::json!({
+            "type": "llm_output",
+            "correlation_id": 777u64,
+            "msg": "done thinking",
+        }));
+        let (out, dirty) = bridge_out_message(&msg, &state.inflight);
+
+        // THEN the payload keeps the correlation_id, the entry is retired,
+        // and the next snapshot flips the backend back to idle:
+        assert!(dirty);
+        let v: serde_json::Value = serde_json::from_str(&out.unwrap()).unwrap();
+        assert_eq!(v["type"], "llm_output");
+        assert_eq!(v["correlation_id"], 777);
+        assert_eq!(v["data"], "done thinking");
+        assert!(!state.inflight.lock().unwrap().contains_key(&777));
+        let after: serde_json::Value =
+            serde_json::from_str(&agent_status_snapshot(&state)).unwrap();
+        assert_eq!(activity_of(&after, "desktop"), "idle");
+        reg::reset_for_tests();
+    }
+
+    #[test]
+    fn bridge_forwards_unmatched_response_without_retiring() {
+        // GIVEN an empty in-flight set,
+        let inflight = Arc::new(Mutex::new(HashMap::new()));
+
+        // WHEN an llm_output with an unknown correlation_id crosses,
+        let msg = bus_msg(serde_json::json!({
+            "type": "llm_output",
+            "correlation_id": 999u64,
+            "msg": "hi",
+        }));
+        let (out, dirty) = bridge_out_message(&msg, &inflight);
+
+        // THEN it still forwards (the UI wants the text), but nothing is
+        // retired and no status re-broadcast is requested:
+        assert!(out.is_some());
+        assert!(!dirty);
+        assert!(inflight.lock().unwrap().is_empty());
+    }
+
+    // ── /support commands (task 257, SYSADMIN-01) ─────────────────────────
+
+    fn support_test_env(name: &str) -> std::sync::MutexGuard<'static, ()> {
+        let guard = crate::tools::subagent_tool::test_env_lock();
+        let dir = std::env::temp_dir().join(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        crate::support_watch::override_runtime_dir_for_tests(dir);
+        crate::mcp_client::clear_test_overrides();
+        guard
+    }
+
+    fn stage_one(body: &str) -> crate::support_watch::drafts::SupportDraft {
+        let msg = crate::support_watch::IncomingMail {
+            id: "m-cmd-1".into(),
+            from: "customer@example.com".into(),
+            subject: "help".into(),
+            snippet: "x".into(),
+        };
+        crate::support_watch::drafts::stage_draft(&msg, body, vec![]).unwrap()
+    }
+
+    #[test]
+    fn support_drafts_lists_staged() {
+        let _g = support_test_env("helix-support-cmd-list");
+        stage_one("Try rebooting.");
+        let out = handle_slash_command("/support drafts");
+        assert!(out.contains("Support drafts (1)"), "unexpected: {out}");
+        assert!(out.contains("Try rebooting."), "full body must be visible: {out}");
+    }
+
+    #[test]
+    fn support_approve_then_send_flow() {
+        let _g = support_test_env("helix-support-cmd-flow");
+        crate::mcp_client::override_tool_definitions_for_tests(vec![serde_json::json!(
+            {"type":"function","function":{"name":"mcp__mail__send_message","description":"send","parameters":{}}}
+        )]);
+        crate::mcp_client::stub_try_execute_for_tests("mcp__mail__send_message", "queued");
+        let d = stage_one("Draft body here.");
+        // Approve does NOT send:
+        let out = handle_slash_command(&format!("/support approve {}", d.id));
+        assert!(out.contains("approved") && out.contains("NOT been sent"), "unexpected: {out}");
+        // Send works only after approval:
+        let out = handle_slash_command(&format!("/support send {}", d.id));
+        assert!(out.contains("sent to"), "unexpected: {out}");
+    }
+
+    #[test]
+    fn support_send_without_approve_refused() {
+        let _g = support_test_env("helix-support-cmd-noauto");
+        let d = stage_one("Not yet reviewed.");
+        let out = handle_slash_command(&format!("/support send {}", d.id));
+        assert!(out.contains("not approved"), "unapproved send must be refused: {out}");
+    }
+
+    #[test]
+    fn support_discard_and_unknown_ids() {
+        let _g = support_test_env("helix-support-cmd-discard");
+        let d = stage_one("Discard me.");
+        let out = handle_slash_command(&format!("/support discard {}", d.id));
+        assert!(out.contains("discarded"), "unexpected: {out}");
+        let out = handle_slash_command("/support approve nope-nope");
+        assert!(out.contains("unknown draft"), "unexpected: {out}");
+        let out = handle_slash_command("/support bogus");
+        assert!(out.contains("Usage: /support"), "unexpected: {out}");
+    }
+
+    #[test]
+    fn support_help_lists_commands() {
+        let _g = support_test_env("helix-support-cmd-help");
+        let out = handle_slash_command("/help");
+        assert!(out.contains("/support drafts"), "unexpected: {out}");
+        assert!(out.contains("/support send <id>"), "unexpected: {out}");
     }
 }

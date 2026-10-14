@@ -412,8 +412,36 @@ pub async fn handle_ollama_message(
         .and_then(|v| v["prompt"].as_str().map(|s| s.to_string()))
         .unwrap_or_else(|| message.data.clone());
 
+    // Task 238: correlation_id up front — token messages need it.
+    let correlation_id: u64 = serde_json::from_str::<serde_json::Value>(&message.data)
+        .ok()
+        .and_then(|v| v["correlation_id"].as_u64())
+        .unwrap_or(0);
+
+    // Task 238: stream tokens to the UI as they arrive. The callback
+    // publishes lightweight `llm_token` bus messages; the CPU forwarder
+    // turns them into `chat_token` WS messages. The final `llm_response`
+    // still carries the complete text (unchanged contract).
+    let bus_clone = Arc::clone(bus);
+    let backend_tag = format!("ollama_{}", backend_name);
+    // Task 238: Arc<dyn Fn> so the callback is Send (spawned task bound).
+    let on_token: Arc<dyn Fn(String) + Send + Sync> = Arc::new(move |token: String| {
+        let token_msg = crate::bus::Message {
+            to: "cpu".to_string(),
+            from: backend_tag.clone(),
+            data: serde_json::json!({
+                "type": "llm_token",
+                "correlation_id": correlation_id,
+                "token": token,
+            })
+            .to_string(),
+            timestamp: now_ms(),
+        };
+        let _ = bus_clone.publish(token_msg);
+    });
+
     for attempt in 1..=MAX_RETRIES {
-        match call_ollama(&client, base_url, model, &prompt, bus).await {
+        match call_ollama(&client, base_url, model, &prompt, bus, Some(on_token.clone())).await {
             // SUCCESS — Ollama returned a valid response
             Ok(response) => {
                 info!(
@@ -423,11 +451,10 @@ pub async fn handle_ollama_message(
                     response.len()
                 );
 
-                // Parse the ORIGINAL request to extract correlation_id
-                let request_payload: serde_json::Value =
-                    serde_json::from_str(&message.data).unwrap_or_default();
+                // Task 223: record the completed turn for conversation history.
+                crate::chat_history::record_turn(&prompt, &response);
 
-                let correlation_id = request_payload["correlation_id"].as_u64().unwrap_or(0);
+                // correlation_id was extracted up front (task 238) for token messages.
 
                 // Build the correct CPU-bound message
                 let response_msg = Message {
@@ -512,6 +539,9 @@ pub async fn handle_ollama_message(
         MAX_RETRIES, last_err
     );
     error!("{}", err);
+    // Task 223: keep the failed turn so "try again" still resolves against
+    // the original request.
+    crate::chat_history::record_turn(&prompt, "");
     publish_error(bus, &err);
     None
 }
@@ -519,15 +549,122 @@ pub async fn handle_ollama_message(
 // ── internal HTTP helpers ─────────────────────────────────────────────────────
 
 /// Wrapper that assembles the default tool-list and delegates to the loop.
+/// `on_token` (Arc, Send) enables streaming (task 238); `None` = buffered (sub-agents).
 async fn call_ollama(
     client: &Client,
     base_url: &str,
     model: &str,
     prompt: &str,
     bus: &Arc<Bus>,
+    on_token: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let tool_defs = crate::tools::tool_definitions();
-    tools::call_ollama_tools(client, base_url, model, prompt, tool_defs, bus).await
+    tools::call_ollama_tools(client, base_url, model, prompt, tool_defs, bus, on_token).await
+}
+
+// ── Task 238: streaming NDJSON support ─────────────────────────────────────
+
+/// Parse one NDJSON line from Ollama's streaming `/api/chat`.
+/// Returns `(token_text, is_done)`. Empty lines and unparseable lines yield
+/// `None` (skipped). The token is `message.content`; `done: true` marks the
+/// final line (which also carries `prompt_eval_count`/`eval_count`).
+pub fn parse_stream_line(line: &str) -> Option<(String, bool)> {
+    let line = line.trim();
+    if line.is_empty() {
+        return None;
+    }
+    let v: Value = serde_json::from_str(line).ok()?;
+    let token = v
+        .get("message")
+        .and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str())
+        .unwrap_or("")
+        .to_string();
+    let done = v.get("done").and_then(|d| d.as_bool()).unwrap_or(false);
+    Some((token, done))
+}
+
+/// Consume a streaming `/api/chat` response, invoking `on_token` for each
+/// content token as it arrives. Returns the reassembled single `message`
+/// object (same shape as the non-streaming response's `message` field) so
+/// the tool loop can inspect `tool_calls`.
+///
+/// The final `done` line's eval counts are merged into the returned object
+/// under the top-level keys Ollama uses (`prompt_eval_count`, `eval_count`),
+/// keeping task-236 metering working on the streaming path.
+async fn read_streaming_response(
+    resp: reqwest::Response,
+    on_token: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
+) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+    let mut content = String::new();
+    let mut tool_calls: Option<Value> = None;
+    let mut eval_counts = serde_json::Map::new();
+    let mut buf = String::new();
+    let on_token = on_token;
+
+    // Pull chunks with resp.chunk() (no `stream` feature needed) and split
+    // NDJSON lines incrementally for time-to-first-token.
+    let mut resp = resp;
+    loop {
+        let chunk = resp.chunk().await.map_err(|e| {
+            let e: Box<dyn std::error::Error + Send + Sync> =
+                format!("stream read error: {}", e).into();
+            e
+        })?;
+        let Some(bytes) = chunk else { break };
+        buf.push_str(&String::from_utf8_lossy(&bytes));
+        // Process complete lines, keeping any partial tail buffered.
+        while let Some(nl) = buf.find('\n') {
+            let line: String = buf.drain(..=nl).collect();
+            let Some((token, done)) = parse_stream_line(&line) else {
+                continue;
+            };
+            if !token.is_empty() {
+                content.push_str(&token);
+                if let Some(cb) = on_token.as_ref() {
+                    cb(token.clone());
+                }
+            }
+            if done {
+                // Capture eval counts + any tool_calls from the final line.
+                if let Ok(v) = serde_json::from_str::<Value>(line.trim()) {
+                    for k in ["prompt_eval_count", "eval_count"] {
+                        if let Some(n) = v.get(k) {
+                            eval_counts.insert(k.to_string(), n.clone());
+                        }
+                    }
+                    if let Some(tc) = v
+                        .get("message")
+                        .and_then(|m| m.get("tool_calls"))
+                        .cloned()
+                    {
+                        tool_calls = Some(tc);
+                    }
+                }
+            }
+        }
+    }
+    // Trailing line without a newline terminator.
+    if !buf.trim().is_empty() {
+        if let Some((token, _)) = parse_stream_line(&buf) {
+            if !token.is_empty() {
+                content.push_str(&token);
+                if let Some(cb) = on_token.as_ref() {
+                    cb(token.clone());
+                }
+            }
+        }
+    }
+
+    let mut message = serde_json::json!({ "role": "assistant", "content": content });
+    if let Some(tc) = tool_calls {
+        message["tool_calls"] = tc;
+    }
+    let mut parsed = serde_json::json!({ "message": message });
+    for (k, v) in eval_counts {
+        parsed[k] = v;
+    }
+    Ok(parsed)
 }
 
 // ── Tools-related code extracted to submod ─────────────────────────────
@@ -567,6 +704,12 @@ pub mod tools {
     /// - Send the prompt.
     /// - If the model returns `tool_calls`, execute them locally and send results back.
     /// - Repeat until the model returns plain text content.
+    ///
+    /// Task 238: when `on_token` is `Some`, the `/api/chat` call streams
+    /// (NDJSON) and each content token is pushed to the callback as it
+    /// arrives — the caller forwards them to the UI for time-to-first-token.
+    /// `None` keeps the legacy buffered behavior (sub-agents need the
+    /// complete text before proceeding).
     pub async fn call_ollama_tools(
         client: &Client,
         base_url: &str,
@@ -574,6 +717,7 @@ pub mod tools {
         prompt: &str,
         tools: Value,
         bus: &Arc<Bus>,
+        on_token: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Task 215: commander system prompt — the model needs to know it
         // should delegate via spawn_subagent instead of chatting.
@@ -581,11 +725,23 @@ pub mod tools {
         if let Some(sys) = crate::tools::subagent_tool::commander_system_message() {
             messages.push(sys);
         }
+        // Conversation history (task 223): recent turns as proper
+        // user/assistant messages so follow-ups ("try again") resolve
+        // against prior turns. The in-flight turn is recorded only after
+        // its reply is produced, so it can never appear here twice.
+        for turn in crate::chat_history::recent_turns() {
+            messages.push(json!({"role": "user", "content": turn.user}));
+            messages.push(json!({"role": "assistant", "content": turn.assistant}));
+        }
         messages.push(json!({"role": "user", "content": prompt}));
 
         // Guard against infinite tool-call loops (e.g. a badly behaved model)
         let max_tool_rounds = 10usize;
         let mut tool_rounds = 0usize;
+
+        // Task 238: streaming enabled once, outside the loop (avoids
+        // borrow-across-iterations issues with the callback).
+        let stream = on_token.is_some();
 
         loop {
             // Sliding-window cap: the history would otherwise grow without
@@ -598,8 +754,7 @@ pub mod tools {
                     "model":    model,
                     "messages": messages,
                     "tools":    tools,
-                    "stream":   false   // MUST be false — streaming returns NDJSON,
-                                        // not a single JSON object, and breaks parsing.
+                    "stream":   stream,
                 }))
                 .send()
                 .await
@@ -620,11 +775,31 @@ pub mod tools {
                 return Err(format!("Ollama returned HTTP {}: {}", status, body).into());
             }
 
-            let parsed: Value = resp.json().await.map_err(|e| {
-                let e: Box<dyn std::error::Error + Send + Sync> =
-                    format!("failed to parse Ollama JSON response: {}", e).into();
-                e
-            })?;
+            // Task 238: streaming NDJSON vs buffered single-JSON.
+            // Reborrow the callback each round (short-lived, no cross-iteration borrow).
+            let parsed: Value = if stream {
+                    read_streaming_response(resp, on_token.clone()).await?
+            } else {
+                resp.json().await.map_err(|e| {
+                    let e: Box<dyn std::error::Error + Send + Sync> =
+                        format!("failed to parse Ollama JSON response: {}", e).into();
+                    e
+                })?
+            };
+
+            // Task 236: real token metering from Ollama eval counts.
+            // Local backends are $0, but the counts feed usage stats.
+            if let Some(usage) = crate::router::spend::parse_ollama_usage(&parsed) {
+                let backend = if base_url.contains("127.0.0.1")
+                    || base_url.contains("localhost")
+                    || base_url.contains("::1")
+                {
+                    crate::router::LLMBackend::LocalOllama
+                } else {
+                    crate::router::LLMBackend::LanOllama
+                };
+                crate::router::spend::note_api_usage(&backend, usage);
+            }
 
             let msg = &parsed["message"];
             messages.push(msg.clone());
@@ -793,6 +968,51 @@ fn truncate(s: &str, max: usize) -> &str {
 mod tests {
     use super::*;
     use crate::bus::Bus;
+
+    // ── Task 238: NDJSON stream parser ────────────────────────────────────
+
+    #[test]
+    fn stream_line_yields_token_in_order() {
+        // GIVEN three NDJSON lines (two tokens + done):
+        let lines = [
+            r#"{"model":"m","created_at":"t","message":{"role":"assistant","content":"Hello"},"done":false}"#,
+            r#"{"model":"m","created_at":"t","message":{"role":"assistant","content":" world"},"done":false}"#,
+            r#"{"model":"m","created_at":"t","message":{"role":"assistant","content":""},"done":true,"prompt_eval_count":10,"eval_count":5}"#,
+        ];
+        // WHEN parsed in order,
+        let mut tokens = Vec::new();
+        let mut dones = Vec::new();
+        for line in lines {
+            let (token, done) = parse_stream_line(line).expect("line must parse");
+            tokens.push(token);
+            dones.push(done);
+        }
+        // THEN tokens arrive in order and only the last line is done:
+        assert_eq!(tokens, vec!["Hello", " world", ""]);
+        assert_eq!(dones, vec![false, false, true]);
+        assert_eq!(tokens.concat(), "Hello world");
+    }
+
+    #[test]
+    fn stream_line_skips_blanks_and_garbage() {
+        assert!(parse_stream_line("").is_none());
+        assert!(parse_stream_line("   \n").is_none());
+        assert!(parse_stream_line("not json at all").is_none());
+        // Valid JSON but no message.content -> empty token, not done.
+        let (token, done) = parse_stream_line(r#"{"done":false}"#).unwrap();
+        assert_eq!(token, "");
+        assert!(!done);
+    }
+
+    #[test]
+    fn stream_line_extracts_tool_calls_shape() {
+        // Tool-call lines carry no content but the message shape survives
+        // reassembly (read_streaming_response merges tool_calls at done).
+        let line = r#"{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"read_log"}}]},"done":false}"#;
+        let (token, done) = parse_stream_line(line).unwrap();
+        assert_eq!(token, "");
+        assert!(!done);
+    }
 
     // ── model discovery ───────────────────────────────────────────────────────
 

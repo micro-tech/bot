@@ -24,10 +24,13 @@ mod agents;
 mod okf;
 mod mcp_client;
 mod router;
+mod security;
 mod acp;
 mod a2a;
 mod ssh;
+mod persona;
 mod cron;
+mod chat_history;
 
 #[tokio::main]
 async fn main() {
@@ -41,6 +44,9 @@ async fn main() {
 
     // Load .env early (for GEMINI_API_KEY etc.)
     let _ = dotenv::dotenv();
+
+    // Task 243: reload persisted chat history before the agent loop starts.
+    crate::chat_history::load_from_disk();
 
     // Permanently fix rustls CryptoProvider (ring) at the absolute earliest point.
     // This resolves conflicts caused by lettre + imap pulling in aws-lc-rs.
@@ -165,6 +171,8 @@ async fn run_helix() {
     }
 
     let bus = std::sync::Arc::new(crate::bus::Bus::new());
+    // Task 230: let bus-less layers (sub-agent registry) publish UI events.
+    crate::bus::set_global_bus(bus.clone());
 
     // Parse port from config
     let port: u16 = toml::from_str::<toml::Value>(&config_str)
@@ -204,6 +212,22 @@ async fn run_helix() {
         println!("commander mode: {}", if enabled { "enabled" } else { "disabled" });
     }
 
+    // ── Task 233: persona files ([helix.persona] self_author, default false) ──
+    // The persona dir is the runtime dir (parent of the loaded config.toml);
+    // agent.md / agents/<role>.md resolve there. Self-authoring is strictly
+    // opt-in and never writes live files (drafts land as .pending).
+    {
+        let self_author = toml::from_str::<toml::Value>(&config_str)
+            .ok()
+            .and_then(|v| v.get("helix")?.get("persona")?.get("self_author")?.as_bool())
+            .unwrap_or(false);
+        crate::persona::set_self_author_enabled(self_author);
+        println!(
+            "persona self-authoring: {}",
+            if self_author { "enabled" } else { "disabled" }
+        );
+    }
+
     // ── Task 217: daily API spend cap ([router] daily_api_cap_usd, default 5.00) ──
     {
         let cap = toml::from_str::<toml::Value>(&config_str)
@@ -213,6 +237,13 @@ async fn run_helix() {
             crate::router::spend::set_daily_api_cap_usd(v);
             println!("daily API spend cap: ${:.2}", v);
         }
+        // ── Task 236: cap-exceed behavior ([router] cap_block_on_exceed,
+        // default false = warn + continue; true = block paid calls) ──
+        let block = toml::from_str::<toml::Value>(&config_str)
+            .ok()
+            .and_then(|v| v.get("router")?.get("cap_block_on_exceed")?.as_bool())
+            .unwrap_or(false);
+        crate::router::spend::set_cap_block_on_exceed(block);
     }
 
     // ── Task 214/217: register Ollama endpoints for the spawn_subagent tool ──
@@ -348,8 +379,7 @@ async fn run_helix() {
                         let cpu_clone = routine_cpu.clone();
                         tokio::spawn(async move {
                             let mut guard = cpu_clone.lock().await;
-                            // Task 216: the full payload (incl. agent job) goes through.
-                            guard.handle_routine_run(&payload).await;
+                            guard.handle_routine_run(&routine_id, &routine_name).await;
                         });
                     }
                 });
@@ -506,6 +536,9 @@ async fn run_helix() {
                         from: display_from.clone(),
                         data: serde_json::json!({
                             "type": "llm_output",
+                            // Task 230: keep the correlation so the web
+                            // server can retire the in-flight backend entry.
+                            "correlation_id": payload["correlation_id"].as_u64().unwrap_or(0),
                             "data": text
                         })
                         .to_string(),
@@ -640,6 +673,27 @@ async fn run_helix() {
     // own schedules (no global 5s tick). The same Arc is handed to the web
     // server so the routines WS API toggles the live registry.
     let rt_dir = runtime_dir(config_path_used);
+    // Task 233: persona files resolve under the runtime dir.
+    crate::persona::set_persona_dir(rt_dir.clone());
+    // Task 256: support-watch state, drafts, and playbook resolve under the
+    // runtime dir too.
+    crate::support_watch::set_runtime_dir(rt_dir.clone());
+    // Task 233: initial self-authoring — if agent.md is missing and the
+    // operator opted in, Helix drafts its own persona in the background.
+    // Fire-and-forget: the draft lands as .pending, never live, and a
+    // failed draft must never block boot.
+    tokio::spawn(async {
+        match crate::persona::ensure_persona_file(None).await {
+            Ok(p) if p.extension().and_then(|x| x.to_str()) == Some("pending") => {
+                println!(
+                    "persona: drafted initial agent.md -> {} (awaiting /persona approve)",
+                    p.display()
+                );
+            }
+            Ok(_) => {}
+            Err(e) => log::debug!("persona: initial draft skipped: {}", e),
+        }
+    });
     let routines = std::sync::Arc::new(tokio::sync::RwLock::new(
         crate::cron::registry::RoutineRegistry::load_or_seed(rt_dir.join("routines.json")),
     ));

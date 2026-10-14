@@ -20,3 +20,4 @@ pub mod simple_planner;
 pub mod reflection_planner_adapter;
 pub mod repo_explorer;
 pub mod plan_tree;
+pub mod subagent_registry;
