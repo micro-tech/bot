@@ -2158,8 +2158,9 @@ fn handle_slash_command(cmd: &str) -> String {
         "support" => {
             // /support [drafts|approve <id>|send <id>|discard <id>]
             // Task 257 (SYSADMIN-01): draft-for-review. Approve and send are
-            // deliberately TWO steps — sending email is irreversible, and
-            // nothing sends without John's explicit tap (see drafts.rs).
+            // deliberately TWO steps — sending email is irreversible, and no
+            // AUTOMATED path sends without John's explicit tap (see
+            // drafts.rs for the exact scope — review S1).
             let sub = parts.get(1).copied().unwrap_or("drafts").to_lowercase();
             match sub.as_str() {
                 "drafts" | "list" | "status" => {

@@ -4,6 +4,7 @@
 //! the cadence position or the set of already-seen message ids. Included in
 //! `scripts/backup-state.sh` (task 256.4).
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -32,6 +33,12 @@ impl WatchMode {
 /// to recognize "already seen" for recent mail.
 pub const MAX_SEEN_IDS: usize = 200;
 
+/// Draft attempts before a message stops being re-driven (review B2).
+/// A poison message (one that always fails drafting) must not burn a
+/// Gemini call every minute forever — after this many attempts it stays
+/// unhandled on the status line for John's manual handling.
+pub const MAX_DRAFT_ATTEMPTS: u32 = 5;
+
 /// Full poll-loop state.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WatchState {
@@ -49,6 +56,12 @@ pub struct WatchState {
     /// removes entries via `mark_handled`).
     #[serde(default)]
     pub unhandled_ids: Vec<String>,
+    /// Draft attempts per message id (review B2). Failed drafts are
+    /// re-driven on subsequent checks; the counter caps the retries so a
+    /// poison message can't burn a Gemini call every minute forever.
+    /// Cleared when the message becomes handled.
+    #[serde(default)]
+    pub draft_attempts: HashMap<String, u32>,
 }
 
 impl WatchState {
@@ -83,8 +96,12 @@ impl WatchState {
     }
 
     /// A message became handled (draft staged, reply sent, or dismissed).
+    /// Also clears its draft-attempt counter (review B2).
     pub fn mark_handled(&mut self, ids: &[String]) {
         self.unhandled_ids.retain(|id| !ids.contains(id));
+        for id in ids {
+            self.draft_attempts.remove(id);
+        }
     }
 
     pub fn state_path(runtime_dir: &Path) -> PathBuf {

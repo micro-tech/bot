@@ -31,7 +31,7 @@ while mail is unhandled) a draft should appear:
 - Web UI: open the **Support** tab in the detail panel — the draft shows
   with its full text, status "pending".
 - Or chat: `/support drafts`.
-- Log line to look for: `support_watch: check done mode=BURST new=1 unhandled=1`.
+- Log line to look for: `support_watch: check done mode=BURST new=1 retried=0 unhandled=1 quiet_streak=0`.
 
 **c. VERIFY NOTHING SENT (the critical assertion).** Before you tap anything:
 - The draft status must still be **pending**.
