@@ -89,6 +89,3 @@ fn calculate_complexity(ctx: &RoutingContext) -> f32 {
 
     score.clamp(0.0, 1.0)
 }
-
-// Re-export for convenience
-pub use crate::router::complexity::score_prompt;

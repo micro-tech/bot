@@ -114,6 +114,19 @@ command = "/home/cobble/.local/bin/google-mcp"  # e.g. ~/workspace/google-mcp/ta
 # GOOGLE_CLIENT_ID = ""
 # GOOGLE_CLIENT_SECRET = ""
 
+<<<<<<< HEAD:example.config.toml
+=======
+# ── SYSADMIN-01 support@ watcher (task 256) ──────────────────────────────
+# Adaptive poll cadence for the support mailbox. All keys optional —
+# omitting the section (or the whole block) selects the defaults.
+# [support]
+# enabled = true               # master switch for the watcher tick
+# business_start = "08:00"      # 5m cadence inside this window ...
+# business_end = "18:00"        # ... 30m outside it, 1m burst on new mail
+# timezone = "America/New_York" # IANA name for the window above
+# auto_send = false             # true: drafted replies send immediately (John's 2026-10-14 call)
+
+>>>>>>> 724249c694aef025d4630744499c2da45760279d:config.toml
 
 [support]
 auto_send = true
