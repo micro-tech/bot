@@ -31,6 +31,7 @@ mod ssh;
 mod persona;
 mod cron;
 mod chat_history;
+mod support_watch;
 
 #[tokio::main]
 async fn main() {
