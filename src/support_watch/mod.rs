@@ -21,6 +21,7 @@
 pub mod config;
 pub mod state;
 pub mod drafts;
+pub mod drafter;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -329,11 +330,21 @@ fn live_config() -> SupportConfig {
 /// so. Never spawns an LLM. Errors are logged, never propagated — a failed
 /// tick must not kill the routine.
 pub fn tick(sink: &dyn MailSink) {
+    let fresh = poll_new_mail();
+    if !fresh.is_empty() {
+        sink.on_new_mail(&fresh);
+    }
+}
+
+/// The tick's core: run a cadence-gated mailbox check and return newly seen
+/// messages. Split out so async callers (the CPU routine handler, task 258)
+/// can draft replies without the sync `MailSink` boundary.
+pub fn poll_new_mail() -> Vec<IncomingMail> {
     let rt = runtime_dir();
     let cfg = live_config();
     if !cfg.enabled {
         debug!("support_watch: disabled in [support]; skipping tick");
-        return;
+        return Vec::new();
     }
     let mut state = WatchState::load(&rt);
     let now_ms = crate::utils::now_ms();
@@ -344,7 +355,7 @@ pub fn tick(sink: &dyn MailSink) {
             state.mode.as_str(),
             state.last_check_ms
         );
-        return;
+        return Vec::new();
     }
 
     let tools = match resolve_mail_tools() {
@@ -357,7 +368,7 @@ pub fn tick(sink: &dyn MailSink) {
             if let Err(e) = state.save(&rt) {
                 warn!("support_watch: failed to persist state: {e}");
             }
-            return;
+            return Vec::new();
         }
     };
 
@@ -384,9 +395,7 @@ pub fn tick(sink: &dyn MailSink) {
         state.unhandled_count(),
         state.quiet_streak
     );
-    if !fresh.is_empty() {
-        sink.on_new_mail(&fresh);
-    }
+    fresh
 }
 
 /// Mark messages handled (draft staged, reply sent, or dismissed by John).

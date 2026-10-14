@@ -6,7 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-### Added (task 257 DONE — Ranger 1, SYSADMIN-01 draft-for-review)
+### Added (task 258 DONE — Ranger 1, SYSADMIN-01 Gemini-delegated drafting)
+
+- **Gemini-pinned drafter** (`src/support_watch/drafter.rs`): `draft_reply()` builds the prompt (customer message wrapped in `<untrusted-data>`, explicit draft-only/never-send instructions, `---DRAFT-BEGIN/END---` markers), spawns via `dispatch_spawn` with backend pinned to `SUPPORT_DRAFT_BACKEND="gemini"` (constant — never auto/local), extracts the body, stages via the draft store. Structural guarantee: Gemini sits last on the health ladder, so an explicit gemini request fails loudly rather than falling back to local (pinned by test); failed drafts stay unhandled and retry on the next burst. Spend flows through normal task-236 metering.
+- **Playbook hook**: `<runtime>/support_playbook.md` parsed into `##` sections; relevant sections cited by keyword overlap (top 3); cited titles recorded on the draft for provenance; graceful when absent/malformed. Format documented for John in `docs/support-playbook.md`.
+- **Wiring**: `tick()` refactored into `poll_new_mail()` + sink wrapper; the CPU routine handler now drafts each fresh message via the drafter.
+- **Verification**: 9 drafter tests + ladder-order test green; full lib suite **409 passed, 0 failed**.
+
+---
 
 - **Pending draft store** (`src/support_watch/drafts.rs`): JSON drafts at `<runtime>/support_drafts/` with strict lifecycle (Pending→Approved→Sent, or →Discarded); draft ids sanitized against path traversal; staging marks the message handled in the watch state.
 - **Hard no-auto-send invariant** (enforced by construction + code review): `send_draft` is the only production call site that invokes the mail send tool, and it refuses anything not explicitly Approved. Approve and send are two separate steps; no approve+send shortcut; no auto-send path exists anywhere.
