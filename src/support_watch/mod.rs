@@ -649,4 +649,94 @@ mod tests {
         assert!(!SUPPORT_DRAFT_BACKEND.contains("ollama"));
         assert!(!SUPPORT_DRAFT_BACKEND.contains("local"));
     }
+
+    /// Task 260.1: mock end-to-end of the support-mail loop. Stubbed
+    /// `mcp__mail__*` tools deliver a fake inbound message; the poll loop
+    /// must enter burst, a draft must stage via the (stubbed) Gemini path,
+    /// the draft must be visible as Pending, and NO send may be attempted
+    /// before approval. Then approve + send: the send tool must fire exactly
+    /// once, carrying the approved text.
+    #[tokio::test]
+    async fn mock_end_to_end_support_loop() {
+        let _g = crate::tools::subagent_tool::test_env_lock();
+        let dir = std::env::temp_dir().join("helix-support-e2e-mock");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        override_runtime_dir_for_tests(dir.clone());
+        crate::mcp_client::clear_test_overrides();
+        crate::mcp_client::override_tool_definitions_for_tests(vec![
+            serde_json::json!({"function": {"name": "mcp__mail__check_inbox"}}),
+            serde_json::json!({"function": {"name": "mcp__mail__send_message"}}),
+        ]);
+        crate::mcp_client::stub_try_execute_for_tests(
+            "mcp__mail__check_inbox",
+            r#"[{"id":"mock-1","from":"customer@example.com","subject":"laptop won't turn on","body":"My laptop won't turn on. It was working yesterday."}]"#,
+        );
+        crate::mcp_client::stub_try_execute_for_tests(
+            "mcp__mail__send_message",
+            r#"{"ok":true,"message_id":"sent-mock-1"}"#,
+        );
+
+        // 1. The poll loop picks up the fake inbound message.
+        let fresh = poll_new_mail();
+        assert_eq!(fresh.len(), 1, "expected one fresh message");
+        assert_eq!(fresh[0].id, "mock-1");
+
+        // 2. Burst mode entered while the message is unhandled.
+        let state = WatchState::load(&dir);
+        assert_eq!(state.mode, WatchMode::Burst, "expected burst after new mail");
+        assert_eq!(state.unhandled_count(), 1);
+
+        // 3. Draft via the Gemini-delegated path (sub-agent dispatch stubbed;
+        // no API key or network needed).
+        unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
+        let draft = drafter::draft_reply(&fresh[0])
+            .await
+            .expect("draft_reply with stubbed sub-agent");
+        unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
+        assert_eq!(draft.status, drafts::DraftStatus::Pending);
+        assert_eq!(draft.in_reply_to, "mock-1");
+
+        // 4. Draft is visible as pending; CRITICAL: no send attempted yet.
+        let calls = crate::mcp_client::take_try_execute_calls_for_tests();
+        assert!(
+            calls.iter().any(|(n, _)| n == "mcp__mail__check_inbox"),
+            "check tool should have been called"
+        );
+        assert!(
+            !calls.iter().any(|(n, _)| n == "mcp__mail__send_message"),
+            "send attempted before approval: {calls:?}"
+        );
+        let listed = drafts::list_drafts();
+        assert!(
+            listed
+                .iter()
+                .any(|d| d.id == draft.id && d.status == drafts::DraftStatus::Pending),
+            "staged draft should be listed as pending"
+        );
+
+        // 5. John's two taps: approve, then send. The send tool must fire
+        // exactly once, carrying the approved text to the customer.
+        let approved = drafts::approve_draft(&draft.id).expect("approve");
+        assert_eq!(approved.status, drafts::DraftStatus::Approved);
+        let sent = drafts::send_draft(&draft.id).expect("send");
+        assert_eq!(sent.status, drafts::DraftStatus::Sent);
+        let calls = crate::mcp_client::take_try_execute_calls_for_tests();
+        let sends: Vec<_> = calls
+            .iter()
+            .filter(|(n, _)| n == "mcp__mail__send_message")
+            .collect();
+        assert_eq!(sends.len(), 1, "send tool must fire exactly once: {calls:?}");
+        assert_eq!(
+            sends[0].1.get("body").and_then(|v| v.as_str()).unwrap_or(""),
+            approved.body.as_str(),
+            "send must carry the approved text"
+        );
+        assert_eq!(
+            sends[0].1.get("to").and_then(|v| v.as_str()).unwrap_or(""),
+            "customer@example.com"
+        );
+
+        crate::mcp_client::clear_test_overrides();
+    }
 }

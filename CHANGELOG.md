@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Added (task 260.1 DONE — Ranger 1, SYSADMIN-01 mock end-to-end verification)
+
+- **Mock integration test** (`support_watch::tests::mock_end_to_end_support_loop`): stubbed `mcp__mail__check_inbox` delivers a fake inbound message → `poll_new_mail()` returns it, `WatchState` enters BURST with 1 unhandled → `draft_reply` (sub-agent dispatch stubbed via `HELIX_SUBAGENT_TEST_STUB`, no API key) stages a Pending draft → the new `try_execute` call log proves the send tool was **not** invoked before approval → `approve_draft` + `send_draft` fire `mcp__mail__send_message` **exactly once** with the approved body to the customer.
+- **Test-only seam** (`src/mcp_client/mod.rs`): `take_try_execute_calls_for_tests()` — ordered log of every `try_execute` call (tool name + args), cleared by `clear_test_overrides()`. Lets integration tests assert a tool was (or was not) invoked and with what arguments.
+- **Live-drill procedure** (`docs/support-live-drill.md`): exact step-by-step for John — prerequisites (mail-mcp install, branch deploy, config, tool-name check), test-email → draft-in-burst-window → **verify-nothing-sent** (critical assertion) → approve→send taps → discard-path drill → overnight cadence check.
+- **Verification**: full lib suite **414 passed, 0 failed** across 3 consecutive runs (one transient single-test flake on an earlier run did not reproduce — same unidentified parallel-test flake pattern as task 258).
+- **Deferred (gated on John's ops)**: 260.2 live drill (mail-mcp install on the R630), 260.3 results documentation. Task 260 stays in_progress until the live drill passes — not marked done on the mock alone.
+
+---
+
 ### Added (task 259 DONE — Ranger 1, SYSADMIN-01 web UI support panel)
 
 - **Support tab** in the web UI detail panel (`#tab-support`): poll-status line (mode, last/next check, quiet streak, unhandled count, mail-mcp state) via public `GET /support/status`; draft list with full bodies via public `GET /support/drafts`; Approve / Send / Discard buttons POSTing through the existing `opsFetch` web-token pattern. `confirm()` gates Send and Discard; `supportEsc` HTML-escapes all draft content; `loadSupport()` wired into `showDetailTab`.

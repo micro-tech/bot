@@ -2180,7 +2180,7 @@
       "id": 260,
       "title": "Live end-to-end verification of the support-mail loop",
       "description": "Gated on John's ops (mail-mcp installed + env creds). John sends a test email to support@; the loop catches it in the burst window, a draft appears for review, NOTHING auto-sends; he approves, the reply sends, then a discard-path drill.",
-      "status": "pending",
+      "status": "in_progress",
       "dependencies": [
         256,
         257,
@@ -2193,26 +2193,30 @@
         {
           "id": 260.1,
           "title": "Mock end-to-end integration (no R630 needed)",
-          "status": "pending",
-          "dependencies": []
+          "status": "done",
+          "dependencies": [],
+          "result": "260.1 done 2026-10-13: mock_end_to_end_support_loop green. Stubbed mcp__mail__check_inbox delivered a fake inbound message -> poll_new_mail returned it, WatchState entered BURST with 1 unhandled; draft_reply (HELIX_SUBAGENT_TEST_STUB, no API key) staged a Pending draft; try_execute call log proved the send tool was NOT invoked before approval; approve_draft -> send_draft fired mcp__mail__send_message exactly once with the approved body to customer@example.com. New test-only seam: mcp_client::take_try_execute_calls_for_tests (call log, cleared by clear_test_overrides). Full lib suite 414 passed / 0 failed x3 runs (one transient single-test flake on an earlier run, unidentified parallel-test flake, did not reproduce)."
         },
         {
           "id": 260.2,
           "title": "Live drill with John's test emails",
-          "status": "pending",
+          "status": "deferred",
           "dependencies": [
             260.1
-          ]
+          ],
+          "result": "GATED on John's ops: mail-mcp at /home/cobble/.local/bin/mail-mcp with env creds on the R630, branch built/deployed, config entries enabled. Exact drill procedure written to docs/support-live-drill.md (test email -> draft appears in burst window -> VERIFY NOTHING SENT -> approve->send taps -> reply arrives -> discard-path drill -> overnight cadence check)."
         },
         {
           "id": 260.3,
           "title": "Document results, file follow-ups on any gap",
-          "status": "pending",
+          "status": "deferred",
           "dependencies": [
             260.2
-          ]
+          ],
+          "result": "Gated on 260.2 live drill. Document results and file follow-ups on any gap; do not mark 260 done on a partial pass."
         }
-      ]
+      ],
+      "result": "260.1 mock integration DONE and green (see subtask). 260.2/260.3 deferred: live drill gated on John's mail-mcp install + drill run per docs/support-live-drill.md. Task 260 stays in_progress until the live drill passes."
     }
   ]
 }
