@@ -31,6 +31,7 @@ mod ssh;
 mod persona;
 mod cron;
 mod chat_history;
+mod support_watch;
 
 #[tokio::main]
 async fn main() {
@@ -593,9 +594,9 @@ async fn run_helix() {
             }
 
             while let Ok(msg) = rx.recv() {
-                println!("[{}] 📥 RECEIVED message from='{}'  preview='{}'", 
+                println!("[{}] 📥 RECEIVED message from='{}'  preview='{}'",
                     topic, msg.from, crate::utils::truncate_str(&msg.data, 160));
-                
+
                 // Only handle chat requests
                 if msg.data.contains("\"type\":\"chat_request\"") {
                     println!("[{}] ✅ Processing chat_request...", topic);
