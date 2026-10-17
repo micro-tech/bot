@@ -33,7 +33,9 @@ impl MCP {
                 timestamp: get_timestamp(),
             })
         } else if msg.data.contains("error") {
-            warn!("MCP detected error message: {}", msg.data);
+            // Task 265 (secrets): bus message data is untrusted content —
+            // log that an error message passed, not its content.
+            warn!("MCP detected error message ({} chars)", msg.data.len());
             None
         } else {
             None

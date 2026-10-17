@@ -14,7 +14,7 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt};
-use log::info;
+use log::{info, warn};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -1290,8 +1290,15 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         }
 
                         let llm = json_val["llm"].as_str().unwrap_or("").to_string();
-                        info!("Chat request received | llm='{}' | msg='{}'", llm, chat_msg);
-                        println!("[WEB] Chat received: llm='{}'  msg='{}'", llm, crate::utils::truncate_str(&chat_msg, 80));
+                        // Task 265 (secrets): chat text can contain pasted
+                        // secrets — log the backend + length, never content.
+                        info!(
+                            "Chat request received | llm='{}' | msg_len={}",
+                            llm,
+                            chat_msg.len()
+                        );
+                        // Task 265: server diagnostic → log::, not println!.
+                        info!("[WEB] Chat received: llm='{}' msg_len={}", llm, chat_msg.len());
 
                         let bus_dest = if llm == "gemini" {
                             "gemini".to_string()
@@ -1369,6 +1376,10 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                     // configured (see the "auth" message above).
                     "config_save" => {
                         if !state.auth_token.is_empty() && !authed {
+                            // Task 265: an unauthenticated save attempt is a
+                            // security event — log it server-side, not just
+                            // in the UI reply the attacker may never read.
+                            warn!("config_save: unauthenticated save attempt rejected");
                             let error_msg = json!({
                                 "type": "config_status",
                                 "status": "error",
@@ -1394,8 +1405,21 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         // The merge base must be the LIVE config file (the one
                         // Helix loaded), not a hardcoded path — otherwise a
                         // save restores secrets from the wrong file.
-                        let disk_config =
-                            fs::read_to_string(&state.config_path).unwrap_or_default();
+                        let disk_config = match fs::read_to_string(&state.config_path) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                // Task 265: a failed merge-base read used to
+                                // silently degrade to an empty base. The
+                                // REDACTED fail-safe below still refuses
+                                // the write, so no secret is clobbered —
+                                // but log why the save is about to fail.
+                                warn!(
+                                    "config_save: cannot read merge base {}: {e}",
+                                    state.config_path
+                                );
+                                String::new()
+                            }
+                        };
                         let merged_config_str =
                             restore_redacted_text(&disk_config, new_config_str);
 
@@ -1403,6 +1427,9 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         // (e.g. the key moved sections), refuse to write
                         // rather than persist the placeholder as a secret.
                         if merged_config_str.contains(REDACTED) {
+                            // Task 265: a refused save is a journal event,
+                            // not just a UI toast the operator might miss.
+                            warn!("config_save: refused, placeholders survived the restore; save not written");
                             let error_msg = json!({
                                 "type": "config_status",
                                 "status": "error",
@@ -1419,8 +1446,24 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             continue;
                         }
 
-                        if let Ok(_parsed) = toml::from_str::<Config>(&merged_config_str) {
-                            if fs::write(&state.config_path, &merged_config_str).is_ok() {
+                        // Task 265 (secrets): do NOT log the parse error —
+                        // its Display echoes the offending config line,
+                        // which may hold a secret (the merged string has
+                        // real values restored).
+                        let parse_result = toml::from_str::<Config>(&merged_config_str);
+                        if parse_result.is_err() {
+                            warn!("config_save: rejected, invalid TOML syntax (save not written)");
+                        }
+                        if let Ok(_parsed) = parse_result {
+                            let write_result =
+                                fs::write(&state.config_path, &merged_config_str);
+                            if let Err(e) = &write_result {
+                                warn!(
+                                    "config_save: failed to write {}: {e}",
+                                    state.config_path
+                                );
+                            }
+                            if write_result.is_ok() {
                                 let success_msg = json!({
                                         "type": "config_status",
                                         "status": "success",
@@ -1479,6 +1522,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                     // gate as config_save.
                     "manifest_save" => {
                         if !state.auth_token.is_empty() && !authed {
+                            warn!("manifest_save: unauthenticated save attempt rejected");
                             let error_msg = json!({
                                 "type": "manifest_status",
                                 "status": "error",
@@ -1496,7 +1540,13 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         }
                         let new_manifest = json_val["data"].as_str().unwrap_or("");
 
-                        if fs::write("system_manifest.md", new_manifest).is_ok() {
+                        // Task 265: log the failure server-side (the UI
+                        // error reply alone leaves no journal trace).
+                        let write_result = fs::write("system_manifest.md", new_manifest);
+                        if let Err(e) = &write_result {
+                            warn!("manifest_save: failed to write system_manifest.md: {e}");
+                        }
+                        if write_result.is_ok() {
                             let success_msg = json!({
                                 "type": "manifest_status",
                                 "status": "success",

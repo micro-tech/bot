@@ -469,8 +469,9 @@ pub async fn handle_ollama_message(
                     timestamp: now_ms(),
                 };
 
-                // Publish to CPU (single source of truth for responses)
-                println!("[ollama_{}] ✅ SUCCESS from Ollama, publishing llm_response to 'cpu' ({} chars)", backend_name, response.len());
+                // Publish to CPU (single source of truth for responses).
+                // Task 265: server diagnostic → log::, not println!.
+                info!("[ollama_{}] ✅ SUCCESS from Ollama, publishing llm_response to 'cpu' ({} chars)", backend_name, response.len());
                 if let Err(e) = bus.publish(response_msg.clone()) {
                     let error_msg = format!("Ollama {} failed to publish LLM response: {}", backend_name, e);
                     log_to_file(&error_msg);
@@ -492,7 +493,8 @@ pub async fn handle_ollama_message(
                     "Ollama attempt {}/{} failed: {}",
                     attempt, MAX_RETRIES, last_err
                 );
-                println!("[ollama_{}] attempt {}/{} FAILED: {}", backend_name, attempt, MAX_RETRIES, last_err);
+                // Task 265: the println! duplicate of the warn! above is
+                // gone — one report per failure, through log::.
 
                 // A 404 "model not found" will never succeed — abort immediately
                 // rather than exhausting all retry attempts uselessly.
@@ -817,7 +819,14 @@ pub mod tools {
 
                     // Basic error detection for tool failures
                     if tool_result.starts_with("Error") || tool_result.starts_with("Unknown tool") {
-                        warn!("Tool '{}' execution reported error: {}", name, tool_result);
+                        // Task 265 (secrets): the error string can echo
+                        // tool input; log its length, not its content.
+                        // The agent sees the full text in its own context.
+                        warn!(
+                            "Tool '{}' execution reported error ({} chars)",
+                            name,
+                            tool_result.len()
+                        );
                     }
 
                     info!("Tool called: '{}' → {} chars", name, tool_result.len());
