@@ -59,12 +59,9 @@ impl Default for SupportConfig {
 impl SupportConfig {
     /// Load the top-level `[support]` section from a full TOML string.
     /// Missing section (or unparseable input) yields the default.
+    /// Fallbacks are logged (task 265) via `config::load_section`.
     pub fn load_from_toml(toml_str: &str) -> Self {
-        toml::from_str::<toml::Value>(toml_str)
-            .ok()
-            .and_then(|v| v.get("support").cloned())
-            .and_then(|t| t.try_into().ok())
-            .unwrap_or_default()
+        crate::config::load_section(toml_str, "[support]", |v| v.get("support").cloned())
     }
 
     /// Parse "HH:MM" into (hour, minute). Returns None on bad input —

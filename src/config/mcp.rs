@@ -65,12 +65,9 @@ pub struct McpServerConfig {
 impl McpConfig {
     /// Load the top-level `[mcp]` section from a full TOML string.
     /// Missing section (or unparseable input) yields the disabled default.
+    /// Fallbacks are logged (task 265) via `config::load_section`.
     pub fn load_from_toml(toml_str: &str) -> Self {
-        toml::from_str::<toml::Value>(toml_str)
-            .ok()
-            .and_then(|v| v.get("mcp").cloned())
-            .and_then(|t| t.try_into().ok())
-            .unwrap_or_default()
+        super::load_section(toml_str, "[mcp]", |v| v.get("mcp").cloned())
     }
 
     pub fn is_enabled(&self) -> bool {

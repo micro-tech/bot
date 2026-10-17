@@ -197,6 +197,9 @@ pub fn extract_email(from: &str) -> String {
 /// objects, or an object with a messages/items/results array); falls back to
 /// treating unparseable output as zero messages rather than crashing.
 /// Id-ish fields are tried in order: id, uid, message_id.
+/// Id values may be strings or JSON numbers (mail-mcp emits numeric UIDs,
+/// task 264); numbers stringify so downstream code parsing back to u32
+/// keeps working.
 /// The task-235 untrusted-data wrapper is stripped before parsing.
 pub fn parse_mail_list(output: &str) -> Vec<IncomingMail> {
     let output = strip_untrusted_tags(output);
@@ -217,12 +220,18 @@ pub fn parse_mail_list(output: &str) -> Vec<IncomingMail> {
     };
     arr.iter()
         .filter_map(|m| {
-            let id = m
+            // mail-mcp emits numeric UIDs (task 264): accept a string id
+            // or a JSON number for any of the id-ish keys. A numeric id
+            // stringifies ("123") so downstream code parsing it back to
+            // u32 keeps working. Items with no id at all are dropped.
+            let id_value = m
                 .get("id")
                 .or_else(|| m.get("uid"))
-                .or_else(|| m.get("message_id"))
-                .and_then(|v| v.as_str())
-                .or_else(|| m.get("id").and_then(|v| v.as_u64()).map(|_| ""))?;
+                .or_else(|| m.get("message_id"))?;
+            let id = id_value
+                .as_str()
+                .map(str::to_string)
+                .or_else(|| id_value.as_u64().map(|n| n.to_string()))?;
             if id.is_empty() {
                 return None;
             }
@@ -643,6 +652,30 @@ mod tests {
     }
 
     #[test]
+    fn parse_mail_list_accepts_numeric_uids_like_real_mail_search() {
+        // Task 264: mail-mcp's mail_search emits numeric UIDs; the parser
+        // used to drop every such message (it only accepted string ids).
+        // GIVEN the real mail_search payload shape with a numeric uid:
+        let out = r#"{"mailbox":"INBOX","criteria":"ALL","returned":1,"messages":[{"uid":123,"subject":"Hi","from":"john mcconnell <john@example.com>","date":"Thu, 16 Oct 2026 01:13:00 +0000"}]}"#;
+        // WHEN parsed, THEN the message survives with the uid stringified:
+        let msgs = parse_mail_list(out);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].id, "123");
+        assert_eq!(msgs[0].subject, "Hi");
+        assert_eq!(msgs[0].from, "john@example.com");
+        // Numeric "id" and "message_id" variants also stringify:
+        assert_eq!(parse_mail_list(r#"[{"id":7,"subject":"x"}]"#)[0].id, "7");
+        assert_eq!(
+            parse_mail_list(r#"[{"message_id":99,"subject":"x"}]"#)[0].id,
+            "99"
+        );
+        // String ids still work, and id-less / null-id items still drop:
+        assert_eq!(parse_mail_list(r#"[{"id":"abc","subject":"x"}]"#)[0].id, "abc");
+        assert!(parse_mail_list(r#"[{"uid":null,"subject":"x"}]"#).is_empty());
+        assert!(parse_mail_list(r#"[{"subject":"x"}]"#).is_empty());
+    }
+
+    #[test]
     fn tick_with_stubbed_mail_tools_drives_burst_lifecycle() {
         // Task 256.5: integration test with stub mcp__mail__* tools — no
         // real binary, no network, no LLM. Exercises the real tick() path
@@ -797,9 +830,12 @@ mod tests {
             serde_json::json!({"function": {"name": "mcp__mail__check_inbox"}}),
             serde_json::json!({"function": {"name": "mcp__mail__send_message"}}),
         ]);
+        // Task 264: the stub emits the REAL mail_search shape — the
+        // {"messages": [...]} wrapper with a NUMERIC uid — so the mock
+        // cannot mask a parser shape mismatch again.
         crate::mcp_client::stub_try_execute_for_tests(
             "mcp__mail__check_inbox",
-            r#"[{"id":"mock-1","from":"customer@example.com","subject":"laptop won't turn on","body":"My laptop won't turn on. It was working yesterday."}]"#,
+            r#"{"mailbox":"INBOX","criteria":"ALL","returned":1,"messages":[{"uid":4242,"from":"customer@example.com","subject":"laptop won't turn on","body":"My laptop won't turn on. It was working yesterday."}]}"#,
         );
         crate::mcp_client::stub_try_execute_for_tests(
             "mcp__mail__send_message",
@@ -809,7 +845,7 @@ mod tests {
         // 1. The poll loop picks up the fake inbound message.
         let fresh = poll_new_mail();
         assert_eq!(fresh.len(), 1, "expected one fresh message");
-        assert_eq!(fresh[0].id, "mock-1");
+        assert_eq!(fresh[0].id, "4242");
 
         // 2. Burst mode entered while the message is unhandled.
         let state = WatchState::load(&dir);
@@ -824,7 +860,7 @@ mod tests {
             .expect("draft_reply with stubbed sub-agent");
         unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
         assert_eq!(draft.status, drafts::DraftStatus::Pending);
-        assert_eq!(draft.in_reply_to, "mock-1");
+        assert_eq!(draft.in_reply_to, "4242");
 
         // 4. Draft is visible as pending; CRITICAL: no send attempted yet.
         let calls = crate::mcp_client::take_try_execute_calls_for_tests();

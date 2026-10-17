@@ -161,9 +161,11 @@ pub async fn run_acp_stdio(
         )
         // ── fallthrough: unknown methods get a clean error ──────────────
         .on_receive_dispatch(
-            move |msg: agent_client_protocol::Dispatch<ClientRequest, ClientNotification>,
+            move |_msg: agent_client_protocol::Dispatch<ClientRequest, ClientNotification>,
                   _cx: ConnectionTo<Client>| async move {
-                warn!("ACP unhandled message: {:?}", msg);
+                // Task 265 (secrets): a dispatch can carry prompt/tool
+                // content — log that one arrived, not its payload.
+                warn!("ACP unhandled message received (dispatch dropped)");
                 Ok(())
             },
             on_receive_dispatch!(),

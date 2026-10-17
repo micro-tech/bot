@@ -26,6 +26,8 @@ where
         .run_unified_agent(goal, planner, allowed_tools, 20)
         .await?;
 
-    info!("[CPU] agent.run completed: {}", result);
+    // Task 265 (secrets): the agent result can quote tool output —
+    // log its length, not its content.
+    info!("[CPU] agent.run completed ({} chars)", result.len());
     Ok(result)
 }

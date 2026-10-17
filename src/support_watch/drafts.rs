@@ -249,7 +249,14 @@ pub fn send_draft(id: &str) -> Result<SupportDraft, String> {
     }
     draft.status = DraftStatus::Sent;
     save_draft(&dir, &draft)?;
-    log::info!("support: sent draft '{}' via {}: {}", draft.id, tools.send, result.chars().take(200).collect::<String>());
+    // Task 265 (secrets): the send result can echo mail content in
+    // error paths — log its length, not its content.
+    log::info!(
+        "support: sent draft '{}' via {} ({} chars)",
+        draft.id,
+        tools.send,
+        result.len()
+    );
     Ok(draft)
 }
 

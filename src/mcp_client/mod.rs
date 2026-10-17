@@ -18,7 +18,7 @@ pub use naming::PREFIX;
 
 use std::sync::OnceLock;
 
-use log::warn;
+use log::{debug, warn};
 use serde_json::Value;
 use tokio::sync::Mutex as TokioMutex;
 
@@ -52,9 +52,16 @@ static MCP_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static MCP_MANAGER: OnceLock<std::sync::Arc<TokioMutex<McpManager>>> = OnceLock::new();
 
 fn load_config_from(path: &std::path::Path) -> McpConfig {
-    std::fs::read_to_string(path)
-        .map(|s| McpConfig::load_from_toml(&s))
-        .unwrap_or_default()
+    match std::fs::read_to_string(path) {
+        Ok(s) => McpConfig::load_from_toml(&s),
+        Err(e) => {
+            // Task 265: a missing/unreadable config file used to silently
+            // disable MCP. Say so — an operator who wrote [mcp] enabled
+            // must not wonder why no MCP tools appear.
+            warn!("mcp: cannot read config file {}, MCP disabled: {e}", path.display());
+            McpConfig::default()
+        }
+    }
 }
 
 fn load_config() -> McpConfig {
@@ -183,6 +190,12 @@ where
 
 fn manager() -> Option<std::sync::Arc<TokioMutex<McpManager>>> {
     if !is_enabled() {
+        // debug!, not warn!: this fires on every tool_definitions() /
+        // try_execute() call while MCP is off, and off is the normal
+        // state for a config without [mcp] enabled = true. A broken
+        // config that *should* have enabled MCP is caught louder, at
+        // load time (load_config_from / load_section warn!).
+        debug!("mcp: client disabled, no manager (no [mcp] enabled = true)");
         return None;
     }
     Some(
