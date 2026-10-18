@@ -55,19 +55,39 @@ impl<P: Planner> RuntimeLoop<P> {
             if self.trace {
                 match &decision {
                     PlannerOutput::ToolCall { tool_name, args_json, .. } => {
-                        info!("[Runtime] Planner chose ToolCall: {} (args={})", tool_name, args_json);
+                        // Task 265 (secrets): log arg KEYS, never values —
+                        // args can carry bodies, commands, or secrets.
+                        let arg_keys: Vec<&str> = args_json
+                            .as_object()
+                            .map(|o| o.keys().map(String::as_str).collect())
+                            .unwrap_or_default();
+                        info!(
+                            "[Runtime] Planner chose ToolCall: {} (arg_keys={:?})",
+                            tool_name, arg_keys
+                        );
                     }
                     PlannerOutput::LLMCall { prompt, .. } => {
                         info!("[Runtime] Planner chose LLMCall (prompt_len={})", prompt.len());
                     }
                     PlannerOutput::FinalAnswer { message, .. } => {
-                        info!("[Runtime] Planner chose FinalAnswer: {}", message);
+                        // Task 265 (secrets): the answer can quote tool
+                        // output; log its length, not its content.
+                        info!(
+                            "[Runtime] Planner chose FinalAnswer ({} chars)",
+                            message.len()
+                        );
                     }
                     PlannerOutput::Error { message } => {
-                        warn!("[Runtime] Planner returned Error: {}", message);
+                        warn!(
+                            "[Runtime] Planner returned Error ({} chars)",
+                            message.len()
+                        );
                     }
                     PlannerOutput::Replan { new_goal_focus, .. } => {
-                        info!("[Runtime] Planner chose Replan: focus on '{}'", new_goal_focus);
+                        info!(
+                            "[Runtime] Planner chose Replan (focus {} chars)",
+                            new_goal_focus.len()
+                        );
                     }
                 }
             }
@@ -109,7 +129,9 @@ impl<P: Planner> RuntimeLoop<P> {
                 PlannerOutput::Error { message } => {
                     state.halt("Terminal step reached");
                     crate::agents::bus_events::emit_agent_error(&state, &message);
-                    warn!("[Runtime] Agent halted with error: {}", message);
+                    // Task 265 (secrets): the full text stays in the trace
+                    // / bus event; the log line carries length only.
+                    warn!("[Runtime] Agent halted with error ({} chars)", message.len());
                     step.error = Some(message);
                     step.halted = true;
                     self.runtime_trace.push(step);
@@ -182,7 +204,15 @@ impl<P: Planner> RuntimeLoop<P> {
                     match tool_result {
                         crate::agents::tool_supervisor_v2::ToolResult::Success(value) => {
                             if self.trace {
-                                info!("[Runtime] Tool '{}' succeeded → {:?}", tool_name, value);
+                                // Task 265 (secrets): tool results can
+                                // carry bodies/secrets — log length only.
+                                let result_len = serde_json::to_string(&value)
+                                    .map(|s| s.len())
+                                    .unwrap_or(0);
+                                info!(
+                                    "[Runtime] Tool '{}' succeeded ({} chars)",
+                                    tool_name, result_len
+                                );
                             }
                             state.last_tool_result = Some(value.clone());
                             state.messages.push(format!(

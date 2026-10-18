@@ -19,9 +19,11 @@
 //! claim "no code path sends without John's tap" system-wide — the promise
 //! is "no AUTOMATED path sends without John's tap."
 //!
-//! Auto-send categories: NONE. If John ever blesses categories, that is a
-//! separate task with its own approval — this module builds no auto-send
-//! path.
+//! Auto-send: John's 2026-10-14 call blessed auto-send for the support
+//! desk. It is config-gated behind `[support] auto_send` (default false):
+//! when true, `auto_send_draft` approves and sends a freshly staged draft
+//! immediately from the poll tick. The default-false keeps the original
+//! invariant (no automated send without John's tap) unless he opts in.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -247,8 +249,24 @@ pub fn send_draft(id: &str) -> Result<SupportDraft, String> {
     }
     draft.status = DraftStatus::Sent;
     save_draft(&dir, &draft)?;
-    log::info!("support: sent draft '{}' via {}: {}", draft.id, tools.send, result.chars().take(200).collect::<String>());
+    // Task 265 (secrets): the send result can echo mail content in
+    // error paths — log its length, not its content.
+    log::info!(
+        "support: sent draft '{}' via {} ({} chars)",
+        draft.id,
+        tools.send,
+        result.len()
+    );
     Ok(draft)
+}
+
+/// Auto-send a freshly staged draft: approve + send in one step.
+/// ONLY called from the poll tick when `[support] auto_send = true`
+/// (John's 2026-10-14 call). A send failure leaves the draft Approved —
+/// visible for John's manual retry — and is NOT retried automatically.
+pub fn auto_send_draft(id: &str) -> Result<SupportDraft, String> {
+    approve_draft(id)?;
+    send_draft(id)
 }
 
 /// True when a `tools::execute` result for the mail send tool is
@@ -317,6 +335,49 @@ mod tests {
         // AND it shows up in the list:
         assert!(list_drafts().iter().any(|x| x.id == d.id && x.status == DraftStatus::Sent));
         crate::mcp_client::clear_test_overrides();
+    }
+
+    #[test]
+    fn auto_send_draft_approves_and_sends() {
+        let _g = with_drafts_dir("helix-drafts-test-autosend");
+        // Stub the mail send tool (no real binary).
+        crate::mcp_client::clear_test_overrides();
+        crate::mcp_client::override_tool_definitions_for_tests(vec![serde_json::json!(
+            {"type":"function","function":{"name":"mcp__mail__send_message","description":"send","parameters":{}}}
+        )]);
+        crate::mcp_client::stub_try_execute_for_tests("mcp__mail__send_message", "message queued");
+
+        // GIVEN a staged (pending) draft:
+        let d = stage_draft(&test_msg(), "body", vec![]).unwrap();
+        assert_eq!(d.status, DraftStatus::Pending);
+        // WHEN auto-sent THEN it goes straight to Sent (approve+send):
+        let d = auto_send_draft(&d.id).unwrap();
+        assert_eq!(d.status, DraftStatus::Sent);
+        crate::mcp_client::clear_test_overrides();
+    }
+
+    #[test]
+    fn auto_send_draft_leaves_failed_send_approved() {
+        let _g = with_drafts_dir("helix-drafts-test-autosend-fail");
+        crate::mcp_client::clear_test_overrides();
+        // GIVEN a staged draft and no mail tools available:
+        let d = stage_draft(&test_msg(), "body", vec![]).unwrap();
+        // WHEN auto-send runs THEN the approve step succeeds but the send
+        // fails at tool resolution:
+        let err = auto_send_draft(&d.id).expect_err("send without tools must fail");
+        assert!(err.contains("no mcp__mail__"), "unexpected error: {err}");
+        // AND the draft is Approved (not Pending, not Sent) — visible for
+        // John's manual retry, never silently dropped or auto-retried.
+        let back = load_draft(&drafts_dir(), &d.id).unwrap();
+        assert_eq!(back.status, DraftStatus::Approved);
+    }
+
+    #[test]
+    fn auto_send_draft_refuses_non_pending() {
+        let _g = with_drafts_dir("helix-drafts-test-autosend-refuse");
+        let d = stage_draft(&test_msg(), "body", vec![]).unwrap();
+        let d = discard_draft(&d.id).unwrap();
+        assert!(auto_send_draft(&d.id).is_err());
     }
 
     #[test]

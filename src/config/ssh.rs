@@ -106,12 +106,9 @@ impl Default for SshConfig {
 impl SshConfig {
     /// Load the top-level `[ssh]` section from a full TOML string.
     /// Missing section (or unparseable input) yields the disabled default.
+    /// Fallbacks are logged (task 265) via `config::load_section`.
     pub fn load_from_toml(toml_str: &str) -> Self {
-        toml::from_str::<toml::Value>(toml_str)
-            .ok()
-            .and_then(|v| v.get("ssh").cloned())
-            .and_then(|s| s.try_into().ok())
-            .unwrap_or_default()
+        super::load_section(toml_str, "[ssh]", |v| v.get("ssh").cloned())
     }
 
     /// True when the operator explicitly enabled the SSH server.

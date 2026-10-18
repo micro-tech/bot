@@ -323,7 +323,17 @@ async fn handle_client(mut stream: tokio::net::UnixStream, bus: Bus, start_time:
         let response = if let Ok(msg) = serde_json::from_str::<Value>(&line) {
             if let Some(cmd) = msg.get("cmd").and_then(|v| v.as_str()) {
                 let args = msg.get("args").cloned().unwrap_or(json!({}));
-                debug!("CLI command: {} with args {:?}", cmd, args);
+                // Task 265 (secrets): CLI args can carry tokens or other
+                // secrets — log the command + arg shape, never the values.
+                debug!(
+                    "CLI command: {} (args: {})",
+                    cmd,
+                    if args.is_object() {
+                        format!("{} keys", args.as_object().map(|o| o.len()).unwrap_or(0))
+                    } else {
+                        format!("{} chars", args.to_string().len())
+                    }
+                );
 
                 // Publish to bus
                 let bus_msg = Message {

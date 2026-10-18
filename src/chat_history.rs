@@ -158,10 +158,22 @@ pub fn load_from_disk() {
     // Compact: rewrite with only the retained turns.
     if let Ok(mut f) = std::fs::File::create(&path) {
         use std::io::Write;
+        // Task 265: a failed compaction write used to be swallowed per
+        // line, silently losing history on the next restart. Report once.
+        let mut first_err: Option<std::io::Error> = None;
         for t in &turns {
             let line =
                 serde_json::json!({ "user": t.user, "assistant": t.assistant }).to_string();
-            let _ = writeln!(f, "{}", line);
+            if let Err(e) = writeln!(f, "{}", line) {
+                if first_err.is_none() {
+                    first_err = Some(e);
+                }
+            }
+        }
+        if let Some(e) = first_err {
+            eprintln!(
+                "[chat_history] compaction write failed ({e}) — history may be lost on restart"
+            );
         }
     }
 }

@@ -454,7 +454,14 @@ async fn call_gemini_tools(
         for (name, args) in &calls {
             let result = crate::tools::execute(name, args);
             if result.starts_with("Error") || result.starts_with("Unknown tool") {
-                warn!("Tool '{}' execution reported error: {}", name, result);
+                // Task 265 (secrets): the error string can echo tool
+                // input; log its length, not its content. The agent
+                // sees the full text in its own context.
+                warn!(
+                    "Tool '{}' execution reported error ({} chars)",
+                    name,
+                    result.len()
+                );
             }
             info!("Gemini tool called: '{}' → {} chars", name, result.len());
 

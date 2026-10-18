@@ -22,6 +22,13 @@ pub struct SupportConfig {
     /// IANA timezone name for business hours. Default America/New_York.
     #[serde(default = "default_tz")]
     pub timezone: String,
+
+    /// Auto-send drafted replies without John's approval. Default false.
+    /// John's 2026-10-14 call: the support desk auto-sends. When true, a
+    /// successfully drafted reply is approved and sent immediately by the
+    /// poll tick; the draft stays visible in the store afterward.
+    #[serde(default)]
+    pub auto_send: bool,
 }
 
 fn default_true() -> bool {
@@ -44,6 +51,7 @@ impl Default for SupportConfig {
             business_start: default_biz_start(),
             business_end: default_biz_end(),
             timezone: default_tz(),
+            auto_send: false,
         }
     }
 }
@@ -51,12 +59,9 @@ impl Default for SupportConfig {
 impl SupportConfig {
     /// Load the top-level `[support]` section from a full TOML string.
     /// Missing section (or unparseable input) yields the default.
+    /// Fallbacks are logged (task 265) via `config::load_section`.
     pub fn load_from_toml(toml_str: &str) -> Self {
-        toml::from_str::<toml::Value>(toml_str)
-            .ok()
-            .and_then(|v| v.get("support").cloned())
-            .and_then(|t| t.try_into().ok())
-            .unwrap_or_default()
+        crate::config::load_section(toml_str, "[support]", |v| v.get("support").cloned())
     }
 
     /// Parse "HH:MM" into (hour, minute). Returns None on bad input —
@@ -92,6 +97,15 @@ mod tests {
         assert_eq!(cfg.business_start, "08:00");
         assert_eq!(cfg.business_end, "18:00");
         assert_eq!(cfg.timezone, "America/New_York");
+        assert!(!cfg.auto_send, "auto-send must default to off");
+    }
+
+    #[test]
+    fn auto_send_parses_when_set() {
+        let cfg = SupportConfig::load_from_toml("[support]\nauto_send = true\n");
+        assert!(cfg.auto_send);
+        let cfg = SupportConfig::load_from_toml("[support]\n");
+        assert!(!cfg.auto_send);
     }
 
     #[test]
