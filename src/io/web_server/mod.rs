@@ -1992,7 +1992,7 @@ async fn support_discard(Json(a): Json<SupportDraftAction>) -> impl IntoResponse
 
 /// POST /ops/restart — restart the helix service (task 229).
 /// Auth via require_web_token middleware (task 240).
-async fn ops_restart(State(state): State<AppState>) -> impl IntoResponse {
+async fn ops_restart(State(_state): State<AppState>) -> impl IntoResponse {
     // --no-block: queue the restart and return before systemd SIGTERMs us.
     // The installer's pattern is interactive sudo, which cannot work headless;
     // `sudo -n` fails fast instead of hanging when no NOPASSWD rule exists.

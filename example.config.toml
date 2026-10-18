@@ -97,32 +97,15 @@ trace_file = "okf_traces.jsonl" # JSONL append target for POST /okf/traces
 # their tools. NOTE: this is unrelated to src/mcp/ ("Master Control Program",
 # the internal bus router).
 #
-# [mcp] is enabled below with the google server live. The mail server entry
-# is a commented template — uncomment it once mail-mcp is installed
-# (task 255; SYSADMIN-01 support@ watcher).
+# Everything below is commented out, which leaves the client disabled — the
+# default. When disabled, no servers are spawned and no MCP tools appear.
 # ─────────────────────────────────────────────────────────────────────────────
-[mcp]
-enabled = true                  # Master switch (set to true to activate)
+ [mcp]
+ enabled = true                  # Master switch (set to true to activate)
 #
 [[mcp.servers]]
 name = "google"                  # Tool namespace: mcp__google__<tool>
 command = "/home/cobble/.local/bin/google-mcp"  # e.g. ~/workspace/google-mcp/target/debug/google-mcp
-#
-# ── SYSADMIN-01 support@ watcher (task 255) ─────────────────────────────
-# Uncomment after installing mail-mcp at the path below with the mailbox
-# credentials in its environment (mail-mcp is one-mailbox-per-process;
-# a second mailbox = a second [[mcp.servers]] entry). Tools appear as
-# mcp__mail__<tool>. Exact tool names are confirmed on the R630 — see
-# docs/mcp.md "mail-mcp (support@ watcher)".
-# [[mcp.servers]]
-# name = "mail"
-# command = "/home/cobble/.local/bin/mail-mcp"
-# [mcp.servers.env]
-# MAIL_MCP_... = "..."   # exact var names per the mail-mcp README; never commit real values
-
-
-
-
 # args = []                        # Extra argv entries (optional)
 #
 # # Extra env vars for the server process, on top of the inherited environment.
@@ -131,6 +114,8 @@ command = "/home/cobble/.local/bin/google-mcp"  # e.g. ~/workspace/google-mcp/ta
 # GOOGLE_CLIENT_ID = ""
 # GOOGLE_CLIENT_SECRET = ""
 
+<<<<<<< HEAD:example.config.toml
+=======
 # ── SYSADMIN-01 support@ watcher (task 256) ──────────────────────────────
 # Adaptive poll cadence for the support mailbox. All keys optional —
 # omitting the section (or the whole block) selects the defaults.
@@ -140,3 +125,8 @@ command = "/home/cobble/.local/bin/google-mcp"  # e.g. ~/workspace/google-mcp/ta
 # business_end = "18:00"        # ... 30m outside it, 1m burst on new mail
 # timezone = "America/New_York" # IANA name for the window above
 # auto_send = false             # true: drafted replies send immediately (John's 2026-10-14 call)
+
+>>>>>>> 724249c694aef025d4630744499c2da45760279d:config.toml
+
+[support]
+auto_send = true
