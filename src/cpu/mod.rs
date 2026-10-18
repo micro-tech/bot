@@ -17,7 +17,7 @@ use crate::cpu::instructions::Instruction;
 #[allow(unused_imports)]
 use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
 use crate::cpu::state::AgentState;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 
 use crate::hy_evo::integration::{CpuExecutor as HyEvoCpuExecutor, HyEvoIntegration};
 use crate::hy_evo::reflection::ReflectionLlm;
@@ -455,12 +455,29 @@ where
     /// attempts per message — past the cap it waits for John's manual
     /// handling instead of burning a Gemini call every minute forever.
     async fn routine_support_mail_watch(&mut self) {
+        let auto_send = crate::support_watch::live_config().auto_send;
         for msg in crate::support_watch::poll_new_mail() {
             match crate::support_watch::drafter::draft_reply(&msg).await {
-                Ok(d) => log_to_file(&format!(
-                    "support: staged draft {} for message {} (from {})",
-                    d.id, msg.id, msg.from
-                )),
+                Ok(d) => {
+                    log_to_file(&format!(
+                        "support: staged draft {} for message {} (from {})",
+                        d.id, msg.id, msg.from
+                    ));
+                    // John's 2026-10-14 call: [support] auto_send ships the
+                    // reply immediately instead of waiting for his tap.
+                    if auto_send {
+                        match crate::support_watch::drafts::auto_send_draft(&d.id) {
+                            Ok(_) => log_to_file(&format!(
+                                "support: auto-sent reply for draft {} (message {})",
+                                d.id, msg.id
+                            )),
+                            Err(e) => log_to_file(&format!(
+                                "support: auto-send failed for draft {}: {} (draft stays approved, no auto-retry)",
+                                d.id, e
+                            )),
+                        }
+                    }
+                }
                 Err(e) => log_to_file(&format!(
                     "support: draft failed for message {}: {} (stays unhandled)",
                     msg.id, e
@@ -483,14 +500,19 @@ where
             title,
             body
         );
-        let _ = std::fs::OpenOptions::new()
+        // Task 265: a failed nightly-report write used to be swallowed —
+        // John's morning review surface silently losing entries.
+        if let Err(e) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&path)
             .and_then(|mut f| {
                 use std::io::Write;
                 f.write_all(entry.as_bytes())
-            });
+            })
+        {
+            warn!("nightly_report: failed to append to {}: {e}", path.display());
+        }
     }
 
     /// Task 202.1: copy short-term (working) memory to long-term storage —
@@ -591,14 +613,22 @@ where
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
             summary
         );
-        let _ = std::fs::OpenOptions::new()
+        // Task 265: a failed consolidated-memory write used to be
+        // swallowed — long-term memory silently losing entries.
+        if let Err(e) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&path)
             .and_then(|mut f| {
                 use std::io::Write;
                 f.write_all(entry.as_bytes())
-            });
+            })
+        {
+            warn!(
+                "persist_consolidated_memory: failed to append to {}: {e}",
+                path.display()
+            );
+        }
     }
 
     /// Task 202.2: error-log check that actually reports findings —
@@ -619,7 +649,9 @@ where
                 body.push_str(&format!("  {}\n", line));
             }
         }
-        println!("[CPU] error-log review: {} error lines", findings.total);
+        // Task 265: server diagnostic → log::, not println! (the
+        // log_to_file line below stays — the CPU's own file log).
+        info!("[CPU] error-log review: {} error lines", findings.total);
         log_to_file(&format!("error-log review: {} error lines", findings.total));
         self.nightly_report("Error log review", &body);
 
@@ -1261,7 +1293,10 @@ where
     // -------------------------------------------------------------------------
 
     pub async fn execute_instruction(&mut self, instr: Instruction) {
-        println!("Executing instruction: {:?}", instr);
+        // Task 265 (secrets): log the variant only — the Debug dump
+        // prints full payloads (memory values, bus payloads, skill
+        // args, LLM prompts).
+        debug!("Executing instruction: {}", instr.variant_name());
 
         match instr {
             Instruction::ReadMemory { key } => {

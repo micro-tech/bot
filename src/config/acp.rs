@@ -38,12 +38,9 @@ impl Default for AcpConfig {
 impl AcpConfig {
     /// Load the top-level `[acp]` section from a full TOML string.
     /// Missing section (or unparseable input) yields the disabled default.
+    /// Fallbacks are logged (task 265) via `config::load_section`.
     pub fn load_from_toml(toml_str: &str) -> Self {
-        toml::from_str::<toml::Value>(toml_str)
-            .ok()
-            .and_then(|v| v.get("acp").cloned())
-            .and_then(|t| t.try_into().ok())
-            .unwrap_or_default()
+        super::load_section(toml_str, "[acp]", |v| v.get("acp").cloned())
     }
 
     pub fn is_enabled(&self) -> bool {

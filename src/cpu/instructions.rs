@@ -58,7 +58,14 @@ impl CpuEvent {
     /// Creates a CpuEvent from a Message.
     /// Suggestions: Implement logging for incoming messages and handle potential errors, such as invalid data in Message.
     pub fn from_message(msg: &Message) -> Self {
-        log::debug!("Creating CpuEvent from message: {:?}", msg); // Added logging
+        // Task 265 (secrets): bus message data is untrusted content —
+        // log routing metadata, never the payload.
+        log::debug!(
+            "Creating CpuEvent from message: from={} to={} data_len={}",
+            msg.from,
+            msg.to,
+            msg.data.len()
+        );
         CpuEvent {
             id: msg.timestamp.to_string(),
             source: CpuEventSource::Internal,
@@ -117,4 +124,24 @@ pub enum Instruction {
         prompt: String,
         correlation_id: u64,
     },
+}
+
+impl Instruction {
+    /// Static variant name for logging (task 265). The `{:#?}`/`{:?}`
+    /// Debug dump prints full payloads (memory values, bus payloads,
+    /// skill args, LLM prompts) — never log those; log the variant only.
+    pub fn variant_name(&self) -> &'static str {
+        match self {
+            Instruction::ReadMemory { .. } => "ReadMemory",
+            Instruction::WriteMemory { .. } => "WriteMemory",
+            Instruction::EmitBusEvent { .. } => "EmitBusEvent",
+            Instruction::UpdateBelief { .. } => "UpdateBelief",
+            Instruction::RunSkill { .. } => "RunSkill",
+            Instruction::ExecuteHooks { .. } => "ExecuteHooks",
+            Instruction::PlanNextSteps => "PlanNextSteps",
+            Instruction::ReflectOnLastStep => "ReflectOnLastStep",
+            Instruction::WaitForEvent => "WaitForEvent",
+            Instruction::CallLlm { .. } => "CallLlm",
+        }
+    }
 }

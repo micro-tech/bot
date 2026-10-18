@@ -44,12 +44,11 @@ pub struct ProjectConfig {
 
 impl ProjectScannerConfig {
     /// Load the `[helix.project_scanner]` section from a full TOML string.
+    /// Fallbacks are logged (task 265) via `config::load_section`.
     pub fn load_from_toml(toml_str: &str) -> Self {
-        toml::from_str::<toml::Value>(toml_str)
-            .ok()
-            .and_then(|v| v.get("helix")?.get("project_scanner").cloned())
-            .and_then(|r| r.try_into().ok())
-            .unwrap_or_default()
+        super::load_section(toml_str, "[helix.project_scanner]", |v| {
+            v.get("helix")?.get("project_scanner").cloned()
+        })
     }
 
     pub fn is_enabled(&self) -> bool {

@@ -31,9 +31,28 @@ mod ssh;
 mod persona;
 mod cron;
 mod chat_history;
+mod support_watch;
 
 #[tokio::main]
 async fn main() {
+    // Task 265 — logging policy, read before adding a print:
+    // - `println!` / `eprintln!` = USER-FACING CLI output only: the
+    //   startup banner, "Using config file", ACP-mode CLI messages, and
+    //   standalone-bin output (installer). These go to the operator.
+    // - `log::{info,debug,warn,error}` = ALL server diagnostics. They
+    //   flow through env_logger (RUST_LOG) to stderr → journal.
+    // - NEVER log content: no secret values, no mail bodies/subjects,
+    //   no chat text, no tool args/results, no config file lines, no
+    //   bus message data. Log names, keys, paths, counts, lengths.
+    //   (Config parse/shape errors are deliberately NOT logged: their
+    //   Display echoes the offending file line.)
+    //
+    // Task 265: sink the `log` facade before anything that logs. The ACP
+    // branch below returns early, so init must come first, not in
+    // run_helix(). env_logger writes to stderr, so the ACP JSON-RPC
+    // stream on stdout stays clean.
+    helix::init_logging();
+
     // `helix acp` — ACP server mode (Zed / ACP clients drive Helix over
     // stdio). Handled before normal startup; see run_acp_server().
     let args: Vec<String> = std::env::args().collect();

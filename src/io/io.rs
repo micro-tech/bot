@@ -76,25 +76,42 @@ impl IOManager {
 
     /// Handles messages destined for Ollama by delegating to the ollama module.
     fn handle_ollama_message(message: Message) {
-        println!("[Ollama] Received message from {}: {}", message.from, message.data);
+        // Task 265 (secrets): log routing metadata, never message data.
+        log::debug!(
+            "[Ollama] Received message from {} ({} chars)",
+            message.from,
+            message.data.len()
+        );
         // Future: call actual ollama_handler::process(message)
     }
 
     /// Handles messages destined for Web Interface.
     fn handle_web_message(message: Message) {
-        println!("[Web] Received message from {}: {}", message.from, message.data);
+        log::debug!(
+            "[Web] Received message from {} ({} chars)",
+            message.from,
+            message.data.len()
+        );
         // Future: Forward to web_server module
     }
 
     /// Handles messages destined for Terminal.
     fn handle_terminal_message(message: Message) {
-        println!("[Terminal] Received message from {}: {}", message.from, message.data);
+        log::debug!(
+            "[Terminal] Received message from {} ({} chars)",
+            message.from,
+            message.data.len()
+        );
         // Future: Forward to terminal/cli module
     }
 
     /// Handles messages destined for Gemini.
     fn handle_gemini_message(message: Message) {
-        println!("[Gemini] Received message from {}: {}", message.from, message.data);
+        log::debug!(
+            "[Gemini] Received message from {} ({} chars)",
+            message.from,
+            message.data.len()
+        );
         // Future: Implement Gemini API integration
     }
 

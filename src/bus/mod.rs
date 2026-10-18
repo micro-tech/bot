@@ -68,10 +68,12 @@ impl Bus {
                     }
                 }
                 if !delivered {
-                    // Optional: log undelivered messages
+                    // Optional: log undelivered messages. Task 265: the
+                    // old println! here also dumped a 120-char data
+                    // preview — bus data is untrusted content, so the
+                    // eprintln! above (routing metadata only) is the
+                    // whole report; no duplicate, no preview.
                     eprintln!("[Bus] ⚠️ NO SUBSCRIBER for destination: '{}' (from='{}')", message.to, message.from);
-                    println!("[Bus] ⚠️ NO SUBSCRIBER for destination: '{}' (from='{}' data preview: {})",
-                        message.to, message.from, &message.data[..message.data.len().min(120)]);
                 }
             }
             println!("[Bus] Router thread exited");
@@ -107,17 +109,19 @@ impl Bus {
     }
 
     /// Logs bus transactions to logs/bus_log.md
+    /// Task 265 (secrets): metadata only (from/to/length). The old code
+    /// wrote the first 300 chars of every message payload into this
+    /// tracked file — bus messages carry chat text, drafts, and config,
+    /// so that was a standing secret/body leak. Full content stays in
+    /// the primary stores (chat history, drafts, notes).
     fn log_transaction(&self, message: &Message) {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
-        let summary = if message.data.len() > 300 {
-            format!("{}...", &message.data[..300])
-        } else {
-            message.data.clone()
-        };
-
         let log_entry = format!(
-            "[{}] {} -> {}: {}",
-            timestamp, message.from, message.to, summary
+            "[{}] {} -> {} ({} chars)",
+            timestamp,
+            message.from,
+            message.to,
+            message.data.len()
         );
 
         // Try to write to bus_log.md, fall back gracefully on error

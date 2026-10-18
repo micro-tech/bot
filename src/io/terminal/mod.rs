@@ -5,8 +5,13 @@ use crate::bus::{Bus, Message};
 
 /// Handles a message destined for the Terminal.
 pub fn handle_terminal_message(message: Message, _bus: &mut Bus) {
-    // Placeholder implementation
-    println!("Handling Terminal message: {}", message.data);
+    // Placeholder implementation. Task 265 (secrets): log routing
+    // metadata, never message data.
+    log::debug!(
+        "Handling Terminal message from {} ({} chars)",
+        message.from,
+        message.data.len()
+    );
 }
 
 /// Starts the terminal interface.

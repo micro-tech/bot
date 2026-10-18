@@ -12,8 +12,20 @@ impl Interrupts {
         log_to_file("Starting to poll next event from bus...");
         
         if let Ok(msg) = bus.try_recv() {
-            debug!("Received bus message: {:?}", msg);  // Existing logging
-            log_to_file(&format!("Received bus message: {:?}", msg));
+            // Task 265 (secrets): bus message data is untrusted content —
+            // log routing metadata in both sinks, never the payload.
+            debug!(
+                "Received bus message: from={} to={} data_len={}",
+                msg.from,
+                msg.to,
+                msg.data.len()
+            );
+            log_to_file(&format!(
+                "Received bus message: from={} to={} data_len={}",
+                msg.from,
+                msg.to,
+                msg.data.len()
+            ));
             Some(Self::from_bus_message(msg))  // Return Some on success
         } else {
             debug!("No event polled after checking or error occurred");  // Added logging for error case
