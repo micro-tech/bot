@@ -13,11 +13,11 @@ pub mod strategy;
 pub mod telemetry;
 
 pub use context::{LLMBackend, RoutingContext};
-pub use config::{RouterConfig, ConfigManager, ComplexityConfig, ScheduleConfig, LoadThresholds, HealthThresholds};
-pub use strategy::{RoutingStrategy, DefaultStrategy};
+pub use config::{RouterConfig, ConfigManager};
+
 pub use fallback::{BackendSelection, resolve_with_fallback};
 pub use route::route;
-pub use user_override::{OverrideStore, OverrideCommand, OverrideTier};
+pub use user_override::OverrideStore;
 pub use health::HealthStore;
-pub use telemetry::TelemetryCollector;
-pub use spend::{note_api_call, note_api_usage, check_api_allowed, paid_spent_today_usd, usage_summary_today, TokenUsage, DEFAULT_DAILY_API_CAP_USD};
+
+pub use spend::{note_api_call, check_api_allowed};

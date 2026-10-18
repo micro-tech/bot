@@ -14,7 +14,7 @@
 pub mod manager;
 pub mod naming;
 
-pub use naming::PREFIX;
+
 
 use std::sync::OnceLock;
 
