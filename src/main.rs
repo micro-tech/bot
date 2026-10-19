@@ -32,6 +32,7 @@ mod persona;
 mod cron;
 mod chat_history;
 mod support_watch;
+mod voice;
 
 #[tokio::main]
 async fn main() {

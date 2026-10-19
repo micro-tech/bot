@@ -453,9 +453,10 @@ mod tests {
 
     #[test]
     fn test_read_log_rejects_dotdot_traversal() {
-        // logs/../config.toml passes the old starts_with("logs/") check and
+        // logs/../example.config.toml passes the old starts_with("logs/") check and
         // resolves to an existing file outside logs/ — must be rejected.
-        let result = read_log(&json!({"log_file": "logs/../config.toml"}));
+        // (Was config.toml before PR #25 renamed it to example.config.toml.)
+        let result = read_log(&json!({"log_file": "logs/../example.config.toml"}));
         assert!(
             result.contains("escapes the allowed directory"),
             "traversal must be rejected, got: {}",
@@ -477,7 +478,7 @@ mod tests {
         {
             let link = std::path::PathBuf::from("logs/_test_evil_link_do_not_use");
             let _ = std::fs::remove_file(&link);
-            if std::os::unix::fs::symlink("../config.toml", &link).is_err() {
+            if std::os::unix::fs::symlink("../example.config.toml", &link).is_err() {
                 return; // cannot create symlinks here — skip
             }
             // Panic-proof: the symlink is removed even if the assert below fails.

@@ -42,7 +42,8 @@ pub async fn decide_backend_with_full_context(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::router::{LLMBackend, OverrideCommand, OverrideTier};
+    use crate::router::{LLMBackend};
+    use crate::router::user_override::{OverrideCommand, OverrideTier};
 
     #[test]
     fn test_basic_routing() {
