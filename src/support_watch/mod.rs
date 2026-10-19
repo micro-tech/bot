@@ -68,7 +68,9 @@ pub fn override_runtime_dir_for_tests(dir: PathBuf) {
     *TEST_RUNTIME_DIR.lock().unwrap() = Some(dir);
 }
 
-fn runtime_dir() -> PathBuf {
+/// Runtime dir for the Helix working tree. Shared with the voice module
+/// (task 267) so both read the same live config.toml.
+pub(crate) fn runtime_dir() -> PathBuf {
     #[cfg(test)]
     if let Some(d) = TEST_RUNTIME_DIR.lock().unwrap().clone() {
         return d;

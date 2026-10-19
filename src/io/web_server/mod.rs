@@ -4,10 +4,10 @@ use crate::okf::{OkfLibrarian, api as okf_api};
 use axum::{
     Router,
     extract::{
-        State, WebSocketUpgrade,
+        Multipart, State, WebSocketUpgrade,
         ws::{Message as WsMessage, WebSocket},
     },
-    http::{HeaderMap, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     middleware,
     response::{Html, IntoResponse, Json},
     routing::{get, post},
@@ -436,6 +436,10 @@ pub async fn start_web_server(
         .route("/support/approve", post(support_approve))
         .route("/support/send", post(support_send))
         .route("/support/discard", post(support_discard))
+        // Tasks 267/268: voice-box proxy endpoints (browser -> Helix ->
+        // voice box), auth-gated like the rest of this router.
+        .route("/api/voice/speak", post(voice_speak))
+        .route("/api/voice/transcribe", post(voice_transcribe))
         .route_layer(middleware::from_fn_with_state(
             token_state.clone(),
             require_web_token,
@@ -1990,6 +1994,130 @@ async fn support_discard(Json(a): Json<SupportDraftAction>) -> impl IntoResponse
     support_action_result(crate::support_watch::drafts::discard_draft(&a.id))
 }
 
+/// POST /api/voice/speak — TTS proxy (task 267.3).
+/// Auth via require_web_token middleware (task 240).
+/// Request: {"text": "...", "voice": "M1"?}. Response: audio/wav bytes.
+/// Browser -> Helix -> voice box; the browser never touches the voice box
+/// directly (no CORS wrestling, auth stays in Helix).
+#[derive(Deserialize)]
+struct VoiceSpeakRequest {
+    text: String,
+    voice: Option<String>,
+}
+
+async fn voice_speak(Json(req): Json<VoiceSpeakRequest>) -> impl IntoResponse {
+    const MAX_TEXT_CHARS: usize = 2000;
+    let bad = |msg: &str| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "error": msg})),
+        )
+            .into_response()
+    };
+    let text = req.text.trim();
+    if text.is_empty() {
+        return bad("empty text");
+    }
+    if text.chars().count() > MAX_TEXT_CHARS {
+        return bad("text too long (max 2000 chars)");
+    }
+    let cfg = crate::voice::live_config();
+    match crate::voice::speak(&cfg, text, req.voice.as_deref()).await {
+        Ok(wav) => ([(header::CONTENT_TYPE, "audio/wav")], wav).into_response(),
+        Err(e) => {
+            // Metadata only: VoiceError::Display never contains audio/text.
+            warn!("voice speak failed: {e}");
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"ok": false, "error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// POST /api/voice/transcribe — STT proxy (task 268.3).
+/// Auth via require_web_token middleware (task 240).
+/// Multipart: file (audio bytes), language? -> {"ok": true, "text": "..."}.
+async fn voice_transcribe(mut multipart: Multipart) -> impl IntoResponse {
+    const MAX_UPLOAD_BYTES: usize = 10 * 1024 * 1024; // 10 MB
+    let bad = |status: StatusCode, msg: &str| {
+        (
+            status,
+            Json(json!({"ok": false, "error": msg})),
+        )
+            .into_response()
+    };
+    let mut audio: Option<(Vec<u8>, String)> = None; // (bytes, mime)
+    let mut language: Option<String> = None;
+    loop {
+        let mut field = match multipart.next_field().await {
+            Ok(Some(f)) => f,
+            Ok(None) => break,
+            Err(e) => {
+                warn!("voice transcribe: multipart parse failed: {e}");
+                return bad(StatusCode::BAD_REQUEST, "bad multipart body");
+            }
+        };
+        let name = field.name().unwrap_or("").to_string();
+        match name.as_str() {
+            "file" | "audio" => {
+                let mime = field
+                    .content_type()
+                    .map(|m| m.to_string())
+                    .unwrap_or_else(|| "application/octet-stream".to_string());
+                let mut bytes = Vec::new();
+                loop {
+                    match field.chunk().await {
+                        Ok(Some(chunk)) => {
+                            if bytes.len() + chunk.len() > MAX_UPLOAD_BYTES {
+                                return bad(
+                                    StatusCode::PAYLOAD_TOO_LARGE,
+                                    "audio too large (max 10 MB)",
+                                );
+                            }
+                            bytes.extend_from_slice(&chunk);
+                        }
+                        Ok(None) => break,
+                        Err(e) => {
+                            warn!("voice transcribe: upload read failed: {e}");
+                            return bad(StatusCode::BAD_REQUEST, "failed reading upload");
+                        }
+                    }
+                }
+                audio = Some((bytes, mime));
+            }
+            "language" => {
+                if let Ok(t) = field.text().await {
+                    let t = t.trim().to_string();
+                    if !t.is_empty() && t.len() <= 16 {
+                        language = Some(t);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let (bytes, mime) = match audio {
+        Some((b, m)) if !b.is_empty() => (b, m),
+        _ => return bad(StatusCode::BAD_REQUEST, "missing audio file field"),
+    };
+    let filename = if mime.contains("webm") {
+        "audio.webm"
+    } else {
+        "audio.wav"
+    };
+    let cfg = crate::voice::live_config();
+    match crate::voice::transcribe(&cfg, &bytes, filename, &mime, language.as_deref()).await {
+        Ok(text) => Json(json!({"ok": true, "text": text})).into_response(),
+        Err(e) => {
+            // Metadata only: never the transcript.
+            warn!("voice transcribe failed: {e}");
+            bad(StatusCode::BAD_GATEWAY, &e.to_string())
+        }
+    }
+}
+
 /// POST /ops/restart — restart the helix service (task 229).
 /// Auth via require_web_token middleware (task 240).
 async fn ops_restart(State(_state): State<AppState>) -> impl IntoResponse {
@@ -2699,8 +2827,126 @@ mod tests {
         assert!(v["error"].as_str().unwrap().contains("not approved"));
     }
 
-    // ── ops endpoints: self-update + restart (tasks 228, 229) ────────────────
+    // ── voice endpoints (tasks 267.3, 268.3) ───────────────────────────────
 
+    /// Build the voice route assembly mirroring `start_web_server`:
+    /// both POSTs behind require_web_token.
+    fn voice_test_app() -> Router {
+        let token_state = Arc::new(support_test_token());
+        Router::new()
+            .route("/api/voice/speak", post(voice_speak))
+            .route("/api/voice/transcribe", post(voice_transcribe))
+            .route_layer(middleware::from_fn_with_state(
+                token_state.clone(),
+                require_web_token,
+            ))
+            .with_state(())
+    }
+
+    fn voice_post(
+        uri: &str,
+        body: axum::body::Body,
+        content_type: &str,
+        token: Option<&str>,
+    ) -> axum::http::Request<axum::body::Body> {
+        let mut b = axum::http::Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("content-type", content_type);
+        if let Some(t) = token {
+            b = b.header("authorization", format!("Bearer {t}"));
+        }
+        b.body(body).unwrap()
+    }
+
+    #[tokio::test]
+    async fn voice_speak_requires_token() {
+        use tower::ServiceExt;
+        let req = voice_post(
+            "/api/voice/speak",
+            axum::body::Body::from(r#"{"text":"hi"}"#),
+            "application/json",
+            None,
+        );
+        let resp = voice_test_app().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn voice_speak_rejects_empty_text() {
+        use tower::ServiceExt;
+        let tok = support_test_token();
+        let req = voice_post(
+            "/api/voice/speak",
+            axum::body::Body::from(r#"{"text":"   "}"#),
+            "application/json",
+            Some(tok.as_str()),
+        );
+        let resp = voice_test_app().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&b).unwrap();
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["error"], "empty text");
+    }
+
+    #[tokio::test]
+    async fn voice_speak_rejects_too_long_text() {
+        use tower::ServiceExt;
+        let tok = support_test_token();
+        let long = "x".repeat(2001);
+        let req = voice_post(
+            "/api/voice/speak",
+            axum::body::Body::from(format!(r#"{{"text":"{long}"}}"#)),
+            "application/json",
+            Some(tok.as_str()),
+        );
+        let resp = voice_test_app().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn voice_transcribe_requires_token() {
+        use tower::ServiceExt;
+        let req = voice_post(
+            "/api/voice/transcribe",
+            axum::body::Body::from("x"),
+            "multipart/form-data; boundary=y",
+            None,
+        );
+        let resp = voice_test_app().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn voice_transcribe_requires_audio_file() {
+        use tower::ServiceExt;
+        let tok = support_test_token();
+        // Multipart with only a language field: no audio -> 400, and the
+        // voice box is never contacted (validation happens first).
+        let boundary = "testboundary123";
+        let body = format!(
+            "--{b}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nen\r\n--{b}--\r\n",
+            b = boundary
+        );
+        let req = voice_post(
+            "/api/voice/transcribe",
+            axum::body::Body::from(body),
+            &format!("multipart/form-data; boundary={boundary}"),
+            Some(tok.as_str()),
+        );
+        let resp = voice_test_app().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&b).unwrap();
+        assert_eq!(v["error"], "missing audio file field");
+    }
+
+    // ── ops endpoints: self-update + restart (tasks 228, 229) ────────────────
     #[test]
     fn build_update_script_full_mode_runs_johns_drill() {
         // GIVEN cgroup escape is available,

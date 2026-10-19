@@ -20,7 +20,7 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 #[cfg(unix)]
-use std::time::{SystemTime, UNIX_EPOCH, Instant};
+use std::time::Instant;
 #[cfg(unix)]
 use serde_json::{json, Value};
 #[cfg(unix)]
@@ -273,14 +273,13 @@ fn route_command(cmd: &str, args: &Value, start_time: Instant) -> Value {
             json!({"status": "ok", "plugins": []})
         }
         "run-plugin" => {
-            let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            let plugin_args: Vec<String> = args.get("args")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
-                .unwrap_or_default();
-
             #[cfg(windows)]
             {
+                let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let plugin_args: Vec<String> = args.get("args")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+                    .unwrap_or_default();
                 match crate::io::unix_cli::plugins::execute_plugin(name, &plugin_args) {
                     Ok(out) => return json!({"status": "ok", "output": out}),
                     Err(e) => return error_response("PLUGIN_ERROR", &e, None),
