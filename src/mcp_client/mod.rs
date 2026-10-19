@@ -257,6 +257,7 @@ pub fn try_execute(name: &str, args: &Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mcp_client::naming::PREFIX;
 
     // NOTE: these tests install a hermetic disabled config via
     // override_config_for_tests — they never depend on the developer's

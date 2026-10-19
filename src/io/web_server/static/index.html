@@ -367,6 +367,34 @@
                 border-radius: 6px;
                 cursor: pointer;
             }
+            /* ── Voice (tasks 267.4, 268.4) ───────────────────────── */
+            #chat-mic {
+                padding: 10px 14px;
+                background: var(--panel);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                cursor: pointer;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+            #chat-mic:active {
+                border-color: #ff6b6b;
+            }
+            .speak-btn {
+                margin-left: 8px;
+                padding: 2px 8px;
+                background: transparent;
+                color: var(--muted);
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.85em;
+            }
+            .speak-btn:hover {
+                color: var(--text);
+                border-color: var(--accent);
+            }
 
             /* ── Right detail panel ───────────────────────── */
             #detail-panel {
@@ -964,6 +992,15 @@
                         onkeypress="if (event.key === 'Enter') sendChat();"
                     />
                     <button id="chat-send" onclick="sendChat()">Send</button>
+                    <button
+                        id="chat-mic"
+                        title="Hold to talk"
+                        onmousedown="micStart(event)"
+                        onmouseup="micStop()"
+                        onmouseleave="micStop()"
+                        ontouchstart="micStart(event)"
+                        ontouchend="micStop()"
+                    >🎤</button>
                 </div>
             </main>
 
@@ -1828,6 +1865,152 @@
                 input.value = "";
             }
 
+            // ── VOICE (tasks 267.4, 268.4) ──────────────────────────────
+            // Browser -> Helix -> voice box. Auth reuses opsFetch (web token,
+            // prompt-on-401) like the other protected endpoints. Audio and
+            // transcripts are never logged; only sizes/statuses surface.
+
+            // Task 267.4: speak an agent reply aloud via /api/voice/speak.
+            async function speakText(text) {
+                try {
+                    const r = await opsFetch("/api/voice/speak", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ text }),
+                    });
+                    if (!r.ok) {
+                        const t = await r.text();
+                        appendChat({
+                            type: "warning",
+                            data: "Speak failed: " + t.slice(0, 200),
+                        });
+                        return;
+                    }
+                    const blob = await r.blob();
+                    const url = URL.createObjectURL(blob);
+                    const audio = new Audio(url);
+                    audio.onended = () => URL.revokeObjectURL(url);
+                    await audio.play();
+                } catch (e) {
+                    appendChat({
+                        type: "warning",
+                        data:
+                            "Speak failed: " +
+                            (e && e.message ? e.message : String(e)),
+                    });
+                }
+            }
+
+            // Task 268.4: push-to-talk. Hold the mic button to record,
+            // release to transcribe via /api/voice/transcribe; the transcript
+            // lands in the chat input for review before sending.
+            let micRecorder = null;
+            let micStream = null;
+            let micChunks = [];
+
+            async function micStart(e) {
+                if (e) e.preventDefault();
+                if (micRecorder) return;
+                if (
+                    !navigator.mediaDevices ||
+                    !navigator.mediaDevices.getUserMedia
+                ) {
+                    appendChat({
+                        type: "warning",
+                        data: "Microphone unavailable: this browser has no media capture API.",
+                    });
+                    return;
+                }
+                try {
+                    micStream =
+                        await navigator.mediaDevices.getUserMedia({
+                            audio: true,
+                        });
+                } catch (err) {
+                    appendChat({
+                        type: "warning",
+                        data:
+                            "Microphone unavailable: " +
+                            (err && err.message ? err.message : String(err)) +
+                            ". Check the browser's mic permission for this site.",
+                    });
+                    return;
+                }
+                micChunks = [];
+                const mime = MediaRecorder.isTypeSupported("audio/webm")
+                    ? "audio/webm"
+                    : "";
+                micRecorder = mime
+                    ? new MediaRecorder(micStream, { mimeType: mime })
+                    : new MediaRecorder(micStream);
+                micRecorder.ondataavailable = (ev) => {
+                    if (ev.data && ev.data.size) micChunks.push(ev.data);
+                };
+                micRecorder.onstop = micSend;
+                micRecorder.start();
+                const btn = document.getElementById("chat-mic");
+                if (btn) {
+                    btn.textContent = "🔴";
+                    btn.title = "Release to send";
+                }
+            }
+
+            function micStop() {
+                if (!micRecorder) return;
+                const rec = micRecorder;
+                micRecorder = null;
+                try {
+                    rec.stop();
+                } catch (e) {}
+                if (micStream) {
+                    micStream.getTracks().forEach((t) => t.stop());
+                    micStream = null;
+                }
+                const btn = document.getElementById("chat-mic");
+                if (btn) {
+                    btn.textContent = "🎤";
+                    btn.title = "Hold to talk";
+                }
+            }
+
+            async function micSend() {
+                if (!micChunks.length) return;
+                const blob = new Blob(micChunks, {
+                    type: (micChunks[0] && micChunks[0].type) || "audio/webm",
+                });
+                micChunks = [];
+                const input = document.getElementById("chat-input");
+                try {
+                    const form = new FormData();
+                    form.append("file", blob, "audio.webm");
+                    const r = await opsFetch("/api/voice/transcribe", {
+                        method: "POST",
+                        body: form,
+                    });
+                    const j = await r.json();
+                    if (j && j.ok && j.text) {
+                        if (input) {
+                            input.value = j.text;
+                            input.focus();
+                        }
+                    } else {
+                        appendChat({
+                            type: "warning",
+                            data:
+                                "Transcribe failed: " +
+                                ((j && j.error) || "status " + r.status),
+                        });
+                    }
+                } catch (e) {
+                    appendChat({
+                        type: "warning",
+                        data:
+                            "Transcribe failed: " +
+                            (e && e.message ? e.message : String(e)),
+                    });
+                }
+            }
+
             function appendChat(msg) {
                 console.log("[Chat] Appending message:", msg);
                 const div = document.getElementById("chat-messages");
@@ -1938,6 +2121,16 @@
                 textSpan.textContent = text;
                 p.appendChild(senderSpan);
                 p.appendChild(textSpan);
+                // Task 267.4: Speak button on agent replies (not user, not
+                // error). Browser -> Helix -> voice box proxy.
+                if (!isUser && !isError) {
+                    const speakBtn = document.createElement("button");
+                    speakBtn.className = "speak-btn";
+                    speakBtn.textContent = "🔊";
+                    speakBtn.title = "Read aloud";
+                    speakBtn.onclick = () => speakText(text);
+                    p.appendChild(speakBtn);
+                }
                 if (isError) {
                     p.style.color = "#ff6b6b";
                     p.style.fontWeight = "500";
