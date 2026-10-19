@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Helix · Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1200px; width: 100%; }
+
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · Diagram Design</p>
+    <h1>Helix — architecture &amp; data flow</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-architecture-title bot-architecture-desc">
+        <title id="bot-architecture-title">Helix — architecture and data flow</title>
+        <desc id="bot-architecture-desc">Architecture and data-flow overview of the Helix agent: web UI, agent core with the commander pattern and sub-agents, LLM backends, MCP tools, the support watcher, the in-Helix OKF server, auth-gated ops endpoints, and chat history.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- Arrows first (behind boxes) -->
+
+        <!-- CHAT: Web UI -> Helix core -->
+        <line x1="190" y1="92" x2="300" y2="92" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+
+        <!-- PROMPT: Helix core -> LLM backends (headline path) -->
+        <line x1="540" y1="92" x2="660" y2="92" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+
+        <!-- GEN: LLM backends -> Helix core (return) -->
+        <line x1="660" y1="108" x2="540" y2="108" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+        <!-- TOOLS: Helix core -> MCP tools -->
+        <path d="M 540,122 H 752 Q 760,122 760,130 V 170"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- DRAFTS: Support watcher -> Web UI -->
+        <line x1="115" y1="124" x2="115" y2="220" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+        <!-- MAIL: Support watcher -> MCP tools (mail fetch) -->
+        <path d="M 190,252 H 644 Q 652,252 652,244 V 210 Q 652,202 660,202"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- READ: Helix core -> OKF server (hops over MAIL) -->
+        <path d="M 300,108 H 250 Q 242,108 242,116 V 244 a 8,8 0 0,0 0,16 V 384 Q 242,392 250,392 H 190"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- OPS: Web UI -> /ops endpoints (hops over READ and MAIL) -->
+        <path d="M 190,150 H 234 a 8,8 0 0,1 16,0 H 612 Q 620,150 620,158 V 244 a 8,8 0 0,0 0,16 V 344 Q 620,352 628,352 H 660"
+              fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+        <!-- RECALL: Helix core -> chat history (hops over MAIL) -->
+        <path d="M 420,134 V 244 a 8,8 0 0,0 0,16 V 300"
+              fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+        <!-- Arrow labels -->
+        <rect x="225" y="82" width="40" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="245" y="92" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CHAT</text>
+
+        <rect x="574" y="82" width="52" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="600" y="92" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PROMPT</text>
+
+        <rect x="580" y="98" width="40" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="600" y="108" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">GEN</text>
+
+        <rect x="772" y="140" width="44" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="794" y="150" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TOOLS</text>
+
+        <rect x="127" y="166" width="48" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="151" y="176" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DRAFTS</text>
+
+        <rect x="310" y="242" width="40" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="330" y="252" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">MAIL</text>
+
+        <rect x="254" y="323" width="40" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="274" y="333" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">READ</text>
+
+        <rect x="632" y="293" width="40" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="652" y="303" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">OPS</text>
+
+        <rect x="432" y="200" width="48" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="456" y="210" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RECALL</text>
+
+        <!-- Node: Web UI (input) -->
+        <rect x="40" y="60" width="150" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="40" y="60" width="150" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+        <rect x="48" y="68" width="32" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+        <text x="64" y="77" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INPUT</text>
+        <text x="115" y="96" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Web UI</text>
+        <text x="115" y="112" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">browser · /ws chat</text>
+
+        <!-- Node: Helix core (focal) -->
+        <rect x="300" y="50" width="240" height="84" rx="6" fill="#f5f5f5"/>
+        <rect x="300" y="50" width="240" height="84" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+        <rect x="308" y="58" width="32" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+        <text x="324" y="67" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CORE</text>
+        <text x="420" y="94" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Helix core</text>
+        <text x="420" y="112" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">commander · runtime · subagents</text>
+
+        <!-- Node: LLM backends -->
+        <rect x="660" y="50" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="660" y="50" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="668" y="58" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="690" y="67" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">BACKEND</text>
+        <text x="760" y="86" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">LLM backends</text>
+        <text x="760" y="102" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">server · desktop · gemini</text>
+
+        <!-- Node: MCP tools -->
+        <rect x="660" y="170" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="660" y="170" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="668" y="178" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="682" y="187" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MCP</text>
+        <text x="760" y="206" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">MCP tools</text>
+        <text x="760" y="222" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">google-mcp · gmail</text>
+
+        <!-- Node: Support watcher -->
+        <rect x="40" y="220" width="150" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="40" y="220" width="150" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="48" y="228" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="70" y="237" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WATCHER</text>
+        <text x="115" y="256" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Support watcher</text>
+        <text x="115" y="272" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">cadence · drafts · send</text>
+
+        <!-- Node: OKF server -->
+        <rect x="40" y="360" width="150" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="40" y="360" width="150" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="48" y="368" width="32" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+        <text x="64" y="377" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STORE</text>
+        <text x="115" y="396" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">OKF server</text>
+        <text x="115" y="412" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">/okf/* knowledge</text>
+
+        <!-- Node: /ops endpoints (security) -->
+        <rect x="660" y="320" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="660" y="320" width="200" height="64" rx="6" fill="rgba(191,69,32,0.05)" stroke="rgba(191,69,32,0.50)" stroke-width="1" stroke-dasharray="4,4"/>
+        <rect x="668" y="328" width="28" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+        <text x="682" y="337" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SEC</text>
+        <text x="760" y="356" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">/ops endpoints</text>
+        <text x="760" y="372" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">update · restart · gated</text>
+
+        <!-- Node: Chat history + memory -->
+        <rect x="300" y="300" width="240" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="300" y="300" width="240" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="308" y="308" width="32" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+        <text x="324" y="317" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STORE</text>
+        <text x="420" y="336" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Chat history + memory</text>
+        <text x="420" y="352" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">context continuity</text>
+
+        <!-- Legend strip -->
+        <line x1="40" y1="496" x2="920" y2="496" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="40" y="512" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="40" y="524" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+        <text x="60" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Focal</text>
+
+        <rect x="120" y="524" width="14" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+        <text x="140" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Input</text>
+
+        <rect x="210" y="524" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="230" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Backend</text>
+
+        <rect x="310" y="524" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <text x="330" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Store</text>
+
+        <rect x="400" y="524" width="14" height="10" rx="2" fill="rgba(191,69,32,0.05)" stroke="rgba(191,69,32,0.50)" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="420" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Auth-gated</text>
+
+        <line x1="540" y1="529" x2="568" y2="529" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="576" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">HTTP / WS</text>
+
+        <line x1="690" y1="529" x2="718" y2="529" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <text x="726" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Primary flow</text>
+
+        <line x1="850" y1="529" x2="878" y2="529" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <text x="886" y="532" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Return</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>
