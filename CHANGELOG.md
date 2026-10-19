@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Added (tasks 267 + 268.2/268.3/268.4 DONE — Ranger 1, Helix voice integration)
+
+- **Voice box client** (`src/voice/`, new module): `[voice]` config section (267.1) — `host` (default `192.168.1.142`), `port` (8081), `tts_model` (`supertonic-tts`), `default_voice` (`M1`), `timeout_ms` (30000), plus optional `stt_model` (empty = let the server pick; set once John names the whisper GGUF in server.json, 268.1). All optional via the shared `config::load_section` helper; `base_url()` tolerates a scheme-prefixed host.
+- **TTS client** (267.2): `voice::speak()` POSTs `{model, input, voice, response_format: "wav"}` to `/v1/audio/speech`, verifies the RIFF/WAVE magic before returning bytes (a JSON error body is never handed to a player as audio). Typed `VoiceError` (Http/Timeout/BadStatus/InvalidAudio/EmptyTranscript); failures `warn!` metadata only — audio bytes, spoken text and transcripts are never logged (task 265 hygiene).
+- **STT client** (268.2): `voice::transcribe()` multipart-POSTs the audio (`file` field + optional `model`/`language`) to `/v1/audio/transcriptions`, parses `{"text"}`. Unit-tested against mock axum servers (request shape, 5xx mapping, empty-transcript error, WAV validation). No ASR model on the voice box yet (268.1 is John's hardware step) — mocks stand in until then.
+- **Proxy endpoints** (267.3, 268.3, `src/io/web_server/mod.rs`): `POST /api/voice/speak` (JSON `{text, voice?}` → `audio/wav` bytes; 400 on empty/>2000-char text) and `POST /api/voice/transcribe` (multipart `file` + optional `language` → `{"ok","text"}`; 413 over 10 MB, 400 on missing file). Both live on the protected router behind the existing `require_web_token` middleware (task 240) — same auth as the other mutating endpoints, no new scheme. Browser → Helix → voice box; the browser never calls the voice box directly (no CORS wrestling, auth stays in Helix).
+- **Web UI** (`src/io/web_server/static/index.html`): 🔊 Speak button on agent replies (267.4) — POSTs the reply text to `/api/voice/speak` via the existing `opsFetch` (web-token, prompt-on-401) and plays the WAV with `Audio`. 🎤 Push-to-talk button (268.4) — hold to record via MediaRecorder, release to POST to `/api/voice/transcribe`; the transcript lands in the chat input for review before sending. Mic denial / failures surface as inline chat warnings.
+- **Tests**: 5 config tests, 8 client tests (mock servers), 5 endpoint tests (auth 401, validation 400s, no voice box needed). Full suite below.
+- **Verification**: `cargo check --lib` **zero warnings**; `cargo test --lib` **443 passed, 0 failed, 4 ignored** (was 425; +18 new voice tests); `cargo check --all-targets` blocked only by the known task-262 installer `include_str!` break (verified with a template `config.toml` present for the check, then removed — no source change).
+- **Live drill** (John, after merge + R630 deploy): `curl` POST `/api/voice/speak` with token → wav bytes (401 without); Speak button on a reply plays matching audio; hold push-to-talk → transcript appears in chat input. STT end-to-end waits on 268.1 (John downloads the whisper GGUF + adds the asr entry to server.json).
+
+---
+
+### Fixed (tasks 271 + 272 DONE — Ranger 1, PR #25 merge fallout)
+
+- **272 — `cargo test --lib` compiles again**: two test-only import errors from the master→PreRelese merge. `src/router/integration.rs`: `OverrideCommand`/`OverrideTier` now imported from `crate::router::user_override` (the merge had removed the re-export). `src/mcp_client/mod.rs` tests: `PREFIX` now imported from `crate::mcp_client::naming` (the merge had removed the re-export).
+- **272 addendum — two more PR #25 test-only breaks**: `test_read_log_rejects_dotdot_traversal` and `test_read_log_rejects_symlink_escape` assumed `config.toml` exists at the repo root; the merge renamed it to `example.config.toml`, so canonicalization failed with ENOENT before the traversal check ran. Tests now target `example.config.toml` (production `resolve_inside` untouched — the security check itself was never broken).
+- **271 — 3 lib warnings gone**: `src/io/unix_socket.rs` dropped unused `SystemTime`/`UNIX_EPOCH` imports; `name`/`plugin_args` (Windows-only) moved inside the `#[cfg(windows)]` block so the unix build no longer warns.
+- **Verification**: `cargo check --lib` zero warnings; `cargo test --lib` **443 passed, 0 failed, 4 ignored** (was 425; +18 new voice tests).
+
+---
+
 ### Added (task 265 DONE — Ranger 1, logging installed + audited project-wide)
 
 - **A logger at last** (`src/lib.rs`, `src/main.rs`): `env_logger` was already a dependency but never initialized, so every `log::` macro in the codebase was a silent no-op and `RUST_LOG` did nothing. New `helix::init_logging()` (env_logger, `RUST_LOG` honored, default `info`, `try_init` idempotent) called first in `main()` before the ACP branch (stderr sink keeps ACP JSON-RPC on stdout clean). Unit test proves idempotent init + logger-live marker; `RUST_LOG=off` suppresses, per-module filter (`helix::tests=debug`) shows.

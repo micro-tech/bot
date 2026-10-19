@@ -26,6 +26,7 @@ pub mod cron;
 pub mod chat_history;
 pub mod persona;
 pub mod support_watch; // task 256: SYSADMIN-01 adaptive support-mail poll loop
+pub mod voice; // task 267/268: voice-box TTS/STT integration
 
 // Re-export commonly used types
 pub use bus::{Bus, Message};
