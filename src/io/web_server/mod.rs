@@ -440,6 +440,8 @@ pub async fn start_web_server(
         // voice box), auth-gated like the rest of this router.
         .route("/api/voice/speak", post(voice_speak))
         .route("/api/voice/transcribe", post(voice_transcribe))
+        // Task 275: non-sensitive voice UI knobs (hotkey, autoplay default).
+        .route("/api/voice/config", get(voice_config))
         .route_layer(middleware::from_fn_with_state(
             token_state.clone(),
             require_web_token,
@@ -1992,6 +1994,20 @@ async fn support_send(Json(a): Json<SupportDraftAction>) -> impl IntoResponse {
 /// POST /support/discard — auth via require_web_token middleware (task 240).
 async fn support_discard(Json(a): Json<SupportDraftAction>) -> impl IntoResponse {
     support_action_result(crate::support_watch::drafts::discard_draft(&a.id))
+}
+
+/// GET /api/voice/config — voice UI knobs (task 275).
+/// Auth via require_web_token middleware (task 240).
+/// Returns the non-sensitive `[voice]` UI settings the web page needs:
+/// {"ok": true, "ptt_hotkey": "ControlRight", "autoplay": false}.
+/// Empty ptt_hotkey means the push-to-talk hotkey is disabled.
+async fn voice_config() -> impl IntoResponse {
+    let cfg = crate::voice::live_config();
+    Json(json!({
+        "ok": true,
+        "ptt_hotkey": cfg.ptt_hotkey,
+        "autoplay": cfg.autoplay,
+    }))
 }
 
 /// POST /api/voice/speak — TTS proxy (task 267.3).
