@@ -130,3 +130,16 @@ command = "/home/cobble/.local/bin/google-mcp"  # e.g. ~/workspace/google-mcp/ta
 
 [support]
 auto_send = true
+
+# ── Voice box (tasks 267/268/275) ─────────────────────────────────────────
+# Headless audio.cpp inference server (TTS + STT). All keys optional —
+# omitting the section selects the defaults below.
+# [voice]
+# host = "192.168.1.142"   # voice-box LAN host
+# port = 8081               # audiocpp_server port
+# tts_model = "supertonic-tts"  # model id for /v1/audio/speech
+# default_voice = "M1"      # TTS voice preset
+# timeout_ms = 30000        # HTTP timeout for voice-box calls
+# stt_model = "citrinet-asr" # model id for /v1/audio/transcriptions ("" = server default)
+# ptt_hotkey = "ControlRight" # web UI push-to-talk hotkey (KeyboardEvent.code); "" disables it
+# autoplay = false          # web UI reads agent replies aloud automatically

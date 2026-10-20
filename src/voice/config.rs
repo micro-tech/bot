@@ -38,6 +38,17 @@ pub struct VoiceConfig {
     /// model. Set once John names the whisper GGUF in server.json (268.1).
     #[serde(default)]
     pub stt_model: String,
+
+    /// Push-to-talk hotkey for the web UI mic (KeyboardEvent.code, e.g.
+    /// "ControlRight"). Default "ControlRight". Empty string disables the
+    /// hotkey entirely. Page focus is required (browser limitation).
+    #[serde(default = "default_ptt_hotkey")]
+    pub ptt_hotkey: String,
+
+    /// Read agent replies aloud automatically via TTS. Default false.
+    /// The web UI toggle overrides this per-session (localStorage).
+    #[serde(default)]
+    pub autoplay: bool,
 }
 
 fn default_host() -> String {
@@ -55,6 +66,9 @@ fn default_voice() -> String {
 fn default_timeout_ms() -> u64 {
     30_000
 }
+fn default_ptt_hotkey() -> String {
+    "ControlRight".to_string()
+}
 
 impl Default for VoiceConfig {
     fn default() -> Self {
@@ -65,6 +79,8 @@ impl Default for VoiceConfig {
             default_voice: default_voice(),
             timeout_ms: default_timeout_ms(),
             stt_model: String::new(),
+            ptt_hotkey: default_ptt_hotkey(),
+            autoplay: false,
         }
     }
 }
@@ -101,13 +117,15 @@ mod tests {
         assert_eq!(cfg.default_voice, "M1");
         assert_eq!(cfg.timeout_ms, 30_000);
         assert!(cfg.stt_model.is_empty());
+        assert_eq!(cfg.ptt_hotkey, "ControlRight");
+        assert!(!cfg.autoplay);
         assert_eq!(cfg.base_url(), "http://192.168.1.142:8081");
     }
 
     #[test]
     fn full_section_parses() {
         let cfg = VoiceConfig::load_from_toml(
-            "[voice]\nhost = \"192.168.1.200\"\nport = 9090\ntts_model = \"other-tts\"\ndefault_voice = \"F1\"\ntimeout_ms = 60000\nstt_model = \"whisper-large\"\n",
+            "[voice]\nhost = \"192.168.1.200\"\nport = 9090\ntts_model = \"other-tts\"\ndefault_voice = \"F1\"\ntimeout_ms = 60000\nstt_model = \"whisper-large\"\nptt_hotkey = \"KeyV\"\nautoplay = true\n",
         );
         assert_eq!(cfg.host, "192.168.1.200");
         assert_eq!(cfg.port, 9090);
@@ -115,7 +133,18 @@ mod tests {
         assert_eq!(cfg.default_voice, "F1");
         assert_eq!(cfg.timeout_ms, 60_000);
         assert_eq!(cfg.stt_model, "whisper-large");
+        assert_eq!(cfg.ptt_hotkey, "KeyV");
+        assert!(cfg.autoplay);
         assert_eq!(cfg.base_url(), "http://192.168.1.200:9090");
+    }
+
+    #[test]
+    fn empty_ptt_hotkey_disables() {
+        let cfg = VoiceConfig::load_from_toml("[voice]\nptt_hotkey = \"\"\n");
+        assert_eq!(cfg.ptt_hotkey, "");
+        // Everything else keeps defaults.
+        assert!(!cfg.autoplay);
+        assert_eq!(cfg.host, "192.168.1.142");
     }
 
     #[test]
