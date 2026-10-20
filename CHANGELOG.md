@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Fixed (task 274 DONE — Ranger 1, mic button sends WAV)
+
+- **Web UI push-to-talk** (`src/io/web_server/static/index.html`): the mic button recorded with MediaRecorder (WebM/Opus), but the voice box `/v1/audio/transcriptions` accepts WAV only and 400s everything else (`"only WAV audio uploads are currently supported"`). Capture is now raw PCM via the Web Audio API — `getUserMedia` → `AudioContext({sampleRate: 16000})` → `MediaStreamAudioSourceNode` → AudioWorklet (ScriptProcessor fallback) collecting Float32 chunks while held. On release: chunks are concatenated, linear-downsampled to 16000 Hz when the context rate differs, encoded to 16-bit mono WAV in JS (44-byte RIFF header), and POSTed as `audio.wav` to `/api/voice/transcribe` through the existing `opsFetch` auth flow. Transcript-into-chat-input and warning paths unchanged; no Rust changes needed.
+- **Tests**: pure DSP helpers (`voiceDownsampleTo16k`, `voiceEncodeWav16`) are delimited by `VOICE-CAPTURE-PURE` markers in `index.html` and unit-tested by `src/io/web_server/static/voice-wav.test.js` (`node` — 9 tests: RIFF/WAVE magic, fmt = 16-bit mono 16000 Hz, data length, int16 clamping, downsample ratios, 16 kHz identity, sine-shape preservation, chunk-concat round-trip). `cargo test --lib` stays **443 passed, 0 failed, 4 ignored**.
+
+---
+
 ### Added (tasks 267 + 268.2/268.3/268.4 DONE — Ranger 1, Helix voice integration)
 
 - **Voice box client** (`src/voice/`, new module): `[voice]` config section (267.1) — `host` (default `192.168.1.142`), `port` (8081), `tts_model` (`supertonic-tts`), `default_voice` (`M1`), `timeout_ms` (30000), plus optional `stt_model` (empty = let the server pick; set once John names the whisper GGUF in server.json, 268.1). All optional via the shared `config::load_section` helper; `base_url()` tolerates a scheme-prefixed host.

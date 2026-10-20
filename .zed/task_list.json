@@ -2217,6 +2217,416 @@
         }
       ],
       "result": "260.1 mock integration DONE and green (see subtask). 260.2/260.3 deferred: live drill gated on John's mail-mcp install + drill run per docs/support-live-drill.md. Task 260 stays in_progress until the live drill passes."
+    },
+    {
+      "id": 261,
+      "title": "Fix PreRelese build break: missing `mod support_watch;` in the bin crate root (src/main.rs)",
+      "description": "origin/PreRelese @ 11dbf1b does not compile: cargo check --lib --bins fails with 13x E0433 'cannot find support_watch in the crate root' (src/io/web_server/mod.rs x10, src/cpu/mod.rs x2, src/main.rs x1). The support watcher (PR #20, tasks 255-260) declares `pub mod support_watch;` only in src/lib.rs; the bin crate (src/main.rs) references crate::support_watch without declaring it.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "FILED BY QUARTERMASTER, 2026-10-14 nightly run. Blocks all shipping from PreRelese (nothing leaves the dock on red).\n\nFAILURE OUTPUT (full log: ~/workspace/goals/nightly-quartermaster-run/hidden_files/qm-20261014-bot-check.log):\n  error[E0433]: cannot find `support_watch` in the crate root\n      --> src/io/web_server/mod.rs:1898:17 (Json(crate::support_watch::status_snapshot())...)\n  ... 13 errors total; lib crate compiles clean (4 baseline warnings only).\n\nRULED OUT:\n- Not a sandbox/worktree artifact: reproduced in a fresh git worktree of origin/PreRelese @ 11dbf1b (~/workspace/qm-prerelese-bot).\n- Not a dependency/environment issue: lib crate checks fine; deps all compiled.\n- Not from PR #21/#22 (master merges): the breakage is the PR #20 merge (e6b9782 from micro-tech/ranger-255-260) predating/omitting the fix.\n\nCONFIRMED FIX DIRECTION: the one-line fix already exists on the local fix-bin-support-watch branch (commit 0e328e5 'fix: declare mod support_watch in the bin crate (main.rs)', main.rs:34) but was never carried into the merged PR. Adding `mod support_watch;` to src/main.rs in the scratch worktree took cargo check --lib --bins to exit 0 with ZERO new warnings vs the documented baseline (see ~/workspace/goals/nightly-quartermaster-run/hidden_files/qm-20261014-bot-check-fixed.log).\n\nSUGGESTED START: apply the one-line declaration to src/main.rs on PreRelese (feature branch + PR against PreRelese, per branch workflow \u2014 pushes/PRs need John's approval). Also reconcile fix-bin-support-watch vs ranger-255-260: decide which branch carries forward so the 1-line diff between them disappears. Then address task 262 (installer bin) so a fresh clone builds fully.\n\nSURVEYOR 1 PLAN (2026-10-14, tasks 261+262 combined repair).\nBRANCH RECON (verified): fix-bin-support-watch @ 12b8cbd is a strict superset of ranger-255-260 (git log ranger-255-260..fix-bin-support-watch shows only the 3 fix-branch commits; reverse empty) and 3 commits ahead of origin/PreRelese (0e328e5 one-line fix, af31c37 cadence, 12b8cbd auto-send). fix-bin-support-watch is the single source of truth; no drift to reconcile beyond naming. Ranger 1 must NOT cherry-pick 0e328e5 onto a new branch \u2014 work continues on fix-bin-support-watch so the 2026-10-14 support commits ship too.\n\nPLAN: Phase 1 \u2014 the one-line fix is already committed on this branch (src/main.rs:34 `mod support_watch;`); verify it is intact, then run cargo check --lib --bins -> exit 0 with ZERO new warnings vs the documented baseline (16 warning lines in qm-20261014-bot-check-fixed.log: router/mod.rs x5, route.rs, mcp_client/mod.rs, ssh/mod.rs, unix_socket.rs x3, web_server/mod.rs, build.rs). Then cargo build (exit 0) and cargo test: lib suite must show at most the 6 known task-213 failures (mcp_client x2, a2a_handler x2, acp::agent x2); all 10 integration targets green. Phase 2 \u2014 task 262 (dependencies [261]): replace the compile-time include_str! with a runtime read + baked-in fallback (details in task 262). Phase 3 \u2014 PR workflow: push fix-bin-support-watch, open PR against PreRelese (NEVER master), no force-push; pushes/PRs need John's approval card. FINAL STEP: awaiting John's tap.\n\nVERIFIED DONE BY QUARTERMASTER 2026-10-18 ~04:35 EDT: the fix branch was merged to PreRelese via PR #23 (23c097c) and PR #24 (4469266), and cargo check --lib --bins on the new PreRelese tip 92d7ae3 shows ZERO E0433 errors - support_watch resolves in the bin crate. Full log: ~/workspace/goals/nightly-quartermaster-run/hidden_files/qm-20261018-bot-build.log",
+      "testStrategy": "cargo check --lib --bins and cargo build: exit 0, zero new warnings vs the documented baseline (13 sites: router/mod.rs x5, route.rs, mcp_client/mod.rs, ssh/mod.rs, unix_socket.rs x3, web_server/mod.rs, build.rs). Then cargo test: lib suite must show at most the 6 known task-213 failures (mcp_client x2, a2a_handler x2, acp::agent x2); all 10 integration targets green.",
+      "subtasks": [
+        {
+          "id": "261.1",
+          "status": "done",
+          "title": "Surveyor recon: fix-bin-support-watch verified as strict superset of ranger-255-260 and origin/PreRelese; branch is source of truth"
+        },
+        {
+          "id": "261.2",
+          "status": "pending",
+          "title": "Verify `mod support_watch;` intact at src/main.rs:34 on fix-bin-support-watch"
+        },
+        {
+          "id": "261.3",
+          "status": "pending",
+          "title": "cargo check --lib --bins -> exit 0, zero new warnings vs documented baseline"
+        },
+        {
+          "id": "261.4",
+          "status": "pending",
+          "title": "cargo build -> exit 0; cargo test -> <=6 known task-213 failures, 10 integration targets green"
+        },
+        {
+          "id": "261.5",
+          "status": "pending",
+          "title": "Push branch + PR against PreRelese (never master, no force-push); approval card needed -> awaiting John's tap"
+        }
+      ]
+    },
+    {
+      "id": 262,
+      "title": "installer bin: include_str! of never-tracked .grok/docs/system_manifest_root.md (fresh-clone build break)",
+      "description": "src/bin/installer.rs:267 does include_str!(\"../../.grok/docs/system_manifest_root.md\"), but the file has never been committed to the repo (path moved by b3fe19b, 2026-06-16; git ls-files shows 0 .grok files). Any fresh clone fails to build the installer bin. Currently masked in the main sandbox checkout only by an untracked local copy of the file.",
+      "status": "pending",
+      "dependencies": [
+        261
+      ],
+      "priority": "medium",
+      "details": "FILED BY QUARTERMASTER, 2026-10-14 nightly run (spotted during the task-261 failure investigation).\n\nRULED OUT:\n- Not caused by the PR #20/21/22 merges: the include_str! line predates them (in PreRelese since June 2026).\n- No build script generates the file (build.rs only touches .grok/diagrams).\n- No CI regenerates it (repo has no .github/workflows at all).\n- Not gitignored into existence elsewhere: the main-checkout copy is untracked-but-present; a fresh worktree lacks it and fails.\n\nSUGGESTED START: pick one \u2014 (a) commit the manifest into the repo at a stable path (src/ or docs/), (b) replace the compile-time include_str! with a runtime read + graceful fallback, or (c) drop the embed if the installer no longer needs the default manifest. John's call if the manifest content is load-bearing for the installer. Do this after/independently of task 261; both must be green for a fresh-clone `cargo build` to pass.\n\nSURVEYOR 1 PLAN (2026-10-14). CRITICAL FINDING: the local .grok/docs/system_manifest_root.md is a 7-line STUB that reads 'LOCAL COMPILE STUB \u2014 NOT FOR SHIPMENT ... Do not commit this stub \u2014 .grok/ is gitignored for exactly this reason' (.gitignore line 20 ignores .grok/ wholesale). So option (a) 'commit the manifest' is OFF the table without John's explicit content blessing: the stub must never ship, and the real manifest lives only on his dev machine. RECOMMENDED: replace compile-time include_str! (src/bin/installer.rs:267) with a runtime read + baked-in minimal fallback. Concrete: const FALLBACK_MANIFEST: &str = \"# System Manifest\\n\\n(default placeholder baked at compile time; replace with the real .grok/docs/system_manifest_root.md at install time)\\n\"; fn load_default_manifest(source_dir: &Path) -> String { try source_dir.join(\".grok/docs/system_manifest_root.md\") via fs::read_to_string, fall back to FALLBACK_MANIFEST }. Call-site: deploy_tracked_file(\"system_manifest.md\", &source_dir, &load_default_manifest(&source_dir), &primary_runtime_dir) \u2014 note the existing deploy_tracked_file already prefers a runtime on-disk file and only uses the embedded default as fallback, so this change fits the installer's existing design. John's decision needed on ONE thing: whether the manifest content is load-bearing for the verify step (installer.rs:255-271 says it writes the embedded default and verify checks they match) \u2014 if he wants the real manifest shipped, he must supply its content; otherwise the placeholder fallback stands and can be refined later. ALTERNATIVE CONSIDERED (rejected): generate the file in build.rs \u2014 rejected because there is no in-repo source content to generate it from; build.rs cannot conjure the gitignored real manifest. Second alternative (rejected): commit a tracked fallback copy and keep include_str! \u2014 rejected because it ships stub content into /etc/helix and the runtime dir on every install, contradicting the stub's explicit 'NOT FOR SHIPMENT' warning.\n\nUPDATE BY QUARTERMASTER 2026-10-18 ~04:35 EDT: STILL BROKEN on PreRelese tip 92d7ae3, and the shape changed. PR #25 (master->PreRelese) included 7696e59 'rename config.toml' -> example.config.toml (live config.toml is now untracked+gitignored), so installer.rs:266 include_str!(\"../../config.toml\") now fails with 'No such file or directory' for a SECOND reason - the file is gone by name, not just absent. installer.rs:267 include_str!(\"../../.grok/docs/system_manifest_root.md\") still fails (file never tracked). Full log: ~/workspace/goals/nightly-quartermaster-run/hidden_files/qm-20261018-bot-build.log. The 262.4 decision for John stands and is now sharper: point the installer at example.config.toml (and decide whether embedding the template is acceptable), and decide the manifest question (262.4: is the manifest content load-bearing for the installer verify step?).",
+      "testStrategy": "Fresh git worktree (no untracked .grok present) -> cargo check --lib --bins: exit 0. Verify the installer bin compiles and its DEFAULT_MANIFEST embeds the intended content.",
+      "subtasks": [
+        {
+          "id": "262.1",
+          "status": "pending",
+          "title": "src/bin/installer.rs: replace include_str! (line 267) with runtime load_default_manifest() + FALLBACK_MANIFEST constant"
+        },
+        {
+          "id": "262.2",
+          "status": "pending",
+          "title": "Fresh worktree check (no .grok present): cargo check --lib --bins -> exit 0 (fresh-clone simulation)"
+        },
+        {
+          "id": "262.3",
+          "status": "pending",
+          "title": "Confirm installer behavior: runtime .grok file preferred when present, baked-in fallback otherwise; verify step still matches"
+        },
+        {
+          "id": "262.4",
+          "status": "pending",
+          "title": "Ask John: is manifest content load-bearing for the installer verify step? If yes, he supplies the real content"
+        }
+      ]
+    },
+    {
+      "id": 263,
+      "title": "Fix flaky chat_history test: clear_empties_history bypasses test_env_lock and races the other chat_history tests",
+      "description": "cargo test --lib on fix-bin-support-watch @ 12b8cbd failed once with chat_history::tests::corrupt_lines_dont_break_reload asserting 0 turns instead of 2, then passed on an immediate re-run with zero code changes. Scheduling-dependent flake: clear_empties_history does not use with_clean_history, so it takes no test_env_lock and mutates the shared process-global history (record_turn/clear) while other chat_history tests run in parallel.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "FILED BY QUARTERMASTER, 2026-10-16 nightly run. Production code NOT implicated (lib suite is green on re-run; the flake is test isolation only), but a flaky test reds the line intermittently and must not be ignored.\n\nFAILURE OUTPUT (full log: ~/workspace/goals/nightly-quartermaster-run/hidden_files/qm-20261016-bot-full.log):\n  thread 'chat_history::tests::corrupt_lines_dont_break_reload' panicked at src/chat_history.rs:312:13:\n  assertion `left == right` failed\n    left: 0\n   right: 2\n  failures:\n      chat_history::tests::corrupt_lines_dont_break_reload\n  test result: FAILED. 422 passed; 1 failed; 4 ignored\n\nRE-RUN (same tree, same command, minutes later; log qm-20261016-bot-testlib-rerun.log): test result: ok. 423 passed; 0 failed; 4 ignored.\n\nMECHANISM (verified in src/chat_history.rs): with_clean_history() takes crate::tools::subagent_tool::test_env_lock() (a process-global Mutex) and points HELIX_CHAT_HISTORY_FILE at a temp file. All chat_history tests use it EXCEPT clear_empties_history (src/chat_history.rs:265), which calls record_turn(\"x\", \"y\") + clear() with no lock. A clear() landing between another test's load_from_disk() and its recent_turns() assert produces exactly the observed 0-turns failure. Note with_clean_history's temp file name is pid-only (helix-chat-history-test-{pid}.jsonl), so it is shared by every chat_history test in the process \u2014 the lock is the only isolation.\n\nRULED OUT:\n- Not a code change: the tree is byte-identical to the 2026-10-15 green run (fix-bin-support-watch @ 12b8cbd, no new commits anywhere).\n- Not the 261/262 build breaks: the lib crate compiles and the lib suite runs; 261/262 block only the bins + non-lib test targets.\n- Not stale worktree state: the temp file is removed at the start/end of every with_clean_history call; the failure is a live interleaving, not leftover data.\n\nSUGGESTED START: wrap clear_empties_history's body in with_clean_history (or take test_env_lock directly). Audit the whole lib suite for other tests that touch shared chat_history globals (record_turn / clear / recent_turns) or HELIX_CHAT_HISTORY_FILE without the lock \u2014 spot-check found production callers in src/io/llm_gemini/mod.rs and src/io/ollama/mod.rs, so check whether any of their tests drive those paths concurrently. Consider making the temp file name unique per test (e.g. include the test name), not just per pid, as defense in depth.\n\nNOTE: full `cargo test` verification is still gated on task 262 (installer include_str! blocks all non-lib test targets). Verify via cargo test --lib until 262 lands.\n\nSURVEYOR 1 VERIFIED 2026-10-16 (plan only, no code touched):\n- clear_empties_history (src/chat_history.rs:265) is the ONLY chat_history test outside with_clean_history (line 185); all 8 others hold test_env_lock (src/tools/subagent_tool.rs:591, process-global Mutex) for the whole test body.\n- Audit: NO other test in the lib suite calls record_turn / clear / load_from_disk / recent_turns, and NO test outside chat_history.rs sets HELIX_CHAT_HISTORY_FILE (grep-verified). llm_gemini test gemini_tool_loop_emits_spawn_subagent_call calls call_gemini_tools, which READS recent_turns (mod.rs:387) but never writes \u2014 and it holds test_env_lock, so it is serialized with the chat_history tests. record_turn in llm_gemini lives in handle_gemini_bus_message (mod.rs:68), which no test calls. Ollama tests are pure unit tests + one #[ignore]d live test (test_handle_ollama_live); no default-suite ollama test drives handle_ollama_message / call_ollama_tools (the record_turn / recent_turns sites, mod.rs:332/553). No audit changes needed beyond the 263.2 fix.\n- Second failure direction: clear_empties_history's record_turn(\"x\",\"y\") also APPENDS to whatever HELIX_CHAT_HISTORY_FILE points to at that moment \u2014 another test's shared temp file (inflating its count) or, with the var unset, the real logs/chat_history.jsonl (a stray untracked logs/chat_history.jsonl is in the worktree; Ranger to check whether it is test pollution and remove it if so).\n- Unique-per-test temp filenames are OPTIONAL defense-in-depth only: they fix the disk side, NOT the shared in-memory HISTORY \u2014 clear() would still wipe global memory without the lock. Do not ship filenames as the fix.\n- Do NOT change production record_turn / clear / load_from_disk / recent_turns \u2014 test-only fix. Do NOT re-plan 261/262.",
+      "testStrategy": "263.1: repro attempt logged (loop counts + outcome; attempt counts even if the flake doesn't fire). 263.2-263.3: cargo test --lib chat_history green. 263.4: cargo test --lib loop 10x at default parallelism green + cargo test --lib -- --test-threads=1 green. Full cargo test re-verification deferred until task 262 lands (262 gates all non-lib test targets).",
+      "subtasks": [
+        {
+          "id": "263.1",
+          "status": "pending",
+          "title": "Reproduce the flake (attempt): loop cargo test --lib chat_history (50x) + full cargo test --lib (20x); log attempts; proceed on the verified mechanism if it doesn't fire"
+        },
+        {
+          "id": "263.2",
+          "status": "pending",
+          "title": "Fix clear_empties_history isolation: wrap its body in with_clean_history (src/chat_history.rs:265) so it runs under test_env_lock"
+        },
+        {
+          "id": "263.3",
+          "status": "pending",
+          "title": "Audit: confirm no other test touches shared chat_history globals or HELIX_CHAT_HISTORY_FILE without the lock (llm_gemini read-only under lock; ollama live test ignored) + check stray logs/chat_history.jsonl"
+        },
+        {
+          "id": "263.4",
+          "status": "pending",
+          "title": "Verify: cargo test --lib loop 10x green at default parallelism + single-threaded run green; leave changes uncommitted for QM/John review"
+        }
+      ]
+    },
+    {
+      "id": 264,
+      "title": "Fix parse_mail_list dropping numeric UIDs: support watcher never sees mail",
+      "description": "The support watcher polls run and mail-mcp returns mail, but parse_mail_list() drops every message: mail-mcp mail_search emits numeric UIDs ({\"uid\": <u32>}) while the parser only accepts STRING id/uid/message_id. The numeric-uid fallback looks for an \"id\" key that mail_search never emits, yields None, and the message is silently discarded. Result: seen_ids stays empty, no drafts, no auto-send, despite mail_configured=true and a healthy mailbox.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "FILED BY COBBLE JR per John, 2026-10-16 evening live drill. FOR RANGER 1.\n\nROOT CAUSE (verified 2026-10-16 ~21:27 EDT):\n- mail-mcp mail_search (~/workspace/mail-mcp/src/mail.rs blocking_search) returns {\"mailbox\",\"criteria\",\"returned\",\"messages\":[{\"uid\": <u32>, \"subject\", \"from\", \"date\"}]}. uid is a JSON NUMBER. Params default sanely: mailbox=INBOX, query=\"\" -> criteria ALL, limit default 10; the watcher calls with {\"limit\": 50}, so the call itself is fine.\n- Helix parse_mail_list (src/support_watch/mod.rs:201) per item: get(\"id\") -> None (mail_search never emits \"id\"); or_else get(\"uid\") -> Some(number); and_then as_str() -> None (number, not string); or_else get(\"id\").as_u64() -> None (no \"id\" key) -> `?` -> None -> item DROPPED. The as_u64 fallback only helps when the key is literally \"id\" AND numeric; it never helps for \"uid\"/\"message_id\".\n- Top-level \"messages\" wrapper IS handled, so the drop is purely per-item id typing.\n\nEVIDENCE CHAIN (all verified live on R630, Helix PID 54523 after debug restart):\n- GET /support/status -> mail_configured: true (resolve_mail_tools() succeeds in-process; watcher HAS check+send tools). No-tools theory DEAD.\n- Config valid: TOML OK, [mcp] enabled=true, [[mcp.servers]] google + mail each with own [mcp.servers.env]. Binary fresh (Oct 16 00:50, has watcher strings). CWD /home/cobble/helix. main.rs resolves config_path_used=\"config.toml\", mcp_config_path same file. Format check: tool_definitions() returns Ollama-style {function:{name}} matching the watcher's expectation.\n- Polls run (state.json last_check advances), seen_ids=[], unhandled=[], draft_attempts={}. Test mail (\"Hi\"/\"Test\", from John's phone) sat unread in support@ INBOX all day through business-hours 5-min polls.\n- Mock E2E (task 260.1) passed because the MOCK returns string ids, masking the real-server shape. The mock must be fixed to emit numeric uids (264.3) or this class of bug recurs.\n\nFIX DIRECTION (264.1): in parse_mail_list, accept numeric id/uid/message_id by stringifying the u64 (e.g. v.as_str().map(str::to_string).or_else(|| v.as_u64().map(|n| n.to_string()))) instead of mapping numeric to \"\" and dropping. Keep string ids working; keep dropping items with no id at all.\n\nDOWNSTREAM COMPATIBILITY (verify in 264.4): IncomingMail.id flows to state seen/unhandled lists and to the drafter -> mail_read / mail_modify paths, which expect a numeric UID. A stringified \"123\" must parse back to u32 there. Confirm mail_read takes the id as uid (check drafter.rs/drafts.rs call sites); if any site assumes the id is already numeric-typed, adapt it to parse. Do NOT change mail-mcp: its numeric uid output is correct IMAP behavior.\n\nNOT IN SCOPE: Helix installs no logger (no env_logger/set_logger/SimpleLogger/tracing_subscriber init anywhere in src/), so all log:: output is discarded. That is a separate observability defect, NOT this task. Do not bundle it here; file separately.\n\nR630 STATE NOTES: debug override staged at /etc/systemd/system/helix.service.d/debug.conf (RUST_LOG=debug) during diagnosis \u2014 it never produced watcher logs (no logger installed) and should be removed + service restarted when this fix deploys. Test mail still unread in support@ INBOX for the post-fix live drill. state.json was reset during diagnosis (backup in /tmp/support_watch-state-before-debug.bak on R630).\n\nRESULTS (Ranger 1, 2026-10-16):\n264.1: parse_mail_list id extraction rewritten \u2014 one lookup over id/uid/message_id, accept string OR u64 (stringified). Doc comment updated.\n264.2: new test parse_mail_list_accepts_numeric_uids_like_real_mail_search \u2014 real mail_search payload shape (messages wrapper, numeric uid 123, from with display name), numeric id + message_id variants, string-id still works, null-id / id-less items still drop.\n264.3: mock E2E stub now emits the real mail_search shape ({\"messages\":[{\"uid\":4242,...}]}) ; id asserts updated \"mock-1\" -> \"4242\".\n264.4: downstream verified by inspection \u2014 msg.id flows only as String (in_reply_to, WatchState seen/unhandled sets, mark_handled string ops). No parse::<u32> on the id anywhere in drafter.rs/drafts.rs; no mail_read/mail_modify uid call exists in the watcher flow yet. Stringified numeric uid is fully compatible. The mock E2E with id \"4242\" exercises the full loop as executable proof.\n264.5: cargo test --lib support_watch: 49 passed, 0 failed. Full cargo test --lib: 424 passed, 0 failed, 4 ignored (was 423; +1 new regression test). Changes left UNCOMMITTED for review. Live drill on R630 after John deploys (test mail still unread) completes 255.3/260.2/260.3.\nNote: this resolves the reviewer's deferred nit B4 from the ranger-255-260 review (\"numeric message ids still dropped\").\n",
+      "testStrategy": "264.1-264.2: new unit test feeds parse_mail_list the REAL mail_search payload shape ({\"messages\":[{\"uid\":123,\"subject\":\"Hi\",\"from\":\"john mcconnell <...>\",\"date\":\"...\"}]}) and asserts the message is returned with id \"123\"; plus numeric \"id\" and \"message_id\" variants and the existing string-id cases. 264.3: mock E2E emits numeric uids; suite still green. 264.4: downstream id->uid parse covered by existing drafter/drafts tests or a new assertion. 264.5: cargo test --lib support_watch green + full lib suite green; leave changes uncommitted for review. Live drill on R630 after John deploys (test mail still unread) completes tasks 255.3/260.2/260.3.",
+      "subtasks": [
+        {
+          "id": "264.1",
+          "status": "done",
+          "title": "Fix parse_mail_list (src/support_watch/mod.rs:201) to accept numeric id/uid/message_id by stringifying the u64 instead of dropping"
+        },
+        {
+          "id": "264.2",
+          "status": "done",
+          "title": "Regression test: parse_mail_list on real mail_search payload (numeric uid, messages wrapper) returns the message with id \"123\"; cover numeric id + message_id variants + string-id cases"
+        },
+        {
+          "id": "264.3",
+          "status": "done",
+          "title": "Fix mock E2E (task 260.1) to emit numeric uids like real mail-mcp so the mock cannot mask this shape mismatch again"
+        },
+        {
+          "id": "264.4",
+          "status": "done",
+          "title": "Verify downstream id flow: stringified uid parses back to u32 in drafter/mail_read/mail_modify/mark_handled paths; adapt any site that assumes numeric-typed id"
+        },
+        {
+          "id": "264.5",
+          "status": "done",
+          "title": "Verify: cargo test --lib support_watch green + full lib suite green; leave changes uncommitted for review; live drill on R630 after John deploys"
+        }
+      ]
+    },
+    {
+      "id": 265,
+      "title": "Install a logger and audit logging project-wide: log:: output is currently discarded everywhere",
+      "description": "Helix installs no logger, so every log::info!/debug!/warn!/error! call in the codebase is a silent no-op and RUST_LOG has no effect. This made the support-watcher outage (task 264) undiagnosable from logs: zero mcp: spawn lines, zero support_watch: lines at any level, even with RUST_LOG=debug in effect. Install a logger honoring RUST_LOG and put logging where it is needed across the whole project, without leaking secrets.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "FILED BY COBBLE JR per John, 2026-10-16 evening drill (follow-up to task 264). FOR RANGER 1.\n\nROOT (verified 2026-10-16): grep for env_logger/set_logger/SimpleLogger/tracing_subscriber init across ~/helix/src/ returns NOTHING. The log facade IS used widely (support_watch mod.rs info!/debug!/warn!, mcp_client try_execute warn!, etc.) but nothing sinks it. Startup println! lines reach the journal; log:: lines do not. A debug restart with RUST_LOG=debug in effect produced zero watcher/MCP lines \u2014 the debug override was working (systemctl show Environment confirmed RUST_LOG=debug), the logger simply did not exist.\n\n265.1 INSTALL LOGGER: add env_logger (log-facade-compatible; do NOT migrate the codebase to tracing \u2014 bigger change, out of scope) to Cargo.toml; initialize once, early in main() before run_helix (and in any lib/bin entry that needs it). Honor RUST_LOG with a sane default (info). Init must be idempotent-safe (try_init or OnceLock guard) so tests cannot panic on double init. Verify per-module filtering works (e.g. RUST_LOG=helix::support_watch=debug). env_logger writes to stderr, which systemd forwards to the journal \u2014 no extra plumbing needed.\n\n265.2 AUDIT + ADD LOGGING PROJECT-WIDE: every silent fallback / swallowed error gets at least a warn!:\n- McpConfig::load_from_toml falling back to the disabled default (log the path + that MCP is disabled \u2014 this silent fallback sent the 264 diagnosis down the wrong path for hours).\n- load_config read failures; manager() returning None; MCP spawn/handshake/tools-list failures; tool call errors (try_execute already warn!s \u2014 confirm it fires post-logger).\n- Watcher poll outcomes (info!/debug! lines already exist \u2014 confirm they appear), cadence/mode transitions, draft attempts/failures.\n- Config path resolution, config save/load failures, web server errors, agent/tool errors, backup/restore outcomes.\nUse appropriate levels: error for failures, warn for fallbacks/degraded operation, info for lifecycle, debug for per-call detail. Keep debug! out of tight loops.\n\n265.3 SECRETS HYGIENE (mandatory review pass): never log secret VALUES \u2014 [mcp.servers.env] values (MAIL_PASS, GOOGLE_CLIENT_SECRET, tokens), auth tokens, customer mail bodies/subjects, full config dumps. Log keys/paths/counts, never values. Grep log macros near secret-bearing variables and fix any that leak. A debug log that prints a mailbox password is worse than no log.\n\n265.4 PRINTLN POLICY: decide and document (short comment in main.rs or task notes): println! stays for user-facing CLI output (startup banner, \"Using config file\"); diagnostics go through log::. Convert existing diagnostic println!/eprintln! to log:: where they are diagnostics, not user output. Do not churn user-facing output for style.\n\n265.5 VERIFY + DEPLOY NOTE: cargo test --lib green (no test broken by logger init; tests capturing output still pass). R630 manual verification after John deploys: restart with RUST_LOG=debug, journalctl shows support_watch + mcp: lines; restart at info shows info+warn only, debug filtered out. DEPLOY NOTE: a debug override is currently staged on R630 at /etc/systemd/system/helix.service.d/debug.conf (RUST_LOG=debug) from the 264 diagnosis \u2014 it does nothing until this task lands, then it will FLOOD the journal. Removing that override + restarting at info is part of this task's deploy.\n\nOUT OF SCOPE: rewording log messages everywhere for style; structured/JSON logging (future work if wanted); log rotation (journald handles it); the task 264 parser fix itself.\n\nRESULTS (Ranger 1, 2026-10-16):\n265.1: env_logger was ALREADY a Cargo dependency (0.11.11) but never initialized. Added helix::init_logging() in src/lib.rs (env_logger::Builder::from_env, default filter info, try_init for idempotency) + unit test proving idempotent + logger-live marker. main.rs calls it first thing in main(), before the ACP branch (env_logger writes to stderr, so ACP JSON-RPC on stdout stays clean). installer.rs/test_ollama.rs use no log:: macros, so no init needed there. Verified: RUST_LOG=off suppresses the marker, RUST_LOG=helix::tests=debug shows it; marker format '[ts INFO helix::tests] ...'.\n265.2: config::load_section helper (src/config/mod.rs) \u2014 all 8 section loaders (mcp/acp/shell/ssh/okf/reasoning/project_scanner/support) funnel through it: unparseable TOML -> warn + defaults; missing section -> debug + defaults; wrong shape -> warn + defaults. mcp_client load_config_from read failure -> warn; manager() None -> debug (not warn: fires per call, off is the normal state). MCP manager spawn/list/call failures ALREADY warn! (were just invisible). Watcher poll outcomes ALREADY info!/debug!. tools::execute injection guard ALREADY warn!. Web server: warn! on config_save/manifest_save auth rejection, merge-base read failure, REDACTED refusal, TOML rejection, write failures. chat_history compaction write failure -> eprintln once (module's idiom). cpu nightly_report + persist_consolidated_memory write failures -> warn!. Installer backup_existing ALREADY println!/eprintln!s. Deliberately untouched: WS/channel-send `let _ =` (receiver-gone is normal; logging would spam), test cleanup remove_dir_all, cpu fix-loop fire-and-forget shell calls (outcome is logged), bus.publish ignores.\n265.3: secrets audit fixed 15 sites to metadata-only (names/keys/paths/counts/lengths): runtime_loop ToolCall args -> arg keys, FinalAnswer/Planner Error/Replan -> lengths, tool-success value -> length; llm_gemini + ollama tool-error warns -> lengths; unix_socket CLI args -> key count/char count; web_server chat msg -> msg_len (info! + println); mcp_handler bus error data -> length; ACP dispatch -> static warn; instructions/interrupts bus messages -> from/to/data_len (both log:: and log_to_file sinks); bus log_transaction -> metadata-only (was first 300 chars of every payload into TRACKED logs/bus_log.md); drafts.rs send-result 200 chars -> length; cpu commands agent.run result -> length; Instruction Debug dump (carried memory values/bus payloads/skill args/LLM prompts) -> new Instruction::variant_name(); bus NO SUBSCRIBER println data preview (120 chars) deleted (eprintln with metadata already covers it); io.rs + terminal placeholder handlers full message.data -> metadata. Parser/serde errors are NEVER logged with {e}: their Display echoes the offending file line/value (config TOML parse + load_section shape errors log static hints only). io::Error-only warns kept (no values). Deliberately KEPT: email_tools to/subject sent-mail audit trail (recipient+subject prove delivery; not a secret value or body), four error!(\"{}\", error_msg) sites (locally-formatted io/channel errors, no untrusted content).\n265.4: policy documented in main.rs comment (println!/eprintln! = user-facing CLI only; log:: = all server diagnostics; never log content). Converted server diagnostics to log::: web_server chat line -> info!, ollama SUCCESS -> info!, ollama FAILED println duplicate deleted (warn! above covers it), cpu error-log review -> info!. Deliberately LEFT as println!/eprintln! for a follow-up cleanup (no content in any of them): main.rs startup banner + 'Using config file', ACP CLI messages, bus lifecycle lines, io routing lines, cpu routine/heartbeat/memory-consolidation lines, hy_evo chaos/visualization, terminal interface start, unix_cli docs, installer bin output, chat_history eprintln!s (module idiom). Test-only println!s left (ollama live-test response print).\n265.5: cargo check --lib clean (4 remaining warnings all pre-existing: unix_socket unused, ops_restart state = task 254). cargo check --all-targets clean (exit 0; router/mod.rs unused-import warnings pre-existing = task 254). cargo test --lib: 425 passed, 0 failed, 4 ignored (was 424 after 264; +1 init_logging test). RUST_LOG filtering verified live (off suppresses, module filter shows). Secrets re-grep clean (one hit = backend name only). Changes left UNCOMMITTED for review. R630 deploy note: REMOVE /etc/systemd/system/helix.service.d/debug.conf + restart at info when this lands, or debug will flood the journal. Side observation: test runs appended new metadata-only lines to the already-dirty tracked logs/bus_log.md (old content-preview lines in the diff are pre-existing, not mine); left untouched rather than restoring and destroying pre-existing local content.\n",
+      "testStrategy": "265.1-265.2: cargo test --lib green; new test asserting logger init is safe to call (try_init / once semantics) if feasible without global-state flakiness; existing watcher/MCP tests still pass with a logger installed. 265.3: secrets grep pass clean (no log macro adjacent to secret values). 265.5: R630 manual \u2014 RUST_LOG=debug shows support_watch + mcp: lines in journalctl; RUST_LOG=info filters debug out; debug override removed, service restarted at info.",
+      "subtasks": [
+        {
+          "id": "265.1",
+          "status": "done",
+          "title": "Install logger: add env_logger (log-facade-compatible, no tracing migration), init once early in main() honoring RUST_LOG (default info), idempotent-safe for tests; verify per-module filtering"
+        },
+        {
+          "id": "265.2",
+          "status": "done",
+          "title": "Audit + add logging project-wide: every silent fallback / swallowed error gets warn! (config fallback, manager None, MCP spawn/list/call failures, watcher outcomes, config/web/agent errors); sane levels, debug! out of tight loops"
+        },
+        {
+          "id": "265.3",
+          "status": "done",
+          "title": "Secrets hygiene review: no log macro prints secret values (env secrets, tokens, mail bodies/subjects, config dumps) \u2014 keys/paths/counts only"
+        },
+        {
+          "id": "265.4",
+          "status": "done",
+          "title": "println policy: document println! = user-facing output vs log:: = diagnostics; convert diagnostic println!/eprintln! to log:: where appropriate"
+        },
+        {
+          "id": "265.5",
+          "status": "done",
+          "title": "Verify: cargo test --lib green; R630 journal check at debug + info; remove staged debug override (/etc/systemd/system/helix.service.d/debug.conf) and restart at info"
+        }
+      ]
+    },
+    {
+      "id": 266,
+      "title": "Voice-box TTS bring-up: start audiocpp_server, verify API, bind to LAN, systemd unit",
+      "description": "Bring up the already-built audiocpp_server on the voice box (Proxmox LXC 'voice', Ubuntu 24.04.4, CPU-only): start it with the written /audio.cpp/server.json, verify /health + /v1/models, run the first TTS curl test, measure CPU latency, bind 0.0.0.0 + firewall so the R630 can reach it, and install a systemd unit. All subtasks are HARDWARE steps for John, one verified step at a time.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "FILED BY SURVEYOR 1 per John, 2026-10-18 (voice-box planning session). Verified context: repo 0xShug0/audio.cpp (real upstream, v0.9.2, pure C++ ggml runtime) at /audio.cpp; CPU-release build already done; server binary /audio.cpp/build/linux-cpu-release/bin/audiocpp_server; OpenAI-compatible API (POST /v1/audio/speech, POST /v1/audio/transcriptions, GET /health, GET /v1/models). Models present: models/Supertonic-3-GGUF (454MB TTS), models/PocketTTS-GGUF/english (128MB Q8 TTS). NO ASR/STT model yet -- TTS first, STT is task 268. /audio.cpp/server.json already written (host 127.0.0.1, port 8081, backend cpu, 8 threads, lazy_load true, one model: supertonic-tts, family supertonic, path models/Supertonic-3-GGUF, task tts, mode streaming, default voice M1). IMPORTANT: the server's --backend flag defaults to cuda; always start with --config server.json (which pins cpu). Do NOT start the server from the sandbox -- John runs all hardware steps himself.",
+      "testStrategy": "curl http://<voice-lan-ip>:8081/health returns 200 FROM THE R630 (not just localhost); /v1/models lists supertonic-tts; /tmp/tts-test.wav is valid RIFF WAVE >10KB and intelligible when played on the ASUS box; `systemctl is-active audiocpp` is active and /health is 200 after `sudo systemctl restart audiocpp` and after a reboot.",
+      "subtasks": [
+        {
+          "id": "266.1",
+          "title": "Start audiocpp_server in the foreground; verify /health and /v1/models on localhost",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": "266.2",
+          "title": "First TTS curl test: POST /v1/audio/speech -> wav file, verify RIFF WAVE, play on ASUS",
+          "status": "pending",
+          "dependencies": [
+            "266.1"
+          ]
+        },
+        {
+          "id": "266.3",
+          "title": "Measure TTS latency on CPU (3 timed runs of a ~20-word sentence), record numbers",
+          "status": "pending",
+          "dependencies": [
+            "266.2"
+          ]
+        },
+        {
+          "id": "266.4",
+          "title": "Bind 0.0.0.0 + firewall 8081/tcp; verify /health from the R630",
+          "status": "pending",
+          "dependencies": [
+            "266.2"
+          ]
+        },
+        {
+          "id": "266.5",
+          "title": "Install systemd unit audiocpp.service (auto-start, restart on failure), verify across restart + reboot",
+          "status": "pending",
+          "dependencies": [
+            "266.4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 267,
+      "title": "Helix TTS integration: [voice] config, voice-box HTTP client, /api/voice/speak proxy, browser playback",
+      "description": "Helix-side TTS: config knobs, an HTTP client for the voice box /v1/audio/speech endpoint, a POST /api/voice/speak proxy endpoint (browser -> Helix -> voice box, avoiding CORS on the voice box and keeping auth/metering in Helix), and a Speak button in the web UI. Architecture (decided with John 2026-10-18): the browser is mic+speaker, the voice box is a headless inference server, Helix is the calling harness.",
+      "status": "done",
+      "dependencies": [
+        266
+      ],
+      "priority": "high",
+      "details": "FILED BY SURVEYOR 1, 2026-10-18. FOR RANGER 1. Voice box API is OpenAI-compatible: POST {host}:{port}/v1/audio/speech with JSON {model, input, voice} returns audio bytes. Server is on the voice LXC, reachable from the R630 at <voice-lan-ip>:8081 after 266.4 (John sets the LAN IP in his untracked config; do NOT hardcode it). Proxy rather than browser-direct: the voice box has CORS disabled by default and Helix already has the require_web_token pattern (task 240) for gating. File response first; SSE streaming only if 266.3 latencies demand it.",
+      "testStrategy": "Unit tests: config parse round-trip; HTTP client request shape against a mock server. Live: curl POST /api/voice/speak with token from the ASUS box returns wav bytes (401 without token, 400 on empty text); manual on ASUS: Speak button on a reply plays matching audio.",
+      "subtasks": [
+        {
+          "id": "267.1",
+          "title": "Add [voice] config section: host, port, tts_model, default_voice, timeout_ms (all optional, sane defaults)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": "267.2",
+          "title": "Helix HTTP client for /v1/audio/speech (typed errors, warn! on failure, never log audio bytes)",
+          "status": "done",
+          "dependencies": [
+            "267.1",
+            "266.4"
+          ]
+        },
+        {
+          "id": "267.3",
+          "title": "POST /api/voice/speak proxy endpoint (auth-gated, text length cap)",
+          "status": "done",
+          "dependencies": [
+            "267.2"
+          ]
+        },
+        {
+          "id": "267.4",
+          "title": "Web UI Speak button on agent replies + audio playback",
+          "status": "done",
+          "dependencies": [
+            "267.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 268,
+      "title": "Helix STT integration: ASR model download, transcriptions client, /api/voice/transcribe, browser mic capture",
+      "description": "STT phase: download a whisper-family ASR GGUF on the voice box (John's hardware step), add it to server.json, then Helix client + endpoint + browser mic capture (MediaRecorder push-to-talk). Depends on the server running (266).",
+      "status": "in_progress",
+      "dependencies": [
+        266
+      ],
+      "priority": "high",
+      "details": "FILED BY SURVEYOR 1, 2026-10-18. FOR RANGER 1 (268.1 is HARDWARE for John). Voice box API: POST {host}:{port}/v1/audio/transcriptions as multipart with fields file (wav bytes), model, language (optional). NOTE: getUserMedia requires a secure context -- the Helix web UI is already https://<r630-lan>:8443 so this is satisfied on the ASUS box; do NOT 'fix' anything by downgrading to HTTP. Round-trip check idea for 268.1: synthesize a known sentence with 266.2's TTS and transcribe it back.",
+      "testStrategy": "Unit tests: multipart request shape against a mock server. Live: curl a known-content wav at /api/voice/transcribe with token -> correct transcript JSON; manual on ASUS: hold push-to-talk, release -> accurate transcript appears in the chat input; mic denial shows a clear inline message.",
+      "subtasks": [
+        {
+          "id": "268.1",
+          "title": "Download whisper-family ASR GGUF via audio.cpp model manager; add asr entry to server.json; curl STT test",
+          "status": "pending",
+          "dependencies": [
+            "266.1"
+          ]
+        },
+        {
+          "id": "268.2",
+          "title": "Helix HTTP client for /v1/audio/transcriptions (multipart upload, typed errors)",
+          "status": "done",
+          "dependencies": [
+            "268.1",
+            "266.4"
+          ]
+        },
+        {
+          "id": "268.3",
+          "title": "POST /api/voice/transcribe endpoint (auth-gated, upload size cap)",
+          "status": "done",
+          "dependencies": [
+            "268.2"
+          ]
+        },
+        {
+          "id": "268.4",
+          "title": "Web UI push-to-talk mic capture (MediaRecorder) -> transcript into chat input",
+          "status": "done",
+          "dependencies": [
+            "268.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 269,
+      "title": "End-to-end voice loop test + voice observability (metadata-only logging)",
+      "description": "Close the loop: speak on the ASUS box -> STT -> agent reply -> TTS -> hear it, timed per stage. Then add voice request logging (outcomes + latencies, never audio bytes or transcripts above debug). Joint John+Ranger verification.",
+      "status": "pending",
+      "dependencies": [
+        267,
+        268
+      ],
+      "priority": "high",
+      "details": "FILED BY SURVEYOR 1, 2026-10-18. 269.1 is the acceptance gate for the whole voice add-on: two consecutive clean loops. 269.2 applies the task-265 secrets-hygiene rule to voice data (audio bytes and transcripts are sensitive).",
+      "testStrategy": "269.1 passes when two consecutive loops complete with correct transcript and intelligible audio, stage latencies recorded. 269.2 passes when the journal shows voice lines with latencies and a grep confirms no transcript text or audio payload in the logs.",
+      "subtasks": [
+        {
+          "id": "269.1",
+          "title": "End-to-end loop test, timed per stage (capture/STT/agent/TTS/playback); two consecutive clean loops",
+          "status": "pending",
+          "dependencies": [
+            "267.4",
+            "268.4"
+          ]
+        },
+        {
+          "id": "269.2",
+          "title": "Voice observability: log outcomes + latencies; metadata only, no audio/transcript content",
+          "status": "pending",
+          "dependencies": [
+            "269.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 270,
+      "title": "Voice cloning (phase 3, deferred): evaluate zero-shot cloning in the same runtime",
+      "description": "PLACEHOLDER ONLY -- do not spec in depth yet. When the loop (269) works: evaluate Chatterbox / CosyVoice3 zero-shot voice cloning inside the existing audiocpp_server (same runtime, new model download). Inference-time cloning works on CPU; training/fine-tuning a voice waits for the GPU. John's call when to activate.",
+      "status": "deferred",
+      "dependencies": [
+        269
+      ],
+      "priority": "low",
+      "details": "FILED BY SURVEYOR 1, 2026-10-18, per John's sequencing (TTS -> STT -> cloning). audio.cpp already supports Clone task families (chatterbox, cosyvoice3, fish_audio); no new service needed. Deferred until John says go.",
+      "testStrategy": "N/A (deferred). Activation test will be: clone John's voice from a ~6-second reference clip, synthesize a sentence, confirm recognizable.",
+      "subtasks": []
+    },
+    {
+      "id": 271,
+      "title": "3 new lib warnings on PreRelese from the PR #25 master merge (unix_socket.rs unused imports/vars)",
+      "description": "PreRelese tip 92d7ae3 compiles the lib crate with 3 NEW warnings vs the 2026-10-17 baseline (warning-free bar broken): src/io/unix_socket.rs:23 unused imports `SystemTime` and `UNIX_EPOCH`; src/io/unix_socket.rs:276 unused variable `name`; src/io/unix_socket.rs:277 unused variable `plugin_args`. Introduced by the master->PreRelese merge (PR #25). Trivial to fix (drop the imports, underscore-prefix or remove the vars), but they arrived with the merge and should be cleaned before the next green-build claim.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "SPOTTED BY QUARTERMASTER 2026-10-18 ~04:35 EDT during the nightly cargo check --lib --bins on 92d7ae3. Full log: ~/workspace/goals/nightly-quartermaster-run/hidden_files/qm-20261018-bot-build.log. RULED OUT: not pre-existing - the 2026-10-17 fix-branch baseline check was warning-identical to 2026-10-15 (zero new warnings from 264/265); these 3 come from code the PR #25 merge brought in from master. NOTE: the bin target (installer) still fails on task 262, so the overall line stays red regardless; fix alongside 262.",
+      "testStrategy": "cargo check --lib --bins emits zero warnings; diff of the warning body against the 42d891c state of 2026-10-17 (warning-free lib) is empty.",
+      "subtasks": []
+    },
+    {
+      "id": 272,
+      "title": "cargo test --lib fails to compile on PreRelese: 2 test-only errors from the PR #25 master merge",
+      "description": "PreRelese tip 92d7ae3: `cargo test --lib` does not compile - 0 tests run. (1) src/router/integration.rs:45 (test mod) E0432: `use crate::router::{OverrideCommand, OverrideTier}` - both items moved to `crate::router::user_override` (compiler suggests that path). (2) src/mcp_client/mod.rs:317 (test) E0425: `PREFIX` not in scope - compiler suggests `use crate::mcp_client::naming::PREFIX;` (line 259 area). Both are test-only (cargo check --lib --bins passes), both arrived with the PR #25 master->PreRelese merge. Fix is the two import corrections; then the lib suite should return to the 425-passed baseline.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "SPOTTED BY QUARTERMASTER 2026-10-18 ~04:50 EDT during the nightly run: cargo check --lib --bins is green for the lib (3 new warnings, task 266) but cargo test --lib --no-run fails with the 2 errors above. Full log: ~/workspace/goals/nightly-quartermaster-run/hidden_files/qm-20261018-bot-testlib.log. RULED OUT: not pre-existing - the fix branch (42d891c) ran 425 passed / 0 failed on 2026-10-17; these errors are in test modules the PR #25 merge touched. RULED OUT: not related to task 262 (installer bin) or 263 (flake). Blocks: the nightly green-build claim for the lib test suite.",
+      "testStrategy": "cargo test --lib compiles and the suite passes at/above the 425-passed / 0-failed / 4-ignored baseline from 2026-10-17; cargo check --lib --bins --tests emits no errors.",
+      "subtasks": []
+    },
+    {
+      "id": 273,
+      "title": "Clean 2 unused-import warnings in tests/unix_socket_test.rs (QM 2026-10-19)",
+      "description": "cargo check --tests reports 2 warnings in tests/unix_socket_test.rs:5-6 \u2014 unused import tokio::net::UnixStream and unused imports AsyncWriteExt, AsyncBufReadExt, BufReader. File is a Task-76 placeholder (test body only asserts on a string literal), unchanged since 42d891c, so warnings are pre-existing, not from the 271/272 fixes. Warning-free bar: delete the unused imports (or the whole placeholder module).",
+      "status": "pending",
+      "priority": "low",
+      "dependencies": [],
+      "details": "Spotted by the 2026-10-19 Quartermaster run during `cargo check --tests --no-run` on ranger-267-268-voice (9c87f34). Ruled out: not introduced by the voice branch (file byte-identical to 42d891c), not related to tasks 262/271/272.",
+      "testStrategy": "cargo check --lib --bins --tests reports zero warnings on the helix package (installer bin excluded: still red on task 262).",
+      "subtasks": []
+    },
+    {
+      "id": 274,
+      "title": "Web UI push-to-talk mic capture must send WAV, not WebM",
+      "description": "The voice box POST /v1/audio/transcriptions accepts WAV only (400 on WebM). The mic button used MediaRecorder (WebM/Opus), so every mic transcription failed. Replace capture with Web Audio API PCM -> 16-bit mono 16kHz WAV encoded in JS.",
+      "status": "done",
+      "dependencies": [
+        268
+      ],
+      "priority": "high",
+      "details": "1) Replace MediaRecorder with getUserMedia -> AudioContext({sampleRate:16000}) -> MediaStreamAudioSourceNode -> AudioWorklet (ScriptProcessor fallback) collecting Float32 PCM chunks while held. 2) On release: concat chunks, linear-downsample to 16000 Hz if ctx.sampleRate differs, encode 16-bit mono WAV in JS (44-byte RIFF header), Blob audio/wav, form.append('file', blob, 'audio.wav'). 3) Keep POST /api/voice/transcribe via opsFetch, transcript-into-chat-input, and warning paths identical. No Rust changes (mod.rs already names non-webm uploads audio.wav).",
+      "testStrategy": "Pure DSP helpers (voiceDownsampleTo16k, voiceEncodeWav16) extracted between VOICE-CAPTURE-PURE markers in index.html and unit-tested by src/io/web_server/static/voice-wav.test.js (node): RIFF/WAVE magic, fmt=16-bit mono 16000Hz, data length, int16 clamping, downsample ratios (48k/44.1k->16k), identity at 16k, sine-shape preservation, chunk-concat round-trip. cargo test --lib must stay at 443 passed / 0 failed / 4 ignored baseline.",
+      "subtasks": []
     }
   ]
 }
