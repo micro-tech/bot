@@ -1901,16 +1901,91 @@
                 }
             }
 
-            // Task 268.4: push-to-talk. Hold the mic button to record,
-            // release to transcribe via /api/voice/transcribe; the transcript
-            // lands in the chat input for review before sending.
-            let micRecorder = null;
+            // Task 274: push-to-talk. Hold the mic button to capture raw PCM
+            // via the Web Audio API, encode 16-bit mono 16 kHz WAV in JS, and
+            // POST it to /api/voice/transcribe; the transcript lands in the
+            // chat input for review before sending.
+            //
+            // Why not MediaRecorder: it emits WebM/Opus, and the voice box
+            // transcriptions endpoint accepts WAV only (400 otherwise).
+            let micCtx = null;
             let micStream = null;
-            let micChunks = [];
+            let micSource = null;
+            let micWorkletNode = null;
+            let micScriptNode = null;
+            let micPcmChunks = [];
+
+            // AudioWorklet processor source (loaded from a Blob URL so the
+            // page stays a single self-contained file).
+            const VOICE_WORKLET_SRC = [
+                "class VoiceCapture extends AudioWorkletProcessor {",
+                "  process(inputs) {",
+                "    const ch = inputs[0] && inputs[0][0];",
+                "    if (ch && ch.length) this.port.postMessage(ch.slice(0));",
+                "    return true;",
+                "  }",
+                "}",
+                'registerProcessor("voice-capture", VoiceCapture);',
+                "",
+            ].join("\n");
+
+            // ==== VOICE-CAPTURE-PURE-START ====
+            // Pure DSP helpers: no browser globals. Extracted verbatim by
+            // voice-wav.test.js for unit testing under node.
+            function voiceDownsampleTo16k(samples, srcRate) {
+                const TARGET = 16000;
+                if (!samples || !samples.length || !(srcRate > 0)) {
+                    return new Float32Array(0);
+                }
+                if (srcRate === TARGET) return samples.slice();
+                const ratio = srcRate / TARGET;
+                const outLen = Math.max(0, Math.floor(samples.length / ratio));
+                const out = new Float32Array(outLen);
+                for (let i = 0; i < outLen; i++) {
+                    const pos = i * ratio;
+                    const i0 = Math.floor(pos);
+                    const i1 = Math.min(i0 + 1, samples.length - 1);
+                    const frac = pos - i0;
+                    out[i] = samples[i0] * (1 - frac) + samples[i1] * frac;
+                }
+                return out;
+            }
+
+            function voiceEncodeWav16(samples) {
+                // samples: Float32Array, mono, 16000 Hz, nominal range [-1, 1].
+                const n = samples ? samples.length : 0;
+                const dataBytes = n * 2;
+                const buf = new ArrayBuffer(44 + dataBytes);
+                const v = new DataView(buf);
+                const wstr = (off, s) => {
+                    for (let i = 0; i < s.length; i++) {
+                        v.setUint8(off + i, s.charCodeAt(i));
+                    }
+                };
+                wstr(0, "RIFF");
+                v.setUint32(4, 36 + dataBytes, true);
+                wstr(8, "WAVE");
+                wstr(12, "fmt ");
+                v.setUint32(16, 16, true); // fmt chunk size
+                v.setUint16(20, 1, true); // PCM
+                v.setUint16(22, 1, true); // mono
+                v.setUint32(24, 16000, true); // sample rate
+                v.setUint32(28, 16000 * 2, true); // byte rate
+                v.setUint16(32, 2, true); // block align
+                v.setUint16(34, 16, true); // bits per sample
+                wstr(36, "data");
+                v.setUint32(40, dataBytes, true);
+                for (let i = 0; i < n; i++) {
+                    const s = Math.max(-1, Math.min(1, samples[i]));
+                    v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+                }
+                return new Uint8Array(buf);
+            }
+            // ==== VOICE-CAPTURE-PURE-END ====
 
             async function micStart(e) {
                 if (e) e.preventDefault();
-                if (micRecorder) return;
+                if (micCtx) return; // already recording
                 if (
                     !navigator.mediaDevices ||
                     !navigator.mediaDevices.getUserMedia
@@ -1918,6 +1993,14 @@
                     appendChat({
                         type: "warning",
                         data: "Microphone unavailable: this browser has no media capture API.",
+                    });
+                    return;
+                }
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (!AC) {
+                    appendChat({
+                        type: "warning",
+                        data: "Microphone unavailable: this browser has no Web Audio API.",
                     });
                     return;
                 }
@@ -1936,18 +2019,62 @@
                     });
                     return;
                 }
-                micChunks = [];
-                const mime = MediaRecorder.isTypeSupported("audio/webm")
-                    ? "audio/webm"
-                    : "";
-                micRecorder = mime
-                    ? new MediaRecorder(micStream, { mimeType: mime })
-                    : new MediaRecorder(micStream);
-                micRecorder.ondataavailable = (ev) => {
-                    if (ev.data && ev.data.size) micChunks.push(ev.data);
-                };
-                micRecorder.onstop = micSend;
-                micRecorder.start();
+                micCtx = new AC({ sampleRate: 16000 });
+                if (micCtx.state === "suspended") {
+                    try {
+                        await micCtx.resume();
+                    } catch (e2) {}
+                }
+                micSource = micCtx.createMediaStreamSource(micStream);
+                micPcmChunks = [];
+                // Zero-gain sink keeps the graph running without audible feedback.
+                const sink = micCtx.createGain();
+                sink.gain.value = 0;
+                sink.connect(micCtx.destination);
+                let captured = false;
+                if (micCtx.audioWorklet) {
+                    try {
+                        const url = URL.createObjectURL(
+                            new Blob([VOICE_WORKLET_SRC], {
+                                type: "application/javascript",
+                            }),
+                        );
+                        try {
+                            await micCtx.audioWorklet.addModule(url);
+                            micWorkletNode = new AudioWorkletNode(
+                                micCtx,
+                                "voice-capture",
+                            );
+                            micWorkletNode.port.onmessage = (ev) => {
+                                if (ev.data && ev.data.length) {
+                                    micPcmChunks.push(
+                                        new Float32Array(ev.data),
+                                    );
+                                }
+                            };
+                            micSource.connect(micWorkletNode);
+                            micWorkletNode.connect(sink);
+                            captured = true;
+                        } finally {
+                            URL.revokeObjectURL(url);
+                        }
+                    } catch (e2) {
+                        micWorkletNode = null;
+                    }
+                }
+                if (!captured) {
+                    // ScriptProcessor fallback (deprecated but universal).
+                    micScriptNode = micCtx.createScriptProcessor(4096, 1, 1);
+                    micScriptNode.onaudioprocess = (ev) => {
+                        micPcmChunks.push(
+                            new Float32Array(
+                                ev.inputBuffer.getChannelData(0),
+                            ),
+                        );
+                    };
+                    micSource.connect(micScriptNode);
+                    micScriptNode.connect(sink);
+                }
                 const btn = document.getElementById("chat-mic");
                 if (btn) {
                     btn.textContent = "🔴";
@@ -1956,12 +2083,13 @@
             }
 
             function micStop() {
-                if (!micRecorder) return;
-                const rec = micRecorder;
-                micRecorder = null;
-                try {
-                    rec.stop();
-                } catch (e) {}
+                const ctx = micCtx;
+                const chunks = micPcmChunks;
+                micCtx = null;
+                micWorkletNode = null;
+                micScriptNode = null;
+                micSource = null;
+                micPcmChunks = [];
                 if (micStream) {
                     micStream.getTracks().forEach((t) => t.stop());
                     micStream = null;
@@ -1971,18 +2099,35 @@
                     btn.textContent = "🎤";
                     btn.title = "Hold to talk";
                 }
+                if (ctx) {
+                    const rate = ctx.sampleRate || 16000;
+                    try {
+                        ctx.close();
+                    } catch (e) {}
+                    if (chunks && chunks.length) {
+                        micSendWav(chunks, rate);
+                    }
+                }
             }
 
-            async function micSend() {
-                if (!micChunks.length) return;
-                const blob = new Blob(micChunks, {
-                    type: (micChunks[0] && micChunks[0].type) || "audio/webm",
-                });
-                micChunks = [];
+            async function micSendWav(chunks, srcRate) {
+                let total = 0;
+                for (const c of chunks) total += c.length;
+                if (!total) return;
+                const pcm = new Float32Array(total);
+                let off = 0;
+                for (const c of chunks) {
+                    pcm.set(c, off);
+                    off += c.length;
+                }
+                const pcm16k = voiceDownsampleTo16k(pcm, srcRate);
+                if (!pcm16k.length) return;
+                const wavBytes = voiceEncodeWav16(pcm16k);
+                const blob = new Blob([wavBytes], { type: "audio/wav" });
                 const input = document.getElementById("chat-input");
                 try {
                     const form = new FormData();
-                    form.append("file", blob, "audio.webm");
+                    form.append("file", blob, "audio.wav");
                     const r = await opsFetch("/api/voice/transcribe", {
                         method: "POST",
                         body: form,
