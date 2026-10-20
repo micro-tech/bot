@@ -1001,6 +1001,11 @@
                         ontouchstart="micStart(event)"
                         ontouchend="micStop()"
                     >🎤</button>
+                    <button
+                        id="chat-autoplay"
+                        title="Auto-play agent replies aloud"
+                        onclick="toggleVoiceAutoplay()"
+                    >🔇</button>
                 </div>
             </main>
 
@@ -1901,6 +1906,95 @@
                 }
             }
 
+            // Task 275: voice UI knobs — push-to-talk hotkey + TTS autoplay.
+            // pttHotkey comes from GET /api/voice/config ([voice] ptt_hotkey,
+            // default "ControlRight"; "" disables). autoplay starts at the
+            // server default and is overridden per-session via localStorage.
+            let voicePttHotkey = "ControlRight";
+            let voiceAutoplay = false;
+
+            function updateAutoplayBtn() {
+                const btn = document.getElementById("chat-autoplay");
+                if (!btn) return;
+                btn.textContent = voiceAutoplay ? "🔊" : "🔇";
+                btn.title = voiceAutoplay
+                    ? "Auto-play ON — agent replies are read aloud (click to turn off)"
+                    : "Auto-play OFF — click to read agent replies aloud automatically";
+            }
+
+            function toggleVoiceAutoplay() {
+                voiceAutoplay = !voiceAutoplay;
+                try {
+                    localStorage.setItem(
+                        "helix_voice_autoplay",
+                        voiceAutoplay ? "1" : "0"
+                    );
+                } catch (e) {}
+                updateAutoplayBtn();
+            }
+
+            async function loadVoiceConfig() {
+                try {
+                    const r = await opsFetch("/api/voice/config");
+                    if (r.ok) {
+                        const j = await r.json();
+                        if (j && j.ok) {
+                            if (typeof j.ptt_hotkey === "string")
+                                voicePttHotkey = j.ptt_hotkey;
+                            voiceAutoplay = !!j.autoplay;
+                        }
+                    }
+                } catch (e) {
+                    // Keep compiled-in defaults; the mic/speaker buttons
+                    // prompt for the token themselves on first use.
+                }
+                try {
+                    const stored =
+                        localStorage.getItem("helix_voice_autoplay");
+                    if (stored !== null) voiceAutoplay = stored === "1";
+                } catch (e) {}
+                updateAutoplayBtn();
+                bindPttHotkey();
+            }
+
+            // ==== VOICE-275-PURE-START ====
+            // Pure helpers (unit-tested under node; see voice-tuning.test.js).
+            function voicePttKeyMatches(code, configured) {
+                return !!configured && code === configured;
+            }
+
+            function voiceShouldAutoplay(
+                msgType,
+                isUser,
+                isError,
+                autoplayOn,
+                recording
+            ) {
+                if (!autoplayOn) return false;
+                if (recording) return false; // avoid mic/speaker feedback
+                if (isUser || isError) return false;
+                if (msgType === "warning") return false;
+                return true;
+            }
+            // ==== VOICE-275-PURE-END ====
+
+            function bindPttHotkey() {
+                // Page focus only — browsers offer no global hotkeys.
+                // Reads voicePttHotkey at event time so a late config load
+                // still takes effect.
+                document.addEventListener("keydown", (e) => {
+                    if (!voicePttKeyMatches(e.code, voicePttHotkey)) return;
+                    if (e.repeat) return;
+                    micStart(e);
+                });
+                document.addEventListener("keyup", (e) => {
+                    if (!voicePttKeyMatches(e.code, voicePttHotkey)) return;
+                    micStop();
+                });
+                // Focus lost mid-hold (alt-tab): stop so the mic can't stick.
+                window.addEventListener("blur", () => micStop());
+            }
+
             // Task 274: push-to-talk. Hold the mic button to capture raw PCM
             // via the Web Audio API, encode 16-bit mono 16 kHz WAV in JS, and
             // POST it to /api/voice/transcribe; the transcript lands in the
@@ -2275,6 +2369,20 @@
                     speakBtn.title = "Read aloud";
                     speakBtn.onclick = () => speakText(text);
                     p.appendChild(speakBtn);
+                    // Task 275: autoplay agent replies through the same
+                    // speak flow. Never warnings/errors, never while the
+                    // mic is recording (feedback).
+                    if (
+                        voiceShouldAutoplay(
+                            msg.type,
+                            isUser,
+                            isError,
+                            voiceAutoplay,
+                            !!micCtx
+                        )
+                    ) {
+                        speakText(text);
+                    }
                 }
                 if (isError) {
                     p.style.color = "#ff6b6b";
@@ -2945,6 +3053,7 @@
             window.onload = () => {
                 connectWS();
                 renderRoutinesEmpty();
+                loadVoiceConfig();
             };
         </script>
         <!-- Config editor modal (task 213): single-file, no external assets. -->

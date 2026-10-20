@@ -2627,6 +2627,45 @@
       "details": "1) Replace MediaRecorder with getUserMedia -> AudioContext({sampleRate:16000}) -> MediaStreamAudioSourceNode -> AudioWorklet (ScriptProcessor fallback) collecting Float32 PCM chunks while held. 2) On release: concat chunks, linear-downsample to 16000 Hz if ctx.sampleRate differs, encode 16-bit mono WAV in JS (44-byte RIFF header), Blob audio/wav, form.append('file', blob, 'audio.wav'). 3) Keep POST /api/voice/transcribe via opsFetch, transcript-into-chat-input, and warning paths identical. No Rust changes (mod.rs already names non-webm uploads audio.wav).",
       "testStrategy": "Pure DSP helpers (voiceDownsampleTo16k, voiceEncodeWav16) extracted between VOICE-CAPTURE-PURE markers in index.html and unit-tested by src/io/web_server/static/voice-wav.test.js (node): RIFF/WAVE magic, fmt=16-bit mono 16000Hz, data length, int16 clamping, downsample ratios (48k/44.1k->16k), identity at 16k, sine-shape preservation, chunk-concat round-trip. cargo test --lib must stay at 443 passed / 0 failed / 4 ignored baseline.",
       "subtasks": []
+    },
+    {
+      "id": 275,
+      "title": "Voice fine-tuning: push-to-talk hotkey + TTS autoplay toggle",
+      "description": "John's polish request on the live voice loop: (A) configurable push-to-talk hotkey (default right Ctrl) that drives the same Web Audio WAV mic capture; (B) autoplay toggle (button + localStorage) that reads agent replies aloud via the existing speak flow.",
+      "status": "in_progress",
+      "priority": "high",
+      "dependencies": [
+        274
+      ],
+      "details": "A: [voice] ptt_hotkey (default ControlRight, empty disables) in VoiceConfig; GET /api/voice/config (protected router) returns ptt_hotkey+autoplay; web UI fetches on load, binds keydown/keyup on e.code (ignore repeat), calls existing micStart/micStop, blur->micStop safety. B: [voice] autoplay (default false) in VoiceConfig + /api/voice/config; \ud83d\udd0a/\ud83d\udd07 toggle button in chat input row, localStorage helix_voice_autoplay, server default as initial state; autoplay calls existing speakText on agent replies only (not user/error/warning), never while mic recording.",
+      "testStrategy": "Rust: config parse tests (defaults ptt_hotkey=ControlRight/autoplay=false, explicit values, empty ptt_hotkey). JS: node voice-tuning.test.js (hotkey match, autoplay gating 9 tests). cargo test --lib stays 443/0/4; cargo check --lib zero warnings; node --check page script.",
+      "subtasks": [
+        {
+          "id": "275.1",
+          "title": "VoiceConfig: ptt_hotkey + autoplay fields, defaults, tests",
+          "status": "done"
+        },
+        {
+          "id": "275.2",
+          "title": "GET /api/voice/config on protected router",
+          "status": "done"
+        },
+        {
+          "id": "275.3",
+          "title": "Web UI: hotkey bind + autoplay toggle + appendChat hook",
+          "status": "done"
+        },
+        {
+          "id": "275.4",
+          "title": "example.config.toml docs for both keys",
+          "status": "done"
+        },
+        {
+          "id": "275.5",
+          "title": "Tests green + push branch",
+          "status": "in_progress"
+        }
+      ]
     }
   ]
 }
