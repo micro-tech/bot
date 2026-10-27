@@ -635,11 +635,42 @@ where
     /// hartbeat.md End-of-Day (b). Replaces the old read-and-discard.
     /// Findings go to the nightly report; a bus alert fires when errors
     /// were found.
+    ///
+    /// Task 276: the count is FILTERED (genuine recent errors only, see
+    /// is_counted_error_line) — the old code counted every non-empty
+    /// line, so routine chatter (~54k lines/day) fired the alert nightly
+    /// forever. Overgrown logs are rotated after counting.
     pub async fn routine_error_log_review(&mut self) {
         let findings = self.check_error_logs();
         let mut body = String::new();
-        for (path, count) in &findings.files {
-            body.push_str(&format!("- {}: {} error lines\n", path, count));
+        for (path, count, total_lines) in &findings.files {
+            body.push_str(&format!(
+                "- {}: {} error lines (of {} lines)\n",
+                path, count, total_lines
+            ));
+        }
+        // Task 276: rotate overgrown logs after counting (once nightly,
+        // not on the log_to_file hot path). Rotation never deletes
+        // silently: the older remainder is archived to <path>.prev.
+        for path in self.error_log_candidates() {
+            match crate::utils::rotate_error_log_if_needed(
+                &path,
+                crate::utils::MAX_ERROR_LOG_LINES,
+            ) {
+                Ok(Some((kept, archived))) => body.push_str(&format!(
+                    "  (rotated {}: kept last {} lines, archived {} older lines to {}.prev)\n",
+                    path.display(),
+                    kept,
+                    archived,
+                    path.display()
+                )),
+                Ok(None) => {}
+                Err(e) => body.push_str(&format!(
+                    "  (rotation failed for {}: {})\n",
+                    path.display(),
+                    e
+                )),
+            }
         }
         if findings.recent.is_empty() {
             body.push_str("\nNo errors found. Log is clean.\n");
@@ -679,7 +710,21 @@ where
     /// — the old code used a CWD-relative path) plus the `log_to_file`
     /// stream (`~/.helix/logs/error_log.md`), which is where CPU log lines
     /// actually land.
+    ///
+    /// Task 276: only genuine recent errors count (see
+    /// is_counted_error_line). Chatter-only logs report 0.
     pub fn check_error_logs(&self) -> ErrorFindings {
+        self.check_error_logs_at(chrono::Local::now().naive_local())
+    }
+
+    /// Task 276: check_error_logs with an injectable clock, for tests.
+    fn check_error_logs_at(&self, now: chrono::NaiveDateTime) -> ErrorFindings {
+        check_error_logs_in(&self.error_log_candidates(), now)
+    }
+
+    /// Task 276: the two files the review reads (shared by check and by
+    /// the rotation pass in routine_error_log_review).
+    fn error_log_candidates(&self) -> Vec<std::path::PathBuf> {
         let mut candidates = vec![self.runtime_dir.join("logs/error_log.md")];
         if let Some(home) = std::env::var_os("HOME") {
             candidates.push(
@@ -687,28 +732,7 @@ where
                     .join(".helix/logs/error_log.md"),
             );
         }
-        let mut findings = ErrorFindings::default();
-        for path in candidates {
-            let Ok(content) = std::fs::read_to_string(&path) else {
-                continue;
-            };
-            let lines: Vec<&str> = content
-                .lines()
-                .map(str::trim)
-                .filter(|l| !l.is_empty())
-                .collect();
-            if lines.is_empty() {
-                continue;
-            }
-            findings.total += lines.len();
-            findings
-                .files
-                .push((path.display().to_string(), lines.len()));
-            for line in lines.iter().rev().take(5) {
-                findings.recent.push(truncate_200(line).to_string());
-            }
-        }
-        findings
+        candidates
     }
 
     /// Task 202.3: nighttime code-write autonomy (granted by John 2026-10-04).
@@ -1409,8 +1433,85 @@ where
 #[derive(Debug, Default)]
 pub struct ErrorFindings {
     pub total: usize,
-    pub files: Vec<(String, usize)>,
+    /// Per file: (path, genuine-recent-error count, total lines in file).
+    /// Task 276: the count is filtered, the total is raw — the report
+    /// shows both so a huge chatter file is visible, not hidden.
+    pub files: Vec<(String, usize, usize)>,
     pub recent: Vec<String>,
+}
+
+/// Task 276: a log line counts as a genuine recent error only when ALL hold:
+/// - it is not an `[INIT]` marker line (installer / clear audit lines),
+/// - its leading `[YYYY-MM-DD HH:MM:SS AM/PM]` timestamp (the log_to_file
+///   format) parses and falls within the last 24h of `now`,
+/// - it carries an error marker: `[ERROR]`, `ERROR:`, `Error`, `Failed`,
+///   `failed`, or `HALTED`.
+/// The marker match is case-sensitive on purpose: routine chatter uses
+/// lowercase "error" ("error-log review: N error lines", "or error
+/// occurred"), and the review's own summary line must never count itself.
+/// Lines without a parseable timestamp are not counted: every current
+/// producer goes through log_to_file, which always stamps its lines.
+const ERROR_LOG_RECENT_WINDOW_MINUTES: i64 = 24 * 60;
+const ERROR_MARKERS: [&str; 6] = ["[ERROR]", "ERROR:", "Error", "Failed", "failed", "HALTED"];
+
+fn is_counted_error_line(line: &str, now: chrono::NaiveDateTime) -> bool {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with("[INIT]") {
+        return false;
+    }
+    let Some(rest) = line.strip_prefix('[') else {
+        return false;
+    };
+    let Some((ts, _)) = rest.split_once(']') else {
+        return false;
+    };
+    let Ok(stamp) = chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %I:%M:%S %p")
+    else {
+        return false;
+    };
+    // A future stamp (clock skew) counts as recent: its age is negative,
+    // which is within the window by construction.
+    if now
+        .signed_duration_since(stamp)
+        .num_minutes()
+        > ERROR_LOG_RECENT_WINDOW_MINUTES
+    {
+        return false;
+    }
+    ERROR_MARKERS.iter().any(|m| line.contains(m))
+}
+
+/// Task 276: the shared scan behind check_error_logs_at, over an explicit
+/// path list so tests can point it at fixtures without HOME leaking in.
+fn check_error_logs_in(
+    paths: &[std::path::PathBuf],
+    now: chrono::NaiveDateTime,
+) -> ErrorFindings {
+    let mut findings = ErrorFindings::default();
+    for path in paths {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let lines: Vec<&str> = content
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .collect();
+        let counted: Vec<&&str> = lines
+            .iter()
+            .filter(|l| is_counted_error_line(l, now))
+            .collect();
+        findings.total += counted.len();
+        findings.files.push((
+            path.display().to_string(),
+            counted.len(),
+            lines.len(),
+        ));
+        for line in counted.iter().rev().take(5) {
+            findings.recent.push(truncate_200(line).to_string());
+        }
+    }
+    findings
 }
 
 /// The nighttime code-write autonomy gate (task 202.3, granted 2026-10-04).
@@ -1749,9 +1850,12 @@ mod nightly_tests {
         let (cpu, dir) = test_cpu();
         let log_dir = dir.join("logs");
         std::fs::create_dir_all(&log_dir).unwrap();
+        // Task 276: fixtures use recent log_to_file-format timestamps, or
+        // the 24h filter drops them.
+        let ts = chrono::Local::now().format("%Y-%m-%d %I:%M:%S %p");
         std::fs::write(
             log_dir.join("error_log.md"),
-            "[2026-10-05] ERROR: something broke\n\n[2026-10-05] ERROR: another thing broke\n",
+            format!("[{ts}] ERROR: something broke\n\n[{ts}] ERROR: another thing broke\n"),
         )
         .unwrap();
 
@@ -1762,9 +1866,10 @@ mod nightly_tests {
         let entry = findings
             .files
             .iter()
-            .find(|(p, _)| p.ends_with("logs/error_log.md"))
+            .find(|(p, _, _)| p.ends_with("logs/error_log.md"))
             .expect("runtime error log must be checked");
         assert_eq!(entry.1, 2);
+        assert_eq!(entry.2, 2);
         assert!(findings.total >= 2);
         assert!(!findings.recent.is_empty());
         assert!(findings.recent.iter().any(|l| l.contains("something broke")));
@@ -1781,7 +1886,172 @@ mod nightly_tests {
 
         // THEN no panic, and the absent runtime file contributes no findings:
         let runtime_path = dir.join("logs/error_log.md").display().to_string();
-        assert!(!findings.files.iter().any(|(p, _)| p == &runtime_path));
+        assert!(!findings.files.iter().any(|(p, _, _)| p == &runtime_path));
+    }
+
+    // Task 276: chatter-only logs count 0 (checked via the path-scoped
+    // scan so HOME's real log cannot leak into the fixture).
+    #[tokio::test]
+    async fn error_log_check_filters_chatter_to_zero() {
+        // GIVEN a runtime log of pure CPU chatter (recent timestamps):
+        let (_cpu, dir) = test_cpu();
+        let log_dir = dir.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let ts = chrono::Local::now().format("%Y-%m-%d %I:%M:%S %p");
+        let path = log_dir.join("error_log.md");
+        std::fs::write(
+            &path,
+            format!(
+                "[{ts}] CPU routine_run: Support mailbox watch (SYSADMIN-01) (support-mail-watch)\n\
+                 [{ts}] [TRACE] {{\"event\":\"tick\"}}\n\
+                 [{ts}] Starting to poll next event from bus...\n\
+                 [{ts}] Scheduled instructions: []\n\
+                 [{ts}] Agent mode changed to Active\n\
+                 [{ts}] Starting execution of instruction: Nop\n\
+                 [{ts}] error-log review: 0 error lines\n\
+                 [INIT] Error log cleared via web UI at 2026-10-26 20:00:00\n"
+            ),
+        )
+        .unwrap();
+
+        // WHEN scanned:
+        let findings = check_error_logs_in(&[path], chrono::Local::now().naive_local());
+
+        // THEN 0 errors, but the raw line count is still reported:
+        assert_eq!(findings.total, 0);
+        assert_eq!(findings.files.len(), 1);
+        assert_eq!(findings.files[0].1, 0);
+        assert_eq!(findings.files[0].2, 8);
+        assert!(findings.recent.is_empty());
+    }
+
+    // Task 276: only recent genuine errors count — old errors, chatter,
+    // INIT lines and the review's own lowercase summary line do not.
+    #[tokio::test]
+    async fn error_log_check_counts_only_recent_genuine_errors() {
+        let (_cpu, dir) = test_cpu();
+        let log_dir = dir.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let now = chrono::Local::now();
+        let recent = now.format("%Y-%m-%d %I:%M:%S %p");
+        let old = (now - chrono::Duration::hours(48)).format("%Y-%m-%d %I:%M:%S %p");
+        let path = log_dir.join("error_log.md");
+        std::fs::write(
+            &path,
+            format!(
+                "[{recent}] ERROR: disk write failed\n\
+                 [{recent}] CPU routine_run: Support mailbox watch (SYSADMIN-01)\n\
+                 [{old}] ERROR: stale failure from two days ago\n\
+                 [{recent}] Failed to publish message to bus: closed\n\
+                 [INIT] Error log cleared via web UI at 2026-10-26 20:00:00\n\
+                 [{recent}] error-log review: 3 error lines\n\
+                 [{recent}] [AgentState] HALTED: watchdog tripped\n"
+            ),
+        )
+        .unwrap();
+
+        let findings = check_error_logs_in(&[path], now.naive_local());
+
+        assert_eq!(findings.total, 3);
+        assert_eq!(findings.files[0].1, 3);
+        assert_eq!(findings.files[0].2, 7);
+        assert!(findings.recent.iter().any(|l| l.contains("disk write failed")));
+        assert!(findings.recent.iter().any(|l| l.contains("Failed to publish")));
+        assert!(findings.recent.iter().any(|l| l.contains("watchdog tripped")));
+        assert!(!findings.recent.iter().any(|l| l.contains("stale failure")));
+        assert!(!findings.recent.iter().any(|l| l.contains("routine_run")));
+    }
+
+    // Task 276: INIT lines never count — even the clear audit line, which
+    // contains the word "Error". The INIT check must precede the marker
+    // check.
+    #[tokio::test]
+    async fn error_log_check_skips_init_lines() {
+        let (_cpu, dir) = test_cpu();
+        let log_dir = dir.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let path = log_dir.join("error_log.md");
+        std::fs::write(
+            &path,
+            "[INIT] Log created by AgentOS installer at unix timestamp 1792542982\n\
+             [INIT] Error log cleared via web UI at 2026-10-26 20:00:00\n",
+        )
+        .unwrap();
+
+        let findings = check_error_logs_in(&[path], chrono::Local::now().naive_local());
+
+        assert_eq!(findings.total, 0);
+        assert!(findings.recent.is_empty());
+    }
+
+    // Task 276: the filter predicate itself, including the boundaries.
+    #[test]
+    fn is_counted_error_line_predicate() {
+        let now = chrono::Local::now().naive_local();
+        let recent = chrono::Local::now().format("%Y-%m-%d %I:%M:%S %p");
+        let old = (chrono::Local::now() - chrono::Duration::hours(48))
+            .format("%Y-%m-%d %I:%M:%S %p");
+        assert!(is_counted_error_line(&format!("[{recent}] ERROR: boom"), now));
+        assert!(is_counted_error_line(
+            &format!("[{recent}] Failed to publish: x"),
+            now
+        ));
+        assert!(is_counted_error_line(
+            &format!("[{recent}] [AgentState] HALTED: x"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] CPU routine_run: watch"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] error-log review: 2 error lines"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{old}] ERROR: stale"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            "[INIT] Error log cleared via web UI at 2026-10-26 20:00:00",
+            now
+        ));
+        assert!(!is_counted_error_line("no timestamp here ERROR: x", now));
+    }
+
+    // Task 276: rotation caps the file at the bound and archives the
+    // remainder to <path>.prev; under-bound and missing files are no-ops.
+    #[tokio::test]
+    async fn error_log_rotation_caps_file() {
+        let (_cpu, dir) = test_cpu();
+        let path = dir.join("error_log.md");
+        let mut content = String::new();
+        for i in 0..250 {
+            content.push_str(&format!("line {i}\n"));
+        }
+        std::fs::write(&path, &content).unwrap();
+
+        let rotated = crate::utils::rotate_error_log_if_needed(&path, 100)
+            .expect("rotation must not fail");
+        assert_eq!(rotated, Some((100, 150)));
+        let kept = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(kept.lines().count(), 100);
+        assert!(kept.contains("line 249"));
+        assert!(!kept.contains("line 0\n"));
+        let prev = std::fs::read_to_string(path.with_extension("md.prev")).unwrap();
+        assert_eq!(prev.lines().count(), 150);
+        assert!(prev.contains("line 0\n"));
+
+        // Now within bound: no-op.
+        assert_eq!(
+            crate::utils::rotate_error_log_if_needed(&path, 100).unwrap(),
+            None
+        );
+        // Missing file: no-op.
+        assert_eq!(
+            crate::utils::rotate_error_log_if_needed(&dir.join("nope.md"), 100).unwrap(),
+            None
+        );
     }
 
     #[tokio::test]
@@ -1872,9 +2142,11 @@ mod nightly_tests {
         let (mut cpu, dir) = test_cpu();
         let log_dir = dir.join("logs");
         std::fs::create_dir_all(&log_dir).unwrap();
+        // Task 276: recent timestamp, or the 24h filter drops the fixture.
+        let ts = chrono::Local::now().format("%Y-%m-%d %I:%M:%S %p");
         std::fs::write(
             log_dir.join("error_log.md"),
-            "[2026-10-05] ERROR: widget failed to sprocket\n",
+            format!("[{ts}] ERROR: widget failed to sprocket\n"),
         )
         .unwrap();
 
