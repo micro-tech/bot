@@ -1,6 +1,7 @@
 use crate::bus::{Bus, Message};
 use crate::config::okf::OkfConfig;
 use crate::okf::{OkfLibrarian, api as okf_api};
+use crate::utils::error_log_path;
 use axum::{
     Router,
     extract::{
@@ -1663,13 +1664,31 @@ async fn clear_chat_log(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 /// POST /logs/error/clear — auth via require_web_token middleware (task 240).
+///
+/// Task 276: the old handler cleared only `state.logging.error_log` (the
+/// runtime file, 1 line on the R630) while the nightly review counts the
+/// `log_to_file` stream (`~/.helix/logs/error_log.md`, 322k lines) — so
+/// clearing from the UI changed nothing. Clear BOTH review candidates.
+/// The INIT audit line written back is skipped by the review (task 276),
+/// so it is never counted as an "error line" again.
 async fn clear_error_log(State(state): State<AppState>) -> impl IntoResponse {
     let init_line = format!(
         "[INIT] Error log cleared via web UI at {}\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
     );
-    let _ = fs::write(&state.logging.error_log, init_line);
-    Html("<span style='color:#69f0ae'>Error log cleared.</span>").into_response()
+    let home_log = error_log_path();
+    let home_log_str = home_log.to_string_lossy().into_owned();
+    let mut cleared: Vec<String> = Vec::new();
+    for path in [&state.logging.error_log, &home_log_str] {
+        if fs::write(path, &init_line).is_ok() {
+            cleared.push(path.clone());
+        }
+    }
+    Html(format!(
+        "<span style='color:#69f0ae'>Error log cleared ({}).</span>",
+        cleared.join(", ")
+    ))
+    .into_response()
 }
 
 async fn serve_error_log(State(state): State<AppState>) -> impl IntoResponse {

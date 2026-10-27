@@ -10,7 +10,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Returns a cross-platform path for the error log.
 /// Windows: %APPDATA%\helix\logs\error_log.md
 /// Linux/macOS: ~/.helix/logs/error_log.md
-fn error_log_path() -> PathBuf {
+/// Task 276: pub(crate) so the web UI clear endpoint can clear the same
+/// file log_to_file writes (it used to clear only the runtime log).
+pub(crate) fn error_log_path() -> PathBuf {
     let base = if cfg!(windows) {
         std::env::var("APPDATA")
             .map(PathBuf::from)
@@ -58,6 +60,50 @@ pub fn log_to_file(message: &str) {
             error!("Failed to open error log file {:?}: {}", path, e);
         }
     }
+}
+
+/// Task 276: maximum lines kept in the error log by rotation. At the
+/// observed ~54k chatter lines/day this holds roughly two days of log,
+/// so a nightly review's 24h window is never truncated away.
+pub const MAX_ERROR_LOG_LINES: usize = 100_000;
+
+/// Task 276: rotate an error log that grew past `max_lines`. Keeps exactly
+/// the last `max_lines` lines in place and archives the older remainder
+/// to `<path>.prev` (single rolling backup, overwritten each rotation —
+/// bounded disk, nothing silently deleted). Returns `Ok(None)` when the
+/// file is missing or already within bound, `Ok(Some((kept, archived)))`
+/// after a rotation.
+/// Called by the nightly error-log review (once daily), NOT the
+/// log_to_file hot path: a read+rewrite on every log line would cost
+/// more than the one-day growth it bounds. Worst case the file holds
+/// `max_lines` plus one day's growth between reviews.
+pub fn rotate_error_log_if_needed(
+    path: &PathBuf,
+    max_lines: usize,
+) -> std::io::Result<Option<(usize, usize)>> {
+    let Ok(content) = fs::read_to_string(path) else {
+        return Ok(None);
+    };
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.len() <= max_lines {
+        return Ok(None);
+    }
+    let archived = lines.len() - max_lines;
+    let kept = &lines[archived..];
+    let mut prev_text = String::new();
+    for line in &lines[..archived] {
+        prev_text.push_str(line);
+        prev_text.push('\n');
+    }
+    // error_log.md -> error_log.md.prev
+    fs::write(path.with_extension("md.prev"), prev_text)?;
+    let mut kept_text = String::new();
+    for line in kept {
+        kept_text.push_str(line);
+        kept_text.push('\n');
+    }
+    fs::write(path, kept_text)?;
+    Ok(Some((max_lines, archived)))
 }
 
 pub fn now_ms() -> u64 {
