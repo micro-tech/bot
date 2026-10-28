@@ -875,11 +875,12 @@ mod registry_tests {
         assert!(ids.contains(&"nightly_memory_consolidation"));
         assert!(ids.contains(&"error_log_review"));
         // Task 216: the mail_check example ships DISABLED (John enables it when
-        // he wants the agent watching mail); everything else ships enabled.
+        // he wants the agent watching mail); task 281: self-improve ships
+        // DISABLED (John enables it after gate 280). Everything else ships enabled.
         assert!(reg
             .list()
             .iter()
-            .filter(|r| r.id != "mail_check")
+            .filter(|r| r.id != "mail_check" && r.id != "self-improve")
             .all(|r| r.enabled));
         assert!(reg.list().iter().all(|r| r.next_run_ms.is_some()));
         assert!(path.exists());
