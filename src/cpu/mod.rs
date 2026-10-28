@@ -443,6 +443,10 @@ where
             // machine, deliberately no LLM (polling needs no model; John's
             // call is that drafting delegates to a capable backend, task 258).
             "support-mail-watch" => self.routine_support_mail_watch().await,
+            // Task 281 (self-improving loop): one loop cycle — metrics
+            // first, then (phase >= 1) exactly one worker. Never routes
+            // through maybe_nightly_fix or its paths.
+            "self-improve" => self.routine_self_improve().await,
             other => log_to_file(&format!("CPU received unknown routine_run: {}", other)),
         }
     }
@@ -483,6 +487,217 @@ where
                     msg.id, e
                 )),
             }
+        }
+    }
+
+    /// Task 281 (self-improving loop, Phase 1): one loop cycle.
+    /// Task 283 refines the order: the ledger entry is written AFTER
+    /// the worker completes, so the cycle's outcome — intake,
+    /// `phase_failure`, `cycle_timeout`, or parse failure — is recorded
+    /// IN the entry's `proposal_outcomes`, not in a separate line.
+    ///
+    /// Order is load-bearing:
+    /// 1. Kill switches FIRST — any one aborts before any work, and the
+    ///    abort names which condition stopped it (task 284).
+    /// 2. Collect inputs from live sources (counts only — never
+    ///    `ErrorFindings.recent` lines, never bodies).
+    /// 3. Phase gate: phase 0 collects and proposes nothing.
+    /// 4. Phase >= 1 with a failing signal (genuine recent errors or
+    ///    restarts): seed the loop-worker persona, then dispatch
+    ///    EXACTLY ONE worker via `dispatch_spawn` with the draft
+    ///    backend and the cycle budget as its timeout. A healthy cycle
+    ///    dispatches nobody — no Gemini call is burned when there is
+    ///    nothing to fix.
+    /// 5. On return: a timed-out cycle abandons cleanly (no partial
+    ///    proposal, `cycle_timeout` recorded); a parseable report goes
+    ///    through the budget gate (task 283) — a violation aborts the
+    ///    cycle, logged as `phase_failure`, never a quiet skip — and an
+    ///    allowed proposal is intaked handler-side (the worker writes
+    ///    nothing itself, task 282). Lessons land in durable memory.
+    /// 6. One ledger entry is appended with the outcome, then the
+    ///    counts-only log line.
+    ///
+    /// Deliberately NOT here: `maybe_nightly_fix` and its paths (the
+    /// loop is a separate autonomy, untouched by this build), any live
+    /// tree/config write, any outbound send. The routine ships
+    /// disabled, so none of this runs until John enables it.
+    async fn routine_self_improve(&mut self) {
+        let rt = self.runtime_dir.clone();
+        let cfg = crate::self_improve::live_config_at(&rt);
+        // 1. Kill switches first, before any work.
+        let routine_enabled =
+            crate::self_improve::routine_enabled_in_file(&rt.join("routines.json"), "self-improve");
+        if let Some(cond) = crate::self_improve::check_kill_switches(&rt, &cfg, routine_enabled) {
+            log_to_file(&crate::self_improve::kill_abort_message(cond));
+            return;
+        }
+        // 2. Collect from live sources (counts only).
+        let findings = self.check_error_logs();
+        let mut error_by_file = std::collections::BTreeMap::new();
+        for (path, errors, total_lines) in &findings.files {
+            error_by_file.insert(
+                path.clone(),
+                crate::self_improve::metrics::ErrorFileCounts {
+                    errors: *errors,
+                    total_lines: *total_lines,
+                },
+            );
+        }
+        let qm_path = crate::self_improve::metrics::qm_summary_path(&rt);
+        let (qm_summary, qm_parse_error) = match crate::self_improve::metrics::parse_qm_summary(&qm_path) {
+            Ok(s) => (s, None),
+            Err(e) => (None, Some(e)),
+        };
+        let mut inputs = crate::self_improve::metrics::CycleInputs {
+            routine_outcomes: std::collections::BTreeMap::from([(
+                "self-improve".to_string(),
+                crate::self_improve::metrics::RoutineOutcome { fired: 1, failed: 0 },
+            )]),
+            support_stats: crate::support_watch::status_snapshot(),
+            error_total: findings.total,
+            error_by_file,
+            restart_count: crate::self_improve::metrics::count_restarts(&rt),
+            qm_summary,
+            qm_parse_error,
+            proposal_outcomes: std::collections::BTreeMap::new(),
+        };
+        // 3. Phase gate: collect-only proposes nothing.
+        if cfg.phase == 0 {
+            self.write_self_improve_entry(&rt, &cfg, inputs);
+            log_to_file("self_improve: phase 0 collect-only: no proposal");
+            return;
+        }
+        // 4. One worker, only on a failing signal.
+        let signal = if inputs.error_total > 0 {
+            let worst = inputs
+                .error_by_file
+                .iter()
+                .max_by_key(|(_, c)| c.errors)
+                .map(|(p, c)| format!("{p} ({} genuine recent errors)", c.errors))
+                .unwrap_or_else(|| "error log".to_string());
+            Some(format!(
+                "{} genuine recent errors, worst file: {}",
+                inputs.error_total, worst
+            ))
+        } else if inputs.restart_count > 0 {
+            Some(format!("{} restarts detected", inputs.restart_count))
+        } else {
+            None
+        };
+        let Some(signal) = signal else {
+            self.write_self_improve_entry(&rt, &cfg, inputs);
+            log_to_file("self_improve: healthy cycle: no worker dispatched");
+            return;
+        };
+        // Task 282: seed the loop-worker persona into the runtime persona
+        // dir (never overwrites John's edits) so the fail-closed tool
+        // filter resolves, then dispatch with the worker brief.
+        if let Err(e) = crate::self_improve::worker::ensure_loop_worker_persona(&rt) {
+            log_to_file(&format!("self_improve: persona seed failed: {e}"));
+            return;
+        }
+        let brief = crate::self_improve::worker::build_loop_brief(&signal);
+        let spec = crate::tools::subagent_tool::SpawnSpec {
+            task: brief,
+            backend: cfg.draft_backend.clone(),
+            role_hint: "loop-worker".to_string(),
+            timeout_secs: cfg.max_cycle_minutes.saturating_mul(60),
+        };
+        let deadline = crate::self_improve::budgets::CycleDeadline::new(
+            crate::utils::now_ms(),
+            cfg.max_cycle_minutes,
+        );
+        let report = crate::tools::subagent_tool::dispatch_spawn(&spec).await;
+        log_to_file(&format!(
+            "self_improve: worker dispatched (backend {}): {}",
+            cfg.draft_backend,
+            report.lines().next().unwrap_or("")
+        ));
+        // 5. Complete the cycle: timeout, parse, budget gate, intake.
+        let now = crate::utils::now_ms();
+        if deadline.expired(now) {
+            inputs
+                .proposal_outcomes
+                .insert("cycle".to_string(), "cycle_timeout".to_string());
+            crate::self_improve::budgets::record_loop_lesson(
+                &mut self.memory,
+                "self-improve cycle timed out; no partial proposal intaked",
+                0.9,
+            );
+            self.write_self_improve_entry(&rt, &cfg, inputs);
+            log_to_file("self_improve: cycle_timeout: abandoned cleanly, no partial proposal");
+            return;
+        }
+        let outcome = match crate::self_improve::worker::parse_worker_report(&report) {
+            Err(e) => {
+                log_to_file(&format!("self_improve: worker report unparseable, no proposal: {e}"));
+                "parse_failed".to_string()
+            }
+            Ok(new_proposal) => {
+                let signature = new_proposal.trace.trim().to_string();
+                match crate::self_improve::worker::read_proposals(&rt) {
+                    Err(e) => {
+                        log_to_file(&format!("self_improve: phase_failure: proposals unreadable: {e}"));
+                        format!("phase_failure:proposals unreadable")
+                    }
+                    Ok(prior) => {
+                        match crate::self_improve::budgets::check_proposal_allowed(
+                            &prior, &signature, &cfg, now,
+                        ) {
+                            Err(block) => {
+                                let msg = format!("self_improve: phase_failure: {block}");
+                                log_to_file(&msg);
+                                crate::self_improve::budgets::record_loop_lesson(
+                                    &mut self.memory,
+                                    &format!("proposal for {signature} blocked: {block}"),
+                                    0.9,
+                                );
+                                format!("phase_failure:{block}")
+                            }
+                            Ok(()) => {
+                                match crate::self_improve::worker::intake_proposal(
+                                    &rt, new_proposal, now,
+                                ) {
+                                    Err(e) => {
+                                        log_to_file(&format!(
+                                            "self_improve: phase_failure: intake rejected: {e}"
+                                        ));
+                                        format!("phase_failure:intake rejected: {e}")
+                                    }
+                                    Ok(record) => {
+                                        crate::self_improve::budgets::record_loop_outcome(
+                                            &mut self.memory,
+                                            &format!(
+                                                "self-improve proposal intaked for {}",
+                                                record.signature
+                                            ),
+                                            vec!["self-improve".to_string(), "proposal".to_string()],
+                                        );
+                                        format!("proposal:{}", record.signature)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        inputs.proposal_outcomes.insert("cycle".to_string(), outcome);
+        // 6. One ledger entry with the outcome, then the log line.
+        self.write_self_improve_entry(&rt, &cfg, inputs);
+    }
+
+    /// Append one self-improve ledger entry and log the counts-only
+    /// line (task 283: the outcome travels inside the entry).
+    fn write_self_improve_entry(
+        &self,
+        rt: &std::path::Path,
+        cfg: &crate::self_improve::SelfImproveConfig,
+        inputs: crate::self_improve::metrics::CycleInputs,
+    ) {
+        match crate::self_improve::metrics::collect_cycle(rt, cfg, inputs, crate::utils::now_ms()) {
+            Ok(entry) => log_to_file(&crate::self_improve::metrics::log_line(&entry)),
+            Err(e) => log_to_file(&format!("self_improve: ledger append failed: {e}")),
         }
     }
 
@@ -1842,6 +2057,180 @@ mod nightly_tests {
             fix_autonomy_decision(true, 3, false),
             FixDecision::ProposeOnly("[shell] not enabled — fixes cannot be test-verified")
         );
+    }
+
+    // ── Task 281: self-improve routine arm ──────────────────────────────
+
+    /// Test Cpu whose runtime dir carries a `[self_improve]` config and a
+    /// routines.json for the loop arm. The support snapshot is pointed
+    /// at the same scratch dir so no ambient state leaks in.
+    fn self_improve_cpu(phase: u8, routine_enabled: bool) -> (Cpu<DummyLlm>, std::path::PathBuf) {
+        let (cpu, dir) = test_cpu();
+        std::fs::write(
+            dir.join("config.toml"),
+            format!("[self_improve]\nenabled = true\nphase = {phase}\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("routines.json"),
+            format!(
+                r#"[{{"id":"self-improve","enabled":{}}}]"#,
+                routine_enabled
+            ),
+        )
+        .unwrap();
+        crate::support_watch::override_runtime_dir_for_tests(dir.clone());
+        (cpu, dir)
+    }
+
+    fn self_improve_ledger(dir: &std::path::Path) -> Vec<crate::self_improve::metrics::LedgerEntry> {
+        let cfg = crate::self_improve::SelfImproveConfig::default();
+        crate::self_improve::metrics::read_ledger(dir, &cfg).0
+    }
+
+    #[tokio::test]
+    async fn self_improve_phase_zero_collects_and_proposes_nothing() {
+        // GIVEN phase 0 + all kill switches clear, WHEN the arm fires,
+        // THEN one ledger entry is written and NO worker is dispatched
+        // (registry stays empty even with the dispatch stub armed).
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        crate::agents::subagent_registry::reset_for_tests();
+        unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
+        let (mut cpu, dir) = self_improve_cpu(0, true);
+        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
+        let entries = self_improve_ledger(&dir);
+        assert_eq!(entries.len(), 1, "phase 0 must still collect one entry");
+        assert!(
+            crate::agents::subagent_registry::snapshot().is_empty(),
+            "phase 0 must dispatch nobody"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn self_improve_kill_switch_aborts_before_dispatch() {
+        // GIVEN the routine disabled in routines.json (kill #3),
+        // WHEN the arm fires, THEN nothing is collected and nobody is
+        // dispatched — the abort happens before any work.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        crate::agents::subagent_registry::reset_for_tests();
+        unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
+        let (mut cpu, dir) = self_improve_cpu(1, false);
+        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
+        assert!(
+            self_improve_ledger(&dir).is_empty(),
+            "killed cycle must not collect"
+        );
+        assert!(
+            crate::agents::subagent_registry::snapshot().is_empty(),
+            "killed cycle must not dispatch (dispatch_spawn not called)"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn self_improve_phase_one_dispatches_one_worker_on_signal() {
+        // GIVEN phase 1 + a failing signal (a restart marker in the
+        // runtime logs), WHEN the arm fires, THEN one ledger entry is
+        // written AND exactly one worker is dispatched (stub registry
+        // gains one finished record) — the arm routes "self-improve"
+        // to the loop handler, not the unknown-routine branch.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        crate::agents::subagent_registry::reset_for_tests();
+        unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
+        let (mut cpu, dir) = self_improve_cpu(1, true);
+        let log_dir = dir.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        std::fs::write(log_dir.join("boot.log"), "Helix is running...\n").unwrap();
+        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
+        let entries = self_improve_ledger(&dir);
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].restart_count >= 1);
+        let dispatched = crate::agents::subagent_registry::snapshot();
+        assert_eq!(
+            dispatched.len(),
+            1,
+            "phase 1 on signal must dispatch exactly one worker, got {}",
+            dispatched.len()
+        );
+        assert_eq!(dispatched[0].role_hint, "loop-worker");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn self_improve_config_disabled_aborts_before_any_work() {
+        // GIVEN config enabled=false (kill #1) with the routine enabled,
+        // WHEN the arm fires, THEN nothing is collected and nobody is
+        // dispatched.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        crate::agents::subagent_registry::reset_for_tests();
+        unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
+        let (mut cpu, dir) = self_improve_cpu(1, true);
+        std::fs::write(dir.join("config.toml"), "[self_improve]\nenabled = false\nphase = 1\n").unwrap();
+        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
+        assert!(self_improve_ledger(&dir).is_empty());
+        assert!(crate::agents::subagent_registry::snapshot().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn self_improve_stop_file_aborts_before_any_work() {
+        // GIVEN a stop file present (kill #2) with config + routine
+        // enabled, WHEN the arm fires, THEN nothing is collected and
+        // nobody is dispatched.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        crate::agents::subagent_registry::reset_for_tests();
+        unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
+        let (mut cpu, dir) = self_improve_cpu(1, true);
+        std::fs::write(dir.join("SELF_IMPROVE_OFF"), "").unwrap();
+        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
+        assert!(self_improve_ledger(&dir).is_empty());
+        assert!(crate::agents::subagent_registry::snapshot().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn self_improve_stop_file_mid_cycle_aborts_next_and_reenable_resumes() {
+        // GIVEN a running loop (phase 1 + restart signal), WHEN a stop
+        // file appears between cycles, THEN the next cycle aborts
+        // (no new entry, no new dispatch, no proposal orphan) and
+        // removing the file resumes cycles. Per spec, a stop file that
+        // appears DURING a cycle aborts the NEXT cycle — the in-flight
+        // cycle is not retroactively killed (its handler-side intake
+        // stands; worktree cleanup for Phase 2 lives in task 287).
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        crate::agents::subagent_registry::reset_for_tests();
+        unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
+        let (mut cpu, dir) = self_improve_cpu(1, true);
+        let log_dir = dir.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        std::fs::write(log_dir.join("boot.log"), "Helix is running...\n").unwrap();
+        // Cycle 1: proceeds, dispatches once.
+        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        assert_eq!(self_improve_ledger(&dir).len(), 1);
+        assert_eq!(crate::agents::subagent_registry::snapshot().len(), 1);
+        // Stop file appears mid-stream (between cycles).
+        std::fs::write(dir.join("SELF_IMPROVE_OFF"), "").unwrap();
+        // Cycle 2: aborts — no entry, no dispatch, no proposal file.
+        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        assert_eq!(self_improve_ledger(&dir).len(), 1);
+        assert_eq!(crate::agents::subagent_registry::snapshot().len(), 1);
+        assert!(
+            !dir.join("self_improve").join("proposals.json").exists(),
+            "aborted cycle must leave no proposal orphan"
+        );
+        // Re-enable all three mechanisms: cycle 3 proceeds again.
+        std::fs::remove_file(dir.join("SELF_IMPROVE_OFF")).unwrap();
+        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        assert_eq!(self_improve_ledger(&dir).len(), 2);
+        assert_eq!(crate::agents::subagent_registry::snapshot().len(), 2);
+        unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]

@@ -443,6 +443,8 @@ pub async fn start_web_server(
         .route("/api/voice/transcribe", post(voice_transcribe))
         // Task 275: non-sensitive voice UI knobs (hotkey, autoplay default).
         .route("/api/voice/config", get(voice_config))
+        // Task 279: self-improving loop status — token-gated, read-only.
+        .route("/self_improve/status", get(self_improve_status))
         .route_layer(middleware::from_fn_with_state(
             token_state.clone(),
             require_web_token,
@@ -1973,6 +1975,15 @@ async fn support_status() -> impl IntoResponse {
     Json(crate::support_watch::status_snapshot()).into_response()
 }
 
+/// GET /self_improve/status — self-improving loop snapshot (task 279):
+/// phase, kill-switch states, budget counters, latest ledger entry.
+/// Token-gated via the protected router (unlike /support/status, which
+/// is public): loop phase and kill states are operator-only. Read-only;
+/// no mutating endpoints exist in this phase.
+async fn self_improve_status() -> impl IntoResponse {
+    Json(crate::self_improve::status_snapshot()).into_response()
+}
+
 /// GET /support/drafts — all drafts with full text (John must see the full
 /// text before any approve/send tap). Read-only.
 async fn support_drafts() -> impl IntoResponse {
@@ -2777,6 +2788,89 @@ mod tests {
         for key in ["mode", "last_check_ms", "next_check_ms", "quiet_streak", "unhandled_count"] {
             assert!(v.get(key).is_some(), "status missing '{key}'");
         }
+    }
+
+    /// Test bearer <redacted>, assembled (not a literal) so secret-redaction
+    /// never rewrites it out from under the test.
+    fn self_improve_test_token() -> String {
+        ["helix", "self", "improve", "test", "token"].join("-")
+    }
+
+    fn self_improve_test_app() -> Router {
+        let token_state = Arc::new(self_improve_test_token());
+        Router::new()
+            .route("/self_improve/status", get(self_improve_status))
+            .route_layer(middleware::from_fn_with_state(
+                token_state.clone(),
+                require_web_token,
+            ))
+            .with_state(())
+    }
+
+    #[tokio::test]
+    async fn self_improve_status_requires_token_and_reports_snapshot() {
+        use tower::ServiceExt;
+        let _g = crate::tools::subagent_tool::test_env_lock();
+        // Hermetic runtime dir for the loop: config + routines + ledger.
+        let dir = std::env::temp_dir().join("helix-self-improve-route");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        crate::self_improve::override_runtime_dir_for_tests(dir.clone());
+        std::fs::write(
+            dir.join("config.toml"),
+            "[self_improve]\nenabled = true\nphase = 0\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("routines.json"),
+            r#"[{"id":"self-improve","enabled":true}]"#,
+        )
+        .unwrap();
+        // One ledger cycle so latest_ledger is non-null.
+        let mut inputs = crate::self_improve::metrics::CycleInputs::default();
+        inputs.support_stats = serde_json::json!({"mode": "normal_night"});
+        let cfg = crate::self_improve::SelfImproveConfig {
+            enabled: true,
+            ..Default::default()
+        };
+        crate::self_improve::metrics::collect_cycle(&dir, &cfg, inputs, 1_000).unwrap();
+
+        let get = |auth: Option<String>| {
+            let mut b = axum::http::Request::builder().uri("/self_improve/status");
+            if let Some(a) = auth {
+                b = b.header("authorization", a);
+            }
+            b.body(axum::body::Body::empty()).unwrap()
+        };
+        // No token -> 401.
+        let resp = self_improve_test_app().oneshot(get(None)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "no token");
+        // Wrong token -> 401.
+        let resp = self_improve_test_app()
+            .oneshot(get(Some(format!("Bearer {}-wrong", self_improve_test_token()))))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "wrong token");
+        // Right token -> 200 + full snapshot shape (task 279.2).
+        let resp = self_improve_test_app()
+            .oneshot(get(Some(format!("Bearer {}", self_improve_test_token()))))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "right token");
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["phase"], 0);
+        assert_eq!(v["enabled"], true);
+        assert_eq!(v["kill_switches"]["config_enabled"], true);
+        assert_eq!(v["kill_switches"]["stop_file_present"], false);
+        assert_eq!(v["kill_switches"]["routine_enabled"], true);
+        assert_eq!(v["budgets"]["max_proposals_per_week"], 3);
+        assert_eq!(v["budgets"]["max_open_per_signature"], 1);
+        assert_eq!(v["budgets"]["max_cycle_minutes"], 60);
+        assert_eq!(v["budgets"]["max_diff_lines"], 500);
+        assert_eq!(v["budgets"]["proposals_open"], 0);
+        assert_eq!(v["latest_ledger"]["timestamp_ms"], 1_000);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
 
