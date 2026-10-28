@@ -225,6 +225,10 @@ mod tests {
             updated_at,
             proposals_this_week: 0,
             open_for_signature: 0,
+            eval_passed: false,
+            promoted: false,
+            promotion_reason: String::new(),
+            eval_report_json: serde_json::Value::Null,
         }
     }
 

@@ -153,9 +153,26 @@ pub struct ProposalRecord {
     /// signature, at the moment of intake.
     pub proposals_this_week: usize,
     pub open_for_signature: usize,
+    /// Evaluation outcome (task 287; default = unevaluated). The full
+    /// report lives in `eval_report_json` as JSON so this record does
+    /// not depend on the evaluator module's types.
+    #[serde(default)]
+    pub eval_passed: bool,
+    #[serde(default)]
+    pub promoted: bool,
+    #[serde(default)]
+    pub promotion_reason: String,
+    #[serde(default)]
+    pub eval_report_json: serde_json::Value,
 }
 
-const OPEN_STATUSES: [&str; 3] = ["proposed", "evaluating", "queued"];
+const OPEN_STATUSES: [&str; 5] = [
+    "proposed",
+    "evaluating",
+    "evaluated",
+    "queued",
+    "needs-human-review",
+];
 
 /// The set of traces intake accepts (R3). Metric keys come from the
 /// latest ledger entry's live signals; test names come from prior
@@ -265,6 +282,29 @@ pub fn read_proposals(rt_dir: &Path) -> Result<Vec<ProposalRecord>, String> {
         .map_err(|e| format!("proposals read failed: {e}"))
 }
 
+/// Upsert a proposal record by `created_at` (the intake-time identity):
+/// replace the matching record, or append when absent. Atomic temp +
+/// rename. Used by the evaluator to persist post-eval state.
+pub fn upsert_proposal(rt_dir: &Path, record: &ProposalRecord) -> Result<(), String> {
+    let mut all = read_proposals(rt_dir)?;
+    if let Some(slot) = all.iter_mut().find(|p| p.created_at == record.created_at) {
+        *slot = record.clone();
+    } else {
+        all.push(record.clone());
+    }
+    let path = proposals_path(rt_dir);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("proposals dir create failed: {e}"))?;
+    }
+    let data = serde_json::to_string_pretty(&all)
+        .map_err(|e| format!("proposals serialize failed: {e}"))?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, data).map_err(|e| format!("proposals temp write failed: {e}"))?;
+    std::fs::rename(&tmp, &path).map_err(|e| format!("proposals rename failed: {e}"))?;
+    Ok(())
+}
+
 /// Validate a proposal (R3 + completeness) and append it to
 /// `proposals.json` (atomic temp + rename). Returns the stored record.
 /// Budget enforcement (caps, cooldowns, dedupe) is task 283's job —
@@ -306,6 +346,10 @@ pub fn intake_proposal(
         updated_at: now_ms,
         proposals_this_week,
         open_for_signature,
+        eval_passed: false,
+        promoted: false,
+        promotion_reason: String::new(),
+        eval_report_json: serde_json::Value::Null,
     };
     let mut all = prior;
     all.push(record.clone());

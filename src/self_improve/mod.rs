@@ -22,8 +22,11 @@
 //! Phase gates (280, 285, 289, 291) are John's eyeball + elapsed time —
 //! they are NOT code and this module never claims to pass them.
 
+pub mod audit;
 pub mod budgets;
 pub mod config;
+pub mod evaluator;
+pub mod git;
 pub mod metrics;
 pub mod worker;
 
@@ -171,7 +174,11 @@ fn count_open_proposals(rt_dir: &std::path::Path) -> usize {
         .filter(|r| {
             matches!(
                 r.get("status").and_then(|v| v.as_str()),
-                Some("proposed") | Some("evaluating") | Some("queued")
+                Some("proposed")
+                    | Some("evaluating")
+                    | Some("evaluated")
+                    | Some("queued")
+                    | Some("needs-human-review")
             )
         })
         .count()
