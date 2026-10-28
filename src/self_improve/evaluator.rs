@@ -428,6 +428,7 @@ pub fn evaluate_proposal(
         runtime_ms: started.elapsed().as_millis() as u64,
     };
     proposal.status = if passed { "evaluated".to_string() } else { "eval-failed".to_string() };
+    proposal.eval_passed = passed;
     proposal.promoted = promoted;
     proposal.promotion_reason = promotion_reason;
     proposal.eval_report_json =
@@ -533,6 +534,7 @@ mod tests {
             promoted: false,
             promotion_reason: String::new(),
             eval_report_json: serde_json::Value::Null,
+            notes: Vec::new(),
         }
     }
 

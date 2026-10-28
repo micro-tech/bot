@@ -164,6 +164,10 @@ pub struct ProposalRecord {
     pub promotion_reason: String,
     #[serde(default)]
     pub eval_report_json: serde_json::Value,
+    /// Free-form notes appended by later phases (task 290: withdrawal
+    /// + regression notes). Default empty; Phase 1 records still parse.
+    #[serde(default)]
+    pub notes: Vec<String>,
 }
 
 const OPEN_STATUSES: [&str; 5] = [
@@ -350,6 +354,7 @@ pub fn intake_proposal(
         promoted: false,
         promotion_reason: String::new(),
         eval_report_json: serde_json::Value::Null,
+            notes: Vec::new(),
     };
     let mut all = prior;
     all.push(record.clone());

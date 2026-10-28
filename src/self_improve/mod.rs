@@ -28,6 +28,7 @@ pub mod config;
 pub mod evaluator;
 pub mod git;
 pub mod metrics;
+pub mod pr;
 pub mod worker;
 
 // Later tasks add their modules here in dependency order:

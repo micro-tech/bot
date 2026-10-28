@@ -332,13 +332,11 @@ mod tests {
 
     #[test]
     fn needs_human_review_never_reaches_pr_step_stubbed_for_290() {
-        // STUBBED until task 290 lands: the real integration test
-        // asserts the Phase 3 gate REFUSES a needs-human-review
-        // proposal. Until then, this pins the audit-side contract the
-        // gate will check: status is needs-human-review, outcome is
-        // not Clean, and no eval pass can promote it (the gate reads
-        // the audit before any eval result).
-        // TODO(290): replace with a gate-level test + re-run this one.
+        // Audit-side contract for the Phase 3 gate (task 290 now
+        // covers the gate side in pr.rs::needs_human_review_never_opened):
+        // status is needs-human-review, outcome is not Clean, and no
+        // eval pass can promote it (the gate reads the audit before
+        // any eval result). Both tests run in the suite.
         let mut p = ProposalRecord {
             problem_statement: "p".to_string(),
             trace: "errors:logs/error_log.md".to_string(),
@@ -354,6 +352,7 @@ mod tests {
             promoted: true,
             promotion_reason: "ok".to_string(),
             eval_report_json: serde_json::Value::Null,
+            notes: Vec::new(),
         };
         let report = audit_diff(&[diff("src/security.rs", "pub fn check() {}\n")]);
         let outcome = apply_audit_status(&mut p, &report, 2_000);
