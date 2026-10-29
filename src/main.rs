@@ -33,6 +33,7 @@ mod cron;
 mod chat_history;
 mod support_watch;
 mod voice;
+mod self_improve;
 
 #[tokio::main]
 async fn main() {
