@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 430" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-self-improve-flow-title bot-self-improve-flow-desc" id="bot-self-improve-flow-root">
+        <title id="bot-self-improve-flow-title">Helix — self-improve loop</title>
+        <desc id="bot-self-improve-flow-desc">Flowchart of the Helix self-improving loop (src/self_improve): a daily cron routine checks kill switches, collects health counts only, and on a failing signal dispatches one read-only loop-worker subagent; its proposal passes a budgets gate, is evaluated in a disposable worktree, and waits in a PR queue for John to merge.</desc>
+        <defs>
+      <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #bot-self-improve-flow-root { --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace; }
+      #bot-self-improve-flow-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #bot-self-improve-flow-root .diagram-container { width: 100%; overflow-x: auto; }
+      #bot-self-improve-flow-root .back { font-family: var(--font-mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+      margin-bottom: 1.5rem; }
+      #bot-self-improve-flow-root .back a { color: var(--color-muted); text-decoration: none; border-bottom: 1px solid rgba(79,93,117,0.35); }
+      #bot-self-improve-flow-root .back a:hover { color: var(--color-ink); }
+      #bot-self-improve-flow-root a { cursor: pointer; }
+      #bot-self-improve-flow-root .diagram-container { overflow-x: visible; }</style>
+          <marker id="bot-self-improve-flow-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="bot-self-improve-flow-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- Arrows first (behind boxes) -->
+
+        <!-- TICK: Cron tick -> Kill switches -->
+        <line x1="240" y1="72" x2="260" y2="72" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#bot-self-improve-flow-arrow)"/>
+        <!-- CLEAR: Kill switches -> Collect -->
+        <line x1="460" y1="72" x2="480" y2="72" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#bot-self-improve-flow-arrow)"/>
+        <!-- COUNTS: Collect -> Phase gate -->
+        <line x1="680" y1="72" x2="700" y2="72" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#bot-self-improve-flow-arrow)"/>
+        <!-- SIGNAL: Phase gate -> Loop worker -->
+        <line x1="800" y1="104" x2="800" y2="190" stroke="#bf4520" stroke-width="1.4" marker-end="url(#bot-self-improve-flow-arrow-accent)"/>
+        <!-- PROPOSAL: Loop worker -> Budgets gate -->
+        <line x1="700" y1="222" x2="680" y2="222" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#bot-self-improve-flow-arrow)"/>
+        <!-- ALLOWED: Budgets gate -> Evaluate -->
+        <line x1="480" y1="222" x2="460" y2="222" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#bot-self-improve-flow-arrow)"/>
+        <!-- READY: Evaluate -> PR queue -->
+        <line x1="260" y1="222" x2="240" y2="222" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#bot-self-improve-flow-arrow)"/>
+
+        <!-- Arrow labels -->
+        <rect x="230" y="62" width="40" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="250" y="72" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TICK</text>
+
+        <rect x="447" y="62" width="46" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="470" y="72" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CLEAR</text>
+
+        <rect x="664" y="62" width="52" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="690" y="72" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">COUNTS</text>
+
+        <rect x="808" y="140" width="52" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="834" y="150" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SIGNAL</text>
+
+        <rect x="658" y="212" width="64" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="690" y="222" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PROPOSAL</text>
+
+        <rect x="441" y="212" width="58" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="470" y="222" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ALLOWED</text>
+
+        <rect x="227" y="212" width="46" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="250" y="222" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">READY</text>
+
+        <!-- Node: Cron tick -->
+        <rect x="40" y="40" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="40" y="40" width="200" height="64" rx="6" fill="#4f5d75" stroke="#5a6580" stroke-width="1" fill-opacity="0.10"/>
+        <rect x="48" y="48" width="32" height="12" rx="2" fill="none" stroke="#5a6580" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="64" y="57" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CRON</text>
+        <text x="140" y="76" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Cron tick</text>
+        <text x="140" y="92" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">daily 03:30 · ships disabled</text>
+
+        <!-- Node: Kill switches -->
+        <rect x="260" y="40" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="260" y="40" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="268" y="48" width="36" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="286" y="57" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GUARD</text>
+        <text x="360" y="76" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Kill switches</text>
+        <text x="360" y="92" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">any one aborts, logged</text>
+
+        <!-- Node: Collect -->
+        <rect x="480" y="40" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="480" y="40" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="488" y="48" width="32" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="504" y="57" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INPUT</text>
+        <text x="580" y="76" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Collect</text>
+        <text x="580" y="92" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">counts only · never bodies</text>
+
+        <!-- Node: Phase gate -->
+        <rect x="700" y="40" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="700" y="40" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="708" y="48" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="722" y="57" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GATE</text>
+        <text x="800" y="76" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Phase gate</text>
+        <text x="800" y="92" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">phase 0 = collect-only</text>
+
+        <!-- Node: Loop worker (focal) -->
+        <rect x="700" y="190" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="700" y="190" width="200" height="64" rx="6" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08"/>
+        <rect x="708" y="198" width="44" height="12" rx="2" fill="none" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.50"/>
+        <text x="730" y="207" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WORKER</text>
+        <text x="800" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Loop worker</text>
+        <text x="800" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">read-only · draft backend</text>
+
+        <!-- Node: Budgets gate -->
+        <rect x="480" y="190" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="480" y="190" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="488" y="198" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="502" y="207" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GATE</text>
+        <text x="580" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Budgets gate</text>
+        <text x="580" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">caps · cooldowns · dedupe</text>
+
+        <!-- Node: Evaluate -->
+        <rect x="260" y="190" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="260" y="190" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="268" y="198" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="282" y="207" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EVAL</text>
+        <text x="360" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Evaluate</text>
+        <text x="360" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">phase ≥ 2 · secrets audit</text>
+
+        <!-- Node: PR queue -->
+        <rect x="40" y="190" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="40" y="190" width="200" height="64" rx="6" fill="#bf4520" stroke="#bf4520" stroke-width="1" stroke-dasharray="4,4" fill-opacity="0.05" stroke-opacity="0.50"/>
+        <rect x="48" y="198" width="20" height="12" rx="2" fill="none" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.50"/>
+        <text x="58" y="207" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PR</text>
+        <text x="140" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">PR queue</text>
+        <text x="140" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">John merges — never auto</text>
+
+        <!-- Callouts -->
+        <text x="480" y="300" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">Every cycle appends one ledger entry; lessons land in memory; GET /self_improve/status (token-gated) shows the snapshot.</text>
+        <text x="480" y="324" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">The loop never merges, never pushes to master, never restarts the service, never writes the live tree or config, never sends mail or chat.</text>
+
+        <!-- Legend strip -->
+        <line x1="40" y1="368" x2="920" y2="368" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.10"/>
+        <text x="40" y="384" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="40" y="396" width="14" height="10" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08"/>
+        <text x="60" y="404" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Focal</text>
+
+        <rect x="120" y="396" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="140" y="404" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Step</text>
+
+        <rect x="210" y="396" width="14" height="10" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="1" stroke-dasharray="4,4" fill-opacity="0.05" stroke-opacity="0.50"/>
+        <text x="230" y="404" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Gated handoff</text>
+
+        <line x1="360" y1="401" x2="388" y2="401" stroke="#bf4520" stroke-width="1.4" marker-end="url(#bot-self-improve-flow-arrow-accent)"/>
+        <text x="396" y="404" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Headline flow</text>
+
+        <line x1="520" y1="401" x2="548" y2="401" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#bot-self-improve-flow-arrow)"/>
+        <text x="556" y="404" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Flow</text>
+      </svg>
