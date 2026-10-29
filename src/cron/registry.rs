@@ -247,6 +247,24 @@ fn default_routines() -> Vec<Routine> {
             task: String::new(),
             backend: default_routine_backend(),
         },
+        // Task 281 (self-improving loop, Phase 1): one nightly cycle.
+        // Ships DISABLED — John enables it when Phase 0's ledger has a
+        // gap-free week (gate 280). Empty agent_role/task: handled by
+        // the CPU's self-improve arm, which collects metrics and (phase
+        // >= 1) dispatches exactly one loop worker. The existing
+        // load_or_seed merge carries this to deployments seeded by an
+        // older binary without touching John's choices.
+        Routine {
+            id: "self-improve".to_string(),
+            name: "Self-improvement loop".to_string(),
+            schedule: "daily 03:30".to_string(),
+            enabled: false,
+            last_run_ms: None,
+            next_run_ms: None,
+            agent_role: String::new(),
+            task: String::new(),
+            backend: default_routine_backend(),
+        },
     ]
 }
 
@@ -857,11 +875,12 @@ mod registry_tests {
         assert!(ids.contains(&"nightly_memory_consolidation"));
         assert!(ids.contains(&"error_log_review"));
         // Task 216: the mail_check example ships DISABLED (John enables it when
-        // he wants the agent watching mail); everything else ships enabled.
+        // he wants the agent watching mail); task 281: self-improve ships
+        // DISABLED (John enables it after gate 280). Everything else ships enabled.
         assert!(reg
             .list()
             .iter()
-            .filter(|r| r.id != "mail_check")
+            .filter(|r| r.id != "mail_check" && r.id != "self-improve")
             .all(|r| r.enabled));
         assert!(reg.list().iter().all(|r| r.next_run_ms.is_some()));
         assert!(path.exists());
@@ -1025,6 +1044,53 @@ mod registry_tests {
         assert!(reg.remove(&r.id));
         assert!(!reg.remove(&r.id));
         assert!(reg.list().is_empty());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn self_improve_routine_seeded_disabled() {
+        // Task 281.1: the loop routine ships in the seed set, DISABLED,
+        // on the documented schedule — John enables it after gate 280.
+        let routines = default_routines();
+        let r = routines
+            .iter()
+            .find(|r| r.id == "self-improve")
+            .expect("self-improve must be a seeded routine");
+        assert_eq!(r.name, "Self-improvement loop");
+        assert_eq!(r.schedule, "daily 03:30");
+        assert!(!r.enabled, "loop ships disabled");
+        assert!(parse_schedule(&r.schedule).is_ok(), "schedule must parse");
+    }
+
+    #[test]
+    fn self_improve_merges_into_preexisting_file_without_touching_choices() {
+        // Task 281.1: an existing routines.json (seeded by an older
+        // binary) gains self-improve via the merge path, while John's
+        // existing entries — including a routine HE disabled — are
+        // byte-identical in effect (same id/enabled/schedule).
+        let path = tmp_path("self_improve_merge.json");
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(
+            &path,
+            r#"[{"id":"my-job","name":"Mine","schedule":"every 1h","enabled":true,"last_run_ms":null,"next_run_ms":null,"agent_role":"","task":"","backend":"auto"},{"id":"support-mail-watch","name":"Support mailbox watch (SYSADMIN-01)","schedule":"every 1m","enabled":false,"last_run_ms":null,"next_run_ms":null,"agent_role":"","task":"","backend":"auto"}]"#,
+        )
+        .unwrap();
+        let reg = RoutineRegistry::load_or_seed(path.clone());
+        let mine = reg.list().iter().find(|r| r.id == "my-job").expect("custom kept");
+        assert!(mine.enabled);
+        let watch = reg
+            .list()
+            .iter()
+            .find(|r| r.id == "support-mail-watch")
+            .expect("watcher kept");
+        assert!(!watch.enabled, "John's disabled choice must survive the merge");
+        let loop_r = reg
+            .list()
+            .iter()
+            .find(|r| r.id == "self-improve")
+            .expect("self-improve merged in");
+        assert!(!loop_r.enabled);
+        assert_eq!(loop_r.schedule, "daily 03:30");
         let _ = std::fs::remove_file(&path);
     }
 }

@@ -554,7 +554,17 @@ async fn run_subagent(
     let composed = crate::persona::compose_subagent_prompt(task_id, task, role_hint);
     // Task 233: the role's frontmatter allowlist filters the toolset
     // (spawn_subagent is always excluded — the depth guard is absolute).
-    let tools = crate::persona::subagent_tool_definitions(role_hint);
+    // Task 282: the loop worker's filter FAILS CLOSED on a zero match
+    // (unlike the general mechanism's full-toolset fallback) — a typo'd
+    // persona must never silently grant the loop worker the full set.
+    let tools = if role_hint == "loop-worker" {
+        match crate::self_improve::worker::loop_worker_tool_definitions() {
+            Ok(t) => t,
+            Err(e) => return Err(format!("loop-worker spawn refused: {e}")),
+        }
+    } else {
+        crate::persona::subagent_tool_definitions(role_hint)
+    };
 
     match backend {
         LLMBackend::LocalOllama | LLMBackend::LanOllama => {

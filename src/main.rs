@@ -698,6 +698,11 @@ async fn run_helix() {
     // Task 256: support-watch state, drafts, and playbook resolve under the
     // runtime dir too.
     crate::support_watch::set_runtime_dir(rt_dir.clone());
+    // Task 279/281: the self-improve ledger, proposals, worktrees, and
+    // queue resolve under the runtime dir too (the status endpoint and
+    // the kill-switch stop file read this global; the CPU handler uses
+    // its own runtime_dir, which is the same directory in production).
+    crate::self_improve::set_runtime_dir(rt_dir.clone());
     // Task 233: initial self-authoring — if agent.md is missing and the
     // operator opted in, Helix drafts its own persona in the background.
     // Fire-and-forget: the draft lands as .pending, never live, and a

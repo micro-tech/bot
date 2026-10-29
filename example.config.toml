@@ -143,3 +143,29 @@ auto_send = true
 # stt_model = "citrinet-asr" # model id for /v1/audio/transcriptions ("" = server default)
 # ptt_hotkey = "ControlRight" # web UI push-to-talk hotkey (KeyboardEvent.code); "" disables it
 # autoplay = false          # web UI reads agent replies aloud automatically
+
+# ── Self-improving loop (tasks 277+) ─────────────────────────────────────
+# Helix watches its own health and proposes fixes John merges. All keys
+# optional — omitting the section selects the fail-closed defaults below.
+# The loop NEVER merges, NEVER pushes to master, NEVER restarts the
+# service, NEVER writes the live tree or live config, NEVER sends mail or
+# chat. Only John edits phase, pr_opening, and eval_set_approved here;
+# the loop never writes config.
+# [self_improve]
+# enabled = false            # master switch, kill-switch #1 (default OFF)
+# phase = 0                  # 0=collect-only, 1=propose, 2=evaluate, 3=pr-if-allowed
+# cadence = "daily 03:30"    # routine schedule (task 281 seeds the same value)
+# max_proposals_per_week = 3 # hard budget: proposals per rolling week
+# max_open_per_signature = 1 # hard budget: open proposals per failing signature
+# max_cycle_minutes = 60     # hard budget: wall-clock minutes per cycle
+# max_diff_lines = 500       # hard budget: diff lines per proposal (enforced in Phase 2)
+# declined_cooldown_days = 30 # do not re-propose a declined signature for 30 days
+# failed_eval_cooldown_days = 7 # do not retry a failed-eval signature for 7 days
+# max_worktrees = 1          # max worktrees alive at once
+# triage_backend = "local"   # backend for measurement/triage (D3 default)
+# draft_backend = "gemini"   # backend for proposal drafting (D3 default)
+# pr_opening = false         # D1 RUNTIME: false = queue-only (default OFF)
+# eval_set_approved = false  # D5 gate: false = CLOSED, never promotes (task 242 set is DRAFT)
+# stop_file = "SELF_IMPROVE_OFF" # kill-switch #2 stop-file name (runtime dir)
+# worktree_dir = "self_improve/worktrees" # worktree root (runtime dir)
+# ledger_path = "self_improve/ledger.jsonl" # metrics ledger path (runtime dir)
