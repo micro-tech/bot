@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-architecture-title bot-architecture-desc" id="bot-architecture-root">
         <title id="bot-architecture-title">Helix — architecture and data flow</title>
-        <desc id="bot-architecture-desc">Architecture and data-flow overview of the Helix agent: web UI, agent core with the commander pattern and sub-agents, LLM backends, MCP tools, the support watcher, the in-Helix OKF server, auth-gated web server routes, chat history, and the new voice flow (mic push-to-talk to STT, agent replies to TTS). The Support watcher, Web server routes, and Voice flow nodes link to detail diagrams.</desc>
+        <desc id="bot-architecture-desc">Architecture and data-flow overview of the Helix agent: web UI, agent core with the commander pattern and sub-agents, LLM backends, MCP tools, the support watcher, the in-Helix OKF server, auth-gated web server routes, chat history, the voice flow (mic push-to-talk to STT, agent replies to TTS), and the self-improve loop inside the core. The Support watcher, Web server routes, and Voice flow nodes link to detail diagrams, as does the self-improve loop line under Helix core.</desc>
         <defs>
       <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
       #bot-architecture-root { --color-paper:   #f5f5f5;
@@ -112,6 +112,9 @@
         <text x="324" y="57" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CORE</text>
         <text x="420" y="84" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Helix core</text>
         <text x="420" y="102" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">commander · runtime · subagents</text>
+        <a href="bot-self-improve-flow.html">
+          <text x="420" y="118" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">self-improve loop ↗</text>
+        </a>
 
         <!-- Node: LLM backends -->
         <rect x="660" y="50" width="200" height="64" rx="6" fill="#f5f5f5"/>
