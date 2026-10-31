@@ -1666,8 +1666,31 @@ pub struct ErrorFindings {
 /// occurred"), and the review's own summary line must never count itself.
 /// Lines without a parseable timestamp are not counted: every current
 /// producer goes through log_to_file, which always stamps its lines.
+/// Task 293: three report/telemetry shapes are NOT errors even when they
+/// trip the marker match, and are excluded before it:
+/// - `self_improve: metrics` lines (telemetry; the `routine_failed`
+///   counter trips the `failed` substring even at `routine_failed=0`,
+///   and a summary counter is not an error event — underlying failures
+///   have their own lines);
+/// - `nightly fix attempt:` lines (the fixer quoting an old error while
+///   reporting on it — the original line is the finding, not the quote,
+///   and counting quotes feeds the fixer its own output every night);
+/// - bare `[AgentState] HALTED:` terminations (`Terminal step reached`,
+///   `test termination`): `halt()` fires on NORMAL completion too
+///   (runtime_loop.rs halts on FinalAnswer and on planner Error alike),
+///   so a run ending is not a failure. Any other HALTED reason still
+///   counts (e.g. `watchdog tripped`, `Tool failed: ...`), mirroring the
+///   acp/agent.rs rule that only `Tool failed:` is a genuine halt error.
+/// Because `findings.recent` is built from counted lines only, these
+/// exclusions also keep non-actionable lines out of `maybe_nightly_fix`
+/// input (task 293.3) with no separate fixer change.
 const ERROR_LOG_RECENT_WINDOW_MINUTES: i64 = 24 * 60;
 const ERROR_MARKERS: [&str; 6] = ["[ERROR]", "ERROR:", "Error", "Failed", "failed", "HALTED"];
+
+/// Task 293: benign `[AgentState] HALTED:` reasons — a run ending, not a
+/// failure. Any other HALTED reason counts (it still needs no other
+/// marker: HALTED itself is one).
+const BENIGN_HALT_REASONS: [&str; 2] = ["Terminal step reached", "test termination"];
 
 fn is_counted_error_line(line: &str, now: chrono::NaiveDateTime) -> bool {
     let line = line.trim();
@@ -1677,7 +1700,7 @@ fn is_counted_error_line(line: &str, now: chrono::NaiveDateTime) -> bool {
     let Some(rest) = line.strip_prefix('[') else {
         return false;
     };
-    let Some((ts, _)) = rest.split_once(']') else {
+    let Some((ts, body)) = rest.split_once(']') else {
         return false;
     };
     let Ok(stamp) = chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %I:%M:%S %p")
@@ -1692,6 +1715,16 @@ fn is_counted_error_line(line: &str, now: chrono::NaiveDateTime) -> bool {
         > ERROR_LOG_RECENT_WINDOW_MINUTES
     {
         return false;
+    }
+    // Task 293: report/telemetry shapes are not errors (see doc above).
+    let body = body.trim_start();
+    if body.starts_with("self_improve: metrics") || body.starts_with("nightly fix attempt:") {
+        return false;
+    }
+    if let Some(reason) = body.strip_prefix("[AgentState] HALTED:") {
+        if BENIGN_HALT_REASONS.contains(&reason.trim()) {
+            return false;
+        }
     }
     ERROR_MARKERS.iter().any(|m| line.contains(m))
 }
@@ -2351,6 +2384,54 @@ mod nightly_tests {
         assert!(!findings.recent.iter().any(|l| l.contains("routine_run")));
     }
 
+    // Task 293: the three false-positive categories from the Oct 30 R630
+    // breakdown (5650 HALTED terminations, 2979 metrics lines, 1119
+    // fix-attempt quotes out of 9749 marker lines) must not count;
+    // genuine errors and failure-context HALTED lines still do. Because
+    // findings.recent is built from counted lines only, this also proves
+    // the fixer can no longer be fed these categories (293.3).
+    #[tokio::test]
+    async fn error_log_check_excludes_293_false_positives() {
+        let (_cpu, dir) = test_cpu();
+        let log_dir = dir.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let recent = chrono::Local::now().format("%Y-%m-%d %I:%M:%S %p");
+        let path = log_dir.join("error_log.md");
+        std::fs::write(
+            &path,
+            format!(
+                "[{recent}] [AgentState] HALTED: Terminal step reached\n\
+                 [{recent}] [AgentState] HALTED: test termination\n\
+                 [{recent}] self_improve: metrics ts=1793343393651 routines=1 routine_failed=0 errors=9740 restarts=1 qm_missing=true proposals=1\n\
+                 [{recent}] self_improve: metrics ts=1793343394567 routines=1 routine_failed=2 errors=9742 restarts=1 qm_missing=true proposals=1\n\
+                 [{recent}] nightly fix attempt: [{recent}] ERROR: widget failed to sprocket -> REVERTED (tests red): no fix applied\n\
+                 [{recent}] ERROR: disk write failed\n\
+                 [{recent}] Failed to publish message to bus: closed\n\
+                 [{recent}] [AgentState] HALTED: watchdog tripped\n\
+                 [{recent}] [AgentState] HALTED: Tool failed: disk full\n"
+            ),
+        )
+        .unwrap();
+
+        let findings = check_error_logs_in(&[path], chrono::Local::now().naive_local());
+
+        // THEN only the four genuine lines count (the fix-attempt quote
+        // of the sprocket error is not a fifth: the quoted error is not
+        // itself a new error event):
+        assert_eq!(findings.total, 4);
+        assert_eq!(findings.files[0].1, 4);
+        assert_eq!(findings.files[0].2, 9);
+        assert!(findings.recent.iter().any(|l| l.contains("disk write failed")));
+        assert!(findings.recent.iter().any(|l| l.contains("Failed to publish")));
+        assert!(findings.recent.iter().any(|l| l.contains("watchdog tripped")));
+        assert!(findings.recent.iter().any(|l| l.contains("Tool failed: disk full")));
+        assert!(!findings.recent.iter().any(|l| l.contains("Terminal step reached")));
+        assert!(!findings.recent.iter().any(|l| l.contains("test termination")));
+        assert!(!findings.recent.iter().any(|l| l.contains("self_improve: metrics")));
+        assert!(!findings.recent.iter().any(|l| l.contains("nightly fix attempt")));
+        assert!(!findings.recent.iter().any(|l| l.contains("sprocket")));
+    }
+
     // Task 276: INIT lines never count — even the clear audit line, which
     // contains the word "Error". The INIT check must precede the marker
     // check.
@@ -2406,6 +2487,36 @@ mod nightly_tests {
             now
         ));
         assert!(!is_counted_error_line("no timestamp here ERROR: x", now));
+        // Task 293: benign HALTED reasons do not count; failure-context
+        // HALTED reasons still do; metrics and fix-attempt lines never do.
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] [AgentState] HALTED: Terminal step reached"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] [AgentState] HALTED: test termination"),
+            now
+        ));
+        assert!(is_counted_error_line(
+            &format!("[{recent}] [AgentState] HALTED: watchdog tripped"),
+            now
+        ));
+        assert!(is_counted_error_line(
+            &format!("[{recent}] [AgentState] HALTED: Tool failed: boom"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] self_improve: metrics ts=1 routines=1 routine_failed=0 errors=0 restarts=0 qm_missing=false proposals=0"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] self_improve: metrics ts=1 routines=1 routine_failed=3 errors=9 restarts=0 qm_missing=false proposals=0"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] nightly fix attempt: [{recent}] ERROR: old failure -> REVERTED"),
+            now
+        ));
     }
 
     // Task 276: rotation caps the file at the bound and archives the
