@@ -618,12 +618,18 @@ mod tests {
 
     #[test]
     fn unknown_backend_is_rejected() {
+        // Task 294: locked — spawn_subagent checks HELIX_SUBAGENT_TEST_STUB
+        // before backend validation, so a concurrent stub-setting test would
+        // make this see stub output instead of "Unknown backend".
+        let _tl = super::test_env_lock();
         let out = spawn_subagent(&json!({"task": "do a thing", "backend": "skynet"}));
         assert!(out.contains("Unknown backend"), "got: {}", out);
     }
 
     #[test]
     fn grok_backend_reports_not_implemented() {
+        // Task 294: locked — same stub-env race as unknown_backend_is_rejected.
+        let _tl = super::test_env_lock();
         let out = spawn_subagent(&json!({"task": "do a thing", "backend": "grok"}));
         assert!(out.contains("no client implementation"), "got: {}", out);
         assert!(out.to_lowercase().contains("grok"), "got: {}", out);
@@ -663,6 +669,8 @@ mod tests {
 
     #[test]
     fn schema_registered_and_execute_dispatched() {
+        // Task 294: locked — calls tool_definitions() and excluding().
+        let _tl = super::test_env_lock();
         // Schema must be advertised to the models...
         let defs = crate::tools::tool_definitions();
         let arr = defs.as_array().expect("tool_definitions must be an array");

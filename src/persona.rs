@@ -804,6 +804,8 @@ mod tests {
 
     #[test]
     fn unknown_tool_names_warned_and_ignored() {
+        // Task 294: locked — subagent_tool_definitions() reaches the cache.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         let _l = dir_lock();
         let _d = use_temp_dir("unknown");
         // GIVEN a role allowlisting one real and one bogus tool:
@@ -828,6 +830,8 @@ mod tests {
 
     #[test]
     fn empty_after_filter_falls_back_to_full_set() {
+        // Task 294: locked — reaches the definitions cache (see above).
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         let _l = dir_lock();
         let _d = use_temp_dir("emptyfilter");
         // GIVEN an allowlist of only bogus names,
@@ -848,6 +852,8 @@ mod tests {
 
     #[test]
     fn spawn_subagent_never_allowlisted() {
+        // Task 294: locked — reaches the definitions cache (see above).
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         let _l = dir_lock();
         let _d = use_temp_dir("nodepth");
         // GIVEN a role that explicitly allowlists spawn_subagent (naughty):
@@ -875,6 +881,8 @@ mod tests {
 
     #[test]
     fn no_file_means_unfiltered_toolset() {
+        // Task 294: locked — reaches the definitions cache (see above).
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         let _l = dir_lock();
         let _d = use_temp_dir("nofile");
         // GIVEN no persona file for the role,
@@ -890,6 +898,8 @@ mod tests {
 
     #[test]
     fn searcher_allowlist_hides_file_writing_tools() {
+        // Task 294: locked — reaches the definitions cache (see above).
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         let _l = dir_lock();
         let _d = use_temp_dir("searcher");
         // GIVEN John's canonical example: a read-only researcher role,

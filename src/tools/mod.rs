@@ -548,11 +548,22 @@ pub fn tool_definitions() -> Value {
             return cached.clone();
         }
     }
-    // Slow path: build once, store, return.
-    let built = build_tool_definitions();
-    if let Ok(mut guard) = definitions_cache().write() {
-        *guard = Some(built.clone());
+    // Slow path, single-flight (task 294): hold the write lock across
+    // check -> build -> store, so concurrent cache-miss callers serialize
+    // and exactly one build is stored and counted. A thread that waited
+    // finds the fresh cache and returns it without rebuilding.
+    // Deadlock audit: build_tool_definitions() never takes this lock and
+    // never calls back into tool_definitions(); its OKF access is try_lock
+    // (non-blocking) and its MCP access takes only the MCP manager lock,
+    // which no holder ever waits on this lock to release.
+    let mut guard = definitions_cache()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(cached) = guard.as_ref() {
+        return cached.clone();
     }
+    let built = build_tool_definitions();
+    *guard = Some(built.clone());
     #[cfg(test)]
     {
         BUILD_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -712,6 +723,35 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_cache_miss_builds_once() {
+        // Task 294: N threads racing a cold cache must trigger exactly one
+        // build. Deterministic repro for the double-build window: pre-fix,
+        // every cache-miss caller built and counted, so this fails; post-fix
+        // the single-flight slow path stores and counts exactly one build.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
+        invalidate_tool_definitions();
+        BUILD_COUNT.store(0, std::sync::atomic::Ordering::SeqCst);
+
+        // Barrier so all threads hit the cold cache at once, not staggered.
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|s| {
+            for _ in 0..8 {
+                s.spawn(|| {
+                    barrier.wait();
+                    let defs = tool_definitions();
+                    assert!(defs.is_array());
+                });
+            }
+        });
+
+        assert_eq!(
+            BUILD_COUNT.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "concurrent cache-miss callers must trigger exactly one build"
+        );
+    }
+
+    #[test]
     fn test_unknown_tool() {
         let result = execute("totally_unknown", &json!({}));
         assert!(result.contains("Unknown tool"), "got: {}", result);
@@ -740,6 +780,9 @@ mod tests {
 
     #[test]
     fn test_tool_definitions_stable_across_calls() {
+        // Task 294: locked — an unlocked call here could land in a count
+        // test's invalidate -> rebuild window and inflate BUILD_COUNT.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         // Repeated calls (incl. the OKF merge) must produce identical defs.
         let d1 = tool_definitions();
         let d2 = tool_definitions();
@@ -751,6 +794,8 @@ mod tests {
 
     #[test]
     fn test_tool_definitions_is_array() {
+        // Task 294: locked — see test_tool_definitions_stable_across_calls.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         let defs = tool_definitions();
         assert!(defs.is_array());
         let arr = defs.as_array().unwrap();
@@ -761,6 +806,8 @@ mod tests {
 
     #[test]
     fn test_scan_projects_tool_is_registered_in_definitions() {
+        // Task 294: locked — see test_tool_definitions_stable_across_calls.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         let defs = tool_definitions();
         let arr = defs.as_array().expect("tool_definitions must return array");
 
@@ -806,6 +853,8 @@ mod tests {
 
     #[test]
     fn test_tool_definitions_includes_project_scanner_tools() {
+        // Task 294: locked — see test_tool_definitions_stable_across_calls.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         let defs = tool_definitions();
         let arr = defs.as_array().unwrap();
 
