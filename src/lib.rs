@@ -28,6 +28,7 @@ pub mod persona;
 pub mod support_watch; // task 256: SYSADMIN-01 adaptive support-mail poll loop
 pub mod voice; // task 267/268: voice-box TTS/STT integration
 pub mod self_improve; // tasks 277+: self-improving loop (Phase 0 config first)
+pub mod chat_mcp_install; // task 295: chat-mcp installer hook (binary + config + [[mcp.servers]] block)
 
 // Re-export commonly used types
 pub use bus::{Bus, Message};

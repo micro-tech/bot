@@ -2666,6 +2666,43 @@
           "status": "in_progress"
         }
       ]
+    },
+    {
+      "id": 295,
+      "title": "Helix installer hook: install/update chat-mcp during install (Rust)",
+      "description": "John-approved 2026-11-03 (Rust, not script): add a Rust step to Helix installer.rs that installs/updates chat-mcp during a Helix install: binary into ~/.local/bin/chat-mcp built from the micro-tech/chat-mcp repo source, config dir ~/.config/chat-mcp, and the [[mcp.servers]] chat block in Helix config.toml if missing (backup first, never duplicate). Sandbox only: no push, no PR, no deploy, no R630 touch. Token safety is a hard rule: never embed, print, or require a token; preserve an existing chat-mcp config untouched; create a missing one with hub_url and watch_timeout_secs only and no token key, perms 0600. Task 262 interaction: do NOT decide 262.4; the hook is a separate lib module plus a guarded call site and never touches the 262-broken include_str paths.",
+      "status": "done",
+      "priority": "high",
+      "dependencies": [],
+      "details": "Live shape proven on the R630 2026-11-03: binary at /home/cobble/.local/bin/chat-mcp, config 0600 at /home/cobble/.config/chat-mcp/config.toml, chat block appended to ~/helix/config.toml with a .bak backup made first, then systemctl restart helix. Hook ordering in install(): after config.toml is deployed (the block edit needs it) and before the service starts (so the first start picks the chat server up). Ownership of the new binary and config dir is the installer call site's job (chown to the runtime user); the lib module only writes files. Uninstall leaves chat-mcp in place, like config and logs.",
+      "testStrategy": "All 295.x strategies green; orchestrator three-path test green (fresh install, idempotent re-run, existing-config-preserved); cargo check --lib zero warnings; installer bin compiles with the 262 lines temporarily neutralized (patch reverted, never committed); secret grep clean.",
+      "subtasks": [
+        {
+          "id": "295.1",
+          "title": "Binary sourcing: clone-or-reuse chat-mcp repo, cargo build --release, install to ~/.local/bin",
+          "status": "done"
+        },
+        {
+          "id": "295.2",
+          "title": "Config dir + file: preserve-if-exists, create-if-missing with hub_url + watch_timeout_secs, no token, 0600",
+          "status": "done"
+        },
+        {
+          "id": "295.3",
+          "title": "Helix config block: append [[mcp.servers]] chat if missing, backup first, never duplicate header or block",
+          "status": "done"
+        },
+        {
+          "id": "295.4",
+          "title": "installer.rs call site: guarded warn-not-fail, after config deploy, before service start, plus ownership",
+          "status": "done"
+        },
+        {
+          "id": "295.5",
+          "title": "Verification: checks, full lib suite counts, secret grep, branch + commit (no junk)",
+          "status": "done"
+        }
+      ]
     }
   ]
 }
