@@ -2632,7 +2632,7 @@
       "id": 275,
       "title": "Voice fine-tuning: push-to-talk hotkey + TTS autoplay toggle",
       "description": "John's polish request on the live voice loop: (A) configurable push-to-talk hotkey (default right Ctrl) that drives the same Web Audio WAV mic capture; (B) autoplay toggle (button + localStorage) that reads agent replies aloud via the existing speak flow.",
-      "status": "in_progress",
+      "status": "done",
       "priority": "high",
       "dependencies": [
         274
@@ -2663,7 +2663,565 @@
         {
           "id": "275.5",
           "title": "Tests green + push branch",
-          "status": "in_progress"
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": 276,
+      "title": "Nightly error-log review counts all CPU chatter as errors; count real/recent errors and rotate the log",
+      "description": "routine_error_log_review (src/cpu/mod.rs) counts every non-empty line of error_log.md as an 'error line' with no date filter and no ERROR-pattern match, and nothing rotates the file. log_to_file (src/utils.rs) appends all CPU chatter (TRACE, routine_run ticks, polls, scheduler, executor starts) to ~/.helix/logs/error_log.md, which grew ~54k lines/day (~37/min) after the 2026-10-20 reinstall: 322,685 lines by 2026-10-26, vs the 265,352 the alert reported the night before. Any total > 0 fires the same bus error alert, so it now fires every night and grows forever; and maybe_nightly_fix (1-7am window + [shell] enabled on the R630) arms on these chatter lines and attempts fixes on junk. The web UI /logs/error/clear endpoint clears only state.logging.error_log (the 1-line runtime file), NOT the ~/.helix file the review actually counts, and writes back an INIT line that itself counts as an 'error line'.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "DIAGNOSED 2026-10-26 from John's R630 output: wc -l ~/helix/logs/error_log.md (1 line) vs ~/.helix/logs/error_log.md (322,685 lines); tail = per-minute support-mail-watch routine_run lines; file created by installer 2026-10-20 20:36 EDT. R630 Helix log timestamps are UTC (4h ahead of EDT).\n\nCHANGES:\n1. check_error_logs: count only genuine errors - either lines carrying an error marker, or lines from the last 24h (log lines carry '[YYYY-MM-DD HH:MM:SS AM/PM]' timestamps; parse and filter). Prefer last-24h + error-marker filtering; implementer's call on the exact predicate, but chatter-only fixtures must count 0.\n2. Cap/rotate ~/.helix/logs/error_log.md (e.g. keep last N lines or daily rotation with archive) so the file cannot grow unboundedly; keep an INIT-style marker that the review skips.\n3. Alert gating falls out of (1): bus error fires only when the FILTERED count > 0. State it explicitly in the report body (filtered count + file sizes).\n4. Fix /logs/error/clear to clear the file log_to_file actually writes (and both review candidates), and do not write back an INIT line the review counts - or make the review skip INIT lines.\n5. Consequence: maybe_nightly_fix then arms only on real errors.\n\nCLEARING (done 2026-10-26 night by John on the R630: backup + truncate both files) resets the baseline but does NOT silence the alert - the file regrows ~54k/day and any total > 0 alerts. This task is the actual fix.\n\nDo NOT delete the log without backup; do NOT change the support-watch cadence (the ticks are legitimate routine chatter, not the bug).",
+      "testStrategy": "Fixture error_log.md files mixing chatter (routine_run, TRACE, poll, scheduler, executor starts) + genuine error lines + lines older than 24h: assert filtered count equals genuine recent errors only; chatter-only fixture counts 0 and fires no bus alert; rotation caps the file at the configured bound; existing tests error_log_check_reports_findings_on_fixture, error_log_check_handles_missing_log, error_review_reports_and_stays_propose_only_off_hours stay green; cargo test --lib exit 0.",
+      "subtasks": [
+        {
+          "id": "276.1",
+          "status": "done",
+          "title": "check_error_logs: filter to genuine recent errors (error marker and/or last-24h timestamp parse); report filtered count + file sizes"
+        },
+        {
+          "id": "276.2",
+          "status": "done",
+          "title": "Cap/rotate ~/.helix/logs/error_log.md; review skips INIT lines"
+        },
+        {
+          "id": "276.3",
+          "status": "done",
+          "title": "Fix /logs/error/clear to clear the file log_to_file writes (both review candidates), no counted INIT line written back"
+        },
+        {
+          "id": "276.4",
+          "status": "done",
+          "title": "Fixture tests (chatter-only = 0, no alert; mixed + old lines filtered; rotation bound) + CHANGELOG entry"
+        }
+      ]
+    },
+    {
+      "dependencies": [],
+      "description": "Add the [self_improve] config section following the [voice] load_section precedent, with fail-closed defaults and every spec budget knob. This is the loop's master switchboard; all later phases read it.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat. The loop never grades its own homework alone \u2014 the external Quartermaster remains the independent check.\n\nNew module layout: src/self_improve/mod.rs + config.rs (+ metrics.rs, budgets.rs, git.rs, evaluator.rs, audit.rs, pr.rs in later tasks); register `pub mod self_improve;` in src/lib.rs after the support_watch/voice lines (lib.rs:28-29 at c7ecc41).\n\nNew file src/self_improve/config.rs: struct SelfImproveConfig loaded via crate::config::load_section (src/config/mod.rs:25), mirroring VoiceConfig::load_from_toml (src/voice/config.rs:93). Fields with fail-closed defaults: enabled=false (kill-switch #1 master switch), phase=0 (0=collect-only, 1=propose, 2=evaluate, 3=pr-if-allowed \u2014 ONLY John edits this in config; the loop never writes config), cadence schedule string (routine schedule, default \"daily 03:30\" \u2014 see task 281), max_proposals_per_week=3, max_open_per_signature=1, max_cycle_minutes=60, max_diff_lines=500, declined_cooldown_days=30, failed_eval_cooldown_days=7, max_worktrees=1, triage_backend=\"local\", draft_backend=\"gemini\" (D3 default: local-triage + Gemini-draft), pr_opening=false (D1 RUNTIME default OFF \u2014 queue-only), eval_set_approved=false (D5 gate, default CLOSED \u2014 task 242's set is DRAFT), stop_file=\"SELF_IMPROVE_OFF\" (runtime dir), worktree_dir=\"self_improve/worktrees\" (runtime dir), ledger_path=\"self_improve/ledger.jsonl\" (runtime dir). Missing section or malformed values fall back to these defaults with a logged warning (task 265 pattern: log keys, never values).\n\nDocument every key in example.config.toml as commented defaults, mirroring the [voice] docs (example.config.toml:137+). Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: config.rs + mod.rs scaffolding, example.config.toml docs, CHANGELOG. 10 new lib tests green (5 config + 5 kill-switch). Full lib suite: 463 total (449 baseline + 10 new + 4 ignored baseline) \u2014 verified via filtered run (453 filtered out at baseline count). KNOWN-TRANSIENT DEVIATION from testStrategy 'zero new warnings': cargo check --lib shows 2 dead-code warnings for runtime_dir/live_config, which task 281's handler wiring consumes; recorded here and in CHANGELOG, to be closed at 281. Worktree: ranger-loop-277-291, uncommitted (no commit yet; commit at phase boundaries).",
+      "id": 277,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "277.1",
+          "status": "done",
+          "title": "SelfImproveConfig struct + fail-closed defaults + unit tests"
+        },
+        {
+          "dependencies": [
+            "277.1"
+          ],
+          "id": "277.2",
+          "status": "done",
+          "title": "example.config.toml docs + CHANGELOG entry"
+        }
+      ],
+      "testStrategy": "Unit tests: missing section yields all fail-closed defaults (enabled=false, phase=0, pr_opening=false, eval_set_approved=false); partial section overrides only given keys; malformed values fall back to defaults with a warning logged. Fixture-TOML round-trip via load_section. cargo check --lib zero new warnings; full lib suite no new failures.",
+      "title": "Loop Phase 0: [self_improve] config section (fail-closed defaults)"
+    },
+    {
+      "dependencies": [
+        277
+      ],
+      "description": "Append-only per-cycle ledger in the runtime dir covering the spec's 7-row metric catalog, with QM-summary sidecar ingestion and gap flagging. No proposals exist yet \u2014 this phase only measures.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nNew file src/self_improve/metrics.rs. Ledger file rt_dir/self_improve/ledger.jsonl (follow the support_watch runtime-dir pattern: set_runtime_dir + paths under the runtime dir, cf. main.rs:700). One JSON object per cycle: timestamp, routine outcomes by routine id (from the CPU routine-handler path), support-watcher stats via support_watch::status_snapshot() (src/support_watch/mod.rs:458), test results from the QM-summary sidecar (below), restart counts from Helix startup markers in runtime logs, error-log counts via cpu check_error_logs() FILTERED ErrorFindings (src/cpu/mod.rs:716 \u2014 post-task-276: counts + per-file counts + totals ONLY; NEVER persist the `recent` lines \u2014 the ledger is metadata-only, no bodies, no secrets), proposal outcomes from proposals.json (empty until Phase 1).\n\nQM-SIDECAR (spec gap found in grounding \u2014 the spec says test results are 'ingested from its run log' but names no transport, and the R630 cannot read the sandbox QM logs): define qm-summary.json with fields {date, grok_tip, helix_tip, grok_suite, helix_lib, js, ci_failed_count}, dropped into rt_dir/self_improve/ by the QM run or by John. Parser is lenient: missing file or unparseable content records \"qm_missing\": true \u2014 a ledger GAP, which blocks Phase 1 per spec acceptance. Document the sidecar format in the module docs and CHANGELOG.\n\nLedger append is atomic (write temp + rename) and never rewrites history. Expose collect_cycle() for the routine handler (task 281). Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: metrics.rs \u2014 LedgerEntry + collect_cycle (atomic temp+rename append, never rewrites history), read_ledger (corrupt lines skipped+counted), latest_entry, log_line (counts-only), count_restarts (Helix is running... marker), QmSummary lenient parser (missing/unparseable = qm_missing gap flag, blocks Phase 1). 7/7 new tests green (round-trip, missing/malformed sidecar gap, lenient partial sidecar, chatter-only fixture = 0 errors with 322685 total visible, no secret-shaped strings, log-line format). Ledger lives at rt/self_improve/ledger.jsonl per [self_improve] ledger_path. 2 dead-code warnings (runtime_dir/live_config) still pending 281 wiring.",
+      "id": 278,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "278.1",
+          "status": "done",
+          "title": "Ledger schema + atomic append/read"
+        },
+        {
+          "dependencies": [
+            "278.1"
+          ],
+          "id": "278.2",
+          "status": "done",
+          "title": "Collectors: routine outcomes, support-watch snapshot, filtered error-log counts, restart markers"
+        },
+        {
+          "dependencies": [
+            "278.1"
+          ],
+          "id": "278.3",
+          "status": "done",
+          "title": "QM-summary sidecar format + lenient parser + gap flag"
+        },
+        {
+          "dependencies": [
+            "278.2",
+            "278.3"
+          ],
+          "id": "278.4",
+          "status": "done",
+          "title": "Metadata-only tests (no bodies, no secret-shaped strings in entries)"
+        }
+      ],
+      "testStrategy": "Fixture tests: append/read round-trip; missing qm-summary yields a gap flag, no crash; malformed sidecar yields a gap flag; error-log fixture uses filtered counts (chatter-only = 0); a ledger entry built from fixtures containing fake tokens contains no secret-shaped strings (scanner assertion doubles as the metadata-only proof). cargo check --lib zero new warnings; full lib suite no new failures.",
+      "title": "Loop Phase 0: metrics ledger (append-only, metadata-only)"
+    },
+    {
+      "dependencies": [
+        278
+      ],
+      "description": "A per-cycle log line and a read-only GET endpoint mirroring the /support/status pattern, so John can see exactly what the loop sees.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nLog line per collection cycle: `self_improve: metrics ...` (counts only, metadata-only \u2014 same rule as task 278). New route GET /self_improve/status in src/io/web_server/mod.rs beside /support/status (route at :459, handler support_status ~:1973 at c7ecc41 is the pattern to copy), returning the latest ledger entry + current phase + kill-switch states + budget counters. DELIBERATE HARDENING vs /support/status: the new endpoint sits BEHIND require_web_token (src/io/web_server/mod.rs:521) \u2014 loop internals are not public. No mutating endpoints in this phase. Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: status_snapshot() in mod.rs (phase, enabled, kill_switches{config_enabled,stop_file_present,routine_enabled}, budgets{4 limits + proposals_open}, latest_ledger), GET /self_improve/status on the PROTECTED router (require_web_token middleware \u2014 deliberately hardened vs public /support/status), handler beside support_status. 1 new route test green (401 no token, 401 wrong token, 200 + full shape with a staged ledger cycle). SIDE EFFECT: the 2 dead-code warnings from 277 (runtime_dir/live_config) are now RESOLVED \u2014 status_snapshot consumes both \u2014 so cargo check --lib is back to zero warnings a task early (before 281). No mutating endpoints added.",
+      "id": 279,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "279.1",
+          "status": "done",
+          "title": "Cycle log line + latest-entry status snapshot fn"
+        },
+        {
+          "dependencies": [
+            "279.1"
+          ],
+          "id": "279.2",
+          "status": "done",
+          "title": "Token-gated GET /self_improve/status route + tests"
+        }
+      ],
+      "testStrategy": "Tests: endpoint returns the latest ledger entry JSON with the expected fields (phase, kill-switch states, budget counters); unauthenticated request is rejected 401 via middleware (mirror the task-242 eval #10 ops_reject_unauthenticated pattern); log-line format test on a fixture ledger. cargo check --lib zero new warnings; lib suite green; web-server route tests pass.",
+      "title": "Loop Phase 0: read-only status view (log line + token-gated endpoint)"
+    },
+    {
+      "dependencies": [
+        279
+      ],
+      "description": "Produce the one-week ledger export + gap detector; John reads it and agrees or corrects what 'normal' looks like. Phase 1 does not start until this passes.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nRanger 1: (1) run collection for 7 consecutive days with the routine enabled by John in collect mode (phase=0 \u2014 see task 281's seeding; the routine ships disabled, John enables it); (2) gap-detector check: one ledger entry per scheduled cycle, zero qm_missing gaps (or gaps explicitly explained); (3) export the week as a readable summary for John (per-metric normals: routine failure rate, watcher stats, filtered error counts, restarts). JOHN'S EYEBALL REQUIRED: John reads the export and confirms or corrects 'normal'; record his sign-off (date + note) in the task results. If the ledger has gaps, Phase 1 does not start \u2014 fix the collector and re-run the week. Update CHANGELOG.md.",
+      "id": 280,
+      "priority": "medium",
+      "status": "pending",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "280.1",
+          "status": "pending",
+          "title": "Gap detector + one-week export"
+        },
+        {
+          "dependencies": [
+            "280.1"
+          ],
+          "id": "280.2",
+          "status": "pending",
+          "title": "John's one-week ledger review (JOHN'S EYEBALL)"
+        }
+      ],
+      "testStrategy": "Gap detector exits 0 on a complete fixture week and non-zero on a fixture week with a missing day or a qm_missing entry; the export renders all 7 catalog rows; John's sign-off recorded in task results (human step, not automatable \u2014 flagged as John's eyeball).",
+      "title": "Loop Phase 0 GATE: one week of gap-free ledger data, John's review (JOHN'S EYEBALL)"
+    },
+    {
+      "dependencies": [
+        277,
+        278
+      ],
+      "description": "Seed the nightly self-improve routine (disabled by default) and its CPU handler: kill-switch checks first, phase gate, ledger read, worst-signature pick, one worker dispatch.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nSeed in default_routines() (src/cron/registry.rs:195+): id \"self-improve\", name \"Self-improvement loop\", schedule \"daily 03:30\" (off-hours; avoids 02:00 memory consolidation and 06:30 error_log_review), enabled=false (fail-closed \u2014 John enables via the existing routine toggle, cf. the mail_check precedent at registry.rs:225; the loop must never re-enable itself). The existing seed-merge path (load_or_seed, registry.rs:276-290: missing defaults are appended to existing routines.json files without touching John's choices) carries the routine to the R630's existing file \u2014 verify that pickup in a test with a pre-existing routines.json.\n\nHandler arm in handle_routine_run (src/cpu/mod.rs:436, beside the :445 support-mail-watch arm): (1) kill-switch checks FIRST (task 284's checks \u2014 the handler calls them; if tripped, log which condition and abort); (2) phase gate: phase 0 \u2192 collect-only (call collect_cycle, return, propose nothing); phase >= 1 \u2192 proceed; (3) read the ledger, pick the single worst failing signature under budgets (task 283's pre-check); (4) dispatch ONE worker sub-agent via dispatch_spawn (src/tools/subagent_tool.rs:362) with SpawnSpec{backend: draft backend per D3, role_hint: loop-worker, timeout_secs <= max_cycle_minutes*60}; (5) record the outcome.\n\nNON-GOAL GUARDRAIL (do not blur): the loop never invokes maybe_nightly_fix (src/cpu/mod.rs:745) or its paths. That separate John-granted nighttime autonomy is untouched by this build; the loop proposes only. Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: routine seed (self-improve, daily 03:30, enabled=false) in default_routines \u2014 existing load_or_seed merge carries it to older deployments untouched; CPU arm in handle_routine_run + routine_self_improve: kill switches FIRST, collect from live sources (counts only, never ErrorFindings.recent), ledger append + counts-only log line, phase-0 collect-only return, phase>=1 + failing signal dispatches EXACTLY ONE worker (SpawnSpec backend=draft_backend, role_hint=loop-worker, timeout=max_cycle_minutes*60). Never touches maybe_nightly_fix. 5 new tests green (2 registry: seeded-disabled + merge-pickup preserving John's choices; 3 CPU: phase-0 collects/proposes nothing, kill-tripped aborts before dispatch with empty registry, phase-1 on restart signal dispatches exactly one loop-worker). cargo check --lib zero warnings. SEQUENCING NOTE: the worker's tight allowlist + proposal record arrive in 282 and budget gating in 283; the 281 dispatch is real but unconstrained until 282 lands \u2014 safe because the routine ships disabled.",
+      "id": 281,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "281.1",
+          "status": "done",
+          "title": "Routine seed (disabled) + merge-pickup test"
+        },
+        {
+          "dependencies": [
+            "281.1"
+          ],
+          "id": "281.2",
+          "status": "done",
+          "title": "Handler arm + phase gate + single worker dispatch"
+        }
+      ],
+      "testStrategy": "Tests: handler with phase=0 collects and proposes nothing; kill-switch tripped aborts before dispatch (assert dispatch_spawn not called); seeded default routine is present with enabled=false; a pre-existing routines.json gains the routine via the merge path without touching existing choices; dispatch arm routes \"self-improve\" correctly. cargo check --lib zero new warnings; lib suite green.",
+      "title": "Loop Phase 1: self-improve routine + cycle handler (phase-gated)"
+    },
+    {
+      "dependencies": [
+        281
+      ],
+      "description": "The worker sub-agent's brief and tool allowlist, and the task-list-shaped proposal record with the mandatory trace field that enforces the spec's R3 rule.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nWorker brief (system-prompt text stored in code, versioned): role = propose-only loop worker. Allowed tools = read tools + worktree write tools + git-wrapper tools (Phase 2) + proposal-file write. FORBIDDEN: shell outside the worktree, send tools, live-tree tools, spawn_subagent (already absolute-excluded at src/persona.rs:246 \u2014 an allowlist can never re-add it). Enforce via the existing persona allowlist mechanism (src/persona.rs:243-292: frontmatter allowlist filtering at dispatch; unknown tools ignored with a warning; a zero-match allowlist is rejected).\n\nProposal record in the RUNTIME dir at rt_dir/self_improve/proposals.json \u2014 NOT the repo .zed/task_list.json (writing the repo's task list would be a live-tree write; the spec's 'task-list-shaped entries' means the shape, not the file). Fields: problem_statement, trace (failing test name OR metric key \u2014 REQUIRED), diff_description (Phase 1: description only, no branch yet), proving_test, signature, status (proposed), created_at, budget-check refs.\n\nR3 RULE (spec risk R3 \u2014 logs/messages/chat can carry planted instructions): a proposal whose rationale traces to message/log/chat content rather than a failing test or a metric is auto-rejected at intake. Implement trace validation: the trace must match a known failing test name (from ledger/QM data) or a known metric key; free-text 'someone said' traces are rejected. Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: worker.rs \u2014 LOOP_WORKER_TOOLS (8 read-only tools), filter_loop_worker_tools (intersect + fail-closed Err on zero match, spawn_subagent never re-addable), interposed in run_subagent for role loop-worker only; agents/loop-worker.md shipped in repo + ensure_loop_worker_persona seeds it into rt/agents/ (never overwrites John's edits); build_loop_brief moved from CPU handler into worker.rs. ProposalRecord + intake_proposal in rt/self_improve/proposals.json (NOT repo task list \u2014 live-tree write avoided) with R3 trace validation (exact metric key from latest ledger, exact known test name from prior proposals, or test-shaped name; free-text/missing/empty auto-rejected) and budget refs at intake. 7/7 worker tests + 3 CPU handler tests green, zero warnings. CLARIFICATIONS: (1) R3 'known test name' at intake is shape + prior-proposal membership \u2014 existence is verified by the Phase 2 evaluator running the test (intake cannot verify without running cargo); (2) Gemini draft path takes no tool definitions today, so on Gemini the binding constraint is brief+persona text while the filter still refuses zero-match spawns on any backend and fully binds the Ollama tool path; (3) budget refs count PRIOR proposals at intake (283's gate counts prior+1).",
+      "id": 282,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "282.1",
+          "status": "done",
+          "title": "Worker brief + allowlist enforcement"
+        },
+        {
+          "dependencies": [
+            "282.1"
+          ],
+          "id": "282.2",
+          "status": "done",
+          "title": "Proposal record + R3 trace validation at intake"
+        }
+      ],
+      "testStrategy": "Tests: allowlist filters to exactly the permitted set; spawn_subagent cannot be re-added via allowlist; proposal intake accepts a test-traced proposal and rejects a message-content-traced one; missing/empty trace rejected; proposals.json round-trip. cargo check --lib zero new warnings; lib suite green.",
+      "title": "Loop Phase 1: worker brief, tight allowlist, proposal record (R3 trace rule)"
+    },
+    {
+      "dependencies": [
+        281,
+        282
+      ],
+      "description": "Enforce the spec's budgets as code: 3 proposals/week, 1 open/signature, 60-min cycle, 500-line diff cap, 30-day declined / 7-day failed-eval cooldowns, dedupe by signature.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nNew file src/self_improve/budgets.rs: rolling 3-proposals/week counter (from proposals.json); 1-open-proposal-per-signature check (dedupe by failing test name / metric key); cycle wall-clock cap 60 min enforced via timeout around the worker dispatch (timeout \u2192 abandon worktree, record cycle_timeout, no partial proposal); 500-line diff cap \u2014 SPLIT ENFORCEMENT, stated explicitly so Ranger 1 does not invent a Phase 1 diff measurer: Phase 1 records a diff-size estimate field at intake, but the cap is enforced HARD in Phase 2's evaluator (task 287) where a real diff exists; cooldowns: declined \u2192 30 days, failed-eval \u2192 7 days without a changed failing signature (checked against proposals.json outcomes + timestamps); lesson recording via memory_continuity record_lesson / record_important_outcome (src/agents/memory_continuity.rs:88/105) for accepted/rejected shapes so repeat shapes stop. Any budget violation aborts the cycle with a logged reason \u2014 per spec, a cycle that violates a budget fails the PHASE, not just the cycle, so log it as phase_failure, never a quiet skip. Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: budgets.rs \u2014 check_proposal_allowed (weekly cap prior+1>=max, 1-open-per-signature dedupe, declined 30d cooldown, failed-eval 7d cooldown per-signature with changed-signature bypass), CycleDeadline (max_cycle_minutes), lesson/outcome recording via memory_continuity. Handler restructured (281-order refinement): ledger entry now written AFTER the worker completes so the cycle outcome (proposal:<sig> / phase_failure:<reason> / cycle_timeout / parse_failed) is recorded IN the entry; violations logged as phase_failure, never quiet skips; timeout abandons with no partial proposal. 5/5 budget unit tests green (4th-week blocked, 2nd-open blocked, declined 29d blocked/31d allowed, failed-eval 6d blocked/8d allowed + changed-sig bypass, deadline expiry) + 36 self-improve + 3 CPU handler tests green, zero warnings. DEVIATIONS: (1) cooldowns run from ProposalRecord.updated_at (status-change time, new field) not intake time \u2014 required for correct semantics; (2) lesson recording does NOT use Cpu.state \u2014 there are two AgentState types and Cpu.state is runtime counters, not the continuity type \u2014 so lessons go through a fresh unified AgentState + persist_memory_deltas into self.memory (task-206 pattern); (3) parse_worker_report added to worker.rs (Phase 1 path completion \u2014 without it the handler could never intake worker output); (4) 500-line cap NOT enforced here \u2014 recorded as estimate at intake, enforced hard in 287 per task details.",
+      "id": 283,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "283.1",
+          "status": "done",
+          "title": "Counters + dedupe + cooldowns"
+        },
+        {
+          "dependencies": [
+            "283.1"
+          ],
+          "id": "283.2",
+          "status": "done",
+          "title": "Cycle timeout + lesson recording"
+        }
+      ],
+      "testStrategy": "Tests: 4th proposal in a week blocked; second open proposal for the same signature blocked; declined signature re-proposed at 29 days blocked, at 31 days allowed; failed-eval at 6 days blocked, at 8 days allowed (unchanged signature); changed signature bypasses the failed-eval cooldown; cycle timeout abandons cleanly with no partial proposal. cargo check --lib zero new warnings; lib suite green.",
+      "title": "Loop Phase 1: budget, cooldown, and lesson engine (hard caps)"
+    },
+    {
+      "dependencies": [
+        277,
+        281
+      ],
+      "description": "Implement the spec's three independent kill mechanisms (D6, all confirmed) with logging of which condition stopped the cycle.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nChecks run at the TOP of every cycle handler invocation, before any work, and the handler calls them before the phase gate: (1) config [self_improve] enabled=false \u2192 abort; (2) SELF_IMPROVE_OFF stop file present in the runtime dir \u2192 abort before any work, with NO 'finish the current cycle' exception for cycles that would write outside the worktree (worktree writes in flight are abandoned with the worktree \u2014 implement the abort path to drop the worktree handle and run cleanup); (3) routine disabled via registry set_enabled (src/cron/registry.rs:322) \u2192 scheduler stops firing, and the handler re-checks enabled as belt-and-braces. Any ONE of the three suffices. Every abort logs WHICH condition stopped it (config / stop-file / routine-disabled) so John can tell a kill from a crash. Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: kill switch complete \u2014 check_kill_switches (config/stop-file/routine, in that order) + kill_abort_message (line always names the condition) in mod.rs, handler aborts before any work, main.rs sets self_improve runtime dir (completing 279's production wiring). 6 CPU handler tests (config-disabled, routine-disabled, stop-file aborts; mid-cycle stop aborts NEXT cycle with no proposal orphan; re-enable resumes) + 6 mod tests (3 mechanisms + all-clear + abort-message naming + read-only routines flag) green, zero warnings. SPEC READING: a stop file appearing DURING a cycle aborts the NEXT cycle \u2014 the in-flight cycle's handler-side intake stands (its worktree-write abandonment is 287's cleanup, since Phase 1 has no worktrees). Phase 0+1 committed in branch ranger-loop-277-291.",
+      "id": 284,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "284.1",
+          "status": "done",
+          "title": "Three checks + abort logging (which condition stopped it)"
+        },
+        {
+          "dependencies": [
+            "284.1"
+          ],
+          "id": "284.2",
+          "status": "done",
+          "title": "Mid-cycle abandon + worktree cleanup tests"
+        }
+      ],
+      "testStrategy": "Tests: each mechanism independently aborts a cycle (3 tests); the abort log names the condition; a stop file created mid-cycle aborts the NEXT cycle and in-flight worktree writes are abandoned (cleanup verified, no orphan); re-enabling all three resumes cycles. cargo check --lib zero new warnings; lib suite green.",
+      "title": "Loop Phase 1: kill switch \u2014 all three mechanisms, immediate"
+    },
+    {
+      "dependencies": [
+        280,
+        282,
+        283,
+        284
+      ],
+      "description": "Demonstrate Phase 1 acceptance: 2 consecutive weeks of nightly cycles, \u22643 proposals/week, zero live-tree writes, zero sends, zero budget exceptions, and at least one proposal John rates 'actually correct'.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nRanger 1: run the loop nightly for 2 consecutive weeks (phase=1, routine enabled by John). Collect evidence: cycle logs (kill-switch states, budget counters), proposals.json (\u22643/week), live-tree cleanliness proof (live checkout git status clean of loop files \u2014 the loop writes only the runtime dir + worktrees), send audit (bus-log grep for loop-origin sends = 0). JOHN'S EYEBALL REQUIRED: John reads the proposals and rates at least one 'actually correct' (quality bar, not volume); record his rating in the task results. A cycle that violates a budget fails the PHASE, not just the cycle \u2014 if that happens, fix and restart the 2-week clock. Update CHANGELOG.md.",
+      "id": 285,
+      "priority": "medium",
+      "status": "pending",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "285.1",
+          "status": "pending",
+          "title": "Two-week evidence collection (cycles, budgets, live-tree, sends)"
+        },
+        {
+          "dependencies": [
+            "285.1"
+          ],
+          "id": "285.2",
+          "status": "pending",
+          "title": "John's proposal-quality rating (JOHN'S EYEBALL)"
+        }
+      ],
+      "testStrategy": "Evidence checklist: proposals/week count from proposals.json \u22643; live-tree git status clean; send-audit grep empty; budget-violation log grep empty; John's 'actually correct' rating recorded (human step \u2014 flagged). Gate passes only if all checks are green AND John's rating is present.",
+      "title": "Loop Phase 1 GATE: two weeks of nightly cycles, zero violations, one correct proposal (JOHN'S EYEBALL)"
+    },
+    {
+      "dependencies": [
+        282
+      ],
+      "description": "The only git capability the loop may use: worktree add, branch, commit-in-worktree, branch -D. Everything else is rejected by construction (spec unknown U3, closed here).",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nNew file src/self_improve/git.rs: run git via std::process::Command (NO new git2 dependency \u2014 the allowlist stays auditable in one place) with an argv allowlist: `worktree add`, `branch`, `commit` (cwd forced to the worktree path, never the live checkout), `branch -D` (cleanup). Reject by construction BEFORE spawning: push, merge, checkout, reset --hard, fetch, pull, and any other subcommand; reject escape flags (--git-dir, --work-tree, -C pointing outside the worktree root, --upload-pack, etc.); sanitize env (unset GIT_ASKPASS, force -c credential.helper= so no credential helper can run). Worktree root: rt_dir/self_improve/worktrees/ (from task 277 config). This wrapper is itself security-sensitive: keep it small, fully tested, and reviewed as such. Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: git.rs \u2014 Command-based wrapper, no git2. validate_argv runs before EVERY spawn: escape flags rejected anywhere (-C, --git-dir, --work-tree, --upload-pack), subcommand allowlist, branch-name safety, '..' rejection. Env sanitized per spawn (GIT_ASKPASS/GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE/GIT_OBJECT_DIRECTORY/GIT_ALTERNATE_OBJECT_DIRECTORIES removed, credential.helper= forced, local-only commit identity). Typed methods: add_worktree, remove_worktree, create/delete_branch, add_files, commit. 4/4 fixture-repo tests green (end-to-end add->commit->delete with live branch untouched; 20-case rejection table with no side effects; path/cwd escapes; env sanitization), zero warnings. DEVIATIONS (all minimal, documented in code): (1) 'add' allowed with strict in-worktree path validation \u2014 without it new-file diffs could never be committed (commit -a covers tracked modifications only); (2) 'worktree remove --force' allowed \u2014 cleanup requires remove-then-delete ordering (git refuses branch -D while a worktree holds the branch); (3) branch ops run with cwd=repo (ref-only, never working-tree files) because after worktree removal no worktree cwd exists \u2014 commit/add stay pinned to the worktree, never the live checkout. Test fix: raw test git helper strips hostile env vars so the parallel env test cannot pollute fixtures.",
+      "id": 286,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "286.1",
+          "status": "done",
+          "title": "Wrapper + argv allowlist + env sanitization"
+        },
+        {
+          "dependencies": [
+            "286.1"
+          ],
+          "id": "286.2",
+          "status": "done",
+          "title": "Rejection tests (every forbidden op fails closed, no side effect)"
+        }
+      ],
+      "testStrategy": "Tests on a fixture repo: allowed ops succeed end-to-end (add \u2192 commit \u2192 delete); EACH rejected op (push, merge, checkout, reset --hard, fetch, pull, -C escape, --git-dir escape) fails closed with no side effect (assert the fixture repo is unchanged and no git process with the rejected argv was spawned \u2014 assert on the wrapper's error path, not on git's own refusal); cwd-escape attempt rejected. cargo check --lib zero new warnings; lib suite green.",
+      "title": "Loop Phase 2: narrow git wrapper (allowlist, not denylist)"
+    },
+    {
+      "dependencies": [
+        281,
+        282,
+        286
+      ],
+      "description": "One proposal at a time: disposable worktree at PreRelese tip, apply the diff, run the bounded subset + approved eval set, write the eval report, clean up. Promotion is gated on John's approved eval set (D5).",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nNew file src/self_improve/evaluator.rs: for ONE proposal at a time (max 1 worktree alive \u2014 enforced with a lock file + sweep): create a worktree at origin/PreRelese tip via the task-286 wrapper; apply the worker's diff (the worker now writes a real diff, still only inside the worktree); run the bounded subset \u2014 `cargo test --lib` for the modules touched by the diff (module list derived from diff paths) PLUS the approved eval set via the task-242 harness (tests/evals.rs, evals/eval-set.md); write the eval report (pass/fail per test, diff stat, runtime) into the proposal record; delete the worktree after evaluation plus a 24h orphan sweep (stale worktree dirs removed, logged).\n\nD5 GATE (explicit, do not soften): the evaluator reads [self_improve] eval_set_approved (default false \u2014 task 242's set is DRAFT, John's approval pending). If false, it still runs the subset but marks the proposal promoted=false with reason \"eval-set-not-approved\" and NEVER promotes. If true, promotion requires the full eval set green. The 500-line diff cap (task 283) is enforced HARD here: diff > 500 lines \u2192 rejected with reason, no eval run. Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: evaluator.rs \u2014 evaluate_proposal(repo, rt_dir, cfg, proposal, diff_files, runner, now): pre-eval rejections (empty diff, >500 new-content lines, no worktree/test run), max-1 lock (.eval.lock, 24h-stale replacement), worktree add -> whole-file diff apply (path escapes rejected) -> add+commit via 286 wrapper -> bounded subset per touched module (filter derivation src/x.rs->x::y, mod.rs->parent, non-lib->full suite fallback) -> D5 gate (closed: skip eval set, promoted=false eval-set-not-approved even on green; open: subset+eval green promotes) -> record update (status evaluated/eval-failed, promoted, reason, full report JSON) + upsert + remove-then-delete cleanup + lock drop. TestRunner trait, RealRunner (cargo in worktree, parses test ok/FAILED lines), FakeRunner for tests. 9/9 tests green (green end-to-end with diff stat + cleanup + branch deletion, failing subset, gate-closed never promotes, gate-open promotes, over-cap pre-eval, max-1 refusal, orphan sweep, path escape), zero warnings. NOTES: (1) ProposalRecord gained eval fields (serde defaults, Phase 1 records still parse) + upsert_proposal; open statuses extended with evaluated + needs-human-review; (2) diff format is whole-file writes (git apply excluded from 286 allowlist \u2014 adding it would violate 286); (3) RealRunner builds from scratch in fresh worktrees (minutes) \u2014 correct but heavy, bounded handler-side by cycle budget; (4) GAP: no task in 277-291 wires a Phase 2 per-cycle handler arm that calls evaluate_proposal \u2014 the component is complete and tested, the cycle wiring is flagged as follow-up.",
+      "id": 287,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "287.1",
+          "status": "done",
+          "title": "Worktree lifecycle + diff apply"
+        },
+        {
+          "dependencies": [
+            "287.1"
+          ],
+          "id": "287.2",
+          "status": "done",
+          "title": "Bounded tests + eval-set run + eval report"
+        },
+        {
+          "dependencies": [
+            "287.2"
+          ],
+          "id": "287.3",
+          "status": "done",
+          "title": "D5 gate + 500-line cap + cleanup sweep"
+        }
+      ],
+      "testStrategy": "Tests: fixture proposal evaluates green end-to-end with a correct report; a deliberately failing touched-module test yields a fail report; gate-closed (eval_set_approved=false) never promotes even on green; diff > 500 lines rejected pre-eval; worktree cleanup verified (no dir remains after eval; 24h sweep removes a planted stale dir); max-1-worktree enforced (a second eval while one is alive is refused). cargo check --lib zero new warnings; lib suite green.",
+      "title": "Loop Phase 2: worktree evaluator (bounded tests + eval gate, D5-GATED)"
+    },
+    {
+      "dependencies": [
+        287
+      ],
+      "description": "Scan every proposal diff for secret-shaped strings (metadata-only, task-265 pattern) and enforce the spec's sensitive-path list with needs-human-review.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nNew file src/self_improve/audit.rs: scan the DIFF (not the whole repo) for secret-shaped strings using the task-265 metadata-only pattern \u2014 log keys/paths/counts, NEVER values. The audit report records file + line count + pattern class only; the offending value is never copied into any log, report, branch, or task entry. ANY hit blocks the proposal and raises a metadata-only alert for John.\n\nSensitive-path list EXACTLY as specced (D4 confirmed as-is, no additions or removals): src/security.rs, src/tools/shell_security.rs, src/tools/shell_tool.rs, src/config/shell.rs; src/io/web_server/mod.rs auth middleware (require_web_token) and /ops/* handlers; src/support_watch/ auto-send policy and draft/send paths; token/credential handling anywhere (path or content matching token|auth_token|secret in code or config handling); src/cron/registry.rs and src/cpu/mod.rs routine dispatch. A diff touching any sensitive path \u2192 status needs-human-review, stops here: no eval pass counts for it, it never reaches Phase 3, and John must open any PR himself after reading it. Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: audit.rs \u2014 audit_diff over diff files only: secret-value scan (github-token, api-key, bearer-token, private-key, password/secret/api-key assignments; hand-rolled shapes, no regex dep) aggregated per file per class, metadata-only (file + line count + class, NEVER values); sensitive-path matcher for the exact D4 list (6 exact paths, web-auth-surface file rule, support_watch draft/send/auto_send rule, token/secret/auth path + word-boundary credential-content rule, registry/cpu dispatch paths). apply_audit_status: secrets -> blocked (not open, retry allowed), sensitive -> needs-human-review (open, blocks duplicates until John resolves). alert_line metadata-only. 4/4 tests green (fixture secrets blocked + no fixture value in report or alert, clean diff passes, all 11 sensitive classes flagged, needs-human-review stub test for the 290 gate \u2014 TODO(290) to replace with a gate-level test + re-run). Phase 2 committed in branch.",
+      "id": 288,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "288.1",
+          "status": "done",
+          "title": "Metadata-only secret scanner + block + alert"
+        },
+        {
+          "dependencies": [
+            "288.1"
+          ],
+          "id": "288.2",
+          "status": "done",
+          "title": "Sensitive-path matcher + needs-human-review stop"
+        }
+      ],
+      "testStrategy": "Tests: fixture diffs with fake tokens/keys/secrets (fixture values only, never real) are blocked AND the report contains no fixture value; a clean diff passes; a diff touching each sensitive-path class is flagged needs-human-review (parameterized test); a needs-human-review diff never reaches the PR step (integration test against the Phase 3 gate fn \u2014 stubbed until task 290 lands, then re-run). cargo check --lib zero new warnings; lib suite green.",
+      "title": "Loop Phase 2: secrets audit (metadata-only) + sensitive-path enforcement"
+    },
+    {
+      "dependencies": [
+        285,
+        287,
+        288
+      ],
+      "description": "Demonstrate Phase 2 acceptance: 5 evaluated proposals with correct reports, worktree cleanup verified, zero live-tree modifications, approved eval set passing for every promoted proposal.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nRanger 1: evaluate 5 real proposals end-to-end. JOHN SPOT-CHECKS each eval report against a manual run (his eyeball \u2014 record his confirmation per proposal in the task results). Verify worktree cleanup (no orphan worktree dirs 24h after each eval \u2014 sweep logs). Prove zero live-tree modifications (live checkout git status clean of loop files across all 5 evals). Every promoted proposal must have the approved eval set green \u2014 IF D5 approval is still pending, this gate CANNOT pass: record that explicitly (gate stays open until John approves the task-242 set or a replacement, even if the 5 reports are otherwise correct). Update CHANGELOG.md.",
+      "id": 289,
+      "priority": "medium",
+      "status": "pending",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "289.1",
+          "status": "pending",
+          "title": "Five evaluations + John's spot-checks (JOHN'S EYEBALL)"
+        },
+        {
+          "dependencies": [
+            "289.1"
+          ],
+          "id": "289.2",
+          "status": "pending",
+          "title": "Cleanup + live-tree proof (+ D5 status record)"
+        }
+      ],
+      "testStrategy": "Checklist: 5 eval reports present and John-confirmed; orphan-sweep logs show no leftovers; live-tree git status clean; promoted proposals all show eval-set green (or the gate is recorded as blocked-on-D5). Gate passes only with all checks green AND John's spot-check confirmations.",
+      "title": "Loop Phase 2 GATE: 5 evaluated proposals, cleanup verified, zero live-tree mods (JOHN'S EYEBALL)"
+    },
+    {
+      "dependencies": [
+        289
+      ],
+      "description": "Build the PR-opening path (branch \u2192 PreRelese, eval report in body, self-improve label, QM-regression withdrawal) with runtime PR-opening default OFF per the D1 decision.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nNew file src/self_improve/pr.rs: open a PR to PreRelese ONLY (target-branch allowlist = [\"PreRelese\"] \u2014 master rejected by construction, as is any other target). PR body = full eval report + diff stat + budget/cooldown refs; label `self-improve`. Preconditions checked in code before any open: Phase 2 eval gate passed in full (bounded subset + approved eval set + secrets audit clean \u2014 task 288's audit must be clean, not merely absent), AND [self_improve] pr_opening=true (D1 RUNTIME \u2014 default false: when false, the path is a queue-only no-op that logs \"pr-opening-disabled\" and leaves the proposal queued; opening requires John's explicit decision to flip the flag, recorded separately). Sensitive-path proposals are NEVER opened by the loop (needs-human-review \u2192 queue-only forever; John opens manually).\n\nQM-regression withdrawal: a loop PR flagged as a regression by the external Quartermaster is commented + closed by the loop itself (closing its own PR is allowed; merging is not). Implement close via the GitHub connector path the nightly diagram updater already uses for PR creation \u2014 Ranger 1 MUST verify the connector's close capability during build and record the outcome; if close-via-API is unavailable, withdrawal = mark the proposal withdrawn + post the regression note via the available path, and John closes. Update CHANGELOG.md.\n\nRANGER 1 RESULT: RANGER 1: pr.rs \u2014 PrPayload (title/body/head/target/labels/signature; body carries eval report per-test results + diff stat + runtime + intake budget refs), target allowlist [PreRelese] only (master rejected by construction), phase3_gate in order (D1 flag -> audit -> eval gate -> D5 currently-open), QueueBackend (pr_queue.jsonl append, no GitHub call in-crate), request_pr_open (disabled logs pr-opening-disabled, zero backend calls, proposal stays evaluated; green opens once + status queued), withdraw_proposal (backend close + withdrawn + regression note; QueueBackend queues a close action for the consumer). CONNECTOR CHECK (live list-tools 2026-10-28, 46 tools): create_pull_request EXISTS, update_pull_request with state open/closed EXISTS (the close path), merge_pull_request exists and is NEVER called by the loop. 7/7 tests green (disabled zero-call, green payload shape, master rejected, needs-human-review never opened \u2014 the 288 stub test's gate-level replacement, re-run green \u2014 4 incomplete-gate shapes blocked, withdrawal close+note+persist, queue open+close entries), zero warnings. DEVIATION from 289 dependency: built per parent's explicit order while gate 289 stays pending (recorded, not passed). Also fixed evaluator eval_passed (was left false) + ProposalRecord.notes field for withdrawal notes.",
+      "id": 290,
+      "priority": "medium",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "290.1",
+          "status": "done",
+          "title": "PR payload + target allowlist + pr_opening flag"
+        },
+        {
+          "dependencies": [
+            "290.1"
+          ],
+          "id": "290.2",
+          "status": "done",
+          "title": "QM-regression withdrawal (close-only)"
+        }
+      ],
+      "testStrategy": "Tests: pr_opening=false yields no PR attempt (assert no connector call) and the proposal stays queued; pr_opening=true + full gate green yields a correct PR payload (target PreRelese, body contains the eval report, label set); master target rejected; needs-human-review never opened; incomplete gate (missing eval set or dirty audit) blocks opening; withdrawal path closes (or marks withdrawn per the connector capability found). cargo check --lib zero new warnings; lib suite green.",
+      "title": "Loop Phase 3: PR-opening code path (default OFF, queue-only)"
+    },
+    {
+      "dependencies": [
+        290
+      ],
+      "description": "Demonstrate Phase 3 acceptance: 3 loop PRs opened with complete eval reports, zero merges by the loop, zero PRs to master, zero sensitive-path PRs, John merges or declines each on the PR evidence alone.",
+      "details": "HARD RULES (loop spec, non-negotiable \u2014 violation fails the task): the loop never merges, never pushes to master, never restarts the service, never writes the live tree or live config, never sends outbound mail/chat.\n\nREQUIRES JOHN'S D1 RUNTIME DECISION FIRST: until John explicitly allows runtime PR-opening (flips [self_improve] pr_opening), this gate is unpassable BY DESIGN and Phase 3 stays queue-only \u2014 record that state, do not work around it. Once enabled: open 3 loop PRs from fully-gated branches; verify zero merges by the loop (merge log / PR history), zero PRs to master, zero sensitive-path PRs. JOHN'S EYEBALL: John merges or declines each PR on the evidence in the PR alone (no side-channel explanation) and records his verdict per PR in the task results. Update CHANGELOG.md.",
+      "id": 291,
+      "priority": "medium",
+      "status": "pending",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": "291.1",
+          "status": "pending",
+          "title": "D1 runtime enablement decision (JOHN'S DECISION \u2014 gate)"
+        },
+        {
+          "dependencies": [
+            "291.1"
+          ],
+          "id": "291.2",
+          "status": "pending",
+          "title": "Three PRs + John's merge/decline verdicts (JOHN'S EYEBALL)"
+        }
+      ],
+      "testStrategy": "Checklist: 3 PRs with complete eval reports in bodies; merge audit empty for the loop actor; target-branch audit shows PreRelese only; sensitive-path audit empty; John's per-PR verdicts recorded (human steps \u2014 flagged). Gate passes only with all checks green AND John's verdicts.",
+      "title": "Loop Phase 3 GATE: 3 loop PRs on PR evidence alone (requires D1 runtime enable \u2014 JOHN'S DECISION)"
+    },
+    {
+      "dependencies": [],
+      "description": "Nightly error-log review alerts (5366, then 7021 error lines) are dominated by false positives, and the nightly fixer amplifies them. Oct 30 breakdown on the R630 (the .helix/logs/error_log.md file, 9749 marker-matching lines): 5650 [AgentState] HALTED lines (agent-run termination, not failure), 2979 self_improve metrics lines (match via the routine_failed substring even at routine_failed=0), 1119 nightly fix attempt report lines (quote old ERROR/HALTED lines, re-counted nightly), 1 CPU line. Causal chain Oct 30 (UTC log time): 06:30 review reports 7021, fixer activity 06:35-06:56 logs 6099 HALTED lines in hour 06, next review counts those too, so alerts grow night over night. Open sub-question: why about 6099 agent terminations in one hour when the fixer is bounded to 2 errors times 8 steps.",
+      "details": "293.1 Reproduce with fixtures: sample log containing a bare [AgentState] HALTED: Terminal step reached line, a self_improve metrics line with routine_failed=0, a nightly fix attempt line quoting an old ERROR, a genuine ERROR: failure line, and a genuine Failed line. Assert only the genuine lines count. 293.2 Counting exclusions in check_error_logs: skip bare HALTED termination lines (a run ending is not a failure; keep HALTED lines that carry a failure context if any exist), skip self_improve metrics lines, and skip nightly-fix-attempt report lines. Prefer explicit prefix exclusions over changing the marker list, so genuine ERROR:/Failed lines still count. 293.3 Fixer input and volume: maybe_nightly_fix must receive only actionable findings (exclude the three categories above) so it stops chasing terminations and telemetry. Investigate why hour 06 on Oct 30 produced about 6099 HALTED lines against the 2-error by 8-step bound (agent per step, sub-agents, unbounded loop?) and bound it if it is a runaway. 293.4 Rotation check: the log sat at 101,005 lines on Oct 31, over the 100,000-line rotation cap. Verify rotation fires during the nightly review; fix or report if it does not. 293.5 CHANGELOG plus live proof: after deploy to the R630, run the clear endpoint as the live drill still open from task 276, then confirm the next nightly review is quiet or shows only genuine errors. Results (2026-10-31, Ranger 1, branch ranger-293-error-log): prefix exclusions in is_counted_error_line (metrics lines, fix-attempt quotes, benign HALTED reasons Terminal step reached / test termination); other HALTED reasons still count. Fixer input filtering achieved via counting (recent is built from counted lines only) with no separate fixer change. Volume: no runaway proven (all RuntimeLoop drivers single-run-per-call, loop bounded, burst time-boxed to one hour) so no new bound added. Rotation: no code change, 101,005 reading is cap-plus-regrowth per the function's documented worst case. Verified: error-log tests 8/8, full lib 514/0/4 (baseline 513/0/4 + 1), check --lib zero warnings, check --bin helix clean. No merge, no deploy. Remaining for John after deploy: clear-endpoint live drill (open from 276) plus next-nightly-review check; rotation live check is .prev existence / (rotated ...) report line.",
+      "id": 293,
+      "priority": "medium",
+      "status": "done",
+      "subtasks": [
+        {
+          "id": "293.1",
+          "status": "done",
+          "title": "Fixture reproduction of the three false-positive categories"
+        },
+        {
+          "id": "293.2",
+          "status": "done",
+          "title": "Counting exclusions in check_error_logs"
+        },
+        {
+          "id": "293.3",
+          "status": "done",
+          "title": "Fixer input filtering and HALTED-volume investigation"
+        },
+        {
+          "id": "293.4",
+          "status": "done",
+          "title": "Rotation-over-cap verification"
+        },
+        {
+          "id": "293.5",
+          "status": "done",
+          "title": "CHANGELOG and live drill (clear endpoint plus next nightly review)"
+        }
+      ],
+      "testStrategy": "New fixture tests green (only genuine lines count). Full lib suite at baseline (513 passed, 0 failed, 4 ignored) or better. cargo check --lib zero warnings and cargo check --bin helix clean (bin-target bar from Oct 28). Live drill: post-deploy nightly review count drops to genuine errors only.",
+      "title": "Error-log review counts agent terminations, metrics lines, and fixer reports as errors"
+    },
+    {
+      "id": 294,
+      "title": "Fix parallel-run race in tool_definitions cache-count tests (BUILD_COUNT)",
+      "description": "Nightly Quartermaster 2026-11-01: `cargo test --lib` on PreRelese 98dd072 fails under default parallel execution, a different cache-count test each run, while the single-threaded suite is fully green (514 passed / 0 failed / 4 ignored). Root cause is a real double-build race in tool_definitions() plus unlocked test callers (see details). Fix the production single-flight bug and the test isolation so the default parallel run is green. Start from a fresh PreRelese pull on a new branch (NOT the local ranger-275-voice-tuning checkout); PR against PreRelese, never master, no force-push, push only on John's approval.",
+      "status": "in_progress",
+      "dependencies": [],
+      "priority": "high",
+      "details": "FAILURE EVIDENCE. Run 2 (clean full parallel run, exit 101): 'test result: FAILED. 513 passed; 1 failed; 4 ignored' with tools::tests::invalidation_triggers_rebuild panicking at src/tools/mod.rs:678: 'assertion left == right failed: invalidation must trigger exactly one rebuild, left: 2, right: 1'. Run 1 (truncated by a VM reboot mid-suite, but the failure line predates the reboot) failed the sibling test tools::tests::tool_definitions_excluding_uses_cache instead; that test passes in isolation (1/1 ok). Single-threaded full suite: 514 passed / 0 failed / 4 ignored (suite total 518 = prior baseline 517 + 1 new test from PR #35). RULED OUT: (1) NOT a PR #35 regression (it touches error-log review, not the tools cache). (2) NOT a product-code regression in tool_definitions content (single-threaded green, failing test green alone). (3) NOT the reboot (run 2 reproduced cleanly after it).\n\nREFINED MECHANISM (Surveyor 1, 2026-11-01, from reading the code \u2014 not a guess). TWO windows, either suffices for count==2, which is why a different count test fails each run:\n(a) DOUBLE-BUILD ON A SHARED CACHE MISS \u2014 a genuine production bug, not just a test artifact. src/tools/mod.rs:544-562 tool_definitions(): fast path takes definitions_cache().read(), drops it, builds, then takes .write() to store. Two threads that both miss the cache build concurrently, and BOTH execute the #[cfg(test)] BUILD_COUNT.fetch_add (mod.rs:558). So any locked count test that invalidates and rebuilds while an unlocked test hits the same empty cache can observe 2. Production impact today is wasted work (and a double MCP bridge fetch when MCP is enabled); content stays correct because last-writer-wins with identical input.\n(b) UNLOCKED CALLERS RACING THE LOCKED COUNT TESTS. The three BUILD_COUNT tests (mod.rs:649 cached_definitions_build_once_across_calls, :672 invalidation_triggers_rebuild, :688 tool_definitions_excluding_uses_cache) all hold test_env_lock (src/tools/subagent_tool.rs:591), so they serialize against EACH OTHER \u2014 but the lock only helps holders. Tests that call tool_definitions()/tool_definitions_excluding() WITHOUT the lock: src/tools/mod.rs test_tool_definitions_stable_across_calls (:742), test_tool_definitions_is_array (:753), test_scan_projects_tool_is_registered_in_definitions (:808), test_tool_definitions_includes_project_scanner_tools; src/tools/subagent_tool.rs schema_registered_and_execute_dispatched (:656, calls both tool_definitions() and tool_definitions_excluding()). Any of these landing in a count test's invalidate->reset->build->load window inflates the count. Locked invalidators are NOT the culprits on their own: src/mcp_client/mod.rs:308-311, src/acp/agent.rs:280, src/a2a/a2a_handler.rs:402 all run under test_env_lock (via disabled_test_config / hermetic_mcp_disabled); production invalidate sites src/okf/mod.rs:63,302 are not exercised by unlocked tests (only web-server startup calls set_global_librarian). Ranger must still re-audit: grep all test modules for tool_definitions / tool_definitions_excluding / execute / spawn_subagent callers (also check src/persona.rs, src/io/llm_gemini/mod.rs, src/io/ollama/mod.rs, src/acp/tools.rs, src/support_watch) and lock any found unlocked.\n\nSCOPE GUARD: cache-test race ONLY. Do NOT touch task 262 (installer include_str) or task 273 (unused imports) scope. Baseline to preserve: cargo check --lib zero warnings; cargo check --tests exit 101 baseline-identical (only the known 262 errors + 2x 273 warnings); JS voice-tuning test 9/9.\n\nRANGER AUDIT 2026-11-03 (294.1, code inspection + grep; repro loop running separately).\nUNLOCKED test callers of tool_definitions()/excluding() (window b) \u2014 to be locked in 294.3:\n1) src/tools/mod.rs tests: test_tool_definitions_stable_across_calls, test_tool_definitions_is_array, test_scan_projects_tool_is_registered_in_definitions, test_tool_definitions_includes_project_scanner_tools.\n2) src/tools/subagent_tool.rs test: schema_registered_and_execute_dispatched (calls both tool_definitions() and tool_definitions_excluding()).\n3) src/persona.rs tests (via subagent_tool_definitions() / tool_definitions_excluding()): unknown_tool_names_warned_and_ignored, empty_after_filter_falls_back_to_full_set, spawn_subagent_never_allowlisted.\nVERIFIED LOCKED: mcp_client disabled_test_config() acquires test_env_lock; acp/agent.rs + a2a/a2a_handler.rs hermetic_mcp_disabled() acquire test_env_lock (and invalidate under it); all other subagent_tool.rs tests hold _tl.\nRULED OUT as racing partners: execute(\"list_tools\") returns a static string (no tool_definitions call), so the execute() tests in mod.rs are not partners; llm_gemini gemini_function_declarations, ollama default_tools, acp/tools catalog fn are production-only with zero test callers; web_server tests use the MCP override, not the tools cache; support_watch has no hits; okf invalidate sites are production-only; no test calls execute(\"spawn_subagent\") directly.\nPRODUCTION FIX AUDIT (294.2): mcp_client::tool_definitions() never calls back into tools::tool_definitions and never takes the definitions_cache lock (test override mutex / TokioMutex manager lock only; disabled in test env so no bridge runs); build_tool_definitions() uses okf try_lock (non-blocking); invalidate is never called from build \u2014 holding the definitions_cache write lock across check->build->store introduces no deadlock cycle.",
+      "testStrategy": "1) Re-baseline on the fresh PreRelese tip (suite total may have moved past 518 since 98dd072). 2) `cargo test --lib` (default parallel) 3 times consecutively: all green with 0 failed and the re-baselined pass count each time. 3) Single-threaded `cargo test --lib -- --test-threads=1` green. 4) New/kept concurrent cache-miss regression test (subtask 294.2) green under parallel runs. 5) `cargo check --lib` zero warnings and `cargo check --tests` still baseline-identical (only known 262/273 issues, no new errors).",
+      "subtasks": [
+        {
+          "id": "294.1",
+          "status": "in_progress",
+          "title": "Reproduce + audit: loop parallel runs; enumerate every unlocked tool_definitions() caller",
+          "details": "On a fresh PreRelese pull + new branch (e.g. ranger-294-cache-race): run `cargo test --lib` in a loop (up to 5x), recording which count test fails each time (flaky \u2014 non-reproduction in 5 runs does NOT clear the race; the code inspection in task details already proves the double-build window). Also run `cargo test --lib tools::` in a loop. Audit: grep test modules for tool_definitions/tool_definitions_excluding/execute/spawn_subagent callers and record which lack test_env_lock (starting list in task details; check persona, llm_gemini, ollama, acp/tools, support_watch too). Acceptance: a written list of racing partners + either a reproduced failure or a note that reproduction was skipped after N loop runs with the mechanism still standing on code inspection."
+        },
+        {
+          "id": "294.2",
+          "status": "pending",
+          "title": "Deterministic repro + production single-flight fix in tool_definitions()",
+          "details": "First write a deterministic repro (keep it as the regression test if stable): a test that, under test_env_lock, invalidates, resets BUILD_COUNT, spawns N threads calling tool_definitions() concurrently, joins them, and asserts BUILD_COUNT == 1 \u2014 this must FAIL before the fix and PASS after. Then fix src/tools/mod.rs tool_definitions() (:544-562): hold definitions_cache().write() across check -> build -> store (single-flight), with BUILD_COUNT incremented only on the stored build; the read-lock fast path for cache hits stays. Before landing, audit for re-entrancy/deadlock: build_tool_definitions() (:584) calls okf get_global_librarian().try_lock() and mcp_client::tool_definitions() (bridge/block_in_place, :212) \u2014 neither takes the definitions_cache write lock, and invalidate_tool_definitions() is never called from build, so holding the write lock across build must not deadlock; if the MCP-bridge-under-write-lock audit finds a real problem, fall back to build-outside + re-check under write lock and discard the loser (count only the stored build). Acceptance: repro test fails pre-fix, passes post-fix; no behavior change to cached content (existing content-equality tests still pass)."
+        },
+        {
+          "id": "294.3",
+          "status": "pending",
+          "title": "Lock the unlocked test callers found in 294.1 (test-only change)",
+          "details": "Add `let _tl = crate::tools::subagent_tool::test_env_lock();` at the top of every test found in 294.1 that calls tool_definitions()/tool_definitions_excluding() (or a path reaching them) without holding it \u2014 at minimum the tools/mod.rs and subagent_tool.rs tests listed in task details. This closes window (b) for future tests too; it is a complement to 294.2, not a substitute (lock discipline already failed once \u2014 the production single-flight fix is what makes the count robust). Do not refactor unrelated tests. Acceptance: grep shows zero remaining unlocked tool_definitions() callers in test modules, or each remainder is justified in the PR description."
+        },
+        {
+          "id": "294.4",
+          "status": "pending",
+          "title": "Verify: 3x parallel green, single-threaded green, checks at baseline; PR to PreRelese",
+          "details": "Run: `cargo test --lib` 3x consecutively (default parallel, all green at re-baselined counts); `cargo test --lib -- --test-threads=1` green; `cargo test --lib tools::` 3x green; `cargo check --lib` zero warnings; `cargo check --tests` baseline-identical (only known 262/273 issues). Prepare a PR against PreRelese (never master, no force-push) with the mechanism, the fix, and the audit list in its description; push/PR only on John's approval per standing Quartermaster rules. Acceptance: all verification runs green and the PR is ready (or merged on his tap)."
         }
       ]
     }
