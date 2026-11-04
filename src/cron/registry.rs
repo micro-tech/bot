@@ -247,6 +247,24 @@ fn default_routines() -> Vec<Routine> {
             task: String::new(),
             backend: default_routine_backend(),
         },
+        // Task 295 (chat-command loop): the chat-hub command watch.
+        // Fires every minute; the chat_command state machine inside
+        // decides what (if anything) to execute. Empty agent_role/task:
+        // handled in-process by the CPU, no LLM is ever spawned just
+        // to poll. Ships DISABLED — John enables it after reviewing
+        // the [chat_command] config (fail-closed: empty allowed_senders
+        // executes nothing even when enabled).
+        Routine {
+            id: "chat-command-watch".to_string(),
+            name: "Chat command watch".to_string(),
+            schedule: "every 1m".to_string(),
+            enabled: false,
+            last_run_ms: None,
+            next_run_ms: None,
+            agent_role: String::new(),
+            task: String::new(),
+            backend: default_routine_backend(),
+        },
         // Task 281 (self-improving loop, Phase 1): one nightly cycle.
         // Ships DISABLED — John enables it when Phase 0's ledger has a
         // gap-free week (gate 280). Empty agent_role/task: handled by
@@ -774,6 +792,50 @@ mod registry_tests {
     }
 
     #[test]
+    fn seeded_chat_command_watch_exists_disabled() {
+        // Task 295: the chat-command loop tick is seeded, DISABLED,
+        // every 1m, with NO agent payload (in-process handler, no LLM
+        // for polling). John enables it after reviewing [chat_command].
+        let routines = default_routines();
+        let w = routines
+            .iter()
+            .find(|r| r.id == "chat-command-watch")
+            .expect("chat-command-watch seed");
+        assert!(!w.enabled, "chat-command loop ships disabled (fail-closed)");
+        assert_eq!(w.schedule, "every 1m");
+        assert!(!w.has_agent_job(), "watch must not spawn an LLM to poll");
+    }
+
+    #[test]
+    fn load_merges_chat_command_watch_into_existing_file() {
+        // Task 295: a routines file seeded by an older binary gains
+        // the chat-command seed on load; existing entries keep their
+        // settings (including a disabled choice).
+        let path = tmp_path("merge_chat_command.json");
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(
+            &path,
+            r#"[{"id":"nightly_memory_consolidation","name":"N","schedule":"daily 02:00","enabled":false}]"#,
+        )
+        .unwrap();
+        let reg = RoutineRegistry::load_or_seed(path.clone());
+        let w = reg
+            .list()
+            .iter()
+            .find(|r| r.id == "chat-command-watch")
+            .expect("new default merged in");
+        assert!(!w.enabled);
+        assert_eq!(w.schedule, "every 1m");
+        let n = reg
+            .list()
+            .iter()
+            .find(|r| r.id == "nightly_memory_consolidation")
+            .unwrap();
+        assert!(!n.enabled, "existing disabled choice untouched");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
     fn parse_daily_rejects_bad() {
         assert!(parse_schedule("daily 25:00").is_err());
         assert!(parse_schedule("daily 02:60").is_err());
@@ -876,11 +938,18 @@ mod registry_tests {
         assert!(ids.contains(&"error_log_review"));
         // Task 216: the mail_check example ships DISABLED (John enables it when
         // he wants the agent watching mail); task 281: self-improve ships
-        // DISABLED (John enables it after gate 280). Everything else ships enabled.
+        // DISABLED (John enables it after gate 280); task 295:
+        // chat-command-watch ships DISABLED (John enables it after
+        // reviewing the [chat_command] config — fail-closed, since an
+        // enabled loop with an empty allowed_senders list would still
+        // be one config edit away from executing). Everything else
+        // ships enabled.
         assert!(reg
             .list()
             .iter()
-            .filter(|r| r.id != "mail_check" && r.id != "self-improve")
+            .filter(|r| r.id != "mail_check"
+                && r.id != "self-improve"
+                && r.id != "chat-command-watch")
             .all(|r| r.enabled));
         assert!(reg.list().iter().all(|r| r.next_run_ms.is_some()));
         assert!(path.exists());

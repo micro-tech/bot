@@ -169,3 +169,23 @@ auto_send = true
 # stop_file = "SELF_IMPROVE_OFF" # kill-switch #2 stop-file name (runtime dir)
 # worktree_dir = "self_improve/worktrees" # worktree root (runtime dir)
 # ledger_path = "self_improve/ledger.jsonl" # metrics ledger path (runtime dir)
+
+# ── Chat-command loop (task 295) ──────────────────────────────────────
+# Helix watches a dedicated chat-hub room and runs read-only diagnostics
+# posted there by authorized senders, posting output back to the room.
+# All keys optional — omitting the section selects the fail-closed
+# defaults below (notably: allowed_senders EMPTY means NOTHING executes,
+# even if the routine is enabled). The routine itself ships DISABLED;
+# enable it (web UI toggle or routines.json) only after reviewing this
+# section. Do NOT put tokens here — chat-mcp holds the hub token.
+# [chat_command]
+# room = "command"              # hub room watched (auto-creates on first post)
+# allowed_senders = ["cobble-jr", "john"]  # token names ONLY; "helix" is never allowed (loop prevention)
+# command_timeout_secs = 30     # per-command wall-clock timeout
+# max_output_bytes = 131072     # captured output cap (with [truncated] note)
+# chunk_bytes = 7500            # reply chunk size (hub cap is 8 KB; prefix included)
+# max_commands_per_tick = 20    # commands per 1-minute tick; extras wait
+# asus_enabled = false          # Phase 2 master switch (default OFF)
+# asus_host = "100.112.110.14"  # ASUS Tailscale IP (REQUIRED for Phase 2; no default)
+# asus_user = ""                # Windows username (REQUIRED for Phase 2; supplied by John)
+# asus_key_path = ""            # e.g. ~/.ssh/id_helix_asus (REQUIRED for Phase 2; path only)

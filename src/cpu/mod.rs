@@ -443,6 +443,10 @@ where
             // machine, deliberately no LLM (polling needs no model; John's
             // call is that drafting delegates to a capable backend, task 258).
             "support-mail-watch" => self.routine_support_mail_watch().await,
+            // Task 295 (chat-command loop): chat-hub command watch —
+            // in-process tick, no LLM spawned for polling (same shape
+            // as support-mail-watch).
+            "chat-command-watch" => self.routine_chat_command_watch().await,
             // Task 281 (self-improving loop): one loop cycle — metrics
             // first, then (phase >= 1) exactly one worker. Never routes
             // through maybe_nightly_fix or its paths.
@@ -488,6 +492,16 @@ where
                 )),
             }
         }
+    }
+
+    /// Task 295 (chat-command loop): one chat-hub command watch tick.
+    /// In-process only — no LLM is spawned for polling (John's call,
+    /// same shape as support-mail-watch). The tick itself is sync
+    /// (MCP bridge + direct process spawns); errors inside are logged
+    /// by the tick, never propagated, so a failed tick cannot kill
+    /// the routine.
+    async fn routine_chat_command_watch(&mut self) {
+        crate::chat_command::tick(&self.runtime_dir.clone());
     }
 
     /// Task 281 (self-improving loop, Phase 1): one loop cycle.
@@ -2090,6 +2104,30 @@ mod nightly_tests {
             fix_autonomy_decision(true, 3, false),
             FixDecision::ProposeOnly("[shell] not enabled — fixes cannot be test-verified")
         );
+    }
+
+    // ── Task 295: chat-command routine arm ─────────────────────────────
+
+    #[tokio::test]
+    async fn chat_command_watch_dispatch_quiet_skips_without_tools() {
+        // GIVEN a Cpu with no [chat_command] config and no chat tools
+        // advertised, WHEN the chat-command-watch routine fires, THEN
+        // the tick quiet-skips: no tool calls, no state dir, no panic.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let (mut cpu, dir) = test_cpu();
+        crate::mcp_client::override_tool_definitions_for_tests(vec![]);
+        cpu.handle_routine_run("chat-command-watch", "Chat command watch")
+            .await;
+        assert!(
+            crate::mcp_client::take_try_execute_calls_for_tests().is_empty(),
+            "tools-absent tick must not call anything"
+        );
+        assert!(
+            !dir.join("chat_command").exists(),
+            "tools-absent tick must not create state"
+        );
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // ── Task 281: self-improve routine arm ──────────────────────────────

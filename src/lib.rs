@@ -26,6 +26,7 @@ pub mod cron;
 pub mod chat_history;
 pub mod persona;
 pub mod support_watch; // task 256: SYSADMIN-01 adaptive support-mail poll loop
+pub mod chat_command; // task 295: chat-hub command loop (read-only diagnostics)
 pub mod voice; // task 267/268: voice-box TTS/STT integration
 pub mod self_improve; // tasks 277+: self-improving loop (Phase 0 config first)
 

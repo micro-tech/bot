@@ -32,6 +32,7 @@ mod persona;
 mod cron;
 mod chat_history;
 mod support_watch;
+mod chat_command; // task 295: chat-hub command loop (read-only diagnostics)
 mod voice;
 mod self_improve;
 
