@@ -6,6 +6,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// Task 295: the chat-mcp hook lives in the shared lib module (same pattern
+// as the main binary's `mod` declarations) so it compiles and tests through
+// the lib even though this installer binary itself is blocked by task 262
+// on a fresh checkout (see the include_str! lines below).
+#[path = "../chat_mcp_install.rs"]
+mod chat_mcp_install;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -337,6 +344,41 @@ fn install() {
             eprintln!("WARNING: could not write {}: {}", secondary_log, e);
         }
         println!("Created log: {}", primary_log);
+    }
+
+    // ── chat-mcp companion (task 295) ─────────────────────────────────────
+    // Installs/updates chat-mcp (binary + config + [[mcp.servers]] chat
+    // block) so Helix can chat through the hub. Runs after config.toml is
+    // deployed (the block edit needs it) and before the service starts (so
+    // the first start picks the chat server up). The hook module never
+    // touches the task-262 include_str! paths: it takes plain paths and
+    // edits only the live config file. A failure here warns and continues
+    // — chat-mcp is an optional companion, and its source may be
+    // unavailable (no git/cargo/network). The hook never writes a token:
+    // the operator adds the existing helix token on the machine.
+    match chat_mcp_install::install_chat_mcp(&runtime_user, &primary_runtime_dir) {
+        Ok(report) => {
+            println!(
+                "chat-mcp: binary installed: {}, config {:?}, chat block appended: {}",
+                report.binary_installed, report.config, report.block_appended
+            );
+            // The installer runs as root; the runtime user must own the
+            // files it will use (binary + config dir).
+            set_ownership(
+                &report.layout.bin_path.to_string_lossy(),
+                &runtime_user,
+                &runtime_user,
+            );
+            set_ownership(
+                &report.layout.config_dir.to_string_lossy(),
+                &runtime_user,
+                &runtime_user,
+            );
+        }
+        Err(e) => eprintln!(
+            "WARNING: chat-mcp step failed: {} — continuing without it.",
+            e
+        ),
     }
 
     // ── systemd service ─────────────────────────────────────────────────────
