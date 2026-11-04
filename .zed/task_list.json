@@ -3633,7 +3633,7 @@
         "id": 309,
         "title": "Task-handoff envelope parser + dispatch",
         "description": "Parse the ! JSON envelope (how/which/time/scope plus command or task) and dispatch to the command path or the llm handler, with parse-or-fallback for plain commands and rejections for malformed structured messages.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "details": "Implement spec sections 3-4 (chat-command-task-handoff-spec.md): strip !, trim, JSON parse; how=command goes to the existing executor (time overrides command_timeout_secs when present); how=llm goes to the llm handler interface (built in 310; until then, dispatch to a stub that replies llm path not yet built — do not silently drop); parse fail or how missing/invalid falls back to the plain command path (today's behavior); validation failures (missing task or command, unknown backend, missing scope, oversize over 8 KB) post a rejection reply naming the problem and execute nothing. Sender gate runs FIRST (existing allowed_senders check, helix excluded) before any parsing. Scope is validated as present and well-formed here; enforcement by tool allowlist is 310's job. Reuse Phase 1 chunking ([n/m], 7500 B) and audit logging for all replies and rejections.",
@@ -3641,13 +3641,13 @@
         "subtasks": [
           {
             "id": "309.1",
-            "status": "pending",
+            "status": "done",
             "title": "Parser + validation",
             "details": "JSON parse, field validation, parse-or-fallback, rejection replies naming the problem."
           },
           {
             "id": "309.2",
-            "status": "pending",
+            "status": "done",
             "title": "Dispatch wiring",
             "details": "Route to the command executor versus the llm handler interface; sender gate first; chunked replies plus audit."
           }
@@ -3657,7 +3657,7 @@
         "id": 310,
         "title": "LLM task handler (async, scope-enforced, per-backend queue)",
         "description": "Run llm tasks as agent jobs on the named backend (server, desktop, or gemini), async with ACK plus result or timeout reports, scope-enforced tools, and a per-backend FIFO queue with busy and queued replies.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           309
         ],
@@ -3667,13 +3667,13 @@
         "subtasks": [
           {
             "id": "310.1",
-            "status": "pending",
+            "status": "done",
             "title": "Async handler + backend spawn",
             "details": "ACK on accept, result or timeout report on finish, commander spawn on the named backend."
           },
           {
             "id": "310.2",
-            "status": "pending",
+            "status": "done",
             "title": "Scope allowlist + queue + reports + audit",
             "details": "Tool gating by scope, per-backend FIFO queue, chunked reports citing task id, audit lines."
           }
