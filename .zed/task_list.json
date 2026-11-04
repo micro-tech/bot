@@ -3628,6 +3628,82 @@
             "details": "After deploy, post !uptime in the command room and confirm Helix's reply ends with [exit 0]."
           }
         ]
+      },
+      {
+        "id": 309,
+        "title": "Task-handoff envelope parser + dispatch",
+        "description": "Parse the ! JSON envelope (how/which/time/scope plus command or task) and dispatch to the command path or the llm handler, with parse-or-fallback for plain commands and rejections for malformed structured messages.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "details": "Implement spec sections 3-4 (chat-command-task-handoff-spec.md): strip !, trim, JSON parse; how=command goes to the existing executor (time overrides command_timeout_secs when present); how=llm goes to the llm handler interface (built in 310; until then, dispatch to a stub that replies llm path not yet built — do not silently drop); parse fail or how missing/invalid falls back to the plain command path (today's behavior); validation failures (missing task or command, unknown backend, missing scope, oversize over 8 KB) post a rejection reply naming the problem and execute nothing. Sender gate runs FIRST (existing allowed_senders check, helix excluded) before any parsing. Scope is validated as present and well-formed here; enforcement by tool allowlist is 310's job. Reuse Phase 1 chunking ([n/m], 7500 B) and audit logging for all replies and rejections.",
+        "testStrategy": "Unit tests: valid command JSON goes to the command path; valid llm JSON goes to handler dispatch; invalid JSON falls back to command; malformed structured (missing task, unknown backend, missing scope) posts a rejection naming the problem and executes nothing; oversize envelope posts a rejection; helix-token sender is ignored. Full cargo test --lib green; cargo check --bin helix zero warnings (lib-green alone must not mask a broken binary).",
+        "subtasks": [
+          {
+            "id": "309.1",
+            "status": "pending",
+            "title": "Parser + validation",
+            "details": "JSON parse, field validation, parse-or-fallback, rejection replies naming the problem."
+          },
+          {
+            "id": "309.2",
+            "status": "pending",
+            "title": "Dispatch wiring",
+            "details": "Route to the command executor versus the llm handler interface; sender gate first; chunked replies plus audit."
+          }
+        ]
+      },
+      {
+        "id": 310,
+        "title": "LLM task handler (async, scope-enforced, per-backend queue)",
+        "description": "Run llm tasks as agent jobs on the named backend (server, desktop, or gemini), async with ACK plus result or timeout reports, scope-enforced tools, and a per-backend FIFO queue with busy and queued replies.",
+        "status": "pending",
+        "dependencies": [
+          309
+        ],
+        "priority": "high",
+        "details": "Implement spec section 6: handler takes (task string, backend, time budget, scope). Spawns an agent run on the named backend following the commander pattern (backend as commander, may delegate to sub-agents), using Helix's existing agent-run machinery — do not invent a new LLM client. Async: the accepting tick posts an ACK (accepted, backend, budget) and returns; a later tick or callback posts the RESULT (or a timeout report with partial results if the budget expires). Scope enforcement by tool allowlist at spawn: read removes all write tools (labels, archives, edits, sends, file writes) — a read task attempting a write fails closed and the report says so; write:<domain> allows writes only in that domain. Concurrency: one running task per backend; a task for a busy backend QUEUES FIFO per backend, sender gets a reply stating the backend is running plus queue position; a task for an idle backend runs immediately; no queue cap in v1. Reports: same command room, chunked [n/m], citing the task hub message id, never starting with !; read reports state explicitly that no writes were made (or list writes for write tasks). Audit-log every acceptance, start, completion, timeout, rejection, and busy or queued reply.",
+        "testStrategy": "Unit tests: read scope blocks write tools; write:<domain> allows only that domain; per-backend FIFO queue order plus busy and queued position replies; idle backend runs immediately; timeout posts a timeout report with partial results; ACK and result formats; report never starts with !. Full cargo test --lib green; cargo check --bin helix zero warnings.",
+        "subtasks": [
+          {
+            "id": "310.1",
+            "status": "pending",
+            "title": "Async handler + backend spawn",
+            "details": "ACK on accept, result or timeout report on finish, commander spawn on the named backend."
+          },
+          {
+            "id": "310.2",
+            "status": "pending",
+            "title": "Scope allowlist + queue + reports + audit",
+            "details": "Tool gating by scope, per-backend FIFO queue, chunked reports citing task id, audit lines."
+          }
+        ]
+      },
+      {
+        "id": 311,
+        "title": "Task-handoff docs + live drills",
+        "description": "Document the handoff (envelope, dispatch, scope, queue, reports) and prove it live on the R630 with the spec section 9 drills.",
+        "status": "pending",
+        "dependencies": [
+          310
+        ],
+        "priority": "high",
+        "details": "Docs: extend docs/chat-command-loop.md with a task-handoff section (envelope schema plus both JSON examples, dispatch plus fallback rule, scope vocabulary plus enforcement, per-backend queue plus busy and queued replies, report format plus task-id citation, enable and usage, troubleshooting: malformed posts a rejection, oversize posts a rejection, busy posts a queued reply, timeout posts a timeout report). Live drills (John's steps, on the R630 after deploy, mirroring the Phase 1 drill): (a) JSON command (uptime) gives a correct reply; (b) plain !uptime still works (fallback); (c) JSON llm task (safe read-only, e.g. report the R630's disk usage in plain words) gives an agent report back in the room; (d) malformed JSON task posts a rejection, nothing runs; (e) task from the helix token is ignored (loop prevention); (f) second task for a busy backend is queued plus a busy reply with position; task for an idle backend runs immediately. Drills pass only if ALL items behave as specified, with audit log lines for each.",
+        "testStrategy": "Drill checklist above, all items verified by John in the room plus audit log lines for each. Docs reviewed for accuracy against the implemented behavior.",
+        "subtasks": [
+          {
+            "id": "311.1",
+            "status": "pending",
+            "title": "Write task-handoff docs",
+            "details": "Envelope, dispatch, scope, queue, reports, enable steps, troubleshooting."
+          },
+          {
+            "id": "311.2",
+            "status": "pending",
+            "title": "Run task-handoff live drills (John's steps)",
+            "details": "Six drill items (command JSON, fallback, llm report, malformed, helix ignored, queue behavior). All must behave as specified."
+          }
+        ]
       }
   ]
 }
