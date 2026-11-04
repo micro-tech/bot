@@ -3604,6 +3604,30 @@
             "details": "Six drill items (positive, negative, pipeline rejection, offline timeout with routine survival). All must behave as specified."
           }
         ]
+      },
+      {
+        "id": 308,
+        "title": "Chat-command replies: append [exit N] status line",
+        "description": "Helix chat-command replies echo the command and its output but omit the exit status, though the design specified an [exit N] line. Add it.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "details": "Root cause (2026-11-04 drill): the executor captures the exit code (executor.rs exit_code: Option<i32>, set from the process status, tested for 0 and for grep-no-match 1), but the reply builder (reply.rs) never renders it, so the 2026-11-04 !uptime reply carried [1/1] $ uptime plus output and no exit line. Fix: append the exit status after the output and before chunking, so it rides the last chunk: Some(N) renders as [exit N]; None (killed by signal) renders as [exit signal] so the case is visible, not silently dropped. Apply to both the local reply path and the ASUS (!asus:) reply path if they render separately. Do not change the allowlist, the sender gate, or the chunk size.",
+        "testStrategy": "Unit tests in the chat_command module: a successful command reply contains [exit 0]; a non-zero command (grep with no match, exit 1) reply contains [exit 1]; a multi-chunk reply carries [exit N] in the last chunk only; a signal-killed command renders [exit signal]. Full cargo test --lib green. Live check after deploy: !uptime in the command room shows [exit 0] in Helix's reply.",
+        "subtasks": [
+          {
+            "id": "308.1",
+            "status": "pending",
+            "title": "Thread exit_code into reply text",
+            "details": "Render [exit N] (or [exit signal] for None) after output, before chunking, on local and ASUS reply paths. Add the unit tests above."
+          },
+          {
+            "id": "308.2",
+            "status": "pending",
+            "title": "Live re-drill: !uptime shows [exit 0]",
+            "details": "After deploy, post !uptime in the command room and confirm Helix's reply ends with [exit 0]."
+          }
+        ]
       }
   ]
 }
