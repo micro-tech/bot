@@ -3226,7 +3226,7 @@
       ]
     },
       {
-        "id": 295,
+        "id": 296,
         "title": "Chat-command config section + routine seed",
         "description": "Add the [chat_command] config section and seed the chat-command-watch routine (disabled by default).",
         "status": "done",
@@ -3236,19 +3236,19 @@
         "testStrategy": "cargo test --lib cron: seed exists with enabled=false and schedule every 1m; merge adds the seed to an existing routines file without touching other entries. Config parse tests: defaults verified (especially empty allowed_senders); explicit values honored. cargo check --lib: 0 warnings.",
         "subtasks": [
           {
-            "id": "295.1",
+            "id": "296.1",
             "status": "done",
             "title": "Parse [chat_command] config with fail-closed defaults",
             "details": "Read on every tick from config.toml. allowed_senders defaults to empty; room defaults to \"command\"; timeouts/sizes per plan."
           },
           {
-            "id": "295.2",
+            "id": "296.2",
             "status": "done",
             "title": "Seed chat-command-watch routine (enabled false)",
             "details": "Add to default_routines() in src/cron/registry.rs. Verify load_or_seed merge behavior against an existing routines file."
           },
           {
-            "id": "295.3",
+            "id": "296.3",
             "status": "done",
             "title": "Wire dispatch arm in handle_routine_run",
             "details": "Match arm for \"chat-command-watch\" in src/cpu/mod.rs calling routine_chat_command_watch(). Unknown routines still log and continue."
@@ -3256,31 +3256,31 @@
         ]
       },
       {
-        "id": 296,
+        "id": 297,
         "title": "Chat tool resolution + cursor state",
         "description": "Resolve mcp__chat__ tools by prefix and persist a per-message cursor so commands never replay.",
         "status": "done",
         "dependencies": [
-          295
+          296
         ],
         "priority": "high",
         "details": "New module src/chat_command/mod.rs (state.rs submodule optional, mirroring support_watch layout). Resolve mcp__chat__chat_read + mcp__chat__chat_send by prefix from mcp_client::tool_definitions() (mirror support_watch resolve_mail_tools, src/support_watch/mod.rs:116-130). Verify the advertised names against live tool_definitions() at build time (risk R1): if the names differ, resolution fails closed. If tools are absent, debug-log and skip the tick quietly (never crash the routine, never execute). State file <runtime_dir>/chat_command/state.json (mirror <runtime>/support_watch/state.json): {room, last_seen_id}. Corrupt/unparseable state resets the cursor to the room's latest id (via chat_rooms) with a logged reset — never replay old commands. Cursor is persisted per message AFTER that message is processed (reply posted or ignored), so a crash mid-tick never re-executes.",
         "testStrategy": "Unit tests with stub mcp__chat__* tools (mirror support_watch override_tool_definitions_for_tests + stub_try_execute_for_tests): tools-resolved vs tools-absent (quiet skip); state save/load round-trip; corrupt state resets to latest with no replay; per-message cursor persistence.",
         "subtasks": [
           {
-            "id": "296.1",
+            "id": "297.1",
             "status": "done",
             "title": "Resolve chat_read/chat_send tools by prefix",
             "details": "Prefix mcp__chat__ over tool_definitions(). Absent tools mean quiet skip, logged at debug."
           },
           {
-            "id": "296.2",
+            "id": "297.2",
             "status": "done",
             "title": "Cursor state file with per-message persistence",
             "details": "State at <runtime_dir>/chat_command/state.json. Persist after each processed message, not per tick."
           },
           {
-            "id": "296.3",
+            "id": "297.3",
             "status": "done",
             "title": "Corrupt-state reset (no replay)",
             "details": "Unparseable state resets the cursor to the room's latest id via chat_rooms and logs the reset."
@@ -3288,25 +3288,25 @@
         ]
       },
       {
-        "id": 297,
+        "id": 298,
         "title": "Sender gate + trigger parse",
         "description": "Check sender before anything else; only '!' messages from allowed senders become commands.",
         "status": "done",
         "dependencies": [
-          296
+          297
         ],
         "priority": "high",
         "details": "Order is load-bearing: sender check FIRST, before any parsing or execution. Message sender must be in [chat_command] allowed_senders (expected values \"cobble-jr\", \"john\"; the hub stamps sender from the token name and drops spoofed sender fields — server.rs anti-spoofing comment + store.rs Envelope). Any other sender, including \"helix\" (loop prevention: Helix's own replies never re-trigger), is ignored silently (no reply) and audit-logged at info level. Then trigger: trimmed body must start with \"!\"; otherwise ignored silently (debug log). Strip \"!\", trim; empty remainder replies \"empty command\". Remainder starting with \"asus:\" replies \"ASUS relay is Phase 2 (not enabled yet)\" in Phase 1. Cap: max_commands_per_tick commands per tick; extras wait for the next tick (cursor advances only past processed messages).",
         "testStrategy": "Unit tests: allowed senders execute; helix/grok-cli/other senders ignored (no execution, no reply, audit logged); non-'!' messages ignored; empty command replies an error; 'asus:' in Phase 1 replies not-enabled; cursor advances per message.",
         "subtasks": [
           {
-            "id": "297.1",
+            "id": "298.1",
             "status": "done",
             "title": "Sender gate (allowed set, helix excluded)",
             "details": "Gate runs before parsing. Unauthorized senders: silent ignore + info-level audit log, no reply."
           },
           {
-            "id": "297.2",
+            "id": "298.2",
             "status": "done",
             "title": "Trigger parse ('!' prefix, empty, asus: in Phase 1)",
             "details": "Trimmed body must start with '!'. Empty remainder and Phase 1 'asus:' get error/not-enabled replies."
@@ -3314,31 +3314,31 @@
         ]
       },
       {
-        "id": 298,
+        "id": 299,
         "title": "Read-only executor (local)",
         "description": "Allowlist + metachar rejection + direct Command execution with no shell, timeout, and audit logging.",
         "status": "done",
         "dependencies": [
-          297
+          298
         ],
         "priority": "high",
         "details": "Parse the command line into argv by whitespace split (NO quoting in v1 — any token containing a quote char is rejected). Reject if: empty argv; any token contains a metacharacter from | > < ; & $ ` \\ \" ' * ? ~ ( ) { } or a newline/control char. argv[0] must be in the hardcoded v1 allowlist (code, NOT config): cat, tail, head, grep, ls, ps, df, free, uptime, whoami, hostname, systemctl — with systemctl restricted: second token must be one of status, is-active, show, list-units (any other subcommand rejected). Execute via std::process::Command directly (NO shell — this is what makes the allowlist airtight; do NOT use run_shell for this path, it allows writes). Timeout = command_timeout_secs (default 30). Capture stdout + stderr (stderr appended under a [stderr] marker if non-empty), truncate to max_output_bytes with a [truncated] note. Non-zero exit: output still posted, prefixed with an [exit N] line. Audit-log EVERY execution via log_to_file: timestamp, sender, target, command, exit code, duration ms, output bytes. The executor takes the allowlist as a parameter (production passes the hardcoded set; tests pass a set including sleep for the timeout test). Optional defense-in-depth: run validate_shell_command (shell_security.rs:204) over the joined string as a second layer, only if it never widens what the allowlist permits.",
         "testStrategy": "Unit tests: each allowlisted command executes; writes rejected (rm, cp, mv, touch, systemctl restart/stop, redirect attempts); metachar rejection (pipe, redirect, semicolon, $(), backtick, quote); systemctl subcommand restriction; timeout test via injected allowlist (sleep past a 1s test timeout, no hang); audit lines present for executions and rejections.",
         "subtasks": [
           {
-            "id": "298.1",
+            "id": "299.1",
             "status": "done",
             "title": "Argv parse + metachar rejection (no shell)",
             "details": "Whitespace split, no quoting. Reject metachars and control chars in any token. Execute via std::process::Command only."
           },
           {
-            "id": "298.2",
+            "id": "299.2",
             "status": "done",
             "title": "Hardcoded allowlist + systemctl subcommand restriction",
             "details": "Allowlist in code, not config. systemctl limited to status/is-active/show/list-units."
           },
           {
-            "id": "298.3",
+            "id": "299.3",
             "status": "done",
             "title": "Timeout, output cap, and audit logging",
             "details": "Timeout from config (default 30s); truncate to max_output_bytes with a note; log every execution and rejection."
@@ -3346,25 +3346,25 @@
         ]
       },
       {
-        "id": 299,
+        "id": 300,
         "title": "Reply chunking + send",
         "description": "Echo the command, split output into 8KB-safe chunks, and post them in order to the same room.",
         "status": "done",
         "dependencies": [
-          298
+          299
         ],
         "priority": "high",
         "details": "Reply format: first line echoes the command ($ <command> for local, asus$ <command> for ASUS in Phase 2), then output. Chunking: split the full reply into <= chunk_bytes (default 7500) BYTE chunks on UTF-8 char boundaries (never split a character), prefix each chunk \"[n/m] \" (chunk budget includes the prefix). Send sequentially via mcp__chat__chat_send to the SAME room (the command room from config), ~150 ms between chunks (hub rate-limit pacing, ~10 msg/s burst), retry once on failure (including 429, after a short sleep), then abandon remaining chunks (logged, not retried forever). Command failure/timeout posts the error text as the reply — never silent. Empty output becomes a single reply \"(no output)\".",
         "testStrategy": "Unit tests: chunking at the byte boundary (exact/under/over); multibyte safety (chunks reassemble to the original); numbering correct; empty output single reply. Integration with stub chat_send: chunks sent in order to the same room; send-failure retry-once then abandon (assert via stub call counts).",
         "subtasks": [
           {
-            "id": "299.1",
+            "id": "300.1",
             "status": "done",
             "title": "Byte-safe chunking with [n/m] numbering",
             "details": "7500-byte default budget including prefix; never split a UTF-8 character; chunks reassemble exactly."
           },
           {
-            "id": "299.2",
+            "id": "300.2",
             "status": "done",
             "title": "Sequential send with pacing + retry-once",
             "details": "Same room, ~150 ms pacing, retry once on failure/429, then abandon with a log line. Errors always posted, never silent."
@@ -3372,29 +3372,29 @@
         ]
       },
       {
-        "id": 300,
+        "id": 301,
         "title": "Routine wiring + integration tests",
         "description": "Wire the tick handler into the CPU and prove the full loop end to end with stub tools.",
         "status": "done",
         "dependencies": [
-          295,
           296,
           297,
           298,
-          299
+          299,
+          300
         ],
         "priority": "high",
         "details": "Handler routine_chat_command_watch(): load config, resolve tools (quiet skip if absent), read pages via chat_read (since=cursor, limit 200) until a short page, process up to max_commands_per_tick commands in id order (sender gate, trigger, executor, chunked reply), persist cursor per message. Tick budget ~45 s (stop taking new commands, rest wait for the next tick); tick in-progress guard (an overlapping tick skips). Errors inside a tick are logged, never propagated — a failed tick must not kill the routine (mirror support_watch tick discipline). NO LLM is spawned by the tick (in-process only, like support-mail-watch). Run cargo test --lib chat_command + cargo test --lib cron green; cargo check --lib 0 warnings. End-to-end tick test with stub mcp__chat__ tools (mirror support_watch override_tool_definitions_for_tests + stub_try_execute_for_tests): authorized command executes and posts chunked replies; unauthorized sender posts nothing; tools absent means quiet skip. Routine appears in the web UI routines list (checked at drill time, task 7).",
         "testStrategy": "cargo test --lib chat_command and cargo test --lib cron green; cargo check --lib 0 warnings; stub end-to-end tick behaves as specified for authorized, unauthorized, and tools-absent cases; code inspection confirms no LLM call on the tick path.",
         "subtasks": [
           {
-            "id": "300.1",
+            "id": "301.1",
             "status": "done",
             "title": "Tick handler with budget + in-progress guard",
             "details": "Page through chat_read, process in id order, ~45 s budget, overlapping tick skips, errors logged not propagated."
           },
           {
-            "id": "300.2",
+            "id": "301.2",
             "status": "done",
             "title": "End-to-end tick tests with stub chat tools",
             "details": "Authorized/unauthorized/tools-absent cases via stub mcp__chat__ tools. No LLM on the tick path."
@@ -3402,25 +3402,25 @@
         ]
       },
       {
-        "id": 301,
+        "id": 302,
         "title": "Docs + Phase 1 live drill",
         "description": "Document the loop and prove it live on the R630 with positive and negative cases.",
         "status": "pending",
         "dependencies": [
-          300
+          301
         ],
         "priority": "high",
         "details": "Docs file docs/chat-command-loop.md: room name + auto-create note (hub rooms auto-create on first post — no manual step); trigger syntax; exact allowlist + systemctl restriction; sender rule (cobble-jr, john only; helix excluded = loop prevention); fail-closed defaults (empty allowed_senders, routine ships disabled); chunking (7500 B, [n/m]); audit log location; how to enable (set [chat_command] room + allowed_senders in config.toml, then enable the routine via web UI toggle or routines.json); troubleshooting (tools not advertised means quiet skip; routine disabled means nothing; empty allowed_senders means nothing executes); guidance (tail logs, do not cat whole files — 128 KB cap). Live drill (John's steps, on the R630 after deploy): 1) Set config + enable routine. 2) Cobble jr posts !hostname to the command room, Helix replies with the R630 hostname. 3) John posts !whoami, Helix replies. 4) Helix token posts !hostname: IGNORED (no execution, no reply). 5) Cobble jr posts !systemctl restart helix: REJECTED reply, nothing restarted. 6) Long-output command (e.g. !ps aux): chunked replies in order, reassembled equals full output. 7) Cobble jr posts hello (no !): ignored, no reply. Drill passes only if ALL items behave as specified, with audit log lines present for each execution/rejection.",
         "testStrategy": "Drill checklist above, all items verified by John in the room plus audit log lines for each execution/rejection. Docs reviewed for accuracy against the implemented behavior.",
         "subtasks": [
           {
-            "id": "301.1",
+            "id": "302.1",
             "status": "pending",
             "title": "Write docs/chat-command-loop.md",
             "details": "Cover room, trigger, allowlist, sender rule, fail-closed defaults, chunking, audit log, enable steps, troubleshooting."
           },
           {
-            "id": "301.2",
+            "id": "302.2",
             "status": "pending",
             "title": "Run Phase 1 live drill (John's steps)",
             "details": "Seven drill items (positive, negative, chunking, ignored cases). All must behave as specified."
@@ -3428,7 +3428,7 @@
         ]
       },
       {
-        "id": 302,
+        "id": 303,
         "title": "Phase 2 VERIFY: does Helix already reach the ASUS?",
         "description": "John's deploy-time check on the bot VM: non-destructive read-only probe of existing ASUS SSH reachability. Decides whether task 9 is needed at all.",
         "status": "pending",
@@ -3438,19 +3438,19 @@
         "testStrategy": "Verdict recorded (REACHABLE or NOT-REACHABLE) with the exact commands run and outputs (hostnames/usernames only, no key material). If REACHABLE, task 12 proceeds without task 9; if NOT-REACHABLE, task 9 must complete first.",
         "subtasks": [
           {
-            "id": "302.1",
+            "id": "303.1",
             "status": "pending",
             "title": "Inspect existing SSH setup (no key material)",
             "details": "ssh client presence, ~/.ssh filenames, config entries, known_hosts hits via exit codes only (TAILNET_KNOWN/UNKNOWN, LAN_KNOWN/UNKNOWN)."
           },
           {
-            "id": "302.2",
+            "id": "303.2",
             "status": "pending",
             "title": "BatchMode hostname probe to 100.112.110.14",
             "details": "Only with a configured identity or a John-supplied Windows username. BatchMode + ConnectTimeout so it fails fast, never hangs."
           },
           {
-            "id": "302.3",
+            "id": "303.3",
             "status": "pending",
             "title": "Record REACHABLE / NOT-REACHABLE verdict",
             "details": "Written verdict stating which user/host/key-alias worked, or why the probe could not run/failed. Drives the task 9 skip decision."
@@ -3458,31 +3458,31 @@
         ]
       },
       {
-        "id": 303,
+        "id": 304,
         "title": "Phase 2 ASUS setup fallback (John's, ONLY if task 8 = NOT-REACHABLE)",
         "description": "Enable Windows OpenSSH Server on the ASUS and provision a dedicated Helix relay key. SKIP ENTIRELY if task 8 verdict is REACHABLE.",
         "status": "pending",
         "dependencies": [
-          302
+          303
         ],
         "priority": "high",
         "details": "SKIP ENTIRELY if task 8 verdict is REACHABLE. Steps (John's, on the ASUS + bot VM): (1) Enable Windows OpenSSH Server on the ASUS (Windows 11: Settings > System > Optional features > OpenSSH Server, or PowerShell Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; then Start-Service sshd, Set-Service sshd -StartupType Automatic). (2) RECOMMENDED: set PowerShell as the OpenSSH default shell (registry HKLM\\SOFTWARE\\OpenSSH DefaultShell to the powershell.exe path) so the task 11 allowlist matches. Record the PowerShell version (5.1 vs 7 — affects the allowlist). (3) On the bot VM as cobble, generate a DEDICATED keypair for this relay only (never John's personal key): ssh-keygen -t ed25519 -f ~/.ssh/id_helix_asus (0600; passphrase-less recommended for automation — John's call, see open questions; the allowlist + sender gate bound what the key can do). (4) Install the PUBLIC key on the ASUS for the chosen Windows user (user's .ssh\\authorized_keys; for an admin user, administrators_authorized_keys). Apply the Windows OpenSSH ACL requirement: the file must be owned by the user/Administrators with inheritance disabled, else auth fails — use icacls to fix if auth fails (first thing to check). (5) Verify from the bot VM: ssh -o BatchMode=yes -o ConnectTimeout=15 -i ~/.ssh/id_helix_asus <user>@100.112.110.14 hostname — and verify the ASUS host-key fingerprint OUT-OF-BAND on first connect (compare with the fingerprint shown on the ASUS) before accepting it into known_hosts. (6) Confirm + record: Windows username, tailnet IP still 100.112.110.14 (check via tailscale status on either side — stable, but confirm), PowerShell version. Deliverable: a written 'ASUS ready' note (user, host, key filename, shell, PS version) for tasks 10-11.",
         "testStrategy": "The verify command in step 5 prints the ASUS hostname; ssh -o BatchMode=yes ... whoami prints the Windows user; no password prompt appears (BatchMode would fail, not hang). The 'ASUS ready' note is written.",
         "subtasks": [
           {
-            "id": "303.1",
+            "id": "304.1",
             "status": "pending",
             "title": "Enable OpenSSH Server + set PowerShell default shell",
             "details": "ASUS steps: install/start/automatic sshd; DefaultShell registry to PowerShell; record PS version (5.1 vs 7)."
           },
           {
-            "id": "303.2",
+            "id": "304.2",
             "status": "pending",
             "title": "Provision dedicated relay keypair + authorized_keys",
             "details": "Bot VM: ssh-keygen -t ed25519 -f ~/.ssh/id_helix_asus (0600, dedicated key only). ASUS: install public key with correct ACLs (icacls fix if auth fails)."
           },
           {
-            "id": "303.3",
+            "id": "304.3",
             "status": "pending",
             "title": "Verify BatchMode access + record ASUS ready note",
             "details": "BatchMode hostname/whoami succeed with no password prompt; host-key fingerprint verified out-of-band; written note (user, host, key filename, shell, PS version)."
@@ -3490,25 +3490,25 @@
         ]
       },
       {
-        "id": 304,
+        "id": 305,
         "title": "ASUS target router + ssh invocation",
         "description": "Route '!asus: <command>' over Tailscale SSH with the same sender gate and allowlist applied before ssh.",
         "status": "done",
         "dependencies": [
-          300
+          301
         ],
         "priority": "high",
         "details": "Extend [chat_command] config: asus_enabled (default false — John enables after setup/verify), asus_host (REQUIRED, no default; current documented value 100.112.110.14), asus_user (REQUIRED), asus_key_path (REQUIRED, e.g. ~/.ssh/id_helix_asus — path only, never key material). Router: after '!' strip + trim, if the remainder starts with 'asus:' (exact lowercase) then target = ASUS, command = rest trimmed; else target = local. If target = ASUS and (!asus_enabled or any asus_* unset) then reply 'ASUS relay not enabled/configured' (fail closed, NO ssh attempted). The same sender gate (task 3) runs BEFORE routing; the same allowlist + metachar rejection (task 4) runs BEFORE ssh — this is what makes remote-shell invocation safe (ssh runs the remote command via the user's shell; with metachars rejected, the remote shell sees only simple words). SSH invocation via std::process::Command (no shell on the R630 side either): argv = ssh -o BatchMode=yes -o ConnectTimeout=15 -i <key_path> <user>@<host> <command words...>; command timeout = command_timeout_secs covering the whole ssh call. Capture stdout+stderr like task 4. Non-zero exit / timeout / unreachable posts an error back (never silent, never hang: BatchMode + ConnectTimeout + command timeout are all mandatory). Reply labeled: first line 'asus$ <command>', chunks '[n/m] ' like task 5, to the same room. This build task does NOT depend on task 8's outcome (the code is identical either way); only the live drill (task 12) depends on connectivity.",
         "testStrategy": "Unit tests: routing parse (local vs ASUS, case sensitivity, 'asus:' with no command gives an error reply); ASUS disabled/unconfigured gives zero ssh attempts (assert via stub ssh on PATH recording invocations); allowlist-before-ssh (disallowed ASUS command gives a rejection reply, zero ssh calls); metachar ASUS command gives a rejection, zero ssh calls; ssh failure/timeout gives an error reply.",
         "subtasks": [
           {
-            "id": "304.1",
+            "id": "305.1",
             "status": "done",
             "title": "Target router ('!asus: ' vs local) + fail-closed config",
             "details": "Exact-lowercase 'asus:' prefix; asus_enabled false + required asus_host/user/key_path; unconfigured means not-enabled reply, no ssh."
           },
           {
-            "id": "304.2",
+            "id": "305.2",
             "status": "done",
             "title": "SSH invocation via Command (BatchMode + timeouts)",
             "details": "No shell on the R630 side; BatchMode + ConnectTimeout 15s + command timeout mandatory; errors posted back, never silent."
@@ -3516,25 +3516,25 @@
         ]
       },
       {
-        "id": 305,
+        "id": 306,
         "title": "ASUS allowlist + tests",
         "description": "Define the PowerShell-appropriate ASUS allowlist against the confirmed shell and prove it with stub ssh.",
         "status": "done",
         "dependencies": [
-          304
+          305
         ],
         "priority": "high",
         "details": "Define the ASUS allowlist (PowerShell-appropriate, FINALIZED against the CONFIRMED ASUS shell + PS version from task 8/9 — do not guess the shell). Starter candidates for Ranger to confirm: hostname, whoami, Get-Process, Get-Service, Get-ComputerInfo, systeminfo. Single cmdlets with simple args only in v1 — NO pipelines (|), redirection, semicolons, or $() (already rejected by the metachar rule; this task confirms no allowlisted ASUS command needs a metachar). If the ASUS default shell is cmd.exe (not PowerShell), the allowlist must be cmd-appropriate instead (hostname, whoami, tasklist, sc query, systeminfo) — adapt the list to the confirmed shell and document which shell was assumed. Tests: cargo test --lib chat_command (ASUS tests) green; stub-ssh argv assertions pass (BatchMode + ConnectTimeout + key path + user@host present; no shell involved); pipeline/redirection ASUS commands rejected. End-to-end tick test with stub mcp__chat__ tools + stub ssh: authorized '!asus: hostname' invokes stub ssh with expected argv and posts an [asus] reply; unauthorized posts nothing; ASUS disabled posts a not-enabled reply.",
         "testStrategy": "cargo test --lib chat_command (ASUS tests) green; stub-ssh argv assertions pass; pipeline ASUS commands rejected; stub end-to-end tick behaves as specified.",
         "subtasks": [
           {
-            "id": "305.1",
+            "id": "306.1",
             "status": "done",
             "title": "Finalize ASUS allowlist against confirmed shell",
             "details": "Confirm each starter candidate against the shell + PS version from task 8/9; adapt to cmd.exe list if the shell is cmd, and document the assumption."
           },
           {
-            "id": "305.2",
+            "id": "306.2",
             "status": "done",
             "title": "ASUS tests with stub ssh + stub chat tools",
             "details": "Argv assertions, pipeline rejection, end-to-end tick (authorized/unauthorized/disabled cases)."
@@ -3542,26 +3542,26 @@
         ]
       },
       {
-        "id": 306,
+        "id": 307,
         "title": "ASUS live drill + docs",
         "description": "Prove the ASUS relay live in the command room, including negative and offline cases.",
         "status": "pending",
         "dependencies": [
-          305,
-          302
+          306,
+          303
         ],
         "priority": "high",
         "details": "Docs update (docs/chat-command-loop.md): ASUS setup (or the 'already reachable' note from task 8), target syntax ('!asus: <command>'), ASUS allowlist + confirmed shell, troubleshooting (ASUS offline gives a timeout error posted; host key changed means ssh fails closed and John re-verifies the fingerprint; key permissions wrong means BatchMode fails — check ~/.ssh perms). Live drill (John's steps; requires connectivity — task 8 REACHABLE, or task 9 done): 1) Cobble jr posts '!asus: hostname' — [asus] reply with the ASUS hostname. 2) John posts '!asus: whoami' — reply with the Windows user. 3) Helix token posts '!asus: hostname' — IGNORED. 4) Cobble jr posts a write/delete ASUS command (e.g. '!asus: Remove-Item ...') — REJECTED reply, nothing deleted. 5) Cobble jr posts a pipeline ASUS command (e.g. '!asus: Get-Process | Sort-Object CPU') — REJECTED. 6) ASUS powered off / unreachable — timeout error posted, routine stays alive for the next tick (verify the next minute's tick still runs — no hang). Drill passes only if ALL items behave as specified, with audit log lines for each ASUS execution/rejection.",
         "testStrategy": "Drill checklist above verified by John in the room plus audit log lines for each ASUS execution/rejection. Docs reviewed for accuracy against the implemented behavior and the confirmed ASUS shell.",
         "subtasks": [
           {
-            "id": "306.1",
+            "id": "307.1",
             "status": "pending",
             "title": "Update docs with ASUS section",
             "details": "Setup-or-already-reachable note, target syntax, ASUS allowlist + shell, troubleshooting (offline, host key, key perms)."
           },
           {
-            "id": "306.2",
+            "id": "307.2",
             "status": "pending",
             "title": "Run ASUS live drill (John's steps)",
             "details": "Six drill items (positive, negative, pipeline rejection, offline timeout with routine survival). All must behave as specified."
