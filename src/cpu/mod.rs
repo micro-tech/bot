@@ -1698,6 +1698,19 @@ pub struct ErrorFindings {
 /// Because `findings.recent` is built from counted lines only, these
 /// exclusions also keep non-actionable lines out of `maybe_nightly_fix`
 /// input (task 293.3) with no separate fixer change.
+/// Task 312: two more shapes are routine/audit chatter, not errors,
+/// and are excluded before the marker match:
+/// - `CPU routine_run:` lines (the review's own dispatch record — the
+///   routine NAME can contain a marker word, so "Error log review"
+///   counted itself as an error and re-armed the fixer every night on
+///   non-errors; the Nov 5 report armed on exactly 2 such lines) and
+///   `CPU received unknown routine_run:` (same dispatch chatter);
+/// - `chat-command:` lines (audit records of the chat loop's own
+///   operation — rejections, spawn failures, execution records, task
+///   events; the echoed command/reason/task text can contain marker
+///   words, e.g. a `grep Error ...` command or a `spawn failed` note).
+/// Genuine errors that merely MENTION a routine or a chat command still
+/// count: the exclusion is by line prefix, not by substring.
 const ERROR_LOG_RECENT_WINDOW_MINUTES: i64 = 24 * 60;
 const ERROR_MARKERS: [&str; 6] = ["[ERROR]", "ERROR:", "Error", "Failed", "failed", "HALTED"];
 
@@ -1739,6 +1752,19 @@ fn is_counted_error_line(line: &str, now: chrono::NaiveDateTime) -> bool {
         if BENIGN_HALT_REASONS.contains(&reason.trim()) {
             return false;
         }
+    }
+    // Task 312: routine + audit chatter is not an error (see doc above).
+    // `CPU routine_run:` lines carry the routine's own name, which can
+    // contain a marker word ("Error log review") — the review counting
+    // its own dispatch line re-arms the fixer every night on non-errors.
+    // `chat-command:` lines are audit records of the loop's own operation
+    // (rejections, spawn failures, execution records, task events); the
+    // echoed command/reason/task text can contain marker words.
+    if body.starts_with("CPU routine_run:")
+        || body.starts_with("CPU received unknown routine_run:")
+        || body.starts_with("chat-command:")
+    {
+        return false;
     }
     ERROR_MARKERS.iter().any(|m| line.contains(m))
 }
@@ -2555,6 +2581,88 @@ mod nightly_tests {
             &format!("[{recent}] nightly fix attempt: [{recent}] ERROR: old failure -> REVERTED"),
             now
         ));
+        // Task 312: routine + audit chatter never counts, even when the
+        // routine name or echoed command/reason text trips a marker;
+        // genuine errors that merely mention a routine still do.
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] CPU routine_run: Error log review (error_log_review)"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] CPU routine_run: Something Failed (x)"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] CPU received unknown routine_run: error_log_review"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] chat-command: spawn failed sender=cobble-jr target=local cmd=uptime err=No such file"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] chat-command: rejected sender=cobble-jr target=local cmd=grep Error /var/log/syslog reason=not allowlisted"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] chat-command: sender=cobble-jr target=local cmd=grep Failed /var/log/syslog exit=1 ms=3 bytes=0"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] chat-command: task failed hub_id=1 backend=server"),
+            now
+        ));
+        assert!(!is_counted_error_line(
+            &format!("[{recent}] chat-command: task rejected hub_id=2 backend=server reason=Tool failed: boom"),
+            now
+        ));
+        // Prefix, not substring: a genuine error mentioning a routine
+        // still counts.
+        assert!(is_counted_error_line(
+            &format!("[{recent}] ERROR: routine_run failed to start"),
+            now
+        ));
+    }
+
+    // Task 312: a log of ONLY routine + audit chatter yields 0 counted
+    // errors and no arming — the Nov 5 nightly report armed on exactly
+    // 2 such lines (both the review's own routine_run dispatch).
+    #[tokio::test]
+    async fn error_log_check_excludes_312_routine_and_audit_chatter() {
+        let (_cpu, dir) = test_cpu();
+        let log_dir = dir.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let recent = chrono::Local::now().format("%Y-%m-%d %I:%M:%S %p");
+        let path = log_dir.join("error_log.md");
+        std::fs::write(
+            &path,
+            format!(
+                "[{recent}] CPU routine_run: Error log review (error_log_review)\n\
+                 [{recent}] CPU routine_run: watch\n\
+                 [{recent}] CPU routine_run: Something Failed (x)\n\
+                 [{recent}] CPU received unknown routine_run: error_log_review\n\
+                 [{recent}] chat-command: spawn failed sender=cobble-jr target=local cmd=uptime err=No such file\n\
+                 [{recent}] chat-command: rejected sender=cobble-jr target=local cmd=grep Error /var/log/syslog reason=not allowlisted\n\
+                 [{recent}] chat-command: sender=cobble-jr target=local cmd=grep Failed /var/log/syslog exit=1 ms=3 bytes=0\n\
+                 [{recent}] chat-command: task failed hub_id=1 backend=server\n\
+                 [{recent}] chat-command: task rejected hub_id=2 backend=server reason=Tool failed: boom\n\
+                 [{recent}] error-log review: 0 error lines\n"
+            ),
+        )
+        .unwrap();
+
+        let findings = check_error_logs_in(&[path], chrono::Local::now().naive_local());
+
+        assert_eq!(findings.total, 0);
+        assert_eq!(findings.files[0].1, 0);
+        assert_eq!(findings.files[0].2, 10);
+        assert!(findings.recent.is_empty());
+        // And 0 counted errors means the autonomy gate stays disarmed:
+        // the loop must not arm on a routine-only log.
+        assert_eq!(
+            fix_autonomy_decision(true, findings.total, true),
+            FixDecision::ProposeOnly("no logged errors to fix")
+        );
     }
 
     // Task 276: rotation caps the file at the bound and archives the

@@ -226,10 +226,14 @@ fn truncate_str(s: &str, max: usize) -> (String, bool) {
     (s[..end].to_string(), true)
 }
 
-/// Format a command's reply body: echo line, then exit/timeout notes,
-/// then output (stdout + `[stderr]` section), with a `[truncated]`
-/// note when the output cap cut anything. Empty output becomes
-/// `(no output)`.
+/// Format a command's reply body: echo line, then output (stdout +
+/// `[stderr]` section), with a `[truncated]` note when the output cap
+/// cut anything, and the exit status LAST so it rides the last chunk.
+/// Empty output becomes `(no output)`. A timeout keeps its
+/// `[TIMEOUT ...]` note up top (after the echo) and gets no second
+/// outcome line; otherwise the exit status is always rendered —
+/// `Some(N)` as `[exit N]` (including 0, which the old code omitted)
+/// and `None` (killed by a signal) as `[exit signal]`.
 fn format_reply(
     echo_prefix: &str,
     command_text: &str,
@@ -240,12 +244,6 @@ fn format_reply(
     let mut body = format!("{echo_prefix} {command_text}\n");
     if outcome.timed_out {
         body.push_str(&format!("[TIMEOUT after {timeout_secs}s — process killed]\n"));
-    } else if let Some(code) = outcome.exit_code {
-        if code != 0 {
-            body.push_str(&format!("[exit {code}]\n"));
-        }
-    } else if let Some(sig) = outcome.signal {
-        body.push_str(&format!("[exit: killed by signal {sig}]\n"));
     }
     let mut output = outcome.stdout.clone();
     if !outcome.stderr.is_empty() {
@@ -264,6 +262,15 @@ fn format_reply(
         }
         if truncated {
             body.push_str("[truncated]\n");
+        }
+    }
+    // Task 308: the exit status is appended AFTER the output (before
+    // chunking) so it rides the last chunk. Timeouts are excluded —
+    // the [TIMEOUT ...] line above already states that outcome.
+    if !outcome.timed_out {
+        match outcome.exit_code {
+            Some(code) => body.push_str(&format!("[exit {code}]\n")),
+            None => body.push_str("[exit signal]\n"),
         }
     }
     body
@@ -826,6 +833,167 @@ mod tests {
         assert_eq!(split_target("hostname"), (Target::Local, "hostname".to_string()));
         assert_eq!(split_target("asus: hostname"), (Target::Asus, "hostname".to_string()));
         assert_eq!(split_target("Asus: hostname"), (Target::Local, "Asus: hostname".to_string()));
+    }
+
+    // ── Task 308: [exit N] status line ─────────────────────────────
+
+    fn mk_outcome(
+        stdout: &str,
+        exit_code: Option<i32>,
+        signal: Option<i32>,
+    ) -> executor::ExecutionOutcome {
+        executor::ExecutionOutcome {
+            stdout: stdout.to_string(),
+            stderr: String::new(),
+            exit_code,
+            signal,
+            timed_out: false,
+            duration_ms: 0,
+            stdout_truncated: false,
+            stderr_truncated: false,
+        }
+    }
+
+    #[test]
+    fn format_reply_success_shows_exit_0() {
+        let body = format_reply("$", "uptime", &mk_outcome(" 12:00 up 1 day\n", Some(0), None), 10, 7500);
+        assert!(body.starts_with("$ uptime\n"), "{body:?}");
+        assert!(body.contains("[exit 0]\n"), "{body:?}");
+        assert!(body.ends_with("[exit 0]\n"), "exit line must be last: {body:?}");
+    }
+
+    #[test]
+    fn format_reply_nonzero_shows_exit_1() {
+        // grep with no match: empty output, exit 1.
+        let body = format_reply("$", "grep nope /etc/hostname", &mk_outcome("", Some(1), None), 10, 7500);
+        assert!(body.contains("(no output)\n"), "{body:?}");
+        assert!(body.contains("[exit 1]\n"), "{body:?}");
+        assert!(body.ends_with("[exit 1]\n"), "{body:?}");
+    }
+
+    #[test]
+    fn format_reply_signal_shows_exit_signal() {
+        let body = format_reply(
+            "$",
+            "sh -c 'kill -TERM $$'",
+            &mk_outcome("", None, Some(15)),
+            10,
+            7500,
+        );
+        assert!(body.contains("[exit signal]\n"), "{body:?}");
+        assert!(!body.contains("killed by signal"), "{body:?}");
+    }
+
+    #[test]
+    fn format_reply_exit_rides_last_chunk_only() {
+        let long = "x".repeat(20_000);
+        let body = format_reply("$", "cat big", &mk_outcome(&long, Some(0), None), 10, 7500);
+        let chunks = reply::chunk_reply(&body, 7500);
+        assert!(chunks.len() > 1, "20KB output must chunk: {}", chunks.len());
+        let last = chunks.last().unwrap();
+        assert!(last.contains("[exit 0]"), "last chunk must carry the exit line: {last:?}");
+        for c in &chunks[..chunks.len() - 1] {
+            assert!(!c.contains("[exit "), "exit line must not leak into earlier chunks: {c:?}");
+        }
+        // Reassembly keeps the exit line at the very end.
+        let joined: String = chunks
+            .iter()
+            .map(|c| c.split_once("] ").map(|(_, rest)| rest).unwrap_or(c.as_str()))
+            .collect();
+        assert!(joined.ends_with("[exit 0]\n"), "{joined:?}");
+    }
+
+    #[test]
+    fn format_reply_real_commands_carry_exit_codes() {
+        // Real executor outcomes flow into the reply (not just
+        // constructed ones): hostname exits 0, grep-no-match exits 1.
+        let ok = executor::run_command_with_timeout(
+            &["hostname".to_string()],
+            std::time::Duration::from_secs(10),
+            4096,
+        )
+        .expect("hostname must run");
+        assert_eq!(ok.exit_code, Some(0));
+        let body = format_reply("$", "hostname", &ok, 10, 7500);
+        assert!(body.contains("[exit 0]\n"), "{body:?}");
+        let miss = executor::run_command_with_timeout(
+            &[
+                "grep".to_string(),
+                "definitely-not-present-zzz".to_string(),
+                "/etc/hostname".to_string(),
+            ],
+            std::time::Duration::from_secs(10),
+            4096,
+        )
+        .expect("grep must run");
+        assert_eq!(miss.exit_code, Some(1));
+        let body = format_reply(
+            "$",
+            "grep definitely-not-present-zzz /etc/hostname",
+            &miss,
+            10,
+            7500,
+        );
+        assert!(body.contains("[exit 1]\n"), "{body:?}");
+    }
+
+    #[test]
+    fn format_reply_real_signal_kill_shows_exit_signal() {
+        // A command that kills itself with SIGTERM: the executor
+        // reports no exit code + signal 15, and the reply renders
+        // [exit signal] (not the old "[exit: killed by signal 15]").
+        let out = executor::run_command_with_timeout(
+            &["sh".to_string(), "-c".to_string(), "kill -TERM $$".to_string()],
+            std::time::Duration::from_secs(10),
+            4096,
+        )
+        .expect("sh must run");
+        assert!(!out.timed_out);
+        assert_eq!(out.exit_code, None);
+        assert_eq!(out.signal, Some(15));
+        let body = format_reply("$", "sh -c 'kill -TERM $$'", &out, 10, 7500);
+        assert!(body.contains("[exit signal]\n"), "{body:?}");
+        assert!(!body.contains("killed by signal"), "{body:?}");
+    }
+
+    #[test]
+    fn tick_reply_carries_exit_status() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("exit-status");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!hostname"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("$ hostname"), "{}", bodies[0]);
+        assert!(bodies[0].contains("[exit 0]"), "reply must carry the exit line: {}", bodies[0]);
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_asus_reply_carries_exit_status() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("asus-exit-status");
+        write_config(&dir, &asus_config());
+        let (script, log) = stub_ssh(&dir);
+        unsafe { std::env::set_var("ASUS_STUB_LOG", &log) };
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!asus: hostname"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick_with(&dir, script.to_str().unwrap());
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("asus$ hostname"), "{}", bodies[0]);
+        assert!(bodies[0].contains("ASUS-HOSTNAME"), "{}", bodies[0]);
+        assert!(bodies[0].contains("[exit 0]"), "ASUS reply must carry the exit line: {}", bodies[0]);
+        unsafe { std::env::remove_var("ASUS_STUB_LOG") };
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
