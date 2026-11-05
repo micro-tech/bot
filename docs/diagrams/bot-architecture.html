@@ -68,7 +68,7 @@
     <div class="diagram-container">
       <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-architecture-title bot-architecture-desc">
         <title id="bot-architecture-title">Helix — architecture and data flow</title>
-        <desc id="bot-architecture-desc">Architecture and data-flow overview of the Helix agent: web UI, agent core with the commander pattern and sub-agents, LLM backends, MCP tools, the support watcher, the in-Helix OKF server, auth-gated web server routes, chat history, the voice flow (mic push-to-talk to STT, agent replies to TTS), and the self-improve loop inside the core. The Support watcher, Web server routes, and Voice flow nodes link to detail diagrams, as does the self-improve loop line under Helix core.</desc>
+        <desc id="bot-architecture-desc">Architecture and data-flow overview of the Helix agent: web UI, agent core with the commander pattern and sub-agents, LLM backends, MCP tools (including chat-mcp for the chat hub), the support watcher, the in-Helix OKF server, auth-gated web server routes, chat history, the voice flow (mic push-to-talk to STT, agent replies to TTS), and the self-improve and chat-command loops inside the core. The Support watcher, Web server routes, and Voice flow nodes link to detail diagrams, as do the self-improve and chat-command loop lines under Helix core.</desc>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
           <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
@@ -108,7 +108,7 @@
               fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
 
         <!-- RECALL: Helix core -> chat history -->
-        <line x1="420" y1="124" x2="420" y2="300" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <line x1="420" y1="140" x2="420" y2="300" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
 
         <!-- VOICE: Web UI -> Voice flow (mic PTT / speak) -->
         <path d="M 190,66 H 892 Q 900,66 900,74 V 454 Q 900,462 892,462 H 540"
@@ -161,14 +161,17 @@
         <text x="115" y="102" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">browser · /ws chat</text>
 
         <!-- Node: Helix core (focal) -->
-        <rect x="300" y="40" width="240" height="84" rx="6" fill="#f5f5f5"/>
-        <rect x="300" y="40" width="240" height="84" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+        <rect x="300" y="40" width="240" height="100" rx="6" fill="#f5f5f5"/>
+        <rect x="300" y="40" width="240" height="100" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
         <rect x="308" y="48" width="32" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
         <text x="324" y="57" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CORE</text>
         <text x="420" y="84" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Helix core</text>
         <text x="420" y="102" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">commander · runtime · subagents</text>
         <a href="bot-self-improve-flow.html">
           <text x="420" y="118" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">self-improve loop ↗</text>
+        </a>
+        <a href="bot-chat-command-flow.html">
+          <text x="420" y="134" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">chat-command loop ↗</text>
         </a>
 
         <!-- Node: LLM backends -->
@@ -185,7 +188,7 @@
         <rect x="668" y="178" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
         <text x="682" y="187" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MCP</text>
         <text x="760" y="206" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">MCP tools</text>
-        <text x="760" y="222" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">google-mcp · gmail</text>
+        <text x="760" y="222" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">google-mcp · chat-mcp · gmail</text>
 
         <!-- Node: Support watcher (links to detail) -->
         <a href="bot-support-watcher-flow.html">
