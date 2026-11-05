@@ -1,29 +1,41 @@
-//! Chat-command loop (tasks 295–300, 304–305).
+//! Chat-command loop (tasks 295-300, 304-305, 309-310).
 //!
 //! A watcher-style routine (`chat-command-watch`, every 1m) polls a
 //! dedicated chat-hub room via chat-mcp, executes read-only diagnostic
-//! commands posted there by authorized senders, and posts the output
-//! back to the same room. No LLM is spawned on the tick path — the
-//! handler is fully in-process, like `support-mail-watch`.
+//! commands posted there by authorized senders, and posts output back
+//! to the same room. Phase 3 adds task handoff: a `!` JSON envelope
+//! (`how: llm`) hands a task string to one of Helix's LLM backends as
+//! an async agent job, with the report posted back to the same room.
+//! Plain commands stay fully in-process (no LLM on that path), like
+//! `support-mail-watch`; LLM tasks run detached, never blocking the
+//! tick.
 //!
 //! Safety shape (load-bearing order):
-//! 1. Sender gate FIRST — only `allowed_senders` (expected
+//! 1. Sender gate FIRST - only `allowed_senders` (expected
 //!    `"cobble-jr"`, `"john"`) may issue commands. Everyone else,
 //!    including `"helix"` (loop prevention: Helix's own replies can
 //!    never re-trigger), is ignored silently and audit-logged.
 //! 2. Trigger: trimmed body must start with `!`.
-//! 3. Target: `asus: ...` routes to the ASUS (Phase 2); anything else
-//!    runs locally. ASUS disabled/unconfigured → not-enabled reply,
+//! 3. Envelope (Phase 3): a `!` rest that parses as JSON with a valid
+//!    `how` dispatches structured (command -> executor with `time`
+//!    override, llm -> task handler); anything else falls back to the
+//!    plain command path, so hand-typed `!uptime` keeps working.
+//!    Malformed structured messages get a rejection naming the
+//!    problem and execute nothing.
+//! 4. Target: `asus: ...` routes to the ASUS (Phase 2); anything else
+//!    runs locally. ASUS disabled/unconfigured -> not-enabled reply,
 //!    zero ssh attempts.
-//! 4. Parse + allowlist + metachar screen, THEN execution via
+//! 5. Parse + allowlist + metachar screen, THEN execution via
 //!    `std::process::Command` directly. No shell anywhere on this path
-//!    (`run_shell` is deliberately not used — it allows writes).
+//!    (`run_shell` is deliberately not used - it allows writes).
 
 pub mod asus;
 pub mod config;
+pub mod envelope;
 pub mod executor;
 pub mod reply;
 pub mod state;
+pub mod task_handler;
 
 pub use config::ChatCommandConfig;
 use state::{CommandState, StateLoad};
@@ -270,6 +282,7 @@ enum Slot {
 fn process_message(
     tools: &ResolvedChatTools,
     cfg: &ChatCommandConfig,
+    runtime_dir: &Path,
     ssh_bin: &str,
     msg: &ChatMessage,
 ) -> Slot {
@@ -291,7 +304,24 @@ fn process_message(
         }
         Trigger::Command(rest) => rest,
     };
-    // 3. Target.
+    // 3. Structured envelope (Phase 3) or plain command fallback.
+    // The sender gate already ran above, so a structured message
+    // here is from an allowed sender. A rejection executes nothing.
+    match envelope::parse(&rest) {
+        envelope::Parsed::Structured(s) => {
+            return dispatch_structured(tools, cfg, runtime_dir, ssh_bin, msg, s);
+        }
+        envelope::Parsed::Reject(reason) => {
+            crate::utils::log_to_file(&format!(
+                "chat-command: rejected structured sender={} reason={reason}",
+                msg.sender
+            ));
+            send_text(tools, cfg, &format!("rejected: {reason}"));
+            return Slot::Command;
+        }
+        envelope::Parsed::Plain(_) => {}
+    }
+    // 4. Target (plain path).
     let (target, command_text) = split_target(&rest);
     if command_text.is_empty() {
         send_text(tools, cfg, "empty command");
@@ -314,6 +344,7 @@ fn process_message(
             &msg.sender,
             Target::Asus,
             &command_text,
+            cfg.command_timeout_secs,
             || {
                 let argv = executor::parse_command(&command_text)?;
                 asus::check_asus_command(&argv)?;
@@ -339,6 +370,7 @@ fn process_message(
         &msg.sender,
         Target::Local,
         &command_text,
+        cfg.command_timeout_secs,
         || {
             let argv = executor::parse_command(&command_text)?;
             executor::check_local_command(&argv)?;
@@ -357,12 +389,120 @@ fn process_message(
 /// Shared execute→reply path for local and ASUS targets. `validate`
 /// parses + allowlists (rejection → rejection reply, no execution);
 /// `run` executes the validated argv.
+/// Dispatch a validated structured envelope (Phase 3). Commands go
+/// to the existing executor with the envelope's `time` override
+/// (routing by `which`, NOT by an `asus:` prefix inside the command
+/// string — the JSON command is verbatim, so a `which: local`
+/// command starting with `asus:` fails the local allowlist rather
+/// than routing). LLM tasks go to the handler. Scope was validated
+/// as present + well-formed by the parser; for commands it does not
+/// widen the read-only executor (a `write:` scope on a command still
+/// runs the read-only allowlist).
+fn dispatch_structured(
+    tools: &ResolvedChatTools,
+    cfg: &ChatCommandConfig,
+    runtime_dir: &Path,
+    ssh_bin: &str,
+    msg: &ChatMessage,
+    s: envelope::Structured,
+) -> Slot {
+    match s {
+        envelope::Structured::Command {
+            target,
+            time_secs,
+            scope: _,
+            command,
+        } => {
+            let timeout_secs = time_secs.unwrap_or(cfg.command_timeout_secs);
+            if target == Target::Asus {
+                if !cfg.asus_configured() {
+                    send_text(
+                        tools,
+                        cfg,
+                        &format!("asus$ {command}\nASUS relay not enabled/configured"),
+                    );
+                    return Slot::Command;
+                }
+                let (host, user, key) = (
+                    cfg.asus_host.clone().unwrap_or_default(),
+                    cfg.asus_user.clone().unwrap_or_default(),
+                    cfg.asus_key_path.clone().unwrap_or_default(),
+                );
+                return run_and_reply(
+                    tools,
+                    cfg,
+                    &msg.sender,
+                    Target::Asus,
+                    &command,
+                    timeout_secs,
+                    || {
+                        let argv = executor::parse_command(&command)?;
+                        asus::check_asus_command(&argv)?;
+                        Ok(argv)
+                    },
+                    |words| {
+                        asus::run_asus_command(
+                            ssh_bin,
+                            &key,
+                            &user,
+                            &host,
+                            words,
+                            Duration::from_secs(timeout_secs),
+                            cfg.max_output_bytes,
+                        )
+                    },
+                );
+            }
+            run_and_reply(
+                tools,
+                cfg,
+                &msg.sender,
+                Target::Local,
+                &command,
+                timeout_secs,
+                || {
+                    let argv = executor::parse_command(&command)?;
+                    executor::check_local_command(&argv)?;
+                    Ok(argv)
+                },
+                |words| {
+                    executor::run_command_with_timeout(
+                        words,
+                        Duration::from_secs(timeout_secs),
+                        cfg.max_output_bytes,
+                    )
+                },
+            )
+        }
+        envelope::Structured::Llm {
+            backend,
+            time_secs,
+            scope,
+            task,
+        } => {
+            task_handler::submit_llm_task(
+                tools,
+                cfg,
+                runtime_dir,
+                &msg.sender,
+                msg.id,
+                backend,
+                time_secs.unwrap_or(task_handler::DEFAULT_LLM_TIME_SECS),
+                scope,
+                &task,
+            );
+            Slot::Command
+        }
+    }
+}
+
 fn run_and_reply(
     tools: &ResolvedChatTools,
     cfg: &ChatCommandConfig,
     sender: &str,
     target: Target,
     command_text: &str,
+    timeout_secs: u64,
     validate: impl FnOnce() -> Result<Vec<String>, String>,
     run: impl FnOnce(&[String]) -> std::io::Result<executor::ExecutionOutcome>,
 ) -> Slot {
@@ -407,7 +547,7 @@ fn run_and_reply(
         echo_prefix,
         command_text,
         &outcome,
-        cfg.command_timeout_secs,
+        timeout_secs,
         cfg.max_output_bytes,
     );
     send_text(tools, cfg, &body);
@@ -570,7 +710,7 @@ pub fn tick_with(runtime_dir: &Path, ssh_bin: &str) {
                 stop = true;
                 break;
             }
-            let slot = process_message(&tools, &cfg, ssh_bin, &msg);
+            let slot = process_message(&tools, &cfg, runtime_dir, ssh_bin, &msg);
             if matches!(slot, Slot::Command) {
                 processed_cmds += 1;
             }
@@ -586,6 +726,9 @@ pub fn tick_with(runtime_dir: &Path, ssh_bin: &str) {
             break;
         }
     }
+    // Retry any LLM spawns deferred for lack of a runtime (normally
+    // a no-op: the submit already spawned).
+    task_handler::drain_pending(&tools, &cfg);
 }
 
 #[cfg(test)]
@@ -942,6 +1085,165 @@ mod tests {
         assert_eq!(bodies.len(), 1);
         assert!(bodies[0].contains("not enabled"), "{}", bodies[0]);
         unsafe { std::env::remove_var("ASUS_STUB_LOG") };
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Phase 3 (tasks 309/310): envelope + task handoff ──────────
+
+    #[test]
+    fn tick_json_command_executes() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("json-cmd");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"command\", \"which\": \"local\", \"time\": 30, \"scope\": \"read\", \"command\": \"uptime\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("$ uptime"), "{}", bodies[0]);
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1));
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_command_asus_not_enabled() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("json-asus-off");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"command\", \"which\": \"asus\", \"scope\": \"read\", \"command\": \"hostname\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("asus$ hostname"), "{}", bodies[0]);
+        assert!(bodies[0].contains("not enabled"), "{}", bodies[0]);
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_llm_posts_ack_and_writes_role_file() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        task_handler::reset_for_tests();
+        let dir = tmpdir("json-llm-ack");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"llm\", \"which\": \"server\", \"time\": 300, \"scope\": \"read\", \"task\": \"Check disk usage\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(
+            bodies[0].contains("task #1 accepted, running on server, budget 300s"),
+            "{}",
+            bodies[0]
+        );
+        // Role file lands under the tick's runtime dir (the tmpdir),
+        // never the worktree — and carries the read allowlist.
+        let role = std::fs::read_to_string(dir.join("agents").join("chat-task-read.md"))
+            .expect("role file must exist");
+        assert!(role.contains("tools: ["), "{role}");
+        assert!(role.contains("read_note"), "{role}");
+        assert!(!role.contains("write_note"), "{role}");
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1));
+        task_handler::reset_for_tests();
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_llm_second_task_for_busy_backend_queues() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        task_handler::reset_for_tests();
+        let dir = tmpdir("json-llm-queue");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"llm\", \"which\": \"server\", \"scope\": \"read\", \"task\": \"First task\"}"}, {"id": 2, "room": "command", "sender": "john", "body": "!{\"how\": \"llm\", \"which\": \"server\", \"scope\": \"read\", \"task\": \"Second task\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 2, "{bodies:?}");
+        assert!(bodies[0].contains("task #1 accepted"), "{}", bodies[0]);
+        assert!(bodies[1].contains("task #2 queued"), "{}", bodies[1]);
+        assert!(bodies[1].contains("server is busy running task #1"), "{}", bodies[1]);
+        assert!(bodies[1].contains("position 1"), "{}", bodies[1]);
+        task_handler::reset_for_tests();
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_rejections_and_helix_structured_ignored() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        task_handler::reset_for_tests();
+        let dir = tmpdir("json-reject");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"llm\", \"which\": \"server\", \"scope\": \"read\"}"}, {"id": 2, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"llm\", \"which\": \"mars\", \"scope\": \"read\", \"task\": \"x\"}"}, {"id": 3, "room": "command", "sender": "helix", "body": "!{\"how\": \"llm\", \"which\": \"server\", \"scope\": \"read\", \"task\": \"Loop bait\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 2, "{bodies:?}");
+        assert!(bodies[0].contains("rejected: llm task needs a task string"), "{}", bodies[0]);
+        assert!(bodies[1].contains("rejected: unknown backend 'mars'"), "{}", bodies[1]);
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(3), "cursor advances past ignored helix message");
+        task_handler::reset_for_tests();
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_invalid_how_falls_back_to_plain_command() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("json-fallback");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"bogus\"}"}, {"id": 2, "room": "command", "sender": "cobble-jr", "body": "!uptime"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 2, "{bodies:?}");
+        // Plain-path rejection: echo + metachar reason (a structured
+        // rejection would have no "$ " echo).
+        assert!(bodies[0].contains("$ "), "{}", bodies[0]);
+        assert!(bodies[0].contains("forbidden character"), "{}", bodies[0]);
+        assert!(bodies[1].contains("$ uptime"), "{}", bodies[1]);
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_oversize_rejects() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        task_handler::reset_for_tests();
+        let dir = tmpdir("json-oversize");
+        write_config(&dir, BASE_CONFIG);
+        let big_task = "x".repeat(9000);
+        let msg = format!(
+            "{{\"id\": 1, \"room\": \"command\", \"sender\": \"cobble-jr\", \"body\": \"!{{\\\"how\\\": \\\"llm\\\", \\\"which\\\": \\\"server\\\", \\\"scope\\\": \\\"read\\\", \\\"task\\\": \\\"{big_task}\\\"}}\"}}"
+        );
+        install_stubs(
+            &format!("[{msg}]"),
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("rejected: message too large"), "{}", bodies[0]);
+        task_handler::reset_for_tests();
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
