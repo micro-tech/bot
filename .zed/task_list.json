@@ -3609,7 +3609,7 @@
         "id": 308,
         "title": "Chat-command replies: append [exit N] status line",
         "description": "Helix chat-command replies echo the command and its output but omit the exit status, though the design specified an [exit N] line. Add it.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "details": "Root cause (2026-11-04 drill): the executor captures the exit code (executor.rs exit_code: Option<i32>, set from the process status, tested for 0 and for grep-no-match 1), but the reply builder (reply.rs) never renders it, so the 2026-11-04 !uptime reply carried [1/1] $ uptime plus output and no exit line. Fix: append the exit status after the output and before chunking, so it rides the last chunk: Some(N) renders as [exit N]; None (killed by signal) renders as [exit signal] so the case is visible, not silently dropped. Apply to both the local reply path and the ASUS (!asus:) reply path if they render separately. Do not change the allowlist, the sender gate, or the chunk size.",
@@ -3617,7 +3617,7 @@
         "subtasks": [
           {
             "id": "308.1",
-            "status": "pending",
+            "status": "done",
             "title": "Thread exit_code into reply text",
             "details": "Render [exit N] (or [exit signal] for None) after output, before chunking, on local and ASUS reply paths. Add the unit tests above."
           },
@@ -3709,7 +3709,7 @@
         "id": 312,
         "title": "Fix is_counted_error_line: routine chatter must not count as errors",
         "description": "routine_error_log_review counts its own routine_run log lines (and chat-command audit lines) as errors, arming the nightly code-fix loop on non-errors and triggering nightly cargo test runs (the support@ sender). Exclude routine chatter from the error count.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "details": "The nightly routine_error_log_review (src/cpu/mod.rs, routine_error_log_review) counts error_log.md lines via is_counted_error_line. It counts its own routine_run lines (e.g. a CPU routine_run Error log review line) as errors — a self-referential misfire proven by the Nov 5 nightly report (2 counted errors, both routine chatter; loop ARMED a 4th consecutive night; 2 fix attempts ran cargo test --lib, both timed out at 60s and reverted). Chat-command audit lines also land in error_log.md via log_to_file and are counted the same way. Fix is_counted_error_line to exclude routine chatter: routine_run lines and chat-command audit lines (and any other non-error routine or audit chatter the function itself writes). The loop must arm ONLY on genuine errors. Evidence: Nov 2 ARMED (6887 errors), Nov 3 ARMED (4365), Nov 4 ARMED (2), Nov 5 ARMED (2) — the count collapses as the log is cleaned, but the routine's own lines keep re-arming it. After the fix, the loop should stay disarmed on a clean log (verify: run routine_error_log_review against a log containing only routine chatter and confirm 0 counted errors and no arming). Do NOT change the fix loop's arming window, attempt budget, or shell behavior — only the counting predicate.",
@@ -3717,7 +3717,7 @@
         "subtasks": [
           {
             "id": "312.1",
-            "status": "pending",
+            "status": "done",
             "title": "Fix is_counted_error_line (exclude routine + audit chatter)",
             "details": "Exclude routine_run lines and chat-command audit lines from the error count; genuine errors still count."
           },
