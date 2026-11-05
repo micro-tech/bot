@@ -3704,6 +3704,30 @@
             "details": "Six drill items (command JSON, fallback, llm report, malformed, helix ignored, queue behavior). All must behave as specified."
           }
         ]
+      },
+      {
+        "id": 312,
+        "title": "Fix is_counted_error_line: routine chatter must not count as errors",
+        "description": "routine_error_log_review counts its own routine_run log lines (and chat-command audit lines) as errors, arming the nightly code-fix loop on non-errors and triggering nightly cargo test runs (the support@ sender). Exclude routine chatter from the error count.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "details": "The nightly routine_error_log_review (src/cpu/mod.rs, routine_error_log_review) counts error_log.md lines via is_counted_error_line. It counts its own routine_run lines (e.g. a CPU routine_run Error log review line) as errors — a self-referential misfire proven by the Nov 5 nightly report (2 counted errors, both routine chatter; loop ARMED a 4th consecutive night; 2 fix attempts ran cargo test --lib, both timed out at 60s and reverted). Chat-command audit lines also land in error_log.md via log_to_file and are counted the same way. Fix is_counted_error_line to exclude routine chatter: routine_run lines and chat-command audit lines (and any other non-error routine or audit chatter the function itself writes). The loop must arm ONLY on genuine errors. Evidence: Nov 2 ARMED (6887 errors), Nov 3 ARMED (4365), Nov 4 ARMED (2), Nov 5 ARMED (2) — the count collapses as the log is cleaned, but the routine's own lines keep re-arming it. After the fix, the loop should stay disarmed on a clean log (verify: run routine_error_log_review against a log containing only routine chatter and confirm 0 counted errors and no arming). Do NOT change the fix loop's arming window, attempt budget, or shell behavior — only the counting predicate.",
+        "testStrategy": "Unit tests: routine_run lines are not counted; chat-command audit lines are not counted; genuine error lines still are counted (no false negatives); a log containing only routine chatter yields 0 counted errors and the review does not arm. Full cargo test --lib green; cargo check --bin helix zero warnings.",
+        "subtasks": [
+          {
+            "id": "312.1",
+            "status": "pending",
+            "title": "Fix is_counted_error_line (exclude routine + audit chatter)",
+            "details": "Exclude routine_run lines and chat-command audit lines from the error count; genuine errors still count."
+          },
+          {
+            "id": "312.2",
+            "status": "pending",
+            "title": "Verify the loop stays disarmed on routine-only logs",
+            "details": "Unit tests plus a manual review run against a routine-only log; confirm the next nightly report shows the review disarmed (or armed only on genuine errors)."
+          }
+        ]
       }
   ]
 }
