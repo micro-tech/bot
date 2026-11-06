@@ -513,7 +513,8 @@
       "title": "Implement Helix Remote Bundle Fetcher",
       "description": "Add support for Helix to fetch OKF bundles, manifests, and metadata directly from the remote OKF server.",
       "priority": "high",
-      "status": "pending",
+      "status": "done",
+      "results": "Done per bot review 2026-11-05 (PreRelese 17fddd7): src/okf/fetcher.rs has fetch_manifest (:44), fetch_knowledge (:106), health_check (:135), ETag caching test (~:262); config in src/config/okf.rs. All five subtasks covered in substance.",
       "dependencies": [],
       "details": "Add support for Helix to fetch OKF bundles, manifests, and metadata directly from the remote OKF server.",
       "testStrategy": "Test fetching manifests and bundles over network, verify caching and error handling.",
@@ -523,35 +524,35 @@
           "title": "Add remote fetch configuration",
           "description": "Add OKF server base URL, authentication token, and fetch timeout settings to Helix config.",
           "priority": "high",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "169.2",
           "title": "Implement manifest fetcher",
           "description": "Fetch manifest.json for bundles from the OKF server and parse using serde.",
           "priority": "high",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "169.3",
           "title": "Implement bundle content fetcher",
           "description": "Fetch tool definitions, knowledge bundles, and schema files from the OKF server.",
           "priority": "high",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "169.4",
           "title": "Add caching layer",
           "description": "Cache fetched bundles locally to reduce network load and improve reload speed.",
           "priority": "medium",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "169.5",
           "title": "Add fetch error handling",
           "description": "Handle network failures, missing bundles, and invalid responses gracefully.",
           "priority": "medium",
-          "status": "pending"
+          "status": "done"
         }
       ]
     },
@@ -606,7 +607,8 @@
       "id": 171,
       "title": "Project Scanner Module \u2013 Remote scan of Main PC from Dell 630 (Dell 630 scans Main PC over LAN)",
       "description": "Create a configurable \"project scanner\" that runs on the Dell 630 (Helix agent + OKF server in separate Proxmox VMs) and remotely scans the Main PC (where coding/development happens) over the local network. Must support a programmable list of projects + per-PC and per-project settings in config. Outputs structured trees suitable for Mermaid (primary) / OKF bundles. Note: User clarified possible confusion between Markmap and Mermaid \u2014 primary focus is Mermaid diagrams (already supported in schema from task 167).",
-      "status": "pending",
+      "status": "done",
+      "results": "Done per bot review 2026-11-05 (PreRelese 17fddd7): src/tools/project_scanner.rs (713 lines), ProjectScanResult with scanned_from/target_machine, [helix.project_scanner] + [[helix.projects]] parsing in src/config/project_scanner.rs, scan_projects tool wired in src/tools/mod.rs:76,437, SSH remote stub behind optional ssh feature; tests at project_scanner.rs:502-618 + tools/mod.rs:808-832. Caveat: no separately recorded live run from the R630; unit tests cover the local-scan path.",
       "dependencies": [
         167
       ],
@@ -617,32 +619,32 @@
         {
           "id": "171.1",
           "title": "Design and add [helix.project_scanner] + [[projects]] config schema",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "171.2",
           "title": "Implement core ProjectScanner module (walk + filters + metadata)",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "171.3",
           "title": "Add structured output types (ProjectTree, ProjectScanResult) with cross-machine fields",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "171.4",
           "title": "Expose as tool (scan_projects / scan_remote_project) and wire into list_tools + OKF",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "171.5",
           "title": "Add remote scan stub + network config placeholders (SMB/SSH/http)",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "171.6",
           "title": "Unit + integration tests + example config for Main PC scanning",
-          "status": "pending"
+          "status": "done"
         }
       ]
     },
@@ -980,7 +982,8 @@
       "details": "Remove the unused import at src/ssh/mod.rs:13. Trivial single-line fix; do not touch anything else. (Reconstructed 2026-10-08 after the working-tree filing was lost; see nightly-quartermaster-run/hidden_files/run-2026-10-08.md.)",
       "id": 212,
       "priority": "low",
-      "status": "pending",
+      "status": "done",
+      "results": "Done per bot review 2026-11-05 (PreRelese 17fddd7): no import at src/ssh/mod.rs:13 (doc comment + pub mod only). Quartermaster 2026-10-22, 2026-10-23 and 2026-11-05 all report cargo check --lib zero warnings.",
       "subtasks": [],
       "testStrategy": "cargo build shows no warning at src/ssh/mod.rs:13; no new warnings elsewhere.",
       "title": "Clear the unused-import warning at src/ssh/mod.rs:13"
@@ -991,18 +994,19 @@
       "details": "Failing tests: (1) mcp_client::tests::disabled_by_default_from_worktree_config - assert!(!is_enabled()) at src/mcp_client/mod.rs:165 fails because config now enables MCP. (2) mcp_client::tests::try_execute_returns_none_for_mcp_names_when_disabled - try_execute(mcp__google__gmail_search) returns Some(spawn error) instead of None; it tried to spawn /home/cobble/.local/bin/google-mcp which does not exist in this sandbox. (3-6) a2a::a2a_handler::tests::message_send_creates_and_completes_task, cancel_terminal_task_is_noop, acp::agent::tests::run_prompt_produces_final_answer, run_prompt_unknown_session_still_runs - panic at src/mcp_client/mod.rs:103: 'can call blocking only when running on the multi-threaded runtime' via bridge()/block_in_place, because the tests now take the MCP-enabled path on a current-thread runtime. REPAIR DIRECTION: make the tests hermetic - point them at an isolated test config (or env-gated fixture) instead of the worktree config.toml. Do NOT just re-disable [mcp] in config.toml: John enabled it deliberately for his deployment (google-mcp binary at /home/cobble/.local/bin/google-mcp on the R630). Check how is_enabled() locates config.toml and inject a test override. RULED OUT: build is green (exit 0), no new warnings (11 unique, all pre-existing; 5 fixed by the same merges), no disk issues (this was a clean rerun after /tmp was freed; grok-cli fully green). Full failure output: ~/workspace/goals/nightly-quartermaster-run/hidden_files/qm-20261008-bot-test.log\n\nSURVEYOR 1 REPAIR PLAN (2026-10-08, verified by backtrace \u2014 planning only, no code touched): GOAL: make the lib unit tests hermetic w.r.t. the worktree config.toml's [mcp] section. Zero production behavior change; John's enabled [mcp] + google server entry in config.toml stays exactly as he committed it (abc747f). VERIFIED ROOT CAUSE: #[tokio::test] defaults to current_thread flavor (backtrace shows current_thread::Core driving the test fn \u2014 NOT multi-thread). mcp_client::bridge() does Handle::try_current() -> Ok -> block_in_place, which panics on current-thread runtimes. With [mcp] enabled, the 4 agent-loop tests reach bridge() via describe_tools_for_prompt -> tool_definitions -> mcp_client::tool_definitions. Production unaffected (tokio::main is multi-thread; no current_thread runtime anywhere in src/). ALSO SPOTTED: 2 false-green tests pass only because the spawn of the absent google-mcp binary fails; on John's R630 (binary present) they'd attempt real MCP handshakes in unit tests.\n\nPHASES: (1) hermetic config plumbing in src/mcp_client/mod.rs only (HELIX_MCP_CONFIG_PATH env override + #[cfg(test)] default when CONFIG_PATH unset); (2) rewrite the 2 worktree-coupled tests; (3) the 4 a2a/acp tests need NO edits (Phase 1b makes is_enabled() false); (4) full lib suite green with John's enabled config.toml untouched + CHANGELOG entry, commit on PreRelese, push on John's cards. REJECTED: re-disabling [mcp] (John's deliberate deployment choice), multi_thread test flavor (would attempt real spawns on equipped machines), .cargo/config [env] (would neuter local dev runs), reworking bridge() (production change, zero production benefit \u2014 deferred). RISKS: bridge() still panics on current-thread runtimes (future prod hazard \u2014 follow-up candidate); no hermetic enabled-path spawn coverage (fake-stdio fixture \u2014 follow-up). (Reconstructed 2026-10-08 after the working-tree filing was lost; see nightly-quartermaster-run/hidden_files/run-2026-10-08.md.)",
       "id": 213,
       "priority": "high",
-      "status": "pending",
+      "status": "done",
+      "results": "Done per bot review 2026-11-05 (PreRelese 17fddd7): outcome achieved via hermetic test seams in src/mcp_client/mod.rs:75-165 (test_config_override, override_config_for_tests, disabled_test_config()), NOT via HELIX_MCP_CONFIG_PATH as the task spec proposed; the old failing tests were rewritten around them and the suite is green (lib 605/0/4). The 6 originally failing tests (mcp_client x2, a2a x2, acp x2) all pass.",
       "subtasks": [
         {
           "id": "213.1",
           "title": "Phase 1: hermetic config plumbing in src/mcp_client/mod.rs (HELIX_MCP_CONFIG_PATH + #[cfg(test)] default)",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": "213.2",
           "title": "Phase 2: rewrite the 2 worktree-coupled mcp_client tests",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             "213.1"
           ]
@@ -1010,7 +1014,7 @@
         {
           "id": "213.3",
           "title": "Phase 3: verify the 4 a2a/acp tests need no edits",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             "213.1"
           ]
@@ -1018,7 +1022,7 @@
         {
           "id": "213.4",
           "title": "Phase 4: full lib suite green + CHANGELOG, commit on PreRelese",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             "213.2",
             "213.3"
@@ -1353,13 +1357,13 @@
       "id": 222,
       "title": "Clear the unused-re-export warning at src/router/route.rs:94",
       "description": "cargo check emits: warning: unused import: `crate::router::complexity::score_prompt` at src/router/route.rs:94 (`pub use crate::router::complexity::score_prompt;`). The re-export has zero consumers: the only `score_prompt` reference tree-wide is its definition at src/router/complexity.rs:128. The last user of the re-export path was removed by the Oct-8 commander merges (the line itself dates to June commit f48047d). Delete the re-export line; nothing else references it.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "low",
       "details": "FILED BY QUARTERMASTER 2026-10-09 ~04:40 EDT. Verified: `grep -rn score_prompt src/` shows only route.rs:94 (the re-export) and complexity.rs:128 (the definition). RULED OUT: not a build/test blocker (check exit 0); not load-bearing (no `use ...route::score_prompt` anywhere). Suggested start: remove the `// Re-export for convenience` + `pub use` lines at src/router/route.rs:93-94, then `cargo check` to confirm zero warnings delta beyond the 11 pre-existing.",
       "testStrategy": "cargo check emits no warning for src/router/route.rs; full cargo check warning inventory matches the 11 pre-existing (build.rs:1, unix_socket x3, mcp_client x1, router/mod.rs x5, ssh/mod.rs:13).",
       "subtasks": [],
-      "results": ""
+      "results": "Done per bot review 2026-11-05 (PreRelese 17fddd7): no pub use score_prompt remains at src/router/route.rs:85-100. Quartermaster 2026-11-05 reports cargo check --lib zero warnings."
     },
     {
       "id": 223,
@@ -1376,13 +1380,13 @@
       "id": 224,
       "title": "Clear unused-import warnings in tests/unix_socket_test.rs",
       "description": "cargo test compile emits two warnings: `unused import: tokio::net::UnixStream` (tests/unix_socket_test.rs:5) and `unused imports: AsyncBufReadExt, AsyncWriteExt, BufReader` (tests/unix_socket_test.rs:6). The code is old (last touched in 5ee4af4, long before tonight), but the warnings surfaced for the first time in the 2026-10-10 QM run when the task-223 rebuild recompiled test targets. Remove or gate the unused imports.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "low",
       "details": "FILED BY QUARTERMASTER 2026-10-10 ~04:45 EDT. Verified: warnings emitted by cargo test compile of test target `unix_socket_test`; file unchanged since 5ee4af4. RULED OUT: not a build/test blocker (all test targets compile and pass); not new code (test file predates Oct 2026). Suggested start: check whether UnixStream / AsyncBufReadExt / AsyncWriteExt / BufReader are truly unused (they may be used only under cfg features or may have been left after a refactor), delete the dead `use` lines at tests/unix_socket_test.rs:5-6, then `cargo check --tests`/`cargo test --no-run` to confirm the target compiles warning-free.",
       "testStrategy": "cargo test --no-run (or cargo check --tests) emits no warnings for tests/unix_socket_test.rs; unix_socket_test still passes (1/1 integration target green).",
       "subtasks": [],
-      "results": ""
+      "results": "Closed as a duplicate of 273 - same 2 unix_socket_test.rs warnings (filed 2026-10-10 and 2026-10-19). Kept 273, the one the Quartermaster tracks."
     },
     {
       "id": 225,
@@ -1585,13 +1589,13 @@
       "id": 234,
       "title": "Clear remaining pre-existing unused-import warnings (build.rs, unix_socket.rs, mcp_client/mod.rs)",
       "description": "cargo check on PreRelese emits three unused-import warnings not covered by tasks 212/222/224: `use std::env;` in build.rs:1, `use std::time::{SystemTime, UNIX_EPOCH, Instant};` (SystemTime/UNIX_EPOCH unused) in src/io/unix_socket.rs:23, and `pub use naming::PREFIX;` in src/mcp_client/mod.rs:17. All pre-date October (blame: 8689d30a 2026-10-03, f48047d9-style older code paths); none were introduced by the 230/233 merges. Remove or gate the unused imports.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "low",
       "details": "FILED BY QUARTERMASTER 2026-10-11 ~04:40 EDT during nightly run on PreRelese @ 1d73dbd (PR #18 merged). Verified: warnings emitted by cargo check --lib --bins; `git blame` shows the lines pre-date the 230/233 work. RULED OUT: not introduced by task-230/233 merges (git log on those files shows no 230/233 commits), not a build/test blocker, no behavior change expected \u2014 pure dead-import cleanup.",
       "testStrategy": "cargo check --lib --bins emits zero warnings for these three files; cargo build + cargo test --lib unchanged (6 pre-existing task-213 failures only).",
       "subtasks": [],
-      "results": ""
+      "results": "Done per bot review 2026-11-05 (PreRelese 17fddd7): build.rs:1 is now use std::fs; (std::env gone); src/io/unix_socket.rs:23 is use std::time::Instant; only; pub use naming::PREFIX gone from src/mcp_client/mod.rs (only a test-local use at :260). Quartermaster 2026-11-05 reports cargo check --lib zero warnings."
     },
     {
       "id": 235,
@@ -1869,7 +1873,8 @@
       "id": 247,
       "title": "B3: Single-pass tool definition build",
       "description": "In subagent_tool_definitions, build the tool list once and filter twice instead of calling both builders.",
-      "status": "pending",
+      "status": "done",
+      "results": "Done per bot review 2026-11-05 (PreRelese 17fddd7): subsumed by the 237 OnceLock cache, exactly as the task clause allows - src/tools/mod.rs test tool_definitions_excluding_uses_cache asserts BUILD_COUNT == 1 after both tool_definitions_excluding() and tool_definitions(), plus test_static_tool_defs_built_once. Note: src/persona.rs:253-264 still calls both builders, but both hit the OnceLock cache.",
       "dependencies": [
         237
       ],
@@ -1957,13 +1962,13 @@
       "id": 254,
       "title": "Clear new unused warnings from tasks 235-246 + uncovered pre-existing router re-exports",
       "description": "cargo check --lib --bins on PreRelese @ 439617d (PR #19) emits warnings in two groups. NEW (introduced by tasks 235-246, filed by QM 2026-10-12): src/router/mod.rs:23 unused names `TokenUsage`, `note_api_usage`, `usage_summary_today` in the task-235/236 spend re-export (bb32f59a); src/io/web_server/mod.rs:1888 unused variable `state` in ops_restart(State(state): State<AppState>) left over after task 240 moved auth to require_web_token middleware. PRE-EXISTING but not covered by tasks 212/222/224/234 (verified present in the 2026-10-10 and 2026-10-11 QM check logs; pre-October blame): src/router/mod.rs:16 `ComplexityConfig, HealthThresholds, LoadThresholds, ScheduleConfig` (cb9aa41c), :17 `DefaultStrategy, RoutingStrategy` (b57f00ec), :20 `OverrideCommand, OverrideTier` (686129b9), :22 `telemetry::TelemetryCollector` (686129b9). All consumers use full paths (crate::router::spend::..., crate::router::override_mod::..., crate::router::health::...); the mod.rs re-exports are dead convenience aliases. Note: DEFAULT_DAILY_API_CAP_USD/paid_spent_today_usd on line 23 were already warned pre-PR#19; the task-235/236 commit added the three new names to the same line.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "low",
       "details": "FILED BY QUARTERMASTER 2026-10-12 ~04:45 EDT during nightly run on PreRelese @ 439617d. Verified: warnings emitted by cargo check --lib --bins; git blame pins the new ones to PR #19 commits (bb32f59a task 235/236, 35f7711b task 240); consumer grep shows zero users of the router:: re-export paths. RULED OUT: not behavior-affecting (build exits 0, lib tests 356 passed with only the 6 known task-213 failures, no new failures); ops_restart's unused `state` is auth-middleware fallout, not a missing auth check (middleware require_web_token now guards the route). Suggested fix: drop the dead re-export names from src/router/mod.rs (or wire consumers to them); change ops_restart to State(_state) or drop the extractor. If John's metering follow-ups (task 235) plan to consume TokenUsage/note_api_usage/usage_summary_today via the short path, say so and keep those names.",
       "testStrategy": "cargo check --lib --bins emits zero warnings; cargo build clean; cargo test --lib unchanged (6 pre-existing task-213 failures only); the 10 integration targets still green.",
       "subtasks": [],
-      "results": ""
+      "results": "Done per bot review 2026-11-05 (PreRelese 17fddd7): src/router/mod.rs:23 is now pub use spend::{note_api_call, check_api_allowed}; (dead TokenUsage/note_api_usage/usage_summary_today gone); ops_restart at src/io/web_server/mod.rs:2169 takes State(_state). Quartermaster 2026-11-05 reports cargo check --lib zero warnings."
     },
     {
       "id": 255,
@@ -2293,7 +2298,8 @@
       "id": 263,
       "title": "Fix flaky chat_history test: clear_empties_history bypasses test_env_lock and races the other chat_history tests",
       "description": "cargo test --lib on fix-bin-support-watch @ 12b8cbd failed once with chat_history::tests::corrupt_lines_dont_break_reload asserting 0 turns instead of 2, then passed on an immediate re-run with zero code changes. Scheduling-dependent flake: clear_empties_history does not use with_clean_history, so it takes no test_env_lock and mutates the shared process-global history (record_turn/clear) while other chat_history tests run in parallel.",
-      "status": "pending",
+      "status": "done",
+      "results": "Done 2026-11-05. 263.1 repro fired repeatedly on unfixed code (corrupt_lines_dont_break_reload panicked at src/chat_history.rs:324:13, 2/8 runs). 263.2 wrapped clear_empties_history in with_clean_history. 263.3 audit: only default-suite test touching shared chat_history globals without the lock; stray logs/chat_history.jsonl (x/y turns) was test pollution, removed. 263.4 verify: chat_history 10x 0 failures, full lib 10x 0 failures (605/0/4), single-threaded 605/0/4. (263.4 leave-uncommitted clause superseded by the build order: branch pushed, John merges.)",
       "dependencies": [],
       "priority": "medium",
       "details": "FILED BY QUARTERMASTER, 2026-10-16 nightly run. Production code NOT implicated (lib suite is green on re-run; the flake is test isolation only), but a flaky test reds the line intermittently and must not be ignored.\n\nFAILURE OUTPUT (full log: ~/workspace/goals/nightly-quartermaster-run/hidden_files/qm-20261016-bot-full.log):\n  thread 'chat_history::tests::corrupt_lines_dont_break_reload' panicked at src/chat_history.rs:312:13:\n  assertion `left == right` failed\n    left: 0\n   right: 2\n  failures:\n      chat_history::tests::corrupt_lines_dont_break_reload\n  test result: FAILED. 422 passed; 1 failed; 4 ignored\n\nRE-RUN (same tree, same command, minutes later; log qm-20261016-bot-testlib-rerun.log): test result: ok. 423 passed; 0 failed; 4 ignored.\n\nMECHANISM (verified in src/chat_history.rs): with_clean_history() takes crate::tools::subagent_tool::test_env_lock() (a process-global Mutex) and points HELIX_CHAT_HISTORY_FILE at a temp file. All chat_history tests use it EXCEPT clear_empties_history (src/chat_history.rs:265), which calls record_turn(\"x\", \"y\") + clear() with no lock. A clear() landing between another test's load_from_disk() and its recent_turns() assert produces exactly the observed 0-turns failure. Note with_clean_history's temp file name is pid-only (helix-chat-history-test-{pid}.jsonl), so it is shared by every chat_history test in the process \u2014 the lock is the only isolation.\n\nRULED OUT:\n- Not a code change: the tree is byte-identical to the 2026-10-15 green run (fix-bin-support-watch @ 12b8cbd, no new commits anywhere).\n- Not the 261/262 build breaks: the lib crate compiles and the lib suite runs; 261/262 block only the bins + non-lib test targets.\n- Not stale worktree state: the temp file is removed at the start/end of every with_clean_history call; the failure is a live interleaving, not leftover data.\n\nSUGGESTED START: wrap clear_empties_history's body in with_clean_history (or take test_env_lock directly). Audit the whole lib suite for other tests that touch shared chat_history globals (record_turn / clear / recent_turns) or HELIX_CHAT_HISTORY_FILE without the lock \u2014 spot-check found production callers in src/io/llm_gemini/mod.rs and src/io/ollama/mod.rs, so check whether any of their tests drive those paths concurrently. Consider making the temp file name unique per test (e.g. include the test name), not just per pid, as defense in depth.\n\nNOTE: full `cargo test` verification is still gated on task 262 (installer include_str! blocks all non-lib test targets). Verify via cargo test --lib until 262 lands.\n\nSURVEYOR 1 VERIFIED 2026-10-16 (plan only, no code touched):\n- clear_empties_history (src/chat_history.rs:265) is the ONLY chat_history test outside with_clean_history (line 185); all 8 others hold test_env_lock (src/tools/subagent_tool.rs:591, process-global Mutex) for the whole test body.\n- Audit: NO other test in the lib suite calls record_turn / clear / load_from_disk / recent_turns, and NO test outside chat_history.rs sets HELIX_CHAT_HISTORY_FILE (grep-verified). llm_gemini test gemini_tool_loop_emits_spawn_subagent_call calls call_gemini_tools, which READS recent_turns (mod.rs:387) but never writes \u2014 and it holds test_env_lock, so it is serialized with the chat_history tests. record_turn in llm_gemini lives in handle_gemini_bus_message (mod.rs:68), which no test calls. Ollama tests are pure unit tests + one #[ignore]d live test (test_handle_ollama_live); no default-suite ollama test drives handle_ollama_message / call_ollama_tools (the record_turn / recent_turns sites, mod.rs:332/553). No audit changes needed beyond the 263.2 fix.\n- Second failure direction: clear_empties_history's record_turn(\"x\",\"y\") also APPENDS to whatever HELIX_CHAT_HISTORY_FILE points to at that moment \u2014 another test's shared temp file (inflating its count) or, with the var unset, the real logs/chat_history.jsonl (a stray untracked logs/chat_history.jsonl is in the worktree; Ranger to check whether it is test pollution and remove it if so).\n- Unique-per-test temp filenames are OPTIONAL defense-in-depth only: they fix the disk side, NOT the shared in-memory HISTORY \u2014 clear() would still wipe global memory without the lock. Do not ship filenames as the fix.\n- Do NOT change production record_turn / clear / load_from_disk / recent_turns \u2014 test-only fix. Do NOT re-plan 261/262.",
@@ -2301,22 +2307,22 @@
       "subtasks": [
         {
           "id": "263.1",
-          "status": "pending",
+          "status": "done",
           "title": "Reproduce the flake (attempt): loop cargo test --lib chat_history (50x) + full cargo test --lib (20x); log attempts; proceed on the verified mechanism if it doesn't fire"
         },
         {
           "id": "263.2",
-          "status": "pending",
+          "status": "done",
           "title": "Fix clear_empties_history isolation: wrap its body in with_clean_history (src/chat_history.rs:265) so it runs under test_env_lock"
         },
         {
           "id": "263.3",
-          "status": "pending",
+          "status": "done",
           "title": "Audit: confirm no other test touches shared chat_history globals or HELIX_CHAT_HISTORY_FILE without the lock (llm_gemini read-only under lock; ollama live test ignored) + check stray logs/chat_history.jsonl"
         },
         {
           "id": "263.4",
-          "status": "pending",
+          "status": "done",
           "title": "Verify: cargo test --lib loop 10x green at default parallelism + single-threaded run green; leave changes uncommitted for QM/John review"
         }
       ]
@@ -2494,7 +2500,8 @@
       "id": 268,
       "title": "Helix STT integration: ASR model download, transcriptions client, /api/voice/transcribe, browser mic capture",
       "description": "STT phase: download a whisper-family ASR GGUF on the voice box (John's hardware step), add it to server.json, then Helix client + endpoint + browser mic capture (MediaRecorder push-to-talk). Depends on the server running (266).",
-      "status": "in_progress",
+      "status": "done",
+      "results": "Done by John 2026-10-19 (bot review 2026-11-05): installed citrinet_asr_q8_0, added citrinet-asr to /audio.cpp/server.json, restarted audiocpp, set [voice] stt_model to citrinet-asr on the R630, verified active; round-trip verified, live-verified push-to-talk. Note: spec said whisper-family, but no whisper package exists in the audio.cpp model manager - Citrinet was the documented, deliberate substitution.",
       "dependencies": [
         266
       ],
@@ -2505,7 +2512,7 @@
         {
           "id": "268.1",
           "title": "Download whisper-family ASR GGUF via audio.cpp model manager; add asr entry to server.json; curl STT test",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             "266.1"
           ]
@@ -3452,7 +3459,7 @@
         "subtasks": [
           {
             "id": "302.1",
-            "status": "pending",
+            "status": "done",
             "title": "Write docs/chat-command-loop.md",
             "details": "Cover room, trigger, allowlist, sender rule, fail-closed defaults, chunking, audit log, enable steps, troubleshooting."
           },
@@ -3693,7 +3700,7 @@
         "subtasks": [
           {
             "id": "311.1",
-            "status": "pending",
+            "status": "done",
             "title": "Write task-handoff docs",
             "details": "Envelope, dispatch, scope, queue, reports, enable steps, troubleshooting."
           },
@@ -3728,6 +3735,66 @@
             "details": "Unit tests plus a manual review run against a routine-only log; confirm the next nightly report shows the review disarmed (or armed only on genuine errors)."
           }
         ]
-      }
+      },
+    {
+      "id": 313,
+      "title": "WS routine CRUD bypasses the web-token gate",
+      "description": "The four WebSocket routine messages (routine_toggle, routine_create, routine_update, routine_delete) do not check the web token, so any client that can open a WebSocket can enable/disable routines and create agent-job routines even when a token is configured.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Bot review 2026-11-05 (PreRelese 17fddd7), Part B Must-fix 1 (speed first, security a slim second). Evidence: src/io/web_server/mod.rs:1175 (routine_toggle), :1204 (routine_create), :1232 (routine_update), :1265 (routine_delete) - none checks `authed`; the gate is applied only at :1387 (config_save) and :1533 (manifest_save). Impact: any WebSocket client can enable/disable routines (including self-improve, support-mail-watch, chat-command-watch) and create agent-job routines with arbitrary task text + backend, even when a token IS configured and the HTTP mutating endpoints are gated. Fix: apply the same `authed` check to all four routine messages.",
+      "testStrategy": "With a token configured, an unauthenticated WebSocket routine_toggle/create/update/delete is rejected; an authenticated one works. Full cargo test --lib green; cargo check --bin helix zero warnings.",
+      "subtasks": [],
+      "results": ""
+    },
+    {
+      "id": 314,
+      "title": "Log cleanup is dead code, so logs grow without bound",
+      "description": "nightly_maintenance (7-day logs/ prune) has zero callers, so logs/chat_log.md, logs/hartbeat_log.md and logs/bus_log.md grow without bound; only error_log.md is capped.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Bot review 2026-11-05 (PreRelese 17fddd7), Part B Must-fix 2. Evidence: src/cpu/mod.rs:1146 nightly_maintenance (7-day logs/ prune) has zero callers. logs/chat_log.md, logs/hartbeat_log.md (appended every 300 s beat) and logs/bus_log.md (appended on every bus publish) have no rotation - only error_log.md is capped (100k lines, src/utils.rs). Fix: call nightly_maintenance from a real routine, or rotate the three files like the error log.",
+      "testStrategy": "Logs are pruned/rotated on schedule (verify by log sizes over a nightly cycle); cargo test --lib green.",
+      "subtasks": [],
+      "results": ""
+    },
+    {
+      "id": 315,
+      "title": "Cpu mutex held across whole routines, starving heartbeat",
+      "description": "The Cpu mutex is held across whole routine runs, so a long self-improve cycle or nightly fix blocks the heartbeat tick and all other routines for minutes, tripping the missed-beat watchdog.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Bot review 2026-11-05 (PreRelese 17fddd7), Part B Must-fix 3. Evidence: src/main.rs:401 spawns per-routine_run and holds cpu.lock() across handle_routine_run().await (src/cpu/mod.rs:436); the heartbeat tick takes the same lock (src/main.rs:429). A self-improve cycle (up to max_cycle_minutes of LLM work) or a nightly fix (LLM loop + cargo test --lib, src/cpu/mod.rs:1097) blocks all beats and all other routines for minutes. Also routine_chat_command_watch runs the sync tick() (up to the 45 s TICK_BUDGET) while holding the lock. Fix: do not hold the Cpu lock across routine execution - move the lock inside the short critical sections, or run routines on a dedicated task with the heartbeat on its own state.",
+      "testStrategy": "Heartbeat beats continue during a long routine run (no missed-beat watchdog trips); cargo test --lib green.",
+      "subtasks": [],
+      "results": ""
+    },
+    {
+      "id": 316,
+      "title": "Hot-path file I/O on every log line and bus message",
+      "description": "error_log_path() runs fs::create_dir_all on every log_to_file() call and bus publish() opens/appends bus_log.md per message, including per streaming token - expensive file I/O on hot paths.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Bot review 2026-11-05 (PreRelese 17fddd7), Part B Must-fix 4. Evidence: src/utils.rs:33 error_log_path() runs fs::create_dir_all on every log_to_file() call (:43, open + write + close per line) at ~54k lines/day; src/bus/mod.rs:98 publish() calls log_transaction() (:117), which opens/appends logs/bus_log.md per message - including per streaming token (llm_token publish, src/cpu/mod.rs:1430-ish). Fix: create_dir_all once (e.g. OnceLock), and batch/skip bus-log writes for high-frequency types.",
+      "testStrategy": "Log/bus write volume drops (measure create_dir_all calls / bus_log writes per minute under load); cargo test --lib green.",
+      "subtasks": [],
+      "results": ""
+    },
+    {
+      "id": 317,
+      "title": "Update dependencies in Cargo.toml to latest versions",
+      "description": "Update the direct dependency versions in Cargo.toml (and Cargo.lock) to the latest versions, fix any breaking API changes, and note major-version bumps that required code changes.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "Source: RustRecon scan by John 2026-11-05 on the Helix repo - 526 dependencies, 10 high-priority deep-analysis items, many packages with new versions; the full outdated list is in the scan's report.md (held locally by John). Scope: direct dependencies in Cargo.toml (and Cargo.lock); fix any breaking API changes; verify with cargo check + cargo test --lib + cargo check --bin helix; note any major-version bumps that required code changes.",
+      "testStrategy": "cargo check + cargo test --lib + cargo check --bin helix all green on the updated tree; Cargo.lock updated; major-version bumps and their code changes listed in the results.",
+      "subtasks": [],
+      "results": ""
+    }
   ]
 }
