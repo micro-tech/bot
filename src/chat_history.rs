@@ -275,9 +275,17 @@ mod tests {
 
     #[test]
     fn clear_empties_history() {
-        record_turn("x", "y");
-        clear();
-        assert!(recent_turns().is_empty());
+        // Task 263: this was the only chat_history test outside
+        // with_clean_history — it ran without test_env_lock and
+        // mutated the shared process-global history (and, with the
+        // env var unset, appended to the real logs/chat_history.jsonl)
+        // while other chat_history tests ran in parallel, which
+        // intermittently zeroed another test's turn count.
+        with_clean_history(|| {
+            record_turn("x", "y");
+            clear();
+            assert!(recent_turns().is_empty());
+        });
     }
 
     #[test]
