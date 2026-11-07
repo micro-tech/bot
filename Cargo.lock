@@ -1774,6 +1774,7 @@ dependencies = [
  "subtle",
  "tokio",
  "tokio-rustls",
+ "tokio-tungstenite",
  "tokio-util",
  "toml",
  "tower",
