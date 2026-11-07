@@ -116,3 +116,7 @@ path = "src/bin/installer.rs"
 [dev-dependencies]
 # HTTP contract tests for the OKF protocol v1 (task 207).
 mockito = "1.7"
+# Task 313: real WebSocket client for the WS auth-gate tests — drives the
+# /ws endpoint over a live socket instead of asserting on internals.
+# 0.29 is the version already in Cargo.lock (via axum), so no new crates.
+tokio-tungstenite = "0.29"
