@@ -3788,13 +3788,13 @@
       "id": 317,
       "title": "Update dependencies in Cargo.toml to latest versions",
       "description": "Update the direct dependency versions in Cargo.toml (and Cargo.lock) to the latest versions, fix any breaking API changes, and note major-version bumps that required code changes.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "Source: RustRecon scan by John 2026-11-05 on the Helix repo - 526 dependencies, 10 high-priority deep-analysis items, many packages with new versions; the full outdated list is in the scan's report.md (held locally by John). Scope: direct dependencies in Cargo.toml (and Cargo.lock); fix any breaking API changes; verify with cargo check + cargo test --lib + cargo check --bin helix; note any major-version bumps that required code changes.",
       "testStrategy": "cargo check + cargo test --lib + cargo check --bin helix all green on the updated tree; Cargo.lock updated; major-version bumps and their code changes listed in the results.",
       "subtasks": [],
-      "results": ""
+      "results": "All 37 direct dependencies updated to latest (crates.io, 2026-11-07); Cargo.lock regenerated. Major bumps: agent-client-protocol 2.2.0->5.0.0 (code changes in src/acp/server.rs + protocol.rs: schema::v1->v1::schema, Agent::builder()->Agent::v1(), Responder/ConnectionTo/Dispatch->v1 versions, util::internal_error->Error::into_internal_error / Error::new), russh 0.63->0.65.1 (Handler auth_publickey_offered/auth_publickey now take PublicKeyOffer/VerifiedPublicKey in src/ssh/handler.rs), notify 6->8.2.1 and getrandom 0.3->0.4.3 and axum-server 0.8.0->0.9.0 (no code changes needed, compiled clean). Kept: imap 3.0.0-alpha.15 (latest stable 2.4.1 is older); skipped prereleases libc 1.0.0-alpha.5, rustls 0.24.0-dev.2, notify 9.0.0-rc.7. Verify: cargo test --lib 606 passed / 0 failed / 4 ignored (baseline 606/0/4); cargo check --bin helix clean. cargo check --workspace still shows the pre-existing task-262 installer include_str! errors (config.toml / .grok manifest absent in a fresh checkout) - unrelated to this update. Branch ranger-317-deps pushed to origin; no merge to PreRelese."
     }
   ]
 }

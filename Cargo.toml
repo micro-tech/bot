@@ -5,14 +5,14 @@ edition = "2024"
 rust-version = "1.99.0"
 
 [dependencies]
-log = "0.4"
-libc = "0.2"
+log = "0.4.35"
+libc = "0.2.191"
 env_logger = "0.11.11"
 subtle = "2.6.1"
 #serenity = { git = "https://github.com/serenity-rs/serenity", branch = "current", features = ["full"] }
 
 
-tokio = { version = "1.53.2", features = [
+tokio = { version = "1.54.1", features = [
     "macros",
     "rt-multi-thread",
     "time",
@@ -22,33 +22,33 @@ tokio = { version = "1.53.2", features = [
     "io-std",
 ] }
 axum = { version = "0.8.9", features = ["ws", "multipart"] }
-axum-server = { version = "0.8.0", default-features = false, features = ["tls-rustls-no-provider"] }
-hyper = { version = "1", features = ["http1"] }
-hyper-util = { version = "0.1", features = ["tokio"] }
-tokio-rustls = { version = "0.26", features = ["ring"] }
-rustls = { version = "0.23", features = ["ring"] }
-rustls-pemfile = "2"
+axum-server = { version = "0.9.0", default-features = false, features = ["tls-rustls-no-provider"] }
+hyper = { version = "1.12.0", features = ["http1"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+tokio-rustls = { version = "0.26.6", features = ["ring"] }
+rustls = { version = "0.23.46", features = ["ring"] }
+rustls-pemfile = "2.2.0"
 rcgen = "0.14.10"
-tower = "0.5"
-futures-util = { version = "0.3", features = ["sink"] }
-tokio-util = { version = "0.7", features = ["compat"] }
-agent-client-protocol = "2.2.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-toml = "1.1.6"
+tower = "0.5.3"
+futures-util = { version = "0.3.34", features = ["sink"] }
+tokio-util = { version = "0.7.20", features = ["compat"] }
+agent-client-protocol = "5.0.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+toml = "1.2.1"
 dotenv = "0.15"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 #reqwest = { version = "0.12", features = ["json", "blocking", "rustls-tls"] }
 
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "blocking", "multipart", "rustls-no-provider"] }
 tower-http = { version = "0.7.1", features = ["cors"] }
-chrono = { version = "0.4", features = ["serde"] }
-chrono-tz = "0.10" # task 256: business-hours cadence in a configured IANA timezone
-anyhow = "1.0"
-async-trait = "0.1"
-rand = "0.10.2"
-uuid = { version = "1.27.0", features = ["v4", "serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+chrono-tz = "0.10.4" # task 256: business-hours cadence in a configured IANA timezone
+anyhow = "1.0.104"
+async-trait = "0.1.92"
+rand = "0.10.3"
+uuid = { version = "1.29.1", features = ["v4", "serde"] }
 # Use rustls-tls instead of native-tls to avoid pulling in openssl-sys on Windows
 # (native-tls can trigger openssl builds in some configurations on certain setups).
 # Force ring backend to avoid aws-lc-rs conflict with our explicit rustls::ring provider
@@ -56,8 +56,8 @@ uuid = { version = "1.27.0", features = ["v4", "serde"] }
 # We keep default-features = false + explicit ring via runtime install to avoid aws-lc-rs conflict.
 
 
-regex = "1"
-notify = "6"
+regex = "1.13.1"
+notify = "8.2.1"
 
 lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "rustls-tls"] }
 
@@ -67,22 +67,22 @@ lettre = { version = "0.11.23", default-features = false, features = ["builder",
 imap = { version = "3.0.0-alpha.15", default-features = false, features = ["rustls-tls"] }
 
 
-native-tls = "0.2"
-pulldown-cmark = "0.13.4"
-similar = "3.2.0"
+native-tls = "0.2.18"
+pulldown-cmark = "0.13.6"
+similar = "3.2.1"
 sqlx = { version = "0.9.0", features = [
     "runtime-tokio",
     "sqlite",
     "chrono",
     "json",
 ] }
-sha2 = "0.11.0"
+sha2 = "0.11.1"
 
 # === MCP (Model Context Protocol) client support ===
 # Lets Helix spawn external MCP servers (e.g. the standalone google-mcp
 # Gmail/Calendar server) as subprocesses over stdio and expose their tools.
 # Pinned to the same rmcp version the google-mcp server was built with.
-rmcp = { version = "3.5.0", features = ["transport-child-process", "client"] }
+rmcp = { version = "3.9.0", features = ["transport-child-process", "client"] }
 
 # === SSH / Remote Project Scanner support (Task 171) ===
 # Optional because ssh2 -> libssh2-sys -> openssl-sys tends to trigger a full
@@ -98,11 +98,11 @@ rmcp = { version = "3.5.0", features = ["transport-child-process", "client"] }
 #   - Linux/macOS: usually works out of the box via pkg-config
 #
 # Do NOT use vendored-openssl unless you have Perl installed.
-ssh2 = { version = "0.9", optional = true }
+ssh2 = { version = "0.9.7", optional = true }
 
-russh = { version = "0.63", default-features = false, features = ["aws-lc-rs"] }
-rand_core = "0.10"
-getrandom = "0.3"
+russh = { version = "0.65.1", default-features = false, features = ["aws-lc-rs"] }
+rand_core = "0.10.1"
+getrandom = "0.4.3"
 
 [features]
 default = []
@@ -115,8 +115,8 @@ path = "src/bin/installer.rs"
 
 [dev-dependencies]
 # HTTP contract tests for the OKF protocol v1 (task 207).
-mockito = "1.7"
+mockito = "1.7.2"
 # Task 313: real WebSocket client for the WS auth-gate tests — drives the
 # /ws endpoint over a live socket instead of asserting on internals.
 # 0.29 is the version already in Cargo.lock (via axum), so no new crates.
-tokio-tungstenite = "0.29"
+tokio-tungstenite = "0.30.0"

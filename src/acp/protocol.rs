@@ -9,7 +9,7 @@
 //! migration-era extensions (those were grok-cli-specific; the wire format
 //! here is the plain crate schema).
 
-use agent_client_protocol::schema::v1::{SessionId, SessionNotification};
+use agent_client_protocol::v1::schema::{SessionId, SessionNotification};
 
 /// Agent name reported to ACP clients (Zed shows this in the agent picker).
 pub const HELIX_ACP_AGENT_NAME: &str = "helix";
@@ -55,7 +55,7 @@ pub fn tool_call_notification(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::schema::v1::{
+    use agent_client_protocol::v1::schema::{
         InitializeRequest, NewSessionRequest, PromptRequest,
     };
 
