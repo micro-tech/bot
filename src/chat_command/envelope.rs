@@ -1,14 +1,14 @@
 //! Task-handoff envelope parser (task 309, spec §§3–4).
 //!
 //! A `!` message is either a plain command (Phase 1 behavior) or a
-//! structured JSON envelope that dispatches to the command path or
-//! the LLM task handler (Phase 3). The parse-or-fallback rule is
-//! load-bearing:
+//! structured JSON envelope that dispatches to the command path, the
+//! LLM task handler (Phase 3), or the MCP tool-call path (task 319).
+//! The parse-or-fallback rule is load-bearing:
 //!
 //! - Body is not JSON, or is JSON without a valid `how` field
-//!   (`"command"` / `"llm"`) → FALL BACK to the plain command path
-//!   (today's behavior: `asus:` split, allowlist, executor). A
-//!   hand-typed `!uptime` must keep working.
+//!   (`"command"` / `"llm"` / `"mcp"`) → FALL BACK to the plain
+//!   command path (today's behavior: `asus:` split, allowlist,
+//!   executor). A hand-typed `!uptime` must keep working.
 //! - Body is JSON with a valid `how` → it IS a structured message
 //!   and is validated strictly. Any validation failure posts a
 //!   rejection reply NAMING the problem and executes NOTHING.
@@ -21,8 +21,10 @@
 //! ```json
 //! {"how": "command", "which": "local", "time": 30, "scope": "read", "command": "uptime"}
 //! {"how": "llm", "which": "server", "time": 300, "scope": "gmail:read", "task": "Check Gmail for spam..."}
+//! {"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "args": {"query": "x"}, "time": 60, "scope": "read"}
 //! ```
-//! - `how`: `"command"` or `"llm"` (required to count as structured).
+//! - `how`: `"command"`, `"llm"`, or `"mcp"` (required to count as
+//!   structured).
 //! - `which`: command target (`"local"` default, `"asus"`); LLM
 //!   backend (`"server"`, `"desktop"`, `"gemini"` — REQUIRED, no
 //!   default, per spec decision Q1).
@@ -40,7 +42,16 @@
 //!   does not match this agent's own name is ignored by the
 //!   dispatch layer (spec §4 step 4); the name itself is NOT
 //!   validated here, so an unknown agent parses fine and is simply
-//!   never acted on by anyone.
+//!   never acted on by anyone. EXCEPTION: for `how: "mcp"` the
+//!   `to` field is REQUIRED (a broadcast MCP call would run the
+//!   same tool twice) — a missing `to` on an mcp envelope is a
+//!   rejection ("mcp needs a to field").
+//! - `server` / `tool` / `args` (for `how: mcp`): the MCP server
+//!   name and tool name (both required strings) and the tool
+//!   arguments (optional JSON object, defaults to `{}`). A
+//!   non-object `args` is a rejection. `scope` must be `"read"`
+//!   in v1 — any `write:` scope on an mcp envelope is a rejection
+//!   ("mcp writes are not enabled yet").
 //! - Extra fields are ignored (forward compatibility); the field
 //!   irrelevant to `how` (`task` on a command, `command` on an LLM
 //!   task) is ignored.
@@ -193,6 +204,20 @@ pub enum Structured {
         /// Addressee (`to`), if present. Absent = broadcast.
         to: Option<String>,
     },
+    Mcp {
+        /// MCP server name, as configured in `[mcp.servers]`.
+        server: String,
+        /// Tool name on that server.
+        tool: String,
+        /// Tool arguments (always a JSON object; `{}` when absent).
+        args: serde_json::Value,
+        /// `time` override, if present (else the handler default of
+        /// 60 s — the mcp budget).
+        time_secs: Option<u64>,
+        /// Addressee (`to`). REQUIRED for mcp (parser-enforced) —
+        /// a broadcast MCP call would run the same tool twice.
+        to: String,
+    },
 }
 
 impl Structured {
@@ -202,6 +227,7 @@ impl Structured {
         match self {
             Structured::Command { to, .. } => to.as_deref(),
             Structured::Llm { to, .. } => to.as_deref(),
+            Structured::Mcp { to, .. } => Some(to.as_str()),
         }
     }
 }
@@ -238,6 +264,7 @@ pub fn parse(rest: &str) -> Parsed {
     let how = match obj.get("how").and_then(|h| h.as_str()) {
         Some("command") => "command",
         Some("llm") => "llm",
+        Some("mcp") => "mcp",
         _ => return Parsed::Plain(rest.to_string()),
     };
     // Structured from here on: every failure is a rejection.
@@ -278,6 +305,40 @@ pub fn parse(rest: &str) -> Parsed {
             time_secs,
             scope,
             command,
+            to,
+        })
+    } else if how == "mcp" {
+        // `to` is REQUIRED for mcp (spec §2): without it both agents
+        // would run the same tool. A missing `to` is a rejection, not
+        // a broadcast and not a silent ignore.
+        let to = match to {
+            Some(t) => t,
+            None => return reject("mcp needs a to field"),
+        };
+        // v1 is read-only: any `write:` scope is rejected outright.
+        // (A malformed scope was already rejected by
+        // `parse_scope_field` above; only a well-formed Write reaches
+        // here.)
+        if let Scope::Write(_) = scope {
+            return reject("mcp writes are not enabled yet");
+        }
+        let server = match parse_mcp_name(obj, "server") {
+            Ok(s) => s,
+            Err(reason) => return reject(reason),
+        };
+        let tool = match parse_mcp_name(obj, "tool") {
+            Ok(s) => s,
+            Err(reason) => return reject(reason),
+        };
+        let args = match parse_mcp_args(obj) {
+            Ok(a) => a,
+            Err(reason) => return reject(reason),
+        };
+        Parsed::Structured(Structured::Mcp {
+            server,
+            tool,
+            args,
+            time_secs,
             to,
         })
     } else {
@@ -383,6 +444,34 @@ fn parse_llm_backend(
             "unknown backend '{other}' (expected server, desktop, or gemini)"
         )),
         None => Err("which must be a string (server, desktop, or gemini)".to_string()),
+    }
+}
+
+/// `server` / `tool` for an MCP call: REQUIRED, must be a non-empty
+/// string. The server's existence and the tool's availability are
+/// the handler's job (it can name them in the rejection); the parser
+/// only requires the fields to be present and well-formed.
+fn parse_mcp_name(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<String, String> {
+    match obj.get(field).and_then(|v| v.as_str()).map(str::trim) {
+        Some(s) if !s.is_empty() => Ok(s.to_string()),
+        Some(_) => Err(format!("mcp call needs a {field} name")),
+        None => Err(format!("mcp call needs a {field} name")),
+    }
+}
+
+/// `args` for an MCP call: optional JSON object, defaults to `{}`.
+/// A present but non-object `args` is a rejection (the handler
+/// passes the object straight to the tool).
+fn parse_mcp_args(
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    match obj.get("args") {
+        None => Ok(serde_json::Value::Object(serde_json::Map::new())),
+        Some(v) if v.is_object() => Ok(v.clone()),
+        Some(_) => Err("args must be a JSON object".to_string()),
     }
 }
 
@@ -639,6 +728,128 @@ mod tests {
         // Same length but NOT structured → plain (no oversize rule).
         let plain = "y".repeat(MAX_ENVELOPE_BYTES + 100);
         assert_eq!(cmd(&plain), Parsed::Plain(plain));
+    }
+
+    #[test]
+    fn mcp_json_parses_with_args_and_time() {
+        assert_eq!(
+            cmd(r#"{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "args": {"query": "from:example.com"}, "time": 60, "scope": "read"}"#),
+            Parsed::Structured(Structured::Mcp {
+                server: "google".to_string(),
+                tool: "gmail_search".to_string(),
+                args: serde_json::json!({"query": "from:example.com"}),
+                time_secs: Some(60),
+                to: "helix".to_string(),
+            })
+        );
+        // `args` absent → empty object; `time` absent → None (the
+        // handler applies its 60 s default).
+        assert_eq!(
+            cmd(r#"{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "scope": "read"}"#),
+            Parsed::Structured(Structured::Mcp {
+                server: "google".to_string(),
+                tool: "gmail_search".to_string(),
+                args: serde_json::json!({}),
+                time_secs: None,
+                to: "helix".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn mcp_missing_to_rejects_not_broadcast() {
+        // `to` is REQUIRED for mcp: without it both agents would run
+        // the same tool. A missing `to` is a rejection, never a
+        // broadcast and never a silent ignore.
+        match cmd(r#"{"how": "mcp", "server": "google", "tool": "gmail_search", "scope": "read"}"#) {
+            Parsed::Reject(reason) => {
+                assert!(reason.contains("mcp needs a to field"), "{reason}");
+            }
+            other => panic!("missing `to` must reject, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mcp_write_scope_rejects() {
+        // v1 is read-only: any `write:` scope is rejected outright,
+        // with the mcp-specific message (not the generic scope error).
+        for scope in ["write:gmail", "write:notes", "gmail:write"] {
+            match cmd(&format!(
+                r#"{{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "scope": "{scope}"}}"#
+            )) {
+                Parsed::Reject(reason) => {
+                    assert!(
+                        reason.contains("mcp writes are not enabled yet"),
+                        "{scope} → {reason}"
+                    );
+                }
+                other => panic!("{scope} must reject, got {other:?}"),
+            }
+        }
+        // "read" and the domain-first "gmail:read" both parse to Read.
+        assert!(matches!(
+            cmd(r#"{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "scope": "gmail:read"}"#),
+            Parsed::Structured(Structured::Mcp { .. })
+        ));
+    }
+
+    #[test]
+    fn mcp_missing_server_tool_and_scope_reject() {
+        let cases: &[(&str, &str)] = &[
+            (
+                r#"{"how": "mcp", "to": "helix", "tool": "gmail_search", "scope": "read"}"#,
+                "mcp call needs a server name",
+            ),
+            (
+                r#"{"how": "mcp", "to": "helix", "server": "google", "scope": "read"}"#,
+                "mcp call needs a tool name",
+            ),
+            (
+                r#"{"how": "mcp", "to": "helix", "server": "  ", "tool": "gmail_search", "scope": "read"}"#,
+                "mcp call needs a server name",
+            ),
+            (
+                r#"{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search"}"#,
+                "missing scope",
+            ),
+        ];
+        for (json, needle) in cases {
+            match cmd(json) {
+                Parsed::Reject(reason) => {
+                    assert!(reason.contains(needle), "{json} → {reason} (want {needle})");
+                }
+                other => panic!("{json} must reject, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn mcp_non_object_args_rejects() {
+        for args in ["\"query\"", "42", "[1, 2]", "true", "null"] {
+            let json = format!(
+                r#"{{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "args": {args}, "scope": "read"}}"#
+            );
+            match cmd(&json) {
+                Parsed::Reject(reason) => {
+                    assert!(reason.contains("args must be a JSON object"), "{json} → {reason}");
+                }
+                other => panic!("{json} must reject, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn mcp_addressee_is_always_some() {
+        // The parser guarantees `to` for mcp, so addressee() is Some
+        // — the dispatch layer's ignore check applies to mcp exactly
+        // as it does to command/llm.
+        let mcp = match cmd(
+            r#"{"how": "mcp", "to": "john", "server": "google", "tool": "gmail_search", "scope": "read"}"#,
+        ) {
+            Parsed::Structured(s) => s,
+            other => panic!("expected structured, got {other:?}"),
+        };
+        assert_eq!(mcp.addressee(), Some("john"));
     }
 
     #[test]
