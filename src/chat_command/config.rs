@@ -19,6 +19,13 @@ pub struct ChatCommandConfig {
     #[serde(default)]
     pub allowed_senders: Vec<String>,
 
+    /// This agent's own hub name, for the `to` addressing field
+    /// (spec §3). Default `"helix"` (the hub token name). A
+    /// structured message whose `to` does not match this name is
+    /// ignored entirely — no run, no reply, no error.
+    #[serde(default = "default_agent_name")]
+    pub agent_name: String,
+
     /// Per-command wall-clock timeout, seconds.
     #[serde(default = "default_timeout")]
     pub command_timeout_secs: u64,
@@ -53,6 +60,9 @@ pub struct ChatCommandConfig {
 fn default_room() -> String {
     "command".to_string()
 }
+fn default_agent_name() -> String {
+    "helix".to_string()
+}
 fn default_timeout() -> u64 {
     30
 }
@@ -71,6 +81,7 @@ impl Default for ChatCommandConfig {
         Self {
             room: default_room(),
             allowed_senders: Vec::new(),
+            agent_name: default_agent_name(),
             command_timeout_secs: default_timeout(),
             max_output_bytes: default_max_output(),
             chunk_bytes: default_chunk(),
@@ -124,6 +135,7 @@ mod tests {
         let cfg = ChatCommandConfig::load_from_toml("[helix]\nname = \"x\"\n");
         assert_eq!(cfg.room, "command");
         assert!(cfg.allowed_senders.is_empty(), "empty senders = nothing executes");
+        assert_eq!(cfg.agent_name, "helix", "own name defaults to the hub token name");
         assert_eq!(cfg.command_timeout_secs, 30);
         assert_eq!(cfg.max_output_bytes, 131072);
         assert_eq!(cfg.chunk_bytes, 7500);
@@ -135,10 +147,11 @@ mod tests {
     #[test]
     fn explicit_values_honored() {
         let cfg = ChatCommandConfig::load_from_toml(
-            "[chat_command]\nroom = \"ops\"\nallowed_senders = [\"cobble-jr\", \"john\"]\ncommand_timeout_secs = 10\nmax_output_bytes = 4096\nchunk_bytes = 1000\nmax_commands_per_tick = 3\nasus_enabled = true\nasus_host = \"100.112.110.14\"\nasus_user = \"someone\"\nasus_key_path = \"/home/cobble/.ssh/id_helix_asus\"\n",
+            "[chat_command]\nroom = \"ops\"\nallowed_senders = [\"cobble-jr\", \"john\"]\nagent_name = \"helix\"\ncommand_timeout_secs = 10\nmax_output_bytes = 4096\nchunk_bytes = 1000\nmax_commands_per_tick = 3\nasus_enabled = true\nasus_host = \"100.112.110.14\"\nasus_user = \"someone\"\nasus_key_path = \"/home/cobble/.ssh/id_helix_asus\"\n",
         );
         assert_eq!(cfg.room, "ops");
         assert_eq!(cfg.allowed_senders, vec!["cobble-jr", "john"]);
+        assert_eq!(cfg.agent_name, "helix");
         assert_eq!(cfg.command_timeout_secs, 10);
         assert_eq!(cfg.max_output_bytes, 4096);
         assert_eq!(cfg.chunk_bytes, 1000);

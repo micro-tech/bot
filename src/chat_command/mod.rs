@@ -21,7 +21,11 @@
 //!    override, llm -> task handler); anything else falls back to the
 //!    plain command path, so hand-typed `!uptime` keeps working.
 //!    Malformed structured messages get a rejection naming the
-//!    problem and execute nothing.
+//!    problem and execute nothing. Addressing (`to`, spec §4 step 4):
+//!    a structured message whose `to` names another agent is ignored
+//!    silently (no run, no reply, no error); absent `to` is a
+//!    broadcast. Plain `!` commands have no `to` and are always
+//!    broadcast.
 //! 4. Target: `asus: ...` routes to the ASUS (Phase 2); anything else
 //!    runs locally. ASUS disabled/unconfigured -> not-enabled reply,
 //!    zero ssh attempts.
@@ -316,6 +320,22 @@ fn process_message(
     // here is from an allowed sender. A rejection executes nothing.
     match envelope::parse(&rest) {
         envelope::Parsed::Structured(s) => {
+            // 3a. Addressing (spec §4 step 4): a structured message
+            // addressed to another agent is ignored entirely — no
+            // run, no reply, no error. Absent `to` is a broadcast.
+            // This runs AFTER the sender gate and JSON parse, BEFORE
+            // any dispatch. (Plain `!` commands never reach here —
+            // they have no `to` and are always broadcast.)
+            if let Some(to) = s.addressee() {
+                if to != cfg.agent_name {
+                    log::info!(
+                        "chat-command: message addressed to '{to}' ignored (this agent is '{}', room={})",
+                        cfg.agent_name,
+                        cfg.room
+                    );
+                    return Slot::Ignored;
+                }
+            }
             return dispatch_structured(tools, cfg, runtime_dir, ssh_bin, msg, s);
         }
         envelope::Parsed::Reject(reason) => {
@@ -419,6 +439,7 @@ fn dispatch_structured(
             time_secs,
             scope: _,
             command,
+            to: _,
         } => {
             let timeout_secs = time_secs.unwrap_or(cfg.command_timeout_secs);
             if target == Target::Asus {
@@ -486,6 +507,7 @@ fn dispatch_structured(
             time_secs,
             scope,
             task,
+            to: _,
         } => {
             task_handler::submit_llm_task(
                 tools,
@@ -1412,6 +1434,95 @@ mod tests {
         assert_eq!(bodies.len(), 1, "{bodies:?}");
         assert!(bodies[0].contains("rejected: message too large"), "{}", bodies[0]);
         task_handler::reset_for_tests();
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_to_helix_executes() {
+        // `to: "helix"` — addressed to this agent, so it runs.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("json-to-helix");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"command\", \"to\": \"helix\", \"scope\": \"read\", \"command\": \"uptime\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("$ uptime"), "{}", bodies[0]);
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1));
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_to_john_ignored() {
+        // `to: "john"` — addressed to the windows app, so Helix
+        // ignores it entirely: no run, no reply, no error. The
+        // cursor still advances past it.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("json-to-john");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"command\", \"to\": \"john\", \"scope\": \"read\", \"command\": \"uptime\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert!(bodies.is_empty(), "ignored message must not reply: {bodies:?}");
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1), "cursor advances past ignored message");
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_to_unknown_ignored() {
+        // `to` naming an agent that isn't this one (here an LLM
+        // task to grok-cli) — ignored on the LLM path too, so the
+        // check is path-agnostic: no ack, no role file, no reply.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        task_handler::reset_for_tests();
+        let dir = tmpdir("json-to-unknown");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"llm\", \"which\": \"server\", \"to\": \"grok-cli\", \"scope\": \"read\", \"task\": \"Check disk usage\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert!(bodies.is_empty(), "ignored message must not reply: {bodies:?}");
+        assert!(
+            !dir.join("agents").join("chat-task-read.md").exists(),
+            "ignored llm task must not submit (no role file)"
+        );
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1), "cursor advances past ignored message");
+        task_handler::reset_for_tests();
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_no_to_broadcast_executes() {
+        // No `to` — broadcast: Helix runs it, as today. (The
+        // `to`-suite counterpart of tick_json_command_executes.)
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("json-no-to");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"command\", \"scope\": \"read\", \"command\": \"uptime\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("$ uptime"), "{}", bodies[0]);
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1));
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
