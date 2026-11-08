@@ -3795,6 +3795,18 @@
       "testStrategy": "cargo check + cargo test --lib + cargo check --bin helix all green on the updated tree; Cargo.lock updated; major-version bumps and their code changes listed in the results.",
       "subtasks": [],
       "results": "All 37 direct dependencies updated to latest (crates.io, 2026-11-07); Cargo.lock regenerated. Major bumps: agent-client-protocol 2.2.0->5.0.0 (code changes in src/acp/server.rs + protocol.rs: schema::v1->v1::schema, Agent::builder()->Agent::v1(), Responder/ConnectionTo/Dispatch->v1 versions, util::internal_error->Error::into_internal_error / Error::new), russh 0.63->0.65.1 (Handler auth_publickey_offered/auth_publickey now take PublicKeyOffer/VerifiedPublicKey in src/ssh/handler.rs), notify 6->8.2.1 and getrandom 0.3->0.4.3 and axum-server 0.8.0->0.9.0 (no code changes needed, compiled clean). Kept: imap 3.0.0-alpha.15 (latest stable 2.4.1 is older); skipped prereleases libc 1.0.0-alpha.5, rustls 0.24.0-dev.2, notify 9.0.0-rc.7. Verify: cargo test --lib 606 passed / 0 failed / 4 ignored (baseline 606/0/4); cargo check --bin helix clean. cargo check --workspace still shows the pre-existing task-262 installer include_str! errors (config.toml / .grok manifest absent in a fresh checkout) - unrelated to this update. Branch ranger-317-deps pushed to origin; no merge to PreRelese."
+    },
+    {
+      "id": 318,
+      "title": "Add `to` addressing field to the chat-command routine",
+      "description": "Parse the optional `to` field in the `!` JSON envelope (spec §3) and ignore structured messages addressed to another agent (spec §4 step 4). `to: \"helix\"` runs, `to: \"john\"` / unknown agent is ignored silently (no run, no reply, no error), absent `to` is a broadcast as today. Plain `!` commands have no `to` and stay broadcast.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Source: spec ~/workspace/your_files/chat-command-task-handoff-spec.md §3 (envelope `to` row + Agent names), §4 step 4 (addressing check), §9 drills (g)(h)(i); approved by John 2026-11-07 (\"yes do the too field\"). Scope: envelope.rs parses `to` into Structured (both paths); config.rs adds `agent_name` (default \"helix\", the hub token name); mod.rs process_message checks `to` against cfg.agent_name after the sender gate and JSON parse, before any dispatch. The windows_muse side (hub watcher + agent_name config key) is a separate branch, not this task.",
+      "testStrategy": "cargo test --lib green (new envelope tests: `to` parsed for both paths, non-string `to` rejects, addressee() accessor; new tick tests: `to: \"helix\"` executes, `to: \"john\"` ignored, unknown agent ignored, no `to` broadcast executes); cargo check --bin helix clean. Live drills (g)(h)(i) after deploy.",
+      "subtasks": [],
+      "results": "Built on ranger-318-to-field. envelope.rs: `to: Option<String>` on both Structured variants + addressee() + parse_to() (non-string `to` rejects); config.rs: `agent_name` field, default \"helix\" (the hub token name), documented in example.config.toml; mod.rs: process_message checks `to` against cfg.agent_name after sender gate + JSON parse, before dispatch — mismatch returns Slot::Ignored silently (info log only). Verify: cargo test --lib 612 passed / 0 failed / 4 ignored (baseline 606/0/4; +6 new tests: 2 envelope + 4 tick); cargo check --bin helix clean. Test-run log appends (logs/bus_log.md, logs/email_outbox.md) reverted before commit. Live drills (g)(h)(i) pending after deploy."
     }
   ]
 }

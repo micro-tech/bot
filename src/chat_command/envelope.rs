@@ -35,6 +35,12 @@
 //!   rule; enforcement by tool allowlist is the handler's job).
 //! - `command` (for `how: command`) / `task` (for `how: llm`):
 //!   required, non-empty.
+//! - `to`: optional addressee (hub agent name, spec §3). Absent =
+//!   broadcast — every watcher acts on it. A message whose `to`
+//!   does not match this agent's own name is ignored by the
+//!   dispatch layer (spec §4 step 4); the name itself is NOT
+//!   validated here, so an unknown agent parses fine and is simply
+//!   never acted on by anyone.
 //! - Extra fields are ignored (forward compatibility); the field
 //!   irrelevant to `how` (`task` on a command, `command` on an LLM
 //!   task) is ignored.
@@ -173,6 +179,10 @@ pub enum Structured {
         /// regardless of scope — scope does not widen commands).
         scope: Scope,
         command: String,
+        /// Addressee (`to`), if present. Absent = broadcast. The
+        /// dispatch layer ignores a message whose `to` does not
+        /// match this agent's own name (spec §4 step 4).
+        to: Option<String>,
     },
     Llm {
         backend: LlmBackend,
@@ -180,7 +190,20 @@ pub enum Structured {
         time_secs: Option<u64>,
         scope: Scope,
         task: String,
+        /// Addressee (`to`), if present. Absent = broadcast.
+        to: Option<String>,
     },
+}
+
+impl Structured {
+    /// The addressee (`to`), if the envelope named one. `None`
+    /// means broadcast — every watcher acts on the message.
+    pub fn addressee(&self) -> Option<&str> {
+        match self {
+            Structured::Command { to, .. } => to.as_deref(),
+            Structured::Llm { to, .. } => to.as_deref(),
+        }
+    }
 }
 
 /// Parse result for one `!` rest (text after `!`, trimmed).
@@ -228,6 +251,10 @@ pub fn parse(rest: &str) -> Parsed {
         Ok(t) => t,
         Err(reason) => return reject(reason),
     };
+    let to = match parse_to(obj) {
+        Ok(t) => t,
+        Err(reason) => return reject(reason),
+    };
     let scope = match parse_scope_field(obj) {
         Ok(s) => s,
         Err(reason) => return reject(reason),
@@ -251,6 +278,7 @@ pub fn parse(rest: &str) -> Parsed {
             time_secs,
             scope,
             command,
+            to,
         })
     } else {
         let backend = match parse_llm_backend(obj) {
@@ -271,6 +299,7 @@ pub fn parse(rest: &str) -> Parsed {
             time_secs,
             scope,
             task,
+            to,
         })
     }
 }
@@ -289,6 +318,22 @@ fn parse_time(obj: &serde_json::Map<String, serde_json::Value>) -> Result<Option
             "time budget too large (max {MAX_TIME_SECS}s)"
         )),
         Some(n) => Ok(Some(n)),
+    }
+}
+
+/// `to`, when present, must be a string (the addressee's hub agent
+/// name, spec §3). Absent → broadcast (`None`). A non-string `to`
+/// is a rejection — structured messages are validated strictly.
+/// The name itself is NOT validated here (an unknown agent is
+/// simply never acted on by anyone); the dispatch layer compares
+/// it to this agent's own name (spec §4 step 4).
+fn parse_to(obj: &serde_json::Map<String, serde_json::Value>) -> Result<Option<String>, String> {
+    let Some(v) = obj.get("to") else {
+        return Ok(None);
+    };
+    match v.as_str() {
+        Some(s) => Ok(Some(s.to_string())),
+        None => Err("to must be a string (a hub agent name)".to_string()),
     }
 }
 
@@ -358,6 +403,7 @@ mod tests {
                 time_secs: None,
                 scope: Scope::Read,
                 command: "uptime".to_string(),
+                to: None,
             })
         );
     }
@@ -371,6 +417,7 @@ mod tests {
                 time_secs: Some(45),
                 scope: Scope::Read,
                 command: "hostname".to_string(),
+                to: None,
             })
         );
     }
@@ -391,6 +438,7 @@ mod tests {
                     time_secs: Some(300),
                     scope: Scope::Read,
                     task: "Check disk usage".to_string(),
+                    to: None,
                 }),
                 "backend {which}"
             );
@@ -408,6 +456,7 @@ mod tests {
                 time_secs: Some(300),
                 scope: Scope::Read,
                 task: "Check Gmail for spam. Report back the senders and subjects of anything that looks like spam; do not label or archive anything.".to_string(),
+                to: None,
             })
         );
     }
@@ -503,6 +552,11 @@ mod tests {
                 r#"{"how": "llm", "which": "server", "scope": "gmail:delete", "task": "x"}"#,
                 "malformed scope 'gmail:delete'",
             ),
+            // Non-string `to`.
+            (
+                r#"{"how": "command", "scope": "read", "command": "uptime", "to": 42}"#,
+                "to must be a string",
+            ),
             // Bad time.
             (
                 r#"{"how": "command", "scope": "read", "command": "uptime", "time": 0}"#,
@@ -529,6 +583,47 @@ mod tests {
                 other => panic!("{json} must reject, got {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn to_field_parsed_for_both_paths() {
+        // Addressed to this agent and to another — both parse; the
+        // dispatch layer decides by comparing to its own name.
+        assert!(matches!(
+            cmd(r#"{"how": "command", "to": "helix", "scope": "read", "command": "uptime"}"#),
+            Parsed::Structured(Structured::Command { to: Some(t), .. }) if t == "helix"
+        ));
+        assert!(matches!(
+            cmd(r#"{"how": "command", "to": "john", "scope": "read", "command": "uptime"}"#),
+            Parsed::Structured(Structured::Command { to: Some(t), .. }) if t == "john"
+        ));
+        assert!(matches!(
+            cmd(r#"{"how": "llm", "which": "server", "to": "john", "scope": "read", "task": "x"}"#),
+            Parsed::Structured(Structured::Llm { to: Some(t), .. }) if t == "john"
+        ));
+        // An unknown agent name parses fine — it is simply never
+        // acted on by anyone (spec §4 step 4).
+        assert!(matches!(
+            cmd(r#"{"how": "command", "to": "grok-cli", "scope": "read", "command": "uptime"}"#),
+            Parsed::Structured(Structured::Command { to: Some(t), .. }) if t == "grok-cli"
+        ));
+    }
+
+    #[test]
+    fn addressee_accessor_broadcast_is_none() {
+        let addressed = match cmd(
+            r#"{"how": "command", "to": "helix", "scope": "read", "command": "uptime"}"#,
+        ) {
+            Parsed::Structured(s) => s,
+            other => panic!("expected structured, got {other:?}"),
+        };
+        assert_eq!(addressed.addressee(), Some("helix"));
+        let broadcast = match cmd(r#"{"how": "command", "scope": "read", "command": "uptime"}"#)
+        {
+            Parsed::Structured(s) => s,
+            other => panic!("expected structured, got {other:?}"),
+        };
+        assert_eq!(broadcast.addressee(), None);
     }
 
     #[test]
