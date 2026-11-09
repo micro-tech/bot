@@ -26,10 +26,12 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use subtle::ConstantTimeEq;
 use tokio::sync::broadcast;
 use tokio::sync::RwLock;
 use toml;
+
+// Extracted authentication (Task 318)
+mod auth;
 
 // ── AppState ──────────────────────────────────────────────────────────────────
 
