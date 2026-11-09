@@ -3739,14 +3739,14 @@
     {
       "id": 313,
       "title": "WS routine CRUD bypasses the web-token gate",
-      "description": "The four WebSocket routine messages (routine_toggle, routine_create, routine_update, routine_delete) do not check the web token, so any client that can open a WebSocket can enable/disable routines and create agent-job routines even when a token is configured.",
-      "status": "pending",
+      "description": "The four WebSocket routine messages (routine_toggle, routine_create, routine_update, routine_delete) and the slash_cmd arm do not check the web token, so any client that can open a WebSocket can enable/disable routines, create agent-job routines, and run slash commands (including /support approve + /support send, which sends real email) even when a token is configured.",
+      "status": "done",
       "dependencies": [],
       "priority": "high",
-      "details": "Bot review 2026-11-05 (PreRelese 17fddd7), Part B Must-fix 1 (speed first, security a slim second). Evidence: src/io/web_server/mod.rs:1175 (routine_toggle), :1204 (routine_create), :1232 (routine_update), :1265 (routine_delete) - none checks `authed`; the gate is applied only at :1387 (config_save) and :1533 (manifest_save). Impact: any WebSocket client can enable/disable routines (including self-improve, support-mail-watch, chat-command-watch) and create agent-job routines with arbitrary task text + backend, even when a token IS configured and the HTTP mutating endpoints are gated. Fix: apply the same `authed` check to all four routine messages.",
-      "testStrategy": "With a token configured, an unauthenticated WebSocket routine_toggle/create/update/delete is rejected; an authenticated one works. Full cargo test --lib green; cargo check --bin helix zero warnings.",
+      "details": "Bot review 2026-11-05 (PreRelese 17fddd7), Part B Must-fix 1 (speed first, security a slim second). Evidence: src/io/web_server/mod.rs:1175 (routine_toggle), :1204 (routine_create), :1232 (routine_update), :1265 (routine_delete) - none checks `authed`; the gate is applied only at :1387 (config_save) and :1533 (manifest_save). Impact: any WebSocket client can enable/disable routines (including self-improve, support-mail-watch, chat-command-watch) and create agent-job routines with arbitrary task text + backend, even when a token IS configured and the HTTP mutating endpoints are gated. Fix: apply the same `authed` check to all four routine messages. Folded in (bot review 2026-11-07): the slash_cmd arm at :1597 also bypassed the gate — handle_slash_command() can /support send + /support approve (real SMTP), /support drafts (customer bodies), /persona approve, /bayes reset/update, /set, /log — while the same actions over HTTP are behind require_web_token. The same one-line gate was applied to slash_cmd plus all four routine arms; the `chat` arm (:1279) was deliberately left ungated (product decision pending).",
+      "testStrategy": "With a token configured, an unauthenticated WebSocket routine_toggle/create/update/delete/slash_cmd is rejected; an authenticated one works. Full cargo test --lib green; cargo check --bin helix zero warnings.",
       "subtasks": [],
-      "results": ""
+      "results": "Done 2026-11-07 (ranger-313-ws-auth, branch off PreRelese c0c8787). Gate `if !state.auth_token.is_empty() && !authed` applied to all four routine arms (routine_toggle/create/update/delete, src/io/web_server/mod.rs) and to slash_cmd, each replying in its own arm's shape so the UI surfaces the refusal (routine_status/routine_saved ok:false + msg; slash_cmd via bus ollama_response). The `chat` arm was left ungated per scope (product decision pending). New test `ws_mutating_arms_require_auth` drives the real /ws endpoint over a live socket (tokio-tungstenite 0.29 dev-dep, already in Cargo.lock) and enumerates all seven mutating arms: unauthenticated attempts rejected with no state change; authenticated routine arms + slash_cmd work. config_save/manifest_save are negative-only in the test (their positive paths write files; already gated before this change). Verification: cargo test --lib 606 passed / 0 failed / 4 ignored (baseline 605/0/4, +1 new test); cargo check --bin helix clean, zero warnings. Known pre-existing caveats, untouched: cargo check --tests fails on the installer bin (task 262 include_str! files missing in a fresh checkout) and unix_socket_test has 2 unused-import warnings (task 273)."
     },
     {
       "id": 314,
@@ -3788,12 +3788,13 @@
       "id": 317,
       "title": "Update dependencies in Cargo.toml to latest versions",
       "description": "Update the direct dependency versions in Cargo.toml (and Cargo.lock) to the latest versions, fix any breaking API changes, and note major-version bumps that required code changes.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "Source: RustRecon scan by John 2026-11-05 on the Helix repo - 526 dependencies, 10 high-priority deep-analysis items, many packages with new versions; the full outdated list is in the scan's report.md (held locally by John). Scope: direct dependencies in Cargo.toml (and Cargo.lock); fix any breaking API changes; verify with cargo check + cargo test --lib + cargo check --bin helix; note any major-version bumps that required code changes.",
       "testStrategy": "cargo check + cargo test --lib + cargo check --bin helix all green on the updated tree; Cargo.lock updated; major-version bumps and their code changes listed in the results.",
       "subtasks": [],
+<<<<<<< HEAD
       "results": ""
     },
     {
@@ -3903,6 +3904,33 @@
           "dependencies": []
         }
       ]
+=======
+      "results": "All 37 direct dependencies updated to latest (crates.io, 2026-11-07); Cargo.lock regenerated. Major bumps: agent-client-protocol 2.2.0->5.0.0 (code changes in src/acp/server.rs + protocol.rs: schema::v1->v1::schema, Agent::builder()->Agent::v1(), Responder/ConnectionTo/Dispatch->v1 versions, util::internal_error->Error::into_internal_error / Error::new), russh 0.63->0.65.1 (Handler auth_publickey_offered/auth_publickey now take PublicKeyOffer/VerifiedPublicKey in src/ssh/handler.rs), notify 6->8.2.1 and getrandom 0.3->0.4.3 and axum-server 0.8.0->0.9.0 (no code changes needed, compiled clean). Kept: imap 3.0.0-alpha.15 (latest stable 2.4.1 is older); skipped prereleases libc 1.0.0-alpha.5, rustls 0.24.0-dev.2, notify 9.0.0-rc.7. Verify: cargo test --lib 606 passed / 0 failed / 4 ignored (baseline 606/0/4); cargo check --bin helix clean. cargo check --workspace still shows the pre-existing task-262 installer include_str! errors (config.toml / .grok manifest absent in a fresh checkout) - unrelated to this update. Branch ranger-317-deps pushed to origin; no merge to PreRelese."
+    },
+    {
+      "id": 318,
+      "title": "Add `to` addressing field to the chat-command routine",
+      "description": "Parse the optional `to` field in the `!` JSON envelope (spec §3) and ignore structured messages addressed to another agent (spec §4 step 4). `to: \"helix\"` runs, `to: \"john\"` / unknown agent is ignored silently (no run, no reply, no error), absent `to` is a broadcast as today. Plain `!` commands have no `to` and stay broadcast.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Source: spec ~/workspace/your_files/chat-command-task-handoff-spec.md §3 (envelope `to` row + Agent names), §4 step 4 (addressing check), §9 drills (g)(h)(i); approved by John 2026-11-07 (\"yes do the too field\"). Scope: envelope.rs parses `to` into Structured (both paths); config.rs adds `agent_name` (default \"helix\", the hub token name); mod.rs process_message checks `to` against cfg.agent_name after the sender gate and JSON parse, before any dispatch. The windows_muse side (hub watcher + agent_name config key) is a separate branch, not this task.",
+      "testStrategy": "cargo test --lib green (new envelope tests: `to` parsed for both paths, non-string `to` rejects, addressee() accessor; new tick tests: `to: \"helix\"` executes, `to: \"john\"` ignored, unknown agent ignored, no `to` broadcast executes); cargo check --bin helix clean. Live drills (g)(h)(i) after deploy.",
+      "subtasks": [],
+      "results": "Built on ranger-318-to-field. envelope.rs: `to: Option<String>` on both Structured variants + addressee() + parse_to() (non-string `to` rejects); config.rs: `agent_name` field, default \"helix\" (the hub token name), documented in example.config.toml; mod.rs: process_message checks `to` against cfg.agent_name after sender gate + JSON parse, before dispatch — mismatch returns Slot::Ignored silently (info log only). Verify: cargo test --lib 612 passed / 0 failed / 4 ignored (baseline 606/0/4; +6 new tests: 2 envelope + 4 tick); cargo check --bin helix clean. Test-run log appends (logs/bus_log.md, logs/email_outbox.md) reverted before commit. Live drills (g)(h)(i) pending after deploy."
+    },
+    {
+      "id": 319,
+      "title": "Add `how: \"mcp\"` MCP tool-call path to the chat-command routine",
+      "description": "Parse the `how: \"mcp\"` envelope (spec chat-command-mcp-spec.md §2) and invoke one MCP tool on one configured server, posting the result back to the `command` room. `to` is REQUIRED for mcp (missing → rejection \"mcp needs a to field\"); server/tool required; scope must be \"read\" in v1 (any write scope → rejection \"mcp writes are not enabled yet\"); args must be an object (defaults to {}). Addressing: `to` != this agent's name is ignored (same `to` check as command/llm). v1 is READ-ONLY via a per-server read-tool allowlist (non-read tool → rejection). Call runs in the tick within the `time` budget (default 60s); overrun posts a timeout report.",
+      "status": "done",
+      "dependencies": [318],
+      "priority": "high",
+      "details": "Source: spec ~/workspace/your_files/chat-command-mcp-spec.md §2 (envelope), §3 (dispatch), §4 (Helix side), §6 (safety), §8 (test plan); approved by John 2026-11-07 (\"start the mcp for both\"). Scope: envelope.rs adds Structured::Mcp + `how: \"mcp\"` parse (to required, scope must be Read, server/tool required, args object); new mcp_handler.rs (server lookup in [mcp.servers], tool-offered check via tool_definitions, read-tool allowlist per server, try_execute call with a `time` wait budget, chunked report citing the hub message id, audit logging); mod.rs dispatch_structured gains the Mcp arm. The windows app side (MCP client + handler + config) is a separate branch, not this task.",
+      "testStrategy": "cargo test --lib green (new envelope tests: valid mcp JSON, missing `to`, unknown/missing server/tool, write scope, non-object args; new tick tests: valid mcp call posts result, unknown server/tool rejections, non-read tool rejection, timeout report); cargo check --bin helix clean. Live drills (§8 a,c,d,e,f) after deploy, once the hub is reachable.",
+      "subtasks": [],
+      "results": "Built on ranger-319-mcp. envelope.rs: Structured::Mcp { server, tool, args, time_secs, to: String } + `how: \"mcp\"` parse (to required — missing → \"mcp needs a to field\"; scope must be Read — write → \"mcp writes are not enabled yet\"; server/tool required via parse_mcp_name; args must be an object, defaults to {}); addressee() returns Some(to) so the existing addressing check ignores messages for other agents. New mcp_handler.rs: read-tool allowlist (google: gmail_search/gmail_read/calendar_list; chat: chat_read/chat_rooms/chat_health; anything else fail-closed), server check via usable_servers(), tool-offered check via tool_definitions(), call via try_execute on a worker thread within the `time` budget (default 60s; wait-only, does not kill the child — same caveat as the app side), chunked report citing the hub message id, audit logging for every call/rejection/timeout/report. mod.rs: pub mod mcp_handler + Mcp arm in dispatch_structured + docs. Verify: cargo test --lib 635 passed / 0 failed / 4 ignored (baseline 612/0/4; +23 new tests: 6 envelope + 8 mcp_handler + 9 tick); cargo check --bin helix clean. Test-run log appends reverted before commit. Live drills (§8 a,c,d,e,f) pending after deploy, once the hub is reachable."
+>>>>>>> 4a3c1b58be48d8c335e48e81f30c6506a672187c
     }
   ]
 }

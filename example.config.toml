@@ -181,6 +181,7 @@ auto_send = true
 # [chat_command]
 # room = "command"              # hub room watched (auto-creates on first post)
 # allowed_senders = ["cobble-jr", "john"]  # token names ONLY; "helix" is never allowed (loop prevention)
+# agent_name = "helix"          # this agent's own hub name, for the `to` addressing field (default "helix")
 # command_timeout_secs = 30     # per-command wall-clock timeout
 # max_output_bytes = 131072     # captured output cap (with [truncated] note)
 # chunk_bytes = 7500            # reply chunk size (hub cap is 8 KB; prefix included)

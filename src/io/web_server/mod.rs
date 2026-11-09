@@ -1042,9 +1042,11 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     // 6. Main loop: WebSocket messages → Bus
     //
     // `authed` tracks whether this connection presented the web token.
-    // Mutating messages (config_save, manifest_save) are rejected until the
-    // client sends {"type":"auth","token":"..."}. When no token is configured
-    // the endpoints stay open (startup warns loudly about this).
+    // Mutating messages (routine CRUD, config_save, manifest_save,
+    // slash_cmd) are rejected until the client sends
+    // {"type":"auth","token":"..."}. When no token is configured the
+    // endpoints stay open (startup warns loudly about this). `chat` is
+    // deliberately NOT gated — that is a product decision, not yet made.
     let mut authed = false;
     while let Some(msg) = ws_receiver.next().await {
         let msg = match msg {
@@ -1175,6 +1177,20 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                     // persist and confirm {"type":"routine_status",
                     // id, enabled, ok}.
                     "routine_toggle" => {
+                        // Task 313: mutating arm — same gate as config_save.
+                        if !state.auth_token.is_empty() && !authed {
+                            warn!("routine_toggle: unauthenticated attempt rejected");
+                            let reply = json!({
+                                "type": "routine_status",
+                                "id": json_val["id"].as_str().unwrap_or(""),
+                                "enabled": json_val["enabled"].as_bool().unwrap_or(false),
+                                "ok": false,
+                                "msg": "Not authenticated: send {\"type\":\"auth\",\"token\":\"...\"} first."
+                            })
+                            .to_string();
+                            let _ = direct_tx.send(reply);
+                            continue;
+                        }
                         let id = json_val["id"].as_str().unwrap_or("").to_string();
                         let enabled = json_val["enabled"].as_bool().unwrap_or(false);
                         let mut reg = state.routines.write().await;
@@ -1204,6 +1220,19 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                     // reply {"type":"routine_saved", id, ok} (ok:false with
                     // msg on bad schedule/backend/name).
                     "routine_create" => {
+                        // Task 313: mutating arm — same gate as config_save.
+                        if !state.auth_token.is_empty() && !authed {
+                            warn!("routine_create: unauthenticated attempt rejected");
+                            let reply = json!({
+                                "type": "routine_saved",
+                                "id": "",
+                                "ok": false,
+                                "msg": "Not authenticated: send {\"type\":\"auth\",\"token\":\"...\"} first."
+                            })
+                            .to_string();
+                            let _ = direct_tx.send(reply);
+                            continue;
+                        }
                         let name = json_val["name"].as_str().unwrap_or("").to_string();
                         let schedule = json_val["schedule"].as_str().unwrap_or("").to_string();
                         let agent_role = json_val["agent_role"].as_str().unwrap_or("").to_string();
@@ -1232,6 +1261,19 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                     // UI sends {"type":"routine_update", id, ...same fields};
                     // absent fields are left unchanged.
                     "routine_update" => {
+                        // Task 313: mutating arm — same gate as config_save.
+                        if !state.auth_token.is_empty() && !authed {
+                            warn!("routine_update: unauthenticated attempt rejected");
+                            let reply = json!({
+                                "type": "routine_saved",
+                                "id": json_val["id"].as_str().unwrap_or(""),
+                                "ok": false,
+                                "msg": "Not authenticated: send {\"type\":\"auth\",\"token\":\"...\"} first."
+                            })
+                            .to_string();
+                            let _ = direct_tx.send(reply);
+                            continue;
+                        }
                         let id = json_val["id"].as_str().unwrap_or("").to_string();
                         let opt = |k: &str| json_val.get(k).and_then(|v| v.as_str());
                         let enabled = json_val.get("enabled").and_then(|v| v.as_bool());
@@ -1265,6 +1307,19 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                     // UI sends {"type":"routine_delete", id}; we confirm
                     // {"type":"routine_status", id, ok}.
                     "routine_delete" => {
+                        // Task 313: mutating arm — same gate as config_save.
+                        if !state.auth_token.is_empty() && !authed {
+                            warn!("routine_delete: unauthenticated attempt rejected");
+                            let reply = json!({
+                                "type": "routine_status",
+                                "id": json_val["id"].as_str().unwrap_or(""),
+                                "ok": false,
+                                "msg": "Not authenticated: send {\"type\":\"auth\",\"token\":\"...\"} first."
+                            })
+                            .to_string();
+                            let _ = direct_tx.send(reply);
+                            continue;
+                        }
                         let id = json_val["id"].as_str().unwrap_or("").to_string();
                         let mut reg = state.routines.write().await;
                         let ok = reg.remove(&id);
@@ -1597,6 +1652,32 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                     }
 
                     "slash_cmd" => {
+                        // Task 313: mutating arm — same gate as config_save.
+                        // The dispatcher behind handle_slash_command can send
+                        // support email (/support approve + /support send),
+                        // read customer drafts, and apply personas, so an
+                        // unauthenticated client must never reach it. The
+                        // rejection rides the arm's own ollama_response shape
+                        // (via the bus, like a normal reply) so the UI shows
+                        // it in chat; the command itself is not echoed —
+                        // it never ran.
+                        if !state.auth_token.is_empty() && !authed {
+                            warn!("slash_cmd: unauthenticated attempt rejected");
+                            let reply = serde_json::json!({
+                                "type": "ollama_response",
+                                "llm": "system",
+                                "msg": "Not authenticated: send {\"type\":\"auth\",\"token\":\"...\"} first."
+                            })
+                            .to_string();
+                            let bus_msg = crate::bus::Message {
+                                to: "web_interface".to_string(),
+                                from: "system".to_string(),
+                                data: reply,
+                                timestamp: get_timestamp(),
+                            };
+                            let _ = state.bus.publish(bus_msg);
+                            continue;
+                        }
                         let cmd = json_val["cmd"].as_str().unwrap_or("").trim().to_string();
                         let result = handle_slash_command(&cmd);
                         let msg_out = serde_json::json!({
@@ -3576,5 +3657,418 @@ mod tests {
         let out = handle_slash_command("/help");
         assert!(out.contains("/support drafts"), "unexpected: {out}");
         assert!(out.contains("/support send <id>"), "unexpected: {out}");
+    }
+
+    // ── WS auth gate (task 313) ─────────────────────────────────────────────
+    //
+    // Drives the real /ws endpoint over a live socket and enumerates every
+    // mutating WS arm. An unauthenticated client is rejected with no state
+    // change; after {"type":"auth"} the newly gated arms work again. `chat`
+    // is deliberately NOT in the list — gating it is a product decision
+    // John has not made. config_save / manifest_save are negative-only:
+    // their positive paths write files and were already gated before this
+    // change, so there is nothing new to prove on the happy path.
+
+    const WS_AUTH_TOKEN: &str = "ws-auth-test-token";
+    const WS_AUTH_NOT_AUTHED: &str = "Not authenticated";
+
+    type WsAuthStream = tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >;
+
+    /// Unique temp path per process, so parallel `cargo test` runs never
+    /// share a routines/config file.
+    fn ws_auth_tmp_path(suffix: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("helix-ws-auth-{}-{suffix}", std::process::id()))
+    }
+
+    /// Test AppState: a token IS configured, routines + config live in temp
+    /// files. Nothing points at the real tree.
+    fn ws_auth_test_state() -> (AppState, std::path::PathBuf, std::path::PathBuf) {
+        let routines_path = ws_auth_tmp_path("routines.json");
+        let config_path = ws_auth_tmp_path("config.toml");
+        // Sentinel content: the config_save negative test asserts this exact
+        // text survives an unauthenticated save attempt.
+        let _ = std::fs::write(&config_path, "[web]\nport = 8443\n");
+        let bus = Arc::new(Bus::new());
+        let (msg_tx, _rx) = broadcast::channel(100);
+        let routines = Arc::new(RwLock::new(
+            crate::cron::registry::RoutineRegistry::load_or_seed(routines_path.clone()),
+        ));
+        let state = AppState {
+            bus,
+            msg_tx,
+            config_str: String::new(),
+            config_path: config_path.to_string_lossy().to_string(),
+            backends_json: "[]".to_string(),
+            logging: LoggingConfig::default(),
+            auth_token: WS_AUTH_TOKEN.to_string(),
+            routines,
+            inflight: Arc::new(Mutex::new(HashMap::new())),
+        };
+        (state, routines_path, config_path)
+    }
+
+    /// Deletes CWD system_manifest.md on drop if the test created it.
+    /// handle_ws writes a default manifest on connect when none exists, and
+    /// this test must not leave repo dirt behind.
+    struct WsAuthManifestGuard {
+        existed_before: bool,
+    }
+
+    impl WsAuthManifestGuard {
+        fn new() -> Self {
+            Self {
+                existed_before: std::path::Path::new("system_manifest.md").exists(),
+            }
+        }
+    }
+
+    impl Drop for WsAuthManifestGuard {
+        fn drop(&mut self) {
+            if !self.existed_before {
+                let _ = std::fs::remove_file("system_manifest.md");
+            }
+        }
+    }
+
+    /// Drain the connect burst (config, manifest, backends, agent_status,
+    /// log). Reads until 300ms pass with no message; leftovers are harmless
+    /// because read_until skips non-matching types.
+    async fn ws_auth_drain(ws: &mut WsAuthStream) {
+        use futures_util::StreamExt;
+        loop {
+            match tokio::time::timeout(std::time::Duration::from_millis(300), ws.next()).await {
+                Ok(Some(Ok(_))) => continue,
+                _ => break,
+            }
+        }
+    }
+
+    /// Send one JSON message on the socket.
+    async fn ws_auth_send(ws: &mut WsAuthStream, payload: serde_json::Value) {
+        use futures_util::SinkExt;
+        ws.send(tokio_tungstenite::tungstenite::Message::text(
+            payload.to_string(),
+        ))
+        .await
+        .expect("WS send failed");
+    }
+
+    /// Read text messages until one of type `want` arrives (other traffic —
+    /// connect leftovers, agent_status, bus echoes — is skipped). Fails the
+    /// test on timeout instead of hanging the suite.
+    async fn ws_auth_read_until(ws: &mut WsAuthStream, want: &str) -> serde_json::Value {
+        use futures_util::StreamExt;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "timed out waiting for a WS message of type {want}"
+            );
+            let msg = tokio::time::timeout(std::time::Duration::from_secs(2), ws.next())
+                .await
+                .expect("WS read timed out")
+                .expect("WS stream ended")
+                .expect("WS read error");
+            if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if val["type"].as_str() == Some(want) {
+                        return val;
+                    }
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn ws_mutating_arms_require_auth() {
+        // GIVEN a token is configured and the server is up on a live socket:
+        let _manifest_guard = WsAuthManifestGuard::new();
+        let (state, routines_path, config_path) = ws_auth_test_state();
+        let routines = state.routines.clone();
+        let app = Router::new()
+            .route("/ws", get(ws_handler))
+            .with_state(state);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test listener");
+        let port = listener.local_addr().expect("listener addr").port();
+        let server = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+        let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws"))
+            .await
+            .expect("WS connect");
+        ws_auth_drain(&mut ws).await;
+
+        // A seeded routine to toggle / update / delete.
+        let (seed_id, seed_enabled, seed_name) = {
+            let reg = routines.read().await;
+            let r = reg.list().first().expect("a seeded routine");
+            (r.id.clone(), r.enabled, r.name.clone())
+        };
+
+        // WHEN an unauthenticated client sends each mutating message,
+        // THEN it is rejected and nothing changes.
+
+        // routine_toggle
+        ws_auth_send(
+            &mut ws,
+            json!({"type": "routine_toggle", "id": seed_id, "enabled": !seed_enabled}),
+        )
+        .await;
+        let reply = ws_auth_read_until(&mut ws, "routine_status").await;
+        assert_eq!(reply["ok"], false, "toggle must be rejected: {reply}");
+        assert!(
+            reply["msg"]
+                .as_str()
+                .unwrap_or("")
+                .contains(WS_AUTH_NOT_AUTHED),
+            "rejection must say why: {reply}"
+        );
+        assert_eq!(
+            routines
+                .read()
+                .await
+                .list()
+                .iter()
+                .find(|r| r.id == seed_id)
+                .expect("seed routine still present")
+                .enabled,
+            seed_enabled,
+            "rejected toggle must not change state"
+        );
+
+        // routine_create
+        ws_auth_send(
+            &mut ws,
+            json!({"type": "routine_create", "name": "ws-auth-probe", "schedule": "daily 03:00", "agent_role": "", "task": "probe", "backend": "auto", "enabled": true}),
+        )
+        .await;
+        let reply = ws_auth_read_until(&mut ws, "routine_saved").await;
+        assert_eq!(reply["ok"], false, "create must be rejected: {reply}");
+        assert!(
+            reply["msg"]
+                .as_str()
+                .unwrap_or("")
+                .contains(WS_AUTH_NOT_AUTHED),
+            "rejection must say why: {reply}"
+        );
+        assert!(
+            routines
+                .read()
+                .await
+                .list()
+                .iter()
+                .all(|r| r.name != "ws-auth-probe"),
+            "rejected create must not add a routine"
+        );
+
+        // routine_update
+        ws_auth_send(
+            &mut ws,
+            json!({"type": "routine_update", "id": seed_id, "name": "renamed-by-probe"}),
+        )
+        .await;
+        let reply = ws_auth_read_until(&mut ws, "routine_saved").await;
+        assert_eq!(reply["ok"], false, "update must be rejected: {reply}");
+        assert!(
+            reply["msg"]
+                .as_str()
+                .unwrap_or("")
+                .contains(WS_AUTH_NOT_AUTHED),
+            "rejection must say why: {reply}"
+        );
+        assert_eq!(
+            routines
+                .read()
+                .await
+                .list()
+                .iter()
+                .find(|r| r.id == seed_id)
+                .expect("seed routine still present")
+                .name,
+            seed_name,
+            "rejected update must not change state"
+        );
+
+        // routine_delete
+        ws_auth_send(&mut ws, json!({"type": "routine_delete", "id": seed_id})).await;
+        let reply = ws_auth_read_until(&mut ws, "routine_status").await;
+        assert_eq!(reply["ok"], false, "delete must be rejected: {reply}");
+        assert!(
+            reply["msg"]
+                .as_str()
+                .unwrap_or("")
+                .contains(WS_AUTH_NOT_AUTHED),
+            "rejection must say why: {reply}"
+        );
+        assert!(
+            routines.read().await.list().iter().any(|r| r.id == seed_id),
+            "rejected delete must not remove the routine"
+        );
+
+        // config_save (negative only — see the header comment)
+        let config_before = std::fs::read_to_string(&config_path).expect("read temp config");
+        ws_auth_send(
+            &mut ws,
+            json!({"type": "config_save", "data": "[web]\nport = 9999\n"}),
+        )
+        .await;
+        let reply = ws_auth_read_until(&mut ws, "config_status").await;
+        assert_eq!(
+            reply["status"], "error",
+            "config_save must be rejected: {reply}"
+        );
+        assert!(
+            reply["msg"]
+                .as_str()
+                .unwrap_or("")
+                .contains(WS_AUTH_NOT_AUTHED),
+            "rejection must say why: {reply}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&config_path).expect("re-read temp config"),
+            config_before,
+            "rejected config_save must not touch the file"
+        );
+
+        // manifest_save (negative only — see the header comment)
+        let manifest_before = std::fs::read_to_string("system_manifest.md").unwrap_or_default();
+        ws_auth_send(&mut ws, json!({"type": "manifest_save", "data": "# probe"})).await;
+        let reply = ws_auth_read_until(&mut ws, "manifest_status").await;
+        assert_eq!(
+            reply["status"], "error",
+            "manifest_save must be rejected: {reply}"
+        );
+        assert!(
+            reply["msg"]
+                .as_str()
+                .unwrap_or("")
+                .contains(WS_AUTH_NOT_AUTHED),
+            "rejection must say why: {reply}"
+        );
+        assert_eq!(
+            std::fs::read_to_string("system_manifest.md").unwrap_or_default(),
+            manifest_before,
+            "rejected manifest_save must not touch the file"
+        );
+
+        // slash_cmd — the sharp one. /status is read-only, so it is safe to
+        // run authenticated later; unauthenticated it must never reach the
+        // dispatcher (which can /support send). The bus bridge re-wraps the
+        // reply, so the text lands in "data", not "msg".
+        ws_auth_send(&mut ws, json!({"type": "slash_cmd", "cmd": "/status"})).await;
+        let reply = ws_auth_read_until(&mut ws, "ollama_response").await;
+        assert!(
+            reply["data"]
+                .as_str()
+                .unwrap_or("")
+                .contains(WS_AUTH_NOT_AUTHED),
+            "slash_cmd must be rejected: {reply}"
+        );
+
+        // WHEN the client authenticates,
+        // THEN the same calls work.
+        ws_auth_send(&mut ws, json!({"type": "auth", "token": WS_AUTH_TOKEN})).await;
+        let reply = ws_auth_read_until(&mut ws, "auth_status").await;
+        assert_eq!(reply["status"], "ok", "auth must succeed: {reply}");
+
+        // routine_toggle now works
+        ws_auth_send(
+            &mut ws,
+            json!({"type": "routine_toggle", "id": seed_id, "enabled": !seed_enabled}),
+        )
+        .await;
+        let reply = ws_auth_read_until(&mut ws, "routine_status").await;
+        assert_eq!(reply["ok"], true, "authed toggle must work: {reply}");
+        assert_eq!(reply["enabled"], !seed_enabled, "toggle must flip: {reply}");
+        assert_eq!(
+            routines
+                .read()
+                .await
+                .list()
+                .iter()
+                .find(|r| r.id == seed_id)
+                .expect("seed routine still present")
+                .enabled,
+            !seed_enabled,
+            "authed toggle must change state"
+        );
+
+        // routine_create now works
+        ws_auth_send(
+            &mut ws,
+            json!({"type": "routine_create", "name": "ws-auth-probe", "schedule": "daily 03:00", "agent_role": "", "task": "probe", "backend": "auto", "enabled": true}),
+        )
+        .await;
+        let reply = ws_auth_read_until(&mut ws, "routine_saved").await;
+        assert_eq!(reply["ok"], true, "authed create must work: {reply}");
+        let probe_id = reply["id"].as_str().expect("created id").to_string();
+        assert!(!probe_id.is_empty(), "created routine needs an id: {reply}");
+        assert!(
+            routines
+                .read()
+                .await
+                .list()
+                .iter()
+                .any(|r| r.id == probe_id),
+            "authed create must add the routine"
+        );
+
+        // routine_update now works
+        ws_auth_send(
+            &mut ws,
+            json!({"type": "routine_update", "id": probe_id, "name": "ws-auth-probe-renamed"}),
+        )
+        .await;
+        let reply = ws_auth_read_until(&mut ws, "routine_saved").await;
+        assert_eq!(reply["ok"], true, "authed update must work: {reply}");
+        assert_eq!(
+            routines
+                .read()
+                .await
+                .list()
+                .iter()
+                .find(|r| r.id == probe_id)
+                .expect("probe routine present")
+                .name,
+            "ws-auth-probe-renamed",
+            "authed update must change state"
+        );
+
+        // routine_delete now works
+        ws_auth_send(&mut ws, json!({"type": "routine_delete", "id": probe_id})).await;
+        let reply = ws_auth_read_until(&mut ws, "routine_status").await;
+        assert_eq!(reply["ok"], true, "authed delete must work: {reply}");
+        assert!(
+            routines
+                .read()
+                .await
+                .list()
+                .iter()
+                .all(|r| r.id != probe_id),
+            "authed delete must remove the routine"
+        );
+
+        // slash_cmd now works — /status runs, and the reply is a real status
+        // dump, not a rejection.
+        ws_auth_send(&mut ws, json!({"type": "slash_cmd", "cmd": "/status"})).await;
+        let reply = ws_auth_read_until(&mut ws, "ollama_response").await;
+        assert!(
+            !reply["data"]
+                .as_str()
+                .unwrap_or("")
+                .contains(WS_AUTH_NOT_AUTHED),
+            "authed slash_cmd must run: {reply}"
+        );
+
+        // Cleanup: close the socket, stop the server, remove temp files.
+        // system_manifest.md is handled by the Drop guard above.
+        let _ = ws.close(None).await;
+        server.abort();
+        let _ = std::fs::remove_file(&routines_path);
+        let _ = std::fs::remove_file(&config_path);
     }
 }

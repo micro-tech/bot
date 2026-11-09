@@ -6,9 +6,12 @@
 //! to the same room. Phase 3 adds task handoff: a `!` JSON envelope
 //! (`how: llm`) hands a task string to one of Helix's LLM backends as
 //! an async agent job, with the report posted back to the same room.
-//! Plain commands stay fully in-process (no LLM on that path), like
-//! `support-mail-watch`; LLM tasks run detached, never blocking the
-//! tick.
+//! Task 319 adds the MCP path: a `!` JSON envelope (`how: mcp`)
+//! invokes one MCP tool on one configured server (read-only in v1)
+//! and posts the result back. Plain commands stay fully in-process
+//! (no LLM on that path), like `support-mail-watch`; LLM tasks run
+//! detached, never blocking the tick; MCP calls run in the tick
+//! within their `time` budget.
 //!
 //! Safety shape (load-bearing order):
 //! 1. Sender gate FIRST - only `allowed_senders` (expected
@@ -18,10 +21,16 @@
 //! 2. Trigger: trimmed body must start with `!`.
 //! 3. Envelope (Phase 3): a `!` rest that parses as JSON with a valid
 //!    `how` dispatches structured (command -> executor with `time`
-//!    override, llm -> task handler); anything else falls back to the
-//!    plain command path, so hand-typed `!uptime` keeps working.
+//!    override, llm -> task handler, mcp -> MCP tool call with `time`
+//!    budget); anything else falls back to the plain command path, so
+//!    hand-typed `!uptime` keeps working.
 //!    Malformed structured messages get a rejection naming the
-//!    problem and execute nothing.
+//!    problem and execute nothing. Addressing (`to`, spec §4 step 4):
+//!    a structured message whose `to` names another agent is ignored
+//!    silently (no run, no reply, no error); absent `to` is a
+//!    broadcast — EXCEPT for mcp, where `to` is REQUIRED (a missing
+//!    `to` is a rejection, "mcp needs a to field"). Plain `!`
+//!    commands have no `to` and are always broadcast.
 //! 4. Target: `asus: ...` routes to the ASUS (Phase 2); anything else
 //!    runs locally. ASUS disabled/unconfigured -> not-enabled reply,
 //!    zero ssh attempts.
@@ -33,6 +42,7 @@ pub mod asus;
 pub mod config;
 pub mod envelope;
 pub mod executor;
+pub mod mcp_handler;
 pub mod reply;
 pub mod state;
 pub mod task_handler;
@@ -316,6 +326,22 @@ fn process_message(
     // here is from an allowed sender. A rejection executes nothing.
     match envelope::parse(&rest) {
         envelope::Parsed::Structured(s) => {
+            // 3a. Addressing (spec §4 step 4): a structured message
+            // addressed to another agent is ignored entirely — no
+            // run, no reply, no error. Absent `to` is a broadcast.
+            // This runs AFTER the sender gate and JSON parse, BEFORE
+            // any dispatch. (Plain `!` commands never reach here —
+            // they have no `to` and are always broadcast.)
+            if let Some(to) = s.addressee() {
+                if to != cfg.agent_name {
+                    log::info!(
+                        "chat-command: message addressed to '{to}' ignored (this agent is '{}', room={})",
+                        cfg.agent_name,
+                        cfg.room
+                    );
+                    return Slot::Ignored;
+                }
+            }
             return dispatch_structured(tools, cfg, runtime_dir, ssh_bin, msg, s);
         }
         envelope::Parsed::Reject(reason) => {
@@ -419,6 +445,7 @@ fn dispatch_structured(
             time_secs,
             scope: _,
             command,
+            to: _,
         } => {
             let timeout_secs = time_secs.unwrap_or(cfg.command_timeout_secs);
             if target == Target::Asus {
@@ -486,6 +513,7 @@ fn dispatch_structured(
             time_secs,
             scope,
             task,
+            to: _,
         } => {
             task_handler::submit_llm_task(
                 tools,
@@ -499,6 +527,31 @@ fn dispatch_structured(
                 &task,
             );
             Slot::Command
+        }
+        envelope::Structured::Mcp {
+            server,
+            tool,
+            args,
+            time_secs,
+            to: _,
+        } => {
+            // `to` was already enforced by the parser (required for
+            // mcp) and the addressing check in `process_message`
+            // (ignored when addressed to another agent), so by here
+            // this call is addressed to this agent. The handler runs
+            // it in the tick within the `time` budget and posts
+            // exactly one reply (result / failure / timeout /
+            // rejection). Scope is always Read here — the parser
+            // rejected any `write:` scope.
+            mcp_handler::run_mcp_call(
+                tools,
+                cfg,
+                msg.id,
+                &server,
+                &tool,
+                &args,
+                time_secs.unwrap_or(mcp_handler::DEFAULT_MCP_TIME_SECS),
+            )
         }
     }
 }
@@ -1412,6 +1465,398 @@ mod tests {
         assert_eq!(bodies.len(), 1, "{bodies:?}");
         assert!(bodies[0].contains("rejected: message too large"), "{}", bodies[0]);
         task_handler::reset_for_tests();
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_to_helix_executes() {
+        // `to: "helix"` — addressed to this agent, so it runs.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("json-to-helix");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"command\", \"to\": \"helix\", \"scope\": \"read\", \"command\": \"uptime\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("$ uptime"), "{}", bodies[0]);
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1));
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_to_john_ignored() {
+        // `to: "john"` — addressed to the windows app, so Helix
+        // ignores it entirely: no run, no reply, no error. The
+        // cursor still advances past it.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("json-to-john");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"command\", \"to\": \"john\", \"scope\": \"read\", \"command\": \"uptime\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert!(bodies.is_empty(), "ignored message must not reply: {bodies:?}");
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1), "cursor advances past ignored message");
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_to_unknown_ignored() {
+        // `to` naming an agent that isn't this one (here an LLM
+        // task to grok-cli) — ignored on the LLM path too, so the
+        // check is path-agnostic: no ack, no role file, no reply.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        task_handler::reset_for_tests();
+        let dir = tmpdir("json-to-unknown");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"llm\", \"which\": \"server\", \"to\": \"grok-cli\", \"scope\": \"read\", \"task\": \"Check disk usage\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert!(bodies.is_empty(), "ignored message must not reply: {bodies:?}");
+        assert!(
+            !dir.join("agents").join("chat-task-read.md").exists(),
+            "ignored llm task must not submit (no role file)"
+        );
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1), "cursor advances past ignored message");
+        task_handler::reset_for_tests();
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_json_no_to_broadcast_executes() {
+        // No `to` — broadcast: Helix runs it, as today. (The
+        // `to`-suite counterpart of tick_json_command_executes.)
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("json-no-to");
+        write_config(&dir, BASE_CONFIG);
+        install_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"command\", \"scope\": \"read\", \"command\": \"uptime\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+        );
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("$ uptime"), "{}", bodies[0]);
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1));
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Task 319: `how: "mcp"` MCP tool-call path ────────────────
+
+    /// Install the MCP test state: an `[mcp]` config override
+    /// (enabled, servers google + chat), tool definitions including
+    /// the chat tools AND the google/chat MCP tools, and the chat
+    /// read/send/rooms stubs. `mcp_stub` is (tool name, canned
+    /// output) for the one MCP tool the test expects to be called —
+    /// pass None when no call is expected.
+    fn install_mcp_stubs(
+        read_output: &str,
+        rooms_output: &str,
+        mcp_stub: Option<(&str, &str)>,
+    ) {
+        use crate::config::mcp::{McpConfig, McpServerConfig};
+        let cfg = McpConfig {
+            enabled: true,
+            servers: vec![
+                McpServerConfig {
+                    name: "google".to_string(),
+                    command: "/bin/true".to_string(),
+                    args: vec![],
+                    env: Default::default(),
+                },
+                McpServerConfig {
+                    name: "chat".to_string(),
+                    command: "/bin/true".to_string(),
+                    args: vec![],
+                    env: Default::default(),
+                },
+            ],
+        };
+        crate::mcp_client::override_config_for_tests(cfg);
+        let defs = vec![
+            serde_json::json!({"type":"function","function":{"name":"mcp__chat__chat_read"}}),
+            serde_json::json!({"type":"function","function":{"name":"mcp__chat__chat_send"}}),
+            serde_json::json!({"type":"function","function":{"name":"mcp__chat__chat_rooms"}}),
+            serde_json::json!({"type":"function","function":{"name":"mcp__google__gmail_search"}}),
+            serde_json::json!({"type":"function","function":{"name":"mcp__google__gmail_read"}}),
+            serde_json::json!({"type":"function","function":{"name":"mcp__google__gmail_send"}}),
+            serde_json::json!({"type":"function","function":{"name":"mcp__google__calendar_list"}}),
+            serde_json::json!({"type":"function","function":{"name":"mcp__chat__chat_health"}}),
+            serde_json::json!({"type":"function","function":{"name":"mcp__chat__chat_watch"}}),
+        ];
+        crate::mcp_client::override_tool_definitions_for_tests(defs);
+        crate::mcp_client::stub_try_execute_for_tests("mcp__chat__chat_read", read_output);
+        crate::mcp_client::stub_try_execute_for_tests("mcp__chat__chat_send", "{\"id\": 99}");
+        crate::mcp_client::stub_try_execute_for_tests("mcp__chat__chat_rooms", rooms_output);
+        if let Some((tool, out)) = mcp_stub {
+            crate::mcp_client::stub_try_execute_for_tests(tool, out);
+        }
+    }
+
+    /// Drain the recorded try_execute calls once and split them into
+    /// (chat_send bodies, MCP tool calls). A single drain — both
+    /// `send_bodies` and the call log read the same global log, so a
+    /// test that needs both must take them together.
+    fn drain_mcp_tick() -> (Vec<String>, Vec<(String, serde_json::Value)>) {
+        let calls = crate::mcp_client::take_try_execute_calls_for_tests();
+        let bodies = calls
+            .iter()
+            .filter(|(name, _)| name == "mcp__chat__chat_send")
+            .filter_map(|(_, args)| {
+                args.get("body").and_then(|b| b.as_str()).map(str::to_string)
+            })
+            .collect();
+        let mcp = calls
+            .into_iter()
+            .filter(|(name, _)| {
+                (name.starts_with("mcp__google__") || name.starts_with("mcp__chat__"))
+                    && name != "mcp__chat__chat_read"
+                    && name != "mcp__chat__chat_send"
+                    && name != "mcp__chat__chat_rooms"
+            })
+            .collect();
+        (bodies, mcp)
+    }
+
+    #[test]
+    fn tick_mcp_valid_call_posts_result() {
+        // The happy path: a read tool on a configured server runs
+        // and its result is posted back, citing the hub message id.
+        // The tool is invoked with the envelope's `args`, verbatim.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("mcp-ok");
+        write_config(&dir, BASE_CONFIG);
+        install_mcp_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"mcp\", \"to\": \"helix\", \"server\": \"google\", \"tool\": \"gmail_search\", \"args\": {\"query\": \"from:example.com\"}, \"time\": 60, \"scope\": \"read\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+            Some((
+                "mcp__google__gmail_search",
+                "Search results:\n- hello@example.com: Hi",
+            )),
+        );
+        tick(&dir);
+        let (bodies, mcp) = drain_mcp_tick();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(
+            bodies[0].contains("mcp call #1 result (server google tool gmail_search)"),
+            "report must cite the hub id + server + tool: {}",
+            bodies[0]
+        );
+        assert!(bodies[0].contains("hello@example.com"), "{}", bodies[0]);
+        assert!(!bodies[0].starts_with('!'), "reports must never start with '!'");
+        assert_eq!(mcp.len(), 1, "exactly one MCP tool call: {mcp:?}");
+        assert_eq!(mcp[0].0, "mcp__google__gmail_search");
+        assert_eq!(
+            mcp[0].1.get("query").and_then(|q| q.as_str()),
+            Some("from:example.com"),
+            "args must reach the tool verbatim: {:?}",
+            mcp[0].1
+        );
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1));
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_mcp_chat_server_read_tool_posts_result() {
+        // The `chat` server's read tools work too (chat_health is
+        // not used by the tick plumbing, so the only call to it is
+        // the MCP call itself).
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("mcp-chat");
+        write_config(&dir, BASE_CONFIG);
+        install_mcp_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"mcp\", \"to\": \"helix\", \"server\": \"chat\", \"tool\": \"chat_health\", \"scope\": \"read\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+            Some(("mcp__chat__chat_health", "{\"status\": \"ok\"}")),
+        );
+        tick(&dir);
+        let (bodies, mcp) = drain_mcp_tick();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(
+            bodies[0].contains("mcp call #1 result (server chat tool chat_health)"),
+            "{}",
+            bodies[0]
+        );
+        assert!(bodies[0].contains("\"status\": \"ok\""), "{}", bodies[0]);
+        assert_eq!(mcp.len(), 1, "{mcp:?}");
+        assert_eq!(mcp[0].0, "mcp__chat__chat_health");
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_mcp_missing_to_rejects() {
+        // `to` is REQUIRED for mcp: a missing `to` is a rejection
+        // naming it, and the tool never runs.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("mcp-no-to");
+        write_config(&dir, BASE_CONFIG);
+        install_mcp_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"mcp\", \"server\": \"google\", \"tool\": \"gmail_search\", \"scope\": \"read\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+            None,
+        );
+        tick(&dir);
+        let (bodies, mcp) = drain_mcp_tick();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("rejected: mcp needs a to field"), "{}", bodies[0]);
+        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_mcp_unknown_server_rejects() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("mcp-no-server");
+        write_config(&dir, BASE_CONFIG);
+        install_mcp_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"mcp\", \"to\": \"helix\", \"server\": \"nope\", \"tool\": \"gmail_search\", \"scope\": \"read\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+            None,
+        );
+        tick(&dir);
+        let (bodies, mcp) = drain_mcp_tick();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("rejected: unknown mcp server 'nope'"), "{}", bodies[0]);
+        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_mcp_unknown_tool_rejects() {
+        // The tool is not offered by the (configured) server.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("mcp-no-tool");
+        write_config(&dir, BASE_CONFIG);
+        install_mcp_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"mcp\", \"to\": \"helix\", \"server\": \"google\", \"tool\": \"gmail_bogus\", \"scope\": \"read\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+            None,
+        );
+        tick(&dir);
+        let (bodies, mcp) = drain_mcp_tick();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(
+            bodies[0].contains("rejected: unknown tool 'gmail_bogus' on server 'google'"),
+            "{}",
+            bodies[0]
+        );
+        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_mcp_non_read_tool_rejects() {
+        // gmail_send IS offered by google (it is in the definitions)
+        // but it is a write, so the read-tool allowlist rejects it.
+        // This is the test that proves the allowlist — not the
+        // offered-check — is what blocks writes.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("mcp-write-tool");
+        write_config(&dir, BASE_CONFIG);
+        install_mcp_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"mcp\", \"to\": \"helix\", \"server\": \"google\", \"tool\": \"gmail_send\", \"args\": {\"to\": \"x@y.z\"}, \"scope\": \"read\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+            None,
+        );
+        tick(&dir);
+        let (bodies, mcp) = drain_mcp_tick();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(
+            bodies[0].contains("rejected: tool 'gmail_send' is not a read tool"),
+            "{}",
+            bodies[0]
+        );
+        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_mcp_write_scope_rejects() {
+        // A `write:` scope is rejected at parse time (before any
+        // server/tool check), so the tool never runs.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("mcp-write-scope");
+        write_config(&dir, BASE_CONFIG);
+        install_mcp_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"mcp\", \"to\": \"helix\", \"server\": \"google\", \"tool\": \"gmail_search\", \"scope\": \"write:gmail\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+            None,
+        );
+        tick(&dir);
+        let (bodies, mcp) = drain_mcp_tick();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(
+            bodies[0].contains("rejected: mcp writes are not enabled yet"),
+            "{}",
+            bodies[0]
+        );
+        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_mcp_non_object_args_rejects() {
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("mcp-bad-args");
+        write_config(&dir, BASE_CONFIG);
+        install_mcp_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"mcp\", \"to\": \"helix\", \"server\": \"google\", \"tool\": \"gmail_search\", \"args\": \"query\", \"scope\": \"read\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+            None,
+        );
+        tick(&dir);
+        let (bodies, mcp) = drain_mcp_tick();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(bodies[0].contains("rejected: args must be a JSON object"), "{}", bodies[0]);
+        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_mcp_to_john_ignored() {
+        // Addressing applies to mcp exactly as to command/llm: a
+        // message addressed to another agent is ignored entirely —
+        // no run, no reply, no error. The cursor still advances.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = tmpdir("mcp-to-john");
+        write_config(&dir, BASE_CONFIG);
+        install_mcp_stubs(
+            r#"[{"id": 1, "room": "command", "sender": "cobble-jr", "body": "!{\"how\": \"mcp\", \"to\": \"john\", \"server\": \"google\", \"tool\": \"gmail_search\", \"scope\": \"read\"}"}]"#,
+            r#"[{"name": "command", "last_id": 0}]"#,
+            Some(("mcp__google__gmail_search", "must not be called")),
+        );
+        tick(&dir);
+        let (bodies, mcp) = drain_mcp_tick();
+        assert!(bodies.is_empty(), "ignored message must not reply: {bodies:?}");
+        assert!(mcp.is_empty(), "ignored mcp must not call any tool: {mcp:?}");
+        let (state, _) = CommandState::load(&dir);
+        assert_eq!(state.last_seen_id, Some(1), "cursor advances past ignored message");
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }

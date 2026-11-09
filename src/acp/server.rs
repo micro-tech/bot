@@ -1,7 +1,7 @@
 //! ACP stdio server for Helix.
 //!
 //! Speaks the Agent Client Protocol over stdin/stdout using the official
-//! `agent-client-protocol` crate's `Agent::builder()` pattern (the same
+//! `agent-client-protocol` crate's `Agent::v1()` pattern (the same
 //! approach grok-cli uses): the crate owns transport framing and method
 //! dispatch, and we register one typed handler per ACP method.
 //!
@@ -12,15 +12,16 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     ClientNotification, ClientRequest, ContentBlock, InitializeRequest, InitializeResponse,
     ListSessionsRequest, ListSessionsResponse, NewSessionRequest, NewSessionResponse,
     PromptRequest, PromptResponse, SessionId, SessionNotification,
 };
 use agent_client_protocol::{
-    Agent, ByteStreams, Client, ConnectionTo, Responder, on_receive_dispatch, on_receive_notification,
+    Agent, ByteStreams, Client, on_receive_dispatch, on_receive_notification,
     on_receive_request,
 };
+use agent_client_protocol::v1::{ConnectionTo, Responder};
 use log::{debug, info, warn};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
@@ -64,7 +65,7 @@ pub async fn run_acp_stdio(
     let transport = ByteStreams::new(stdout.compat_write(), stdin.compat());
 
     let r = Agent
-        .builder()
+        .v1()
         .name(HELIX_ACP_AGENT_NAME)
         // ── initialize ──────────────────────────────────────────────────
         .on_receive_request(
@@ -84,7 +85,7 @@ pub async fn run_acp_stdio(
                         "agentCapabilities": {},
                         "authMethods": [],
                     }))
-                    .map_err(agent_client_protocol::util::internal_error)?;
+                    .map_err(agent_client_protocol::Error::into_internal_error)?;
                     responder.respond(resp)
                 }
             },
@@ -104,7 +105,7 @@ pub async fn run_acp_stdio(
                     info!("ACP session/new -> {}", sid);
                     let resp: NewSessionResponse =
                         serde_json::from_value(serde_json::json!({ "sessionId": sid }))
-                            .map_err(agent_client_protocol::util::internal_error)?;
+                            .map_err(agent_client_protocol::Error::into_internal_error)?;
                     responder.respond(resp)
                 }
             },
@@ -161,7 +162,7 @@ pub async fn run_acp_stdio(
         )
         // ── fallthrough: unknown methods get a clean error ──────────────
         .on_receive_dispatch(
-            move |_msg: agent_client_protocol::Dispatch<ClientRequest, ClientNotification>,
+            move |_msg: agent_client_protocol::v1::Dispatch<ClientRequest, ClientNotification>,
                   _cx: ConnectionTo<Client>| async move {
                 // Task 265 (secrets): a dispatch can carry prompt/tool
                 // content — log that one arrived, not its payload.
@@ -189,7 +190,7 @@ async fn handle_prompt(
     cx: ConnectionTo<Client>,
     agent: Arc<HelixAcpAgent>,
 ) -> Result<(), agent_client_protocol::Error> {
-    let err = |msg: String| agent_client_protocol::util::internal_error(msg);
+    let err = |msg: String| agent_client_protocol::Error::new(agent_client_protocol::ErrorCode::INTERNAL_ERROR, msg);
     let session_id = req.session_id.0.to_string();
     let text = prompt_text(&req);
     info!(
