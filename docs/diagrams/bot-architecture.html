@@ -68,7 +68,7 @@
     <div class="diagram-container">
       <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-architecture-title bot-architecture-desc">
         <title id="bot-architecture-title">Helix — architecture and data flow</title>
-        <desc id="bot-architecture-desc">Architecture and data-flow overview of the Helix agent: web UI, agent core with the commander pattern and sub-agents, LLM backends, MCP tools (including chat-mcp for the chat hub), the support watcher, the in-Helix OKF server, auth-gated web server routes, chat history, the voice flow (mic push-to-talk to STT, agent replies to TTS), and the self-improve and chat-command loops inside the core. The Support watcher, Web server routes, and Voice flow nodes link to detail diagrams, as do the self-improve and chat-command loop lines under Helix core.</desc>
+        <desc id="bot-architecture-desc">Architecture and data-flow overview of the Helix agent: web UI, agent core with the commander pattern and sub-agents, LLM backends, MCP tools (including chat-mcp for the chat hub), the support watcher, the in-Helix OKF server, auth-gated web server routes, chat history, the voice flow (mic push-to-talk to STT, agent replies to TTS), and the self-improve loop and the chat-command loop (now with a read-only MCP tool-call path, how: mcp) inside the core. The Support watcher, Web server routes, and Voice flow nodes link to detail diagrams, as do the self-improve and chat-command loop lines under Helix core.</desc>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
           <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
@@ -171,7 +171,7 @@
           <text x="420" y="118" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">self-improve loop ↗</text>
         </a>
         <a href="bot-chat-command-flow.html">
-          <text x="420" y="134" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">chat-command loop ↗</text>
+          <text x="420" y="134" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">chat-command loop · how: mcp ↗</text>
         </a>
 
         <!-- Node: LLM backends -->
