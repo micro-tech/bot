@@ -3794,117 +3794,6 @@
       "details": "Source: RustRecon scan by John 2026-11-05 on the Helix repo - 526 dependencies, 10 high-priority deep-analysis items, many packages with new versions; the full outdated list is in the scan's report.md (held locally by John). Scope: direct dependencies in Cargo.toml (and Cargo.lock); fix any breaking API changes; verify with cargo check + cargo test --lib + cargo check --bin helix; note any major-version bumps that required code changes.",
       "testStrategy": "cargo check + cargo test --lib + cargo check --bin helix all green on the updated tree; Cargo.lock updated; major-version bumps and their code changes listed in the results.",
       "subtasks": [],
-<<<<<<< HEAD
-      "results": ""
-    },
-    {
-      "id": 318,
-      "title": "Decompose src/io/web_server/mod.rs (158k lines) into focused modules",
-      "description": "Break the monolithic web_server/mod.rs into a proper module hierarchy. Extract routers, handlers, auth, WS logic, support routes, ops, voice, and agent status into separate files under src/io/web_server/. This is the #1 structural priority from the code review.",
-      "status": "in_progress",
-      "dependencies": [],
-      "priority": "high",
-      "details": "Current state: 158,600 lines in a single file with almost no internal mod structure (only a giant tests module). \n\nTarget structure (proposed):\nsrc/io/web_server/\n├── mod.rs                 (thin re-exports + start_web_server + AppState)\n├── auth.rs                (require_web_token, token validation)\n├── routes/\n│   ├── mod.rs\n│   ├── support.rs         (support approve/send/drafts)\n│   ├── voice.rs\n│   ├── ops.rs             (update, restart, usage)\n│   ├── agent_status.rs\n│   └── ws.rs              (WebSocket handling + routine messages)\n├── handlers/\n│   ├── support.rs\n│   ├── voice.rs\n│   ├── ops.rs\n│   └── ...\n├── state.rs\n└── tests/                 (or keep integration tests)\n\nPhases:\n1. Extract auth middleware + token logic (safe, high value).\n2. Extract support routes + handlers.\n3. Extract ops endpoints.\n4. Extract voice.\n5. Extract WebSocket + routine message handling (critical: fix Task 313 auth bypass here).\n6. Extract agent status / bridge logic.\n7. Clean up mod.rs and add file-size guards.\n\nConstraints:\n- Keep all existing behavior and tests passing.\n- Move tests with the code they test.\n- Do not change public contracts during extraction.\n- After each phase: cargo check + cargo test --lib must stay green.\n\nSuccess criteria: web_server/mod.rs < 8,000 lines, no file in the subtree > 4,000 lines without justification.",
-      "testStrategy": "After each extraction phase: cargo check --bin helix, cargo test --lib, and spot-check of affected route tests. Final: run the full web server test suite + manual verification that WS routine endpoints now enforce auth (Task 313).",
-      "subtasks": [
-        {
-          "id": 318.1,
-          "title": "Phase 1: Extract auth.rs (require_web_token + token helpers)",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 318.2,
-          "title": "Phase 2: Extract support routes & handlers",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 318.3,
-          "title": "Phase 3: Extract ops routes (update, restart, usage, status)",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 318.4,
-          "title": "Phase 4: Extract voice endpoints",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 318.5,
-          "title": "Phase 5: Extract WebSocket + routine messages (fix Task 313)",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 318.6,
-          "title": "Phase 6: Extract agent_status + bridge logic",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 318.7,
-          "title": "Phase 7: Final cleanup + size enforcement",
-          "status": "pending",
-          "dependencies": []
-        }
-      ]
-    },
-    {
-      "id": 319,
-      "title": "Decompose src/cpu/mod.rs (124k lines) into focused modules",
-      "description": "Break the massive cpu/mod.rs god object. It currently contains heartbeat, routine execution, self-improve orchestration, error log review, memory consolidation, nightly jobs, and more. Extract into a clean hierarchy.",
-      "status": "pending",
-      "dependencies": [],
-      "priority": "high",
-      "details": "Current state: 124,781 lines with some internal mods (executor, instructions, etc.) but the main logic is still monolithic.\n\nProposed target structure:\nsrc/cpu/\n├── mod.rs                 (thin orchestration + handle_routine_run dispatch)\n├── heartbeat.rs\n├── routines/\n│   ├── mod.rs\n│   ├── self_improve.rs\n│   ├── error_review.rs\n│   ├── memory_consolidation.rs\n│   ├── chat_command_watch.rs\n│   └── nightly.rs\n├── state.rs\n├── workflow.rs\n└── ...\n\nKey concerns to address during decomposition:\n- Task 315: Stop holding Cpu lock across entire routine runs.\n- Move long-running work off the main lock.\n- Preserve all existing tests.\n\nPhases will mirror the web_server plan but with extra care around the mutex and routine dispatch.",
-      "testStrategy": "cargo check + cargo test --lib after each major extraction. Verify heartbeat continues during simulated long routines. Final validation against Task 315 criteria.",
-      "subtasks": [
-        {
-          "id": 319.1,
-          "title": "Audit current internal modules and mutex usage",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 319.2,
-          "title": "Extract heartbeat logic",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 319.3,
-          "title": "Extract self-improve routine",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 319.4,
-          "title": "Extract error log review + is_counted_error_line",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 319.5,
-          "title": "Extract memory consolidation",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 319.6,
-          "title": "Refactor routine dispatch to avoid long lock holds (Task 315)",
-          "status": "pending",
-          "dependencies": []
-        },
-        {
-          "id": 319.7,
-          "title": "Cleanup + size targets",
-          "status": "pending",
-          "dependencies": []
-        }
-      ]
-=======
       "results": "All 37 direct dependencies updated to latest (crates.io, 2026-11-07); Cargo.lock regenerated. Major bumps: agent-client-protocol 2.2.0->5.0.0 (code changes in src/acp/server.rs + protocol.rs: schema::v1->v1::schema, Agent::builder()->Agent::v1(), Responder/ConnectionTo/Dispatch->v1 versions, util::internal_error->Error::into_internal_error / Error::new), russh 0.63->0.65.1 (Handler auth_publickey_offered/auth_publickey now take PublicKeyOffer/VerifiedPublicKey in src/ssh/handler.rs), notify 6->8.2.1 and getrandom 0.3->0.4.3 and axum-server 0.8.0->0.9.0 (no code changes needed, compiled clean). Kept: imap 3.0.0-alpha.15 (latest stable 2.4.1 is older); skipped prereleases libc 1.0.0-alpha.5, rustls 0.24.0-dev.2, notify 9.0.0-rc.7. Verify: cargo test --lib 606 passed / 0 failed / 4 ignored (baseline 606/0/4); cargo check --bin helix clean. cargo check --workspace still shows the pre-existing task-262 installer include_str! errors (config.toml / .grok manifest absent in a fresh checkout) - unrelated to this update. Branch ranger-317-deps pushed to origin; no merge to PreRelese."
     },
     {
@@ -3930,7 +3819,177 @@
       "testStrategy": "cargo test --lib green (new envelope tests: valid mcp JSON, missing `to`, unknown/missing server/tool, write scope, non-object args; new tick tests: valid mcp call posts result, unknown server/tool rejections, non-read tool rejection, timeout report); cargo check --bin helix clean. Live drills (§8 a,c,d,e,f) after deploy, once the hub is reachable.",
       "subtasks": [],
       "results": "Built on ranger-319-mcp. envelope.rs: Structured::Mcp { server, tool, args, time_secs, to: String } + `how: \"mcp\"` parse (to required — missing → \"mcp needs a to field\"; scope must be Read — write → \"mcp writes are not enabled yet\"; server/tool required via parse_mcp_name; args must be an object, defaults to {}); addressee() returns Some(to) so the existing addressing check ignores messages for other agents. New mcp_handler.rs: read-tool allowlist (google: gmail_search/gmail_read/calendar_list; chat: chat_read/chat_rooms/chat_health; anything else fail-closed), server check via usable_servers(), tool-offered check via tool_definitions(), call via try_execute on a worker thread within the `time` budget (default 60s; wait-only, does not kill the child — same caveat as the app side), chunked report citing the hub message id, audit logging for every call/rejection/timeout/report. mod.rs: pub mod mcp_handler + Mcp arm in dispatch_structured + docs. Verify: cargo test --lib 635 passed / 0 failed / 4 ignored (baseline 612/0/4; +23 new tests: 6 envelope + 8 mcp_handler + 9 tick); cargo check --bin helix clean. Test-run log appends reverted before commit. Live drills (§8 a,c,d,e,f) pending after deploy, once the hub is reachable."
->>>>>>> 4a3c1b58be48d8c335e48e81f30c6506a672187c
+    },
+    {
+      "id": 320,
+      "title": "Resolve merge-conflict markers in .zed/task_list.json (invalid JSON at PreRelese tip 7de0884)",
+      "description": "Merge commit 2d2557d (John, 2026-11-09 16:30 EST) was committed with unresolved conflict markers in .zed/task_list.json (lines 3797-3933 at tip 7de0884). The file is not valid JSON, so the task-runner workflow in AGENTS.md cannot load it (also flagged in harness_review_claude.md). The conflict is a task-ID collision: John's line (e4dec24, based on c0c8787) and the PR line (4a3c1b5) both used IDs 318/319 for different work.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Filed by the nightly Quartermaster 2026-11-10; Surveyor 1 dispatched with the full findings. WHAT BROKE: .zed/task_list.json at origin/PreRelese 7de0884 contains one conflict block (<<<<<<< HEAD at line 3797, ======= at 3907, >>>>>>> 4a3c1b5... at 3933). json.load fails: 'Expecting property name enclosed in double quotes: line 3797 column 1'. The markers were introduced by merge 2d2557d (John, 2026-11-09 16:30 EST, merging his e4dec24 line with origin/PreRelese 4a3c1b5); both parent versions parse cleanly on their own. THE TWO SIDES (both 134 tasks, same IDs, only tasks 313/317/318/319 differ): PR line (4a3c1b5): 313 done, 317 done (with results), 318 done = 'Add to addressing field to the chat-command routine', 319 done = 'Add how: mcp MCP tool-call path'. John's line (e4dec24): 313 pending, 317 pending (empty results), 318 in_progress = 'Decompose src/io/web_server/mod.rs (158k lines) into focused modules' with subtasks 318.1-318.7, 319 pending = 'Decompose src/cpu/mod.rs (124k lines) into focused modules' with subtasks 319.1-319.7. CORRECT RESOLUTION (do NOT just take the PR side - that silently deletes John's decomposition tasks): keep the PR-line 313/317/318/319 (done, with results); re-file John's decomposition tasks under NEW ids 322 (web_server) and 323 (cpu), renumbering subtasks to 322.1-322.7 / 323.1-323.7 and preserving the web_server task's in_progress status (John was working it himself). Note Phase 1 of the web_server decomposition (extract auth.rs) is ALREADY DONE in code - src/io/web_server/auth.rs exists at the tip - so mark the 322.1-equivalent subtask done. Also fix the inflated line counts in the re-filed task text: mod.rs is 4,074 lines and cpu/mod.rs 2,819 lines at the tip, not '158k'/'124k' (those figures look like byte counts). Carry tasks 320 and 321 (filed locally by the Quartermaster in the bot checkout at a279f06, uncommitted) into the repaired tip file. The .zed/task_list.json.bak file (+3123 lines in the same range) is a tooling backup; leave it alone unless it is also conflicted.",
+      "testStrategy": "python3 -c 'json.load(open(\".zed/task_list.json\"))' parses clean; grep for ^<<<<<<< / ^======= / ^>>>>>>> returns nothing; task inventory matches the agreed resolution (134 + re-filed 322/323 + carried 320/321, PR-line 313/317/318/319 done with results, decomposition tasks present under new ids with subtasks); cargo check --lib green after the repair (via task 321 if needed).",
+      "subtasks": [
+        {
+          "id": 320.1,
+          "title": "Resolve the conflicted region: keep PR-line 313/317/318/319, re-file decomposition tasks as 322/323",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 320.2,
+          "title": "Validate JSON parses, no markers remain, task inventory matches the agreed resolution",
+          "status": "done",
+          "dependencies": [
+            320.1
+          ]
+        }
+      ],
+      "results": "Done 2026-11-10 (ranger-320-321-repair): conflict block resolved by line-splice (no json.dump rewrite); file parses as valid JSON, 138 tasks, no markers; PR-line 313/317/318/319 kept done with results; decomposition tasks re-filed as 322 (in_progress, 322.1 done - auth.rs exists) and 323 (pending) with corrected line counts (4,074 / 2,819); tasks 320/321 carried in from the local filing."
+    },
+    {
+      "id": 321,
+      "title": "Fix cargo check --lib break at PreRelese tip: auth split left mod.rs calling ct_eq without the import (E0599)",
+      "description": "cargo check --lib at origin/PreRelese 7de0884 fails (exit 101): E0599 no method named `ct_eq` at src/io/web_server/mod.rs:506, plus 2 new warnings in test builds (unused variable `v`, src/io/web_server/auth.rs:96; unused import `axum::http::HeaderMap`, src/io/web_server/auth.rs:117 in the test module - the lib build shows only the first). Introduced across e4dec24 + merge 2d2557d (Surveyor correction 2026-11-10: e4dec24 removed the import and added `mod auth;` without the module file, so it alone does not compile either; the merge commit 2d2557d added src/io/web_server/auth.rs itself). Yesterday's baseline at 4a3c1b5 was zero warnings, exit 0. PreRelese is red until this lands; cargo test --lib also fails to compile with the same error, so there are no test results at the tip.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Filed by the nightly Quartermaster 2026-11-10 (verification logs qm-20261110-bot-checklib.log in the quartermaster goal hidden_files); Surveyor 1 dispatched with the full findings. ROOT CAUSE: the auth split moved `use subtle::ConstantTimeEq;` from src/io/web_server/mod.rs into new src/io/web_server/auth.rs, but mod.rs kept its own PRIVATE duplicates of constant_time_token_eq / http_token_ok / require_web_token (mod.rs:505-570) that still call ct_eq - now with no import in scope. auth.rs has PUB copies of the same three helpers (auth.rs:16/24/46) with the import at auth.rs:13. The two constant_time_token_eq implementations are behaviorally IDENTICAL (Surveyor correction: subtle 2.6.1 slice ct_eq short-circuits on length mismatch, same as auth.rs's explicit pre-check) - no reconciliation needed there. But the duplication is SIX functions, not three: mod.rs also keeps private http_token_ok / require_web_token / require_okf_write_token / is_secret_key / redacted_config_str, and NOTHING in src/ references auth:: yet - auth.rs is entirely unwired. Two of the other pairs DO differ behaviorally: http_token_ok (mod.rs accepts lowercase `bearer `, auth.rs only capital-B `Bearer `) and redacted_config_str/is_secret_key (mod.rs redacts to `***REDACTED***` with a wider fragment list and preserves formatting; auth.rs uses `<redacted>` with a narrower list). Most important: auth.rs's require_okf_write_token is a behavior REGRESSION vs mod.rs's - mod.rs accepts EITHER the web token OR the OKF auth_token Bearer grok-cli sends (OkfWriteAuth dual-token logic); auth.rs checks one token only. A naive route-everything-to-auth.rs would break grok-cli OKF writes. See Surveyor 1's repair plan for the canonical-choice table. mod.rs's private copies are still CALLED at mod.rs:521, 557, 569, 1071 and tested at mod.rs:2578-2616, so a naive delete would break callers - Surveyor to decide the fix shape. SUGGESTED DIRECTIONS (Surveyor decided 2026-11-10 - see repair plan): (b) full dedupe is the only shape that meets the zero-warning bar: delete mod.rs's private duplicates and route all callers to auth.rs's pub fns, preserving mod.rs's behavior where it is richer (lowercase bearer, redaction format/list, OKF dual-token, require_web_token error type/body). (a) minimal one-line re-add of the import is a TRAP: Surveyor verified with rustc that auth.rs's six unused pub fns in the private module will emit dead_code warnings once E0599 is fixed, so (a) alone fails the zero-warning bar. Keep (a) only as fallback if John explicitly accepts the warnings. Also fix the warnings: auth.rs:96 `if let Some((k, v)) = line.split_once('=')` in redacted_config_str - `v` is unused when the key is a secret (prefix _v or use it); and auth.rs:117 `use axum::http::HeaderMap;` in the #[cfg(test)] module is unused (`use super::*` at auth.rs:116 already brings HeaderMap in) - delete it. Both warnings ride on the same auth.rs file from the split, so fix them together. RULED OUT: not a dependency problem (subtle is in Cargo.toml; auth.rs compiles its import fine); not the known task-262 installer include_str! errors (those only affect cargo check --tests, unchanged baseline); grok-cli is unaffected (green at 39bc650: check/build/test all baseline-identical). NOTE: marking this task done requires the repaired task-list file from task 320 - the tip's .zed/task_list.json is currently invalid JSON, so this entry lives in the local bot checkout filing until 320 lands.",
+      "testStrategy": "cargo check --lib exit 0 with zero warnings; cargo test --lib -- --test-threads=1 AND cargo test --lib (parallel) green vs 635/0/4 baseline (count may shift if auth tests move - record the new expected count); cargo check --tests back to baseline-only items (262 installer include_str! errors + 2 task-273 unused-import warnings); node src/io/web_server/static/voice-tuning.test.js 9/9.",
+      "subtasks": [
+        {
+          "id": 321.1,
+          "title": "Restore the ct_eq import or remove the duplicated auth helpers in mod.rs (per Surveyor's plan)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 321.2,
+          "title": "Fix the two new warnings: unused `v` in auth.rs:96 and unused HeaderMap import in auth.rs:117 (test module)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 321.3,
+          "title": "Re-run full verification: check --lib, test --lib 1t + parallel, check --tests, JS voice-tuning",
+          "status": "done",
+          "dependencies": [
+            321.1,
+            321.2
+          ]
+        }
+      ],
+      "results": "Done 2026-11-10 (ranger-320-321-repair): full dedupe (option b). auth.rs is now the canonical home for all 6 auth helpers + OkfWriteAuth + REDACTED, with mod.rs's richer behavior preserved (lowercase bearer, dual-token OKF, ***REDACTED*** + wide fragment list, require_web_token error body). mod.rs's duplicates deleted (126 lines removed), callers routed via use auth::{...}. cargo check --lib exit 0, zero warnings. cargo test --lib: 639 passed, 0 failed, 4 ignored (new baseline - 638 tip + 1 new lowercase-bearer test; mod.rs auth tests kept for coverage, so count is above Surveyor's 628/630 estimate). cargo check --tests: only the known task-262 installer include_str! errors + 2 pre-existing unix_socket_test.rs warnings. JS voice-tuning 9/9."
+    },
+    {
+      "id": 322,
+      "title": "Decompose src/io/web_server/mod.rs (4,074 lines) into focused modules",
+      "description": "Break the monolithic web_server/mod.rs into a proper module hierarchy. Extract routers, handlers, auth, WS logic, support routes, ops, voice, and agent status into separate files under src/io/web_server/. This is the #1 structural priority from the code review.",
+      "status": "in_progress",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Current state: 4,074 lines in a single file with almost no internal mod structure (only a giant tests module). \n\nTarget structure (proposed):\nsrc/io/web_server/\n├── mod.rs                 (thin re-exports + start_web_server + AppState)\n├── auth.rs                (require_web_token, token validation)\n├── routes/\n│   ├── mod.rs\n│   ├── support.rs         (support approve/send/drafts)\n│   ├── voice.rs\n│   ├── ops.rs             (update, restart, usage)\n│   ├── agent_status.rs\n│   └── ws.rs              (WebSocket handling + routine messages)\n├── handlers/\n│   ├── support.rs\n│   ├── voice.rs\n│   ├── ops.rs\n│   └── ...\n├── state.rs\n└── tests/                 (or keep integration tests)\n\nPhases:\n1. Extract auth middleware + token logic (safe, high value).\n2. Extract support routes + handlers.\n3. Extract ops endpoints.\n4. Extract voice.\n5. Extract WebSocket + routine message handling (critical: fix Task 313 auth bypass here).\n6. Extract agent status / bridge logic.\n7. Clean up mod.rs and add file-size guards.\n\nConstraints:\n- Keep all existing behavior and tests passing.\n- Move tests with the code they test.\n- Do not change public contracts during extraction.\n- After each phase: cargo check + cargo test --lib must stay green.\n\nSuccess criteria: web_server/mod.rs < 8,000 lines, no file in the subtree > 4,000 lines without justification.",
+      "testStrategy": "After each extraction phase: cargo check --bin helix, cargo test --lib, and spot-check of affected route tests. Final: run the full web server test suite + manual verification that WS routine endpoints now enforce auth (Task 313).",
+      "subtasks": [
+        {
+          "id": 322.1,
+          "title": "Phase 1: Extract auth.rs (require_web_token + token helpers)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 322.2,
+          "title": "Phase 2: Extract support routes & handlers",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 322.3,
+          "title": "Phase 3: Extract ops routes (update, restart, usage, status)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 322.4,
+          "title": "Phase 4: Extract voice endpoints",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 322.5,
+          "title": "Phase 5: Extract WebSocket + routine messages (fix Task 313)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 322.6,
+          "title": "Phase 6: Extract agent_status + bridge logic",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 322.7,
+          "title": "Phase 7: Final cleanup + size enforcement",
+          "status": "pending",
+          "dependencies": []
+        }
+      ],
+      "results": "Phase 1 (extract auth.rs) done — src/io/web_server/auth.rs exists at the tip (2026-11-10). Re-filed from task 318 (ID collision in merge 2d2557d)."
+    },
+    {
+      "id": 323,
+      "title": "Decompose src/cpu/mod.rs (2,819 lines) into focused modules",
+      "description": "Break the massive cpu/mod.rs god object. It currently contains heartbeat, routine execution, self-improve orchestration, error log review, memory consolidation, nightly jobs, and more. Extract into a clean hierarchy.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Current state: 2,819 lines with some internal mods (executor, instructions, etc.) but the main logic is still monolithic.\n\nProposed target structure:\nsrc/cpu/\n├── mod.rs                 (thin orchestration + handle_routine_run dispatch)\n├── heartbeat.rs\n├── routines/\n│   ├── mod.rs\n│   ├── self_improve.rs\n│   ├── error_review.rs\n│   ├── memory_consolidation.rs\n│   ├── chat_command_watch.rs\n│   └── nightly.rs\n├── state.rs\n├── workflow.rs\n└── ...\n\nKey concerns to address during decomposition:\n- Task 315: Stop holding Cpu lock across entire routine runs.\n- Move long-running work off the main lock.\n- Preserve all existing tests.\n\nPhases will mirror the web_server plan but with extra care around the mutex and routine dispatch.",
+      "testStrategy": "cargo check + cargo test --lib after each major extraction. Verify heartbeat continues during simulated long routines. Final validation against Task 315 criteria.",
+      "subtasks": [
+        {
+          "id": 323.1,
+          "title": "Audit current internal modules and mutex usage",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 323.2,
+          "title": "Extract heartbeat logic",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 323.3,
+          "title": "Extract self-improve routine",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 323.4,
+          "title": "Extract error log review + is_counted_error_line",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 323.5,
+          "title": "Extract memory consolidation",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 323.6,
+          "title": "Refactor routine dispatch to avoid long lock holds (Task 315)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 323.7,
+          "title": "Cleanup + size targets",
+          "status": "pending",
+          "dependencies": []
+        }
+      ],
+      "results": "Re-filed from task 319 (ID collision in merge 2d2557d)."
     }
   ]
 }
