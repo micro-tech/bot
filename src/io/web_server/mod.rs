@@ -8,7 +8,7 @@ use axum::{
         Multipart, State, WebSocketUpgrade,
         ws::{Message as WsMessage, WebSocket},
     },
-    http::{header, HeaderMap, StatusCode},
+    http::{header, StatusCode},
     middleware,
     response::{Html, IntoResponse, Json},
     routing::{get, post},
@@ -31,7 +31,13 @@ use tokio::sync::RwLock;
 use toml;
 
 // Extracted authentication (Task 318)
+// All web auth helpers live in `auth` (task 321 dedupe); this module
+// re-exports them so existing call sites and tests keep working.
 mod auth;
+use auth::{
+    REDACTED, OkfWriteAuth, constant_time_token_eq, is_secret_key, redacted_config_str,
+    require_okf_write_token, require_web_token,
+};
 
 // ── AppState ──────────────────────────────────────────────────────────────────
 
@@ -496,82 +502,10 @@ pub async fn start_web_server(
 }
 
 // ── Web auth helpers ──────────────────────────────────────────────────────────
-
-/// Constant-time token comparison.
-///
-/// Plain `==` bails on the first mismatched byte, leaking the token
-/// byte-by-byte to a timing oracle. On a loopback homelab service this is
-/// theoretical — but the fix is one line, so there's no excuse.
-fn constant_time_token_eq(provided: &str, expected: &str) -> bool {
-    bool::from(provided.as_bytes().ct_eq(expected.as_bytes()))
-}
-
-/// Check an HTTP request's token against the configured web token.
-/// `Authorization: Bearer <token>` or `X-Web-Token: <token>` are accepted.
-/// When no token is configured this returns true (startup logs a warning).
-fn http_token_ok(token: &str, headers: &HeaderMap) -> bool {
-    if token.is_empty() {
-        return true;
-    }
-    let bearer = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer ").or_else(|| s.strip_prefix("bearer ")));
-    let x_token = headers.get("x-web-token").and_then(|v| v.to_str().ok());
-    bearer.or(x_token).is_some_and(|t| constant_time_token_eq(t, token))
-}
-
-/// Axum middleware: gate mutating OKF routes behind the web token.
-async fn require_web_token(
-    State(token): State<Arc<String>>,
-    req: axum::http::Request<axum::body::Body>,
-    next: middleware::Next,
-) -> Result<axum::response::Response, (StatusCode, &'static str)> {
-    if http_token_ok(&token, req.headers()) {
-        Ok(next.run(req).await)
-    } else {
-        Err((StatusCode::UNAUTHORIZED, "missing or invalid web token"))
-    }
-}
-
-/// Auth state for the v1 OKF write endpoints (task 208).
-/// grok-cli sends the OKF `auth_token` as a Bearer <redacted> it never sees the web
-/// token, so these endpoints accept EITHER credential.
-#[derive(Clone)]
-struct OkfWriteAuth {
-    web_token: Arc<String>,
-    okf_token: String,
-}
-
-/// Axum middleware: gate POST /okf/traces and POST /okf/bundles/{bundle}/concepts
-/// behind the web token OR the OKF auth_token Bearer. Fail-open when neither is
-/// configured, matching the house posture (same as http_token_ok).
-async fn require_okf_write_token(
-    State(auth): State<OkfWriteAuth>,
-    req: axum::http::Request<axum::body::Body>,
-    next: middleware::Next,
-) -> Result<axum::response::Response, (StatusCode, &'static str)> {
-    if auth.web_token.is_empty() && auth.okf_token.is_empty() {
-        return Ok(next.run(req).await);
-    }
-    if http_token_ok(&auth.web_token, req.headers()) {
-        return Ok(next.run(req).await);
-    }
-    let bearer = req
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| {
-            s.strip_prefix("Bearer ")
-                .or_else(|| s.strip_prefix("bearer "))
-        });
-    if !auth.okf_token.is_empty()
-        && bearer.is_some_and(|b| constant_time_token_eq(b, &auth.okf_token))
-    {
-        return Ok(next.run(req).await);
-    }
-    Err((StatusCode::UNAUTHORIZED, "missing or invalid token"))
-}
+// All auth helpers live in `auth` (task 321 dedupe); the ones this module
+// uses are imported at the top of this file: constant_time_token_eq,
+// require_web_token, OkfWriteAuth, require_okf_write_token. (`http_token_ok`
+// is only used by the tests below, via `super::auth`.)
 
 // ── Config redaction (task 184) ───────────────────────────────────────────────
 // The full config.toml (API keys, tokens, hosts, paths) must never be pushed
@@ -582,63 +516,8 @@ async fn require_okf_write_token(
 // the on-disk config before validating + writing.
 
 /// Placeholder substituted for secret values in config text sent to clients.
-const REDACTED: &str = "***REDACTED***";
-
-/// Key-name fragments (case-insensitive) treated as secrets for redaction.
-/// Bare "key" / "credential" are included deliberately: a redactor would
-/// rather over-redact ("monkey" gets masked — harmless) than leak `api-key`.
-fn is_secret_key(key: &str) -> bool {
-    let k = key.to_lowercase();
-    [
-        "token",
-        "secret",
-        "password",
-        "passwd",
-        "api_key",
-        "apikey",
-        "key",
-        "credential",
-        "auth",
-        "private_key",
-    ]
-    .iter()
-    .any(|frag| k.contains(frag))
-}
-
-/// Render a display-safe copy of the raw config TOML with secret values
-/// replaced by `***REDACTED***`.
-///
-/// Line-based (not a TOML re-serialize) so comments, ordering, and formatting
-/// survive for the config editor. Best-effort: only `key = value` lines whose
-/// key looks secret are masked — the real security boundary is the web token +
-/// loopback bind (task 183); this is defense-in-depth for the WS push.
-fn redacted_config_str(config_str: &str) -> String {
-    config_str
-        .lines()
-        .map(|line| {
-            let trimmed = line.trim_start();
-            // Skip section headers, comments, blank lines, and lines without '='.
-            if trimmed.is_empty()
-                || trimmed.starts_with('[')
-                || trimmed.starts_with('#')
-                || !trimmed.contains('=')
-            {
-                return line.to_string();
-            }
-            let raw_key = trimmed
-                .split_once('=')
-                .map(|(k, _)| k.trim())
-                .unwrap_or("");
-            let key = raw_key.trim_matches('"').trim_matches('\'');
-            if key.is_empty() || !is_secret_key(key) {
-                return line.to_string();
-            }
-            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
-            format!("{}{} = \"{}\"", indent, raw_key, REDACTED)
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+// REDACTED, is_secret_key and redacted_config_str live in `auth`
+// (task 321 dedupe) and are imported at the top of this file.
 
 /// Parse a `[section]` / `[[section]]` header line; returns the section name.
 fn section_of(line: &str) -> Option<String> {
@@ -2553,6 +2432,8 @@ fn handle_slash_command(cmd: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::auth::http_token_ok;
+    use axum::http::HeaderMap;
     use crate::bus::Bus;
 
     #[tokio::test]
