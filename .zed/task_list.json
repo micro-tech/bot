@@ -4038,6 +4038,34 @@
       "testStrategy": "cargo check --tests still green on Linux; note that Windows verification needs the ASUS build (sandbox cannot compile for Windows).",
       "subtasks": [],
       "results": "DONE 2026-11-10 by Ranger 1 (branch ranger-harness-325-327). Gated the Unix-only stub_ssh test helper (src/chat_command/mod.rs - uses std::os::unix::fs::PermissionsExt and a #!/bin/sh script) and its four callers (tick_asus_reply_carries_exit_status, tick_asus_routes_to_stub_ssh_with_expected_argv, tick_asus_rejections_make_zero_ssh_calls, tick_asus_disabled_makes_zero_ssh_calls) with #[cfg(unix)]. Production code was already properly gated (executor.rs #[cfg(unix)] blocks with #[cfg(not(unix))] fallbacks; src/io/unix_socket.rs is #[cfg(unix)] in src/io/mod.rs), so the test helper was the only Windows blocker. Verification caveat: the sandbox cannot compile for Windows - the ASUS build is the real verification. cargo check --tests still green on Linux (baseline-identical: only the known task-262 installer include_str! errors and 2 pre-existing task-273 unix_socket_test warnings). Full lib suite 643 passed / 0 failed / 4 ignored (baseline 639/0/4)."
+    },
+    {
+      "id": 328,
+      "title": "Helix web UI: responsive viewport widths — phone width + wider dual-screen width for Pixel 11 Pro Fold",
+      "description": "The Helix web UI should check the viewport/window width when it loads (on login) and adapt its layout. Right now the layout is sized for a desktop width, so logging in from a phone would show the wrong width. Add a phone-width layout and a wider layout for the unfolded dual-screen of the Pixel 11 Pro Fold.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "1) On web UI load/login, detect the viewport/window width and pick the layout for it (also re-check on resize/orientation change, since a Fold can go from folded to unfolded while the page is open). 2) Add a phone-width layout for the folded/cover display (narrow, single column, touch-sized controls). 3) Add a wider layout for the unfolded dual-screen/main display of the Pixel 11 Pro Fold (use the extra width — e.g. side-by-side panels or a wider chat/composer — instead of just stretching the phone layout). 4) Keep the existing desktop width unchanged. Do not guess the exact pixel breakpoints; measure the Fold's cover-display and unfolded-display viewport widths in the browser and set the breakpoints from those real values.",
+      "testStrategy": "Log in to the Helix web UI from the Pixel 11 Pro Fold folded (cover display) and confirm the phone layout is used and usable; unfold to the dual-screen/main display and confirm the wider layout is used; fold back and confirm it switches back. Also confirm the desktop width layout is unchanged. Record the actual viewport widths observed at each step.",
+      "subtasks": [
+        {
+          "id": "328.1",
+          "status": "pending",
+          "title": "Detect viewport width on load/login and on resize/orientation change"
+        },
+        {
+          "id": "328.2",
+          "status": "pending",
+          "title": "Add phone-width layout (folded/cover display)"
+        },
+        {
+          "id": "328.3",
+          "status": "pending",
+          "title": "Add wider dual-screen layout (unfolded main display)"
+        }
+      ],
+      "results": ""
     }
   ]
 }
