@@ -82,6 +82,12 @@ pub struct EvalReport {
 /// Runs tests. Production uses `RealRunner` (cargo in the worktree);
 /// unit tests use `FakeRunner` (never real cargo).
 pub trait TestRunner {
+    /// Point the runner at the worktree dir before running tests.
+    /// `evaluate_proposal` calls this right after creating the
+    /// worktree (task 325): without it, `RealRunner` would run cargo
+    /// in whatever directory it was constructed with, not the
+    /// patched worktree. `FakeRunner` records the path for tests.
+    fn set_work_dir(&mut self, dir: &Path);
     /// Run the lib subset for one module filter ("" = full lib suite).
     fn run_subset(&mut self, filter: &str) -> Vec<TestResult>;
     /// Run the approved eval set (`cargo test --test evals`).
@@ -100,6 +106,10 @@ pub struct RealRunner {
 }
 
 impl TestRunner for RealRunner {
+    fn set_work_dir(&mut self, dir: &Path) {
+        self.work_dir = dir.to_path_buf();
+    }
+
     fn run_subset(&mut self, filter: &str) -> Vec<TestResult> {
         let mut cmd = std::process::Command::new("cargo");
         cmd.arg("test").arg("--lib");
@@ -337,6 +347,11 @@ pub fn evaluate_proposal(
     let branch = format!("self-improve/{slug}-{now_ms}");
     let git = Git::new(repo.to_path_buf(), root.clone());
     let worktree = git.add_worktree(&wt_name, &branch)?;
+    // Task 325: point the runner at the fresh worktree so cargo runs
+    // against the PATCHED code. Before this, RealRunner kept whatever
+    // work_dir it was constructed with (nothing set it), so a
+    // production evaluation would have tested the wrong tree.
+    runner.set_work_dir(&worktree);
     // Cleanup helper: remove worktree + branch, logging (never masking
     // the eval result). Runs on every exit path after creation.
     let cleanup = |git: &Git, name: &str, branch: &str| {
@@ -439,16 +454,69 @@ pub fn evaluate_proposal(
     Ok(report)
 }
 
+/// Per-cycle evaluation arm (task 325, H1 — the single
+/// highest-leverage harness fix).
+///
+/// Picks the oldest stored proposal with status "proposed" and
+/// evaluates it via `evaluate_proposal`, using the caller's runner.
+/// Returns `Ok(Some(report))` when a proposal was evaluated,
+/// `Ok(None)` when there is nothing evaluable, and `Err` when the
+/// evaluation itself failed (cap, lock, worktree/commit failure —
+/// the record is untouched and the caller decides whether to retry).
+///
+/// Two skip cases, both logged, neither an error:
+/// - the oldest "proposed" record carries no diff files. The worker
+///   returns only a `diff_description` (prose), so today that is
+///   every record; the arm becomes effective when a later phase
+///   attaches real diffs. Skipping (rather than calling
+///   `evaluate_proposal` with an empty diff, which would just error
+///   "no diff files") keeps the cycle log honest.
+/// - `repo` is not a git checkout (the worktree is created from it).
+pub fn evaluate_oldest_proposal(
+    repo: &Path,
+    rt_dir: &Path,
+    cfg: &crate::self_improve::SelfImproveConfig,
+    runner: &mut dyn TestRunner,
+    now_ms: u64,
+) -> Result<Option<EvalReport>, String> {
+    let mut proposals = crate::self_improve::worker::read_proposals(rt_dir)?;
+    // Oldest "proposed" record first (by intake time).
+    proposals.sort_by_key(|p| p.created_at);
+    let Some(mut record) = proposals.into_iter().find(|p| p.status == "proposed") else {
+        return Ok(None);
+    };
+    if record.diff_files.is_empty() {
+        eprintln!(
+            "self_improve: proposal {} has no diff files; skipping evaluation",
+            record.signature
+        );
+        return Ok(None);
+    }
+    if !repo.join(".git").exists() {
+        eprintln!(
+            "self_improve: repo {} is not a git checkout; skipping evaluation",
+            repo.display()
+        );
+        return Ok(None);
+    }
+    let diff = record.diff_files.clone();
+    let report = evaluate_proposal(repo, rt_dir, cfg, &mut record, &diff, runner, now_ms)?;
+    Ok(Some(report))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// Fake runner: canned results + call flags. Never runs cargo.
+    /// Records the work dir `evaluate_proposal` points it at (task
+    /// 325: proves the runner is aimed at the fresh worktree).
     struct FakeRunner {
         subset: Vec<TestResult>,
         eval_set: Vec<TestResult>,
         eval_set_called: bool,
         subset_called: bool,
+        work_dir: Option<PathBuf>,
     }
 
     impl FakeRunner {
@@ -458,6 +526,7 @@ mod tests {
                 eval_set: vec![TestResult { name: "eval1".to_string(), passed: true, detail: "ok".to_string() }],
                 eval_set_called: false,
                 subset_called: false,
+                work_dir: None,
             }
         }
 
@@ -467,11 +536,16 @@ mod tests {
                 eval_set: vec![],
                 eval_set_called: false,
                 subset_called: false,
+                work_dir: None,
             }
         }
     }
 
     impl TestRunner for FakeRunner {
+        fn set_work_dir(&mut self, dir: &Path) {
+            self.work_dir = Some(dir.to_path_buf());
+        }
+
         fn run_subset(&mut self, _filter: &str) -> Vec<TestResult> {
             self.subset_called = true;
             self.subset.clone()
@@ -534,6 +608,7 @@ mod tests {
             promoted: false,
             promotion_reason: String::new(),
             eval_report_json: serde_json::Value::Null,
+            diff_files: Vec::new(),
             notes: Vec::new(),
         }
     }
@@ -749,6 +824,81 @@ mod tests {
         let r = evaluate_proposal(&repo, &rt, &cfg, &mut p, &diff, &mut runner, 5_000);
         assert!(r.is_err());
         assert!(!dir.join("evil.txt").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Task 325 (H1): the per-cycle evaluation arm ──────────────────
+
+    #[test]
+    fn arm_evaluates_oldest_proposed_record_with_diff() {
+        // GIVEN a stored "proposed" record carrying diff files, WHEN
+        // the arm runs with a passing fake runner (gate closed), THEN
+        // it evaluates the record (status "evaluated", report
+        // persisted), and the runner was pointed at the fresh
+        // worktree (task 325: set_work_dir wiring).
+        let (dir, repo, rt) = fixture("helix-self-improve-arm-eval");
+        let cfg = cfg_gate_closed();
+        let mut p = proposal("errors:logs/error_log.md");
+        p.diff_files = vec![DiffFile {
+            path: "src/a.rs".to_string(),
+            content: "line one\nline two\nline three\n".to_string(),
+        }];
+        upsert_proposal(&rt, &p).unwrap();
+        let mut runner = FakeRunner::passing();
+        let report = evaluate_oldest_proposal(&repo, &rt, &cfg, &mut runner, 5_000)
+            .unwrap()
+            .expect("arm must evaluate the record with a diff");
+        assert!(report.passed);
+        assert!(!report.promoted, "gate closed must never promote");
+        assert_eq!(report.promotion_reason, "eval-set-not-approved");
+        // The runner was aimed at the fresh worktree.
+        let work_dir = runner
+            .work_dir
+            .expect("evaluate_proposal must set the runner work dir");
+        assert!(
+            work_dir.starts_with(rt.join("self_improve/worktrees")),
+            "runner work dir must be under the worktree root: {}",
+            work_dir.display()
+        );
+        // The record was updated + persisted by the evaluation.
+        let stored = crate::self_improve::worker::read_proposals(&rt).unwrap();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].status, "evaluated");
+        assert!(!stored[0].eval_report_json.is_null());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn arm_skips_record_without_diff_files() {
+        // GIVEN a stored "proposed" record with NO diff files (the
+        // worker returns prose only), WHEN the arm runs, THEN it
+        // returns None and the record stays "proposed" — the arm does
+        // not call evaluate_proposal with an empty diff.
+        let (dir, repo, rt) = fixture("helix-self-improve-arm-nodiff");
+        let cfg = cfg_gate_closed();
+        let p = proposal("errors:logs/error_log.md");
+        assert!(p.diff_files.is_empty());
+        upsert_proposal(&rt, &p).unwrap();
+        let mut runner = FakeRunner::passing();
+        let report = evaluate_oldest_proposal(&repo, &rt, &cfg, &mut runner, 5_000).unwrap();
+        assert!(report.is_none(), "no diff means nothing to evaluate");
+        assert!(!runner.subset_called, "no test run for a diff-less record");
+        let stored = crate::self_improve::worker::read_proposals(&rt).unwrap();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].status, "proposed");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn arm_returns_none_when_no_proposals() {
+        // GIVEN no stored proposals at all, WHEN the arm runs, THEN
+        // it returns None (nothing to evaluate, no error).
+        let (dir, repo, rt) = fixture("helix-self-improve-arm-empty");
+        let cfg = cfg_gate_closed();
+        let mut runner = FakeRunner::passing();
+        let report = evaluate_oldest_proposal(&repo, &rt, &cfg, &mut runner, 5_000).unwrap();
+        assert!(report.is_none());
+        assert!(!runner.subset_called);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
