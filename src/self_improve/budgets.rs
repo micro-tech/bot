@@ -229,6 +229,7 @@ mod tests {
             promoted: false,
             promotion_reason: String::new(),
             eval_report_json: serde_json::Value::Null,
+            diff_files: Vec::new(),
             notes: Vec::new(),
         }
     }

@@ -1028,6 +1028,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn tick_asus_reply_carries_exit_status() {
         let _lock = crate::tools::subagent_tool::test_env_lock();
         let dir = tmpdir("asus-exit-status");
@@ -1214,6 +1215,9 @@ mod tests {
     /// A stub `ssh` script: appends its argv to $ASUS_STUB_LOG and
     /// prints a canned hostname. Lets tests assert the exact ssh
     /// invocation (or zero invocations) without touching a real host.
+    /// Unix-only (task 327): uses `std::os::unix::fs::PermissionsExt`
+    /// and a `#!/bin/sh` script, so it cannot compile on Windows.
+    #[cfg(unix)]
     fn stub_ssh(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {
         use std::os::unix::fs::PermissionsExt;
         let script = dir.join("ssh-stub");
@@ -1233,6 +1237,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn tick_asus_routes_to_stub_ssh_with_expected_argv() {
         let _lock = crate::tools::subagent_tool::test_env_lock();
         let dir = tmpdir("asus-ok");
@@ -1263,6 +1268,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn tick_asus_rejections_make_zero_ssh_calls() {
         let _lock = crate::tools::subagent_tool::test_env_lock();
         let dir = tmpdir("asus-reject");
@@ -1287,6 +1293,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn tick_asus_disabled_makes_zero_ssh_calls() {
         let _lock = crate::tools::subagent_tool::test_env_lock();
         let dir = tmpdir("asus-off");

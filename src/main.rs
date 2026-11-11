@@ -322,6 +322,25 @@ async fn run_helix() {
 
         // Manifest: prefer the runtime dir (task 188); fall back to CWD.
         let rt_dir = runtime_dir(config_path_used);
+        // Task 326 (H2): persist the boot marker where count_restarts
+        // can see it. main.rs previously only println!d "Helix is
+        // running..." to stdout (journal), so count_restarts — which
+        // scans <rt>/logs/ for that marker — always returned 0 in
+        // production and the loop's "restarts detected" trigger never
+        // fired. One marker line per startup, appended to a dedicated
+        // file under the runtime logs dir.
+        {
+            let logs = rt_dir.join("logs");
+            let _ = std::fs::create_dir_all(&logs);
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(logs.join("boot_marker"))
+            {
+                let _ = writeln!(f, "Helix is running...");
+            }
+        }
         let manifest_candidates = [
             rt_dir.join("system_manifest.md"),
             std::path::PathBuf::from("system_manifest.md"),

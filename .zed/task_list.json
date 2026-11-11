@@ -1815,7 +1815,7 @@
       "testStrategy": "Harness executes end-to-end on the current tree with all evals passing. Full lib suite: no new failures.",
       "subtasks": [],
       "review_type": "gap",
-      "results": "Harness shipped: evals/ (README + eval-set.md) + tests/evals.rs (cargo test --test evals). 10 deterministic evals, all green. Gate verified: breaking the validator fails 3 evals. DRAFT STATUS: eval set NOT finalized — John must supply/approve the representative task list. 10 draft candidates in eval-set.md for his review. LLM-dependent evals deferred. Also fixed: on_token callback changed to Arc<dyn Fn + Send + Sync> (was &mut, broke Send bound); spend::reset_for_tests made public for the harness."
+      "results": "Harness shipped: evals/ (README + eval-set.md) + tests/evals.rs (cargo test --test evals). 10 deterministic evals, all green. Gate verified: breaking the validator fails 3 evals. APPROVED by John Nov 10, 2026 — the 10 deterministic evals in evals/eval-set.md approved as-is (including the weak ones 6, 9, 10 — he did not ask to strengthen them). Spending-cap note (John, Nov 10): not worried about caps because mostly free accounts, but track spending and set a level that leaves a buffer for emergencies (bears on eval 8, spend_cap_warns_by_default). LLM-dependent evals deferred. Also fixed: on_token callback changed to Arc<dyn Fn + Send + Sync> (was &mut, broke Send bound); spend::reset_for_tests made public for the harness."
     },
     {
       "id": 243,
@@ -3990,6 +3990,54 @@
         }
       ],
       "results": "Re-filed from task 319 (ID collision in merge 2d2557d)."
+    },
+    {
+      "id": 324,
+      "title": "Record task-242 eval-set approval (John, Nov 10, 2026)",
+      "description": "John approved the 10 deterministic evals in evals/eval-set.md as-is on Nov 10, 2026 ('go with them'). Record the approval: update task 242's results, remove the DRAFT status from evals/eval-set.md, and note John's spending-cap position.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "Approval: John approved the 10 deterministic evals as-is on Nov 10, 2026, including the weak ones 6 (commander_has_injection_reminder - vacuously passes if no commander persona configured), 9 (bridge_forwards_chat_token - shape check only, not the actual forwarding), and 10 (ops_reject_unauthenticated) - he did not ask to strengthen them.\n\nSpending-cap note (John, Nov 10): not worried about caps because mostly free accounts, but track spending and set a level that leaves a buffer for emergencies (bears on eval 8, spend_cap_warns_by_default).\n\nWhat this unblocks: the D5 gate in the self-improvement loop (src/self_improve/evaluator.rs) refuses every promotion while [self_improve] eval_set_approved is false. With John's approval, the config flag can be set true in the live R630 config (John's config change, not this task). Note: the evaluation wiring (task 325) is still missing, so even with the flag set, nothing is evaluated until that lands.",
+      "testStrategy": "evals/eval-set.md no longer carries DRAFT status; task 242's results record the approval; cargo test --test evals still green.",
+      "subtasks": [],
+      "results": "APPROVED by John Nov 10, 2026 - the 10 deterministic evals in evals/eval-set.md approved as-is. Task 242's results updated with the approval + spending-cap note; evals/eval-set.md DRAFT status removed. Filed by Surveyor 1, 2026-11-10."
+    },
+    {
+      "id": 325,
+      "title": "Wire the per-cycle evaluation arm: call evaluate_proposal from routine_self_improve (H1)",
+      "description": "evaluate_proposal (src/self_improve/evaluator.rs:307) is never called from production code - only from its own tests. The loop's output pipeline ends at intake: proposals are intaked and then sit. Add a cycle step in routine_self_improve that calls evaluate_proposal on the oldest proposed record.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Filed from the Cobble jr harness review (2026-11-09), finding H1 - the single highest-leverage harness fix. Evidence: evaluate_proposal (src/self_improve/evaluator.rs:307) is called only from its own tests (lines 577, 616, 644, 666). A grep across src/ finds no production caller. The evaluator's doc comment is explicit: the per-cycle 'evaluate the oldest proposed record' wiring is a follow-up handler arm and 'no task in 277-291 owns it.' This task OWNS the wiring.\n\nConsequence if not done: even if the loop were moved past phase 0 tomorrow, proposals would be intaked and then sit. Nothing would evaluate them, nothing would promote them, and no PR would ever be opened.\n\nWork: add a cycle step in routine_self_improve (src/cpu/mod.rs:538) that calls evaluate_proposal on the oldest proposed record, after intake.\n\nDependency: the D5 gate (task-242 eval set) is now APPROVED by John (Nov 10, 2026), so promotion is unblocked once this wiring lands - but the config flag [self_improve] eval_set_approved still needs to be set true in the live R630 config (John's config change, not this task). The evaluator itself is genuine (applies the diff in a disposable worktree, runs the bounded test subset plus the approved eval set, reports pass/fail) - the problem is only that it never runs.",
+      "testStrategy": "A test that drives a full cycle past phase 0 (or a targeted test) showing evaluate_proposal is invoked on the oldest proposed record; full lib suite green (cargo test --lib).",
+      "subtasks": [],
+      "results": "DONE 2026-11-10 by Ranger 1 (branch ranger-harness-325-327). evaluate_oldest_proposal added (src/self_improve/evaluator.rs): picks the oldest stored proposal with status 'proposed' and evaluates it via evaluate_proposal with the caller's runner; wired into routine_self_improve (src/cpu/mod.rs) after intake, bounded by the cycle deadline, outcome recorded in the ledger proposal_outcomes ('evaluated:<reason>' / 'eval-skipped' / 'eval-error:<e>'). Two gaps closed while wiring: (1) RealRunner.work_dir was never set - evaluate_proposal would have run cargo in the wrong directory; added set_work_dir to the TestRunner trait, called right after git.add_worktree, implemented for RealRunner and FakeRunner (which records it for assertion). (2) ProposalRecord carried no diff files, so the arm could never evaluate anything - added diff_files: Vec<DiffFile> (#[serde(default)], old records parse) to the record; the arm skips records with no diff files (logged, not an error) since the worker returns prose only. The repo is the runtime dir (the checkout in the standard deployment); the arm skips when it is not a git checkout. The D5 gate (task-242 eval set) is now APPROVED, so promotion unblocks once this wiring lands - but [self_improve] eval_set_approved still needs to be set true in the live R630 config (John's config change, not this task). Tests: 3 new arm tests (evaluates a record with a diff + runner work-dir assertion, skips a diff-less record, returns None when empty). Full lib suite 643 passed / 0 failed / 4 ignored (baseline 639/0/4)."
+    },
+    {
+      "id": 326,
+      "title": "Fix the restart signal: write the boot marker to the runtime logs dir (H2)",
+      "description": "count_restarts (src/self_improve/metrics.rs:223) always returns 0 in production because main.rs:139 only println!s the boot marker to stdout (journal) and the runtime logs dir is dead on the write side. The loop's 'restarts detected' trigger never fires. Write the boot marker to a file under the runtime logs dir at startup (or point count_restarts at the journal).",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Filed from the Cobble jr harness review (2026-11-09), finding H2. Evidence: count_restarts (src/self_improve/metrics.rs:223) scans <rt>/logs/ for the boot marker, but main.rs:139 only println!s it to stdout (journal) and the runtime logs dir is dead on the write side (the log check of 2026-11-05 found <runtime>/logs/error_log.md DEAD on the write side). Always returns 0 in production.\n\nFix: write the boot marker to a file under the runtime logs dir at startup (one line of startup code), or point count_restarts at the journal.\n\nEffect: makes the restart input live and gives the loop its second trigger (the error log is the only live input today).",
+      "testStrategy": "A test that writes a boot marker file and confirms count_restarts returns >0; full lib suite green (cargo test --lib).",
+      "subtasks": [],
+      "results": "DONE 2026-11-10 by Ranger 1 (branch ranger-harness-325-327). main.rs now appends one 'Helix is running...' marker line per startup to <rt>/logs/boot_marker (after the runtime dir is resolved, creating the logs dir first), so count_restarts - which scans <rt>/logs/ for that marker - returns the restart count instead of always 0. Also fixed the trigger to use NEW restarts only: count_restarts is cumulative, so the cycle now diffs it against the previous ledger entry's restart_count (latest_entry) and fires only on a positive delta - otherwise the signal would fire every cycle after the first restart. The raw count is still recorded in the ledger; the signal (and the dispatch decision) uses the delta. One existing test (self_improve_stop_file_mid_cycle_aborts_next_and_reenable_resumes) relied on the old every-cycle firing and was updated to simulate a second restart before cycle 3 (its purpose - stop-file abort/resume - is unchanged). Test: new count_restarts_sees_boot_marker_file (0 with no logs, 1 after one marker, 2 after two). Full lib suite 643 passed / 0 failed / 4 ignored (baseline 639/0/4)."
+    },
+    {
+      "id": 327,
+      "title": "Make cargo test compile on Windows (Claude HC1 / Grok P0)",
+      "description": "A Unix-only test breaks cargo test on Windows. Gate the Unix-only test(s) with #[cfg(unix)] (or an equivalent Windows-compatible path) so cargo test compiles on Windows. Helix runs on Linux (R630) right now, but John may want to run it on the ASUS (Windows desktop) someday.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "Filed from the Helix triple review (2026-11-09): Claude harness review HC1 and Grok harness review P0. Grok's recommendation: #[cfg(unix)] the stub_ssh test. Claude HC1: make cargo test compile on Windows.\n\nContext (John, Nov 10, 2026): Helix runs on Linux (R630) right now, but he may want to run it on the ASUS (Windows desktop) someday, so the Windows compilation fix is worth doing.\n\nFix: gate the Unix-only test(s) with #[cfg(unix)] (or an equivalent Windows-compatible path) so cargo test compiles on Windows.\n\nVerification caveat: the sandbox cannot compile for Windows - note that in the results; the ASUS build is the real verification.",
+      "testStrategy": "cargo check --tests still green on Linux; note that Windows verification needs the ASUS build (sandbox cannot compile for Windows).",
+      "subtasks": [],
+      "results": "DONE 2026-11-10 by Ranger 1 (branch ranger-harness-325-327). Gated the Unix-only stub_ssh test helper (src/chat_command/mod.rs - uses std::os::unix::fs::PermissionsExt and a #!/bin/sh script) and its four callers (tick_asus_reply_carries_exit_status, tick_asus_routes_to_stub_ssh_with_expected_argv, tick_asus_rejections_make_zero_ssh_calls, tick_asus_disabled_makes_zero_ssh_calls) with #[cfg(unix)]. Production code was already properly gated (executor.rs #[cfg(unix)] blocks with #[cfg(not(unix))] fallbacks; src/io/unix_socket.rs is #[cfg(unix)] in src/io/mod.rs), so the test helper was the only Windows blocker. Verification caveat: the sandbox cannot compile for Windows - the ASUS build is the real verification. cargo check --tests still green on Linux (baseline-identical: only the known task-262 installer include_str! errors and 2 pre-existing task-273 unix_socket_test warnings). Full lib suite 643 passed / 0 failed / 4 ignored (baseline 639/0/4)."
     }
   ]
 }

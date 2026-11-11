@@ -305,6 +305,28 @@ mod tests {
     }
 
     #[test]
+    fn count_restarts_sees_boot_marker_file() {
+        // Task 326 (H2): GIVEN a fresh runtime dir with no logs, THEN
+        // count_restarts is 0; WHEN the boot marker file is written
+        // (one "Helix is running..." line per startup, as main.rs now
+        // does), THEN count_restarts returns the marker count.
+        let dir = tmpdir("helix-self-improve-restarts");
+        assert_eq!(count_restarts(&dir), 0);
+        let logs = dir.join("logs");
+        std::fs::create_dir_all(&logs).unwrap();
+        std::fs::write(logs.join("boot_marker"), "Helix is running...\n").unwrap();
+        assert_eq!(count_restarts(&dir), 1);
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(logs.join("boot_marker"))
+            .unwrap();
+        writeln!(f, "Helix is running...").unwrap();
+        assert_eq!(count_restarts(&dir), 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn missing_qm_summary_yields_gap_flag_no_crash() {
         // GIVEN inputs with no QM sidecar, THEN the entry is written
         // with qm_missing=true (a gap), not an error.

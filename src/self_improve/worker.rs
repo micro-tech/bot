@@ -30,6 +30,7 @@
 //! Helix tool writes `proposals.json`. This is strictly tighter than
 //! the spec's allowance and is the shipped behavior.
 
+use crate::self_improve::evaluator::DiffFile;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -158,6 +159,13 @@ pub struct ProposalRecord {
     /// not depend on the evaluator module's types.
     #[serde(default)]
     pub eval_passed: bool,
+    /// Whole-file writes for the evaluator (task 325). The worker
+    /// returns only a `diff_description` (prose), so intake leaves
+    /// this empty; a record carries diffs only when a later phase (or
+    /// a test) attaches them. The evaluation arm skips records with
+    /// no diff files — `evaluate_proposal` cannot run without a diff.
+    #[serde(default)]
+    pub diff_files: Vec<DiffFile>,
     #[serde(default)]
     pub promoted: bool,
     #[serde(default)]
@@ -354,6 +362,7 @@ pub fn intake_proposal(
         promoted: false,
         promotion_reason: String::new(),
         eval_report_json: serde_json::Value::Null,
+        diff_files: Vec::new(),
             notes: Vec::new(),
     };
     let mut all = prior;
