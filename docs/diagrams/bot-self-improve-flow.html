@@ -78,7 +78,7 @@
     <div class="diagram-container">
       <svg viewBox="0 0 960 430" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-self-improve-flow-title bot-self-improve-flow-desc">
         <title id="bot-self-improve-flow-title">Helix — self-improve loop</title>
-        <desc id="bot-self-improve-flow-desc">Flowchart of the Helix self-improving loop (src/self_improve): a daily cron routine checks kill switches, collects health counts only, and on a failing signal dispatches one read-only loop-worker subagent; its proposal passes a budgets gate, is evaluated in a disposable worktree, and waits in a PR queue for John to merge.</desc>
+        <desc id="bot-self-improve-flow-desc">Flowchart of the Helix self-improving loop (src/self_improve): a daily cron routine checks kill switches, collects health counts only, and on a failing signal dispatches one read-only loop-worker subagent; its proposal passes a budgets gate, then a per-cycle evaluation arm evaluates the oldest stored 'proposed' record in a disposable worktree (skipping records with no diff files), and the result waits in a PR queue for John to merge. GET /self_improve/status (token-gated) shows the loop snapshot; the restart signal counts only restarts since the last cycle (boot marker written at startup).</desc>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
           <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
@@ -178,8 +178,8 @@
         <rect x="260" y="190" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
         <rect x="268" y="198" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
         <text x="282" y="207" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EVAL</text>
-        <text x="360" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Evaluate</text>
-        <text x="360" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">phase ≥ 2 · secrets audit</text>
+        <text x="360" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Evaluate (per-cycle)</text>
+        <text x="360" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">oldest 'proposed' · worktree</text>
 
         <!-- Node: PR queue -->
         <rect x="40" y="190" width="200" height="64" rx="6" fill="#f5f5f5"/>
@@ -190,7 +190,7 @@
         <text x="140" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">John merges — never auto</text>
 
         <!-- Callouts -->
-        <text x="480" y="300" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">Every cycle appends one ledger entry; lessons land in memory; GET /self_improve/status (token-gated) shows the snapshot.</text>
+        <text x="480" y="300" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">Every cycle appends one ledger entry; the eval arm skips records with no diff files; restarts count only since the last cycle.</text>
         <text x="480" y="324" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">The loop never merges, never pushes to master, never restarts the service, never writes the live tree or config, never sends mail or chat.</text>
 
         <!-- Legend strip -->
