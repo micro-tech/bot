@@ -1391,15 +1391,23 @@
             let opsToken = sessionStorage.getItem("helix_ops_token") || "";
             let opsUpdating = false;
 
+            // opsFetch: auth-gated fetch. On 401 we prompt once for the
+            // Helix web token and stash it in sessionStorage, UNLESS
+            // opts.prompt === false — automatic paths (autoplay speak,
+            // page-load config) must never pop a dialog; the caller
+            // handles the 401 itself. Default prompts, preserving the
+            // behaviour for deliberate user actions (ops/support
+            // buttons, mic, Read-aloud click).
             async function opsFetch(url, opts) {
                 opts = opts || {};
+                const allowPrompt = opts.prompt !== false;
                 const headers = Object.assign({}, opts.headers || {});
                 if (opsToken) headers["Authorization"] = "Bearer " + opsToken;
-                const r = await fetch(
-                    url,
-                    Object.assign({}, opts, { headers }),
-                );
+                const fetchOpts = Object.assign({}, opts, { headers });
+                delete fetchOpts.prompt;
+                const r = await fetch(url, fetchOpts);
                 if (r.status === 401) {
+                    if (!allowPrompt) return r;
                     const t = prompt("This action needs the Helix web token:");
                     if (!t) throw new Error("auth cancelled");
                     opsToken = t;
@@ -1876,14 +1884,22 @@
             // transcripts are never logged; only sizes/statuses surface.
 
             // Task 267.4: speak an agent reply aloud via /api/voice/speak.
-            async function speakText(text) {
+            // opts.silent (autoplay): never prompt for the token and never
+            // show a chat warning — if speaking fails, just skip that
+            // message silently. A deliberate Read-aloud click calls
+            // speakText(text) with no opts, keeping the prompt-on-401
+            // and warning behaviour.
+            async function speakText(text, opts) {
+                const silent = !!(opts && opts.silent);
                 try {
                     const r = await opsFetch("/api/voice/speak", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ text }),
+                        prompt: !silent,
                     });
                     if (!r.ok) {
+                        if (silent) return;
                         const t = await r.text();
                         appendChat({
                             type: "warning",
@@ -1897,6 +1913,7 @@
                     audio.onended = () => URL.revokeObjectURL(url);
                     await audio.play();
                 } catch (e) {
+                    if (silent) return;
                     appendChat({
                         type: "warning",
                         data:
@@ -1935,7 +1952,12 @@
 
             async function loadVoiceConfig() {
                 try {
-                    const r = await opsFetch("/api/voice/config");
+                    // Page-load config fetch must never pop the token
+                    // prompt; without a token we just keep the defaults
+                    // and the localStorage override below.
+                    const r = await opsFetch("/api/voice/config", {
+                        prompt: false,
+                    });
                     if (r.ok) {
                         const j = await r.json();
                         if (j && j.ok) {
@@ -2381,7 +2403,9 @@
                             !!micCtx
                         )
                     ) {
-                        speakText(text);
+                        // Autoplay must never prompt for the token or warn
+                        // in chat — if speaking fails, skip silently.
+                        speakText(text, { silent: true });
                     }
                 }
                 if (isError) {
