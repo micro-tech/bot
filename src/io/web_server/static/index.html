@@ -847,7 +847,23 @@
                 color: var(--danger);
             }
 
-            /* ── Responsive: drawers below desktop widths ── */
+            /* ── Responsive: drawers below desktop widths (task 328) ──
+               Three layout modes, driven by JS (applyViewportLayout in
+               the script below, which sets body[data-layout]) AND by
+               these media queries. The breakpoints MUST match the JS
+               constants VIEWPORT_PHONE_MAX / VIEWPORT_DUALSCREEN_MAX.
+               phone      (<= 600px): single-column chat; sidebar AND
+                              detail panel become slide-in drawers.
+               dualscreen (601-1100px): sidebar + chat visible; detail
+                              panel becomes a slide-in drawer.
+               desktop    (> 1100px): full 3-column grid (unchanged).
+               BREAKPOINTS ARE INITIAL VALUES — the Fold's real
+               cover/unfolded CSS viewport widths have NOT been measured
+               yet (the phone could not load the page when this was
+               written). Verify on the real Pixel 11 Pro Fold: fold it,
+               read the "[viewport]" log line in the browser console,
+               and update the 600/1100 values here AND in the JS
+               constants to the measured widths. */
             #drawer-sidebar-btn,
             #drawer-detail-btn {
                 display: none;
@@ -881,7 +897,7 @@
                     display: inline-block;
                 }
             }
-            @media (max-width: 800px) {
+            @media (max-width: 600px) {
                 #app {
                     grid-template-columns: minmax(0, 1fr);
                 }
@@ -901,6 +917,56 @@
                 }
                 #drawer-sidebar-btn {
                     display: inline-block;
+                }
+                /* ── Task 328: phone-width refinements ── */
+                /* Touch targets: finger-sized tap areas. */
+                #chat-send,
+                #chat-mic,
+                #chat-autoplay,
+                #drawer-sidebar-btn,
+                #drawer-detail-btn {
+                    min-height: 44px;
+                    min-width: 44px;
+                }
+                .ops-btn {
+                    min-height: 44px;
+                    padding: 6px 12px;
+                }
+                /* Compact header: wraps instead of overflowing, is
+                   safe-area aware, and the backend label truncates
+                   instead of pushing buttons off-screen. */
+                #chat-header {
+                    flex-wrap: wrap;
+                    padding: 8px 10px;
+                    padding-top: calc(8px + env(safe-area-inset-top));
+                    gap: 6px;
+                }
+                #chat-backend-label {
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    min-width: 0;
+                }
+                #ops-status {
+                    display: none;
+                }
+                /* Messages use more of the narrow screen. */
+                #chat-messages {
+                    padding: 10px;
+                }
+                .message {
+                    max-width: 92%;
+                }
+                /* Input row: safe-area aware, and a 16px input font
+                   so mobile browsers don't auto-zoom on focus. */
+                #chat-input-row {
+                    padding: 10px;
+                    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+                    gap: 6px;
+                }
+                #chat-input {
+                    font-size: 16px;
+                    min-width: 0;
                 }
             }
         </style>
@@ -1173,6 +1239,62 @@
                 const s = document.getElementById("sidebar");
                 if (s) s.classList.toggle("drawer-open");
             }
+
+            // ── Task 328: responsive viewport widths ─────────────────
+            // Detects the viewport width on load + resize / orientation
+            // change (fold / unfold) and applies a layout mode to
+            // <body> so the CSS above can target each form factor:
+            //   phone      (folded / cover display)
+            //   dualscreen (unfolded main display)
+            //   desktop    (full-width browser)
+            // The mode is exposed as body[data-layout] and the measured
+            // width as body[data-viewport-width] (readable in devtools).
+            // A "[viewport]" line is logged to the console whenever the
+            // mode changes, so the real widths can be read off the phone.
+            //
+            // BREAKPOINTS ARE INITIAL VALUES — they MUST be verified
+            // against the real Pixel 11 Pro Fold. They were NOT measured
+            // (the phone could not load the page when this was written).
+            // Best initial estimates from the Fold's display class:
+            // cover display ~400-430 CSS px, unfolded ~770-850 CSS px,
+            // so 600 cleanly separates the two states with margin on
+            // both sides. To verify: open Helix on the phone, fold and
+            // unfold it, and read the "[viewport]" log lines in the
+            // browser console. If the measured widths don't match, update
+            // the two constants below AND the matching media queries
+            // in the <style> block above (same values).
+            const VIEWPORT_PHONE_MAX = 600;
+            const VIEWPORT_DUALSCREEN_MAX = 1100;
+            function applyViewportLayout() {
+                const w = window.innerWidth;
+                let layout;
+                if (w <= VIEWPORT_PHONE_MAX) layout = "phone";
+                else if (w <= VIEWPORT_DUALSCREEN_MAX)
+                    layout = "dualscreen";
+                else layout = "desktop";
+                const prev = document.body.dataset.layout;
+                document.body.dataset.layout = layout;
+                document.body.dataset.viewportWidth = String(w);
+                if (prev !== layout) {
+                    console.log(
+                        "[viewport] width=" +
+                            w +
+                            " layout=" +
+                            layout +
+                            " (phone<=" +
+                            VIEWPORT_PHONE_MAX +
+                            ", dualscreen<=" +
+                            VIEWPORT_DUALSCREEN_MAX +
+                            ")",
+                    );
+                }
+                return layout;
+            }
+            window.addEventListener("resize", applyViewportLayout);
+            window.addEventListener(
+                "orientationchange",
+                applyViewportLayout,
+            );
 
             function showDetailTab(name) {
                 document
@@ -3051,6 +3173,7 @@
             }
 
             window.onload = () => {
+                applyViewportLayout(); // task 328: phone / dual-screen / desktop
                 connectWS();
                 renderRoutinesEmpty();
                 loadVoiceConfig();

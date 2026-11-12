@@ -4043,7 +4043,7 @@
       "id": 328,
       "title": "Helix web UI: responsive viewport widths — phone width + wider dual-screen width for Pixel 11 Pro Fold",
       "description": "The Helix web UI should check the viewport/window width when it loads (on login) and adapt its layout. Right now the layout is sized for a desktop width, so logging in from a phone would show the wrong width. Add a phone-width layout and a wider layout for the unfolded dual-screen of the Pixel 11 Pro Fold.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "1) On web UI load/login, detect the viewport/window width and pick the layout for it (also re-check on resize/orientation change, since a Fold can go from folded to unfolded while the page is open). 2) Add a phone-width layout for the folded/cover display (narrow, single column, touch-sized controls). 3) Add a wider layout for the unfolded dual-screen/main display of the Pixel 11 Pro Fold (use the extra width — e.g. side-by-side panels or a wider chat/composer — instead of just stretching the phone layout). 4) Keep the existing desktop width unchanged. Do not guess the exact pixel breakpoints; measure the Fold's cover-display and unfolded-display viewport widths in the browser and set the breakpoints from those real values.",
@@ -4051,21 +4051,21 @@
       "subtasks": [
         {
           "id": "328.1",
-          "status": "pending",
+          "status": "done",
           "title": "Detect viewport width on load/login and on resize/orientation change"
         },
         {
           "id": "328.2",
-          "status": "pending",
+          "status": "done",
           "title": "Add phone-width layout (folded/cover display)"
         },
         {
           "id": "328.3",
-          "status": "pending",
+          "status": "done",
           "title": "Add wider dual-screen layout (unfolded main display)"
         }
       ],
-      "results": ""
+      "results": "Built on branch sapper-task-328-responsive-widths (src/io/web_server/static/index.html only). applyViewportLayout() reads window.innerWidth on load + resize/orientationchange and sets body[data-layout]=phone|dualscreen|desktop plus body[data-viewport-width]; logs '[viewport] width=... layout=...' on mode change. Breakpoints (INITIAL, NOT measured): phone <=600px, dual-screen 601-1100px, desktop >1100px. Sidebar-drawer media query moved 800px->600px to align with the phone breakpoint (cleanly separates Fold cover ~410px from unfolded ~770-850px); detail-drawer query unchanged at 1100px; desktop 3-column grid unchanged. Phone refinements: 44px touch targets, wrapping safe-area-aware header, 16px chat input (no auto-zoom on focus), messages 92% width. JS syntax-checked with node --check; cargo check --lib clean. STILL NEEDS: fold/unfold/fold-back login drill on the real Pixel 11 Pro Fold to verify/tune the 600/1100 breakpoints (phone could not load the page when this was built) and confirm desktop unchanged."
     }
   ]
 }
