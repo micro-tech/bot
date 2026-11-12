@@ -633,6 +633,30 @@ async fn run_helix() {
                 println!("[{}] startup health probe: FAILED (Ollama not reachable at this URL)", topic);
             }
 
+            // Ollama cold-load warmup (task 89, wired up 2026-11-11): the
+            // keepalive module existed but was never called, so the model
+            // was evicted 5 min after idle and the next turn paid a cold
+            // load (gpt-oss-20b measured 53.6 s to load on the .149 box).
+            // Preload warms it in the background; the heartbeat then
+            // holds it resident. Both honor the OLLAMA_PRELOAD /
+            // OLLAMA_KEEP_ALIVE_SECS env flags (see keepalive.rs).
+            if crate::io::ollama::keepalive::read_preload_flag() {
+                let preload_url = backend_url.clone();
+                let preload_model = backend_model.clone();
+                tokio::spawn(async move {
+                    if let Err(e) =
+                        crate::io::ollama::keepalive::preload_model(&preload_url, &preload_model).await
+                    {
+                        println!("Ollama preload warning (model '{}'): {}", preload_model, e);
+                    }
+                });
+            }
+            crate::io::ollama::keepalive::spawn_keepalive_task(
+                backend_url.clone(),
+                backend_model.clone(),
+                crate::io::ollama::keepalive::read_keep_alive_secs(),
+            );
+
             while let Ok(msg) = rx.recv() {
                 println!("[{}] 📥 RECEIVED message from='{}'  preview='{}'",
                     topic, msg.from, crate::utils::truncate_str(&msg.data, 160));
