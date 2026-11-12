@@ -17,8 +17,19 @@
 ## Core Components
 - `src/agents/runtime_loop.rs` — `RuntimeLoop<P, R>` main loop
 - `src/agents/planner.rs` — Planner trait + `SimplePlanner`
+- `src/agents/simple_planner.rs` — Default goal-driven planner
+- `src/agents/reflection_planner_adapter.rs` — Parses reflection text into `PlannerOutput`
 - `src/agents/tool_supervisor.rs` — Tool execution with safety rules
+- `src/agents/tool_supervisor_v2.rs` — V2 tool supervisor
 - `src/agents/agent_state.rs` — Step tracking and state
+- `src/agents/agent_step.rs`, `src/agents/final_answer.rs`, `src/agents/planner_output.rs`
+- `src/agents/rule_layer.rs` — Tool allow-list + safety rules
+- `src/agents/safety_rules.rs` — Rule definitions
+- `src/agents/runtime_config.rs`, `src/agents/runtime_trace.rs`, `src/agents/trace_logging.rs`
+- `src/agents/llm_path.rs`, `src/agents/tool_path.rs` — LLM / tool execution paths
+- `src/agents/bus_events.rs`, `src/agents/hooks.rs`, `src/agents/memory_continuity.rs`
+- `src/agents/plan_tree.rs`, `src/agents/subagent_registry.rs`
+- `src/agents/repo_explorer/` — Repository exploration (explorer_impl, fallback, integration)
 
 ## Flow
 1. Planner produces steps

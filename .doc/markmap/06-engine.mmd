@@ -15,10 +15,16 @@
 - [Utils & Display](11-utils-display.html)
 
 ## Core Modules
-- `src/cpu/cpu.rs` — `Cpu<L>` main executor
+- `src/cpu/mod.rs` — `Cpu<L>` main executor (the Cpu struct lives here, not in a `cpu.rs`)
 - `src/cpu/executor.rs` — Instruction execution
 - `src/cpu/scheduler.rs` — Task scheduling
-- `src/hy_evo/` — Evolutionary engine (genome, workflow, mutation)
+- `src/cpu/commands.rs` — CPU command handlers
+- `src/cpu/instructions.rs` — Instruction definitions
+- `src/cpu/interfaces.rs` — CPU interfaces
+- `src/cpu/interrupts.rs` — Interrupt handling
+- `src/cpu/state.rs` — AgentState
+- `src/cpu/workflow_executor.rs` — Workflow execution
+- `src/hy_evo/` — Evolutionary engine (genome, workflow, mutation, crossover, scoring, reflection, integration)
 
 ## Responsibilities
 - Route messages from Bus

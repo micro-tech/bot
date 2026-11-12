@@ -16,7 +16,12 @@
 
 ## Components
 - `src/router/` — Routing logic and backend selection
-- `src/io/ollama/` — Ollama LLM handler
+  - `mod.rs`, `route.rs`, `strategy.rs`, `context.rs`, `complexity.rs`
+  - `config.rs` — RouterConfig (thresholds, schedules, hot-reload)
+  - `fallback.rs`, `health.rs`, `telemetry.rs`, `observability.rs`, `perf.rs`
+  - `schedule.rs`, `deployment.rs`, `spend.rs`, `security.rs`, `user_override.rs`
+  - `debug.rs`, `debug_cli.rs`, `debug_narrative.rs`, `docs.rs`, `tui.rs`, `integration.rs`
+- `src/io/ollama/` — Ollama LLM handler (llm, keepalive)
 - `src/io/llm_gemini/` — Gemini LLM handler
 
 ## Responsibilities

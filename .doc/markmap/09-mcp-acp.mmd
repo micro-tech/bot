@@ -14,14 +14,33 @@
 - [Safety & Security](10-safety-security.html)
 - [Utils & Display](11-utils-display.html)
 
-## Components
-- `src/mcp/` — Master Control Program (priority routing)
-- `src/cron/` — Cron scheduler (background tasks)
+## Two different "MCP"s — do not confuse them
 
-## Responsibilities
+### 1. Internal MCP — Master Control Program (legacy)
+- `src/mcp/mcp_handler.rs` — `MCP` struct: internal priority routing over the bus
 - `MCP::decide(msg)` — Prioritize high-urgency messages
-- Cron publishes `agent_run` every 5 seconds for maintenance
-- Hourly maintenance triggers
+- This is Helix's own internal concept, predating Model Context Protocol adoption
+
+### 2. Model Context Protocol (MCP) — external tool servers
+- `src/mcp_client/` — MCP client manager (`manager.rs`, `naming.rs`, `mod.rs`)
+- `src/chat_command/mcp_handler.rs` — Chat-command MCP path (`how: "mcp"`, `to` required, read-only in v1)
+- `src/config/mcp.rs` — MCP server config (`[mcp.servers]`)
+- `src/chat_mcp_install.rs` — chat-mcp installer hook
+- Live servers: `google` (gmail_search/gmail_read/calendar_list via google-mcp), `chat` (chat_read/rooms/health via chat-mcp)
+- Note: google-mcp on the R630 is currently not answering tool calls (found 2026-11-08)
+
+## ACP — Agent Client Protocol
+- `src/acp/` — ACP server: `mod.rs`, `server.rs`, `protocol.rs`, `agent.rs`, `tools.rs`, `elicitation.rs`, `status_bar.rs`
+- `src/config/acp.rs` — ACP config
+
+## Chat-Command Loop (uses both)
+- `src/chat_command/` — `mod.rs`, `envelope.rs`, `executor.rs`, `task_handler.rs`, `mcp_handler.rs`, `config.rs`, `reply.rs`, `state.rs`, `asus.rs`
+- `!` JSON envelope (`how`/`to`/`which`/`time`/`scope`); `to` addressing (task 318); MCP path (task 319)
+- `src/a2a/` — Agent-to-Agent protocol (`a2a_handler.rs`, `tasks.rs`, `types.rs`)
+
+## Cron (background tasks — not MCP/ACP, listed here for context)
+- `src/cron/` — Cron scheduler (`mod.rs`, `registry.rs`)
+- Cron publishes `agent_run` for maintenance; hourly maintenance triggers
 
 ## Links
 - [Overview](00-overview.html)

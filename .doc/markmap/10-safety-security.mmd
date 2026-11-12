@@ -17,7 +17,24 @@
 ## Components
 - `src/agents/rule_layer.rs` — Safety rule enforcement
 - `src/agents/safety_rules.rs` — Rule definitions
+- `src/agents/tool_supervisor.rs` / `src/agents/tool_supervisor_v2.rs` — Tool execution with safety rules
+- `src/security.rs` — Security module
+- `src/io/web_server/auth.rs` — Single home for auth helpers (token compare, OKF dual-token, lowercase `bearer`); tasks 320/321
+- `src/tools/shell_security.rs` — Shell tool security
+- `src/tools/shell_tool.rs`, `src/tools/subagent_tool.rs`
+- `src/utils/secrets.rs` — Secret handling
+- `src/utils/sanitize.rs` — Input sanitization
+- `src/utils/key_rotation.rs` — Key rotation
+- `src/utils/rate_limit.rs` — Rate limiting
+- `src/utils/audit.rs` — Audit logging
+- `src/utils/compliance.rs` — Compliance helpers
+- `src/utils/diff_privacy.rs` — Diff privacy
+- `src/self_improve/budgets.rs` — Self-improve budgets (3/week, 1/signature, 60 min, 500 diff lines)
 - TLS support in `src/io/web_server/` (rustls)
+
+## WebSocket Auth (task 313)
+- All mutating WS arms + `slash_cmd` require the web token
+- The `chat` WS arm stays ungated by design (John's decision)
 
 ## Responsibilities
 - Validate tool calls before execution

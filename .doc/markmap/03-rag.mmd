@@ -15,14 +15,18 @@
 - [Utils & Display](11-utils-display.html)
 
 ## Status
-RAG subsystem is **planned** but not yet implemented as a dedicated module.
+There is no dedicated `src/rag/` module. RAG pieces exist across several modules:
 
-## Related Existing Components
+## Retrieval Components
 - `src/memory/vector.rs` — Vector similarity search foundation
 - `src/memory/episodic.rs` — Event-based retrieval
-
-## Future Files
-- `src/rag/` — Chunking, embedding, retrieval pipeline
+- `src/utils/rag.rs` — RAG helpers
+- `src/utils/semantic_search.rs` — Semantic search
+- `src/utils/vector_db.rs` — Vector DB helpers
+- `src/utils/embeddings.rs` — Embedding helpers
+- `src/utils/knowledge_graph.rs` — Knowledge graph
+- `src/agents/repo_explorer/` — Repository exploration / retrieval
+- `src/okf/` — OKF knowledge bundles (manifest, fetcher, registry, validator)
 
 ## Links
 - [Memory](04-memory.html)

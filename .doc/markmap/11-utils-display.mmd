@@ -16,8 +16,12 @@
 
 ## Components
 - `src/utils.rs` — `log_to_file()`, centralized logging
+- `src/utils/` — Utility modules (audit, auth, tracing, telemetry, rate_limit, secrets, sanitize, key_rotation, compliance, diff_privacy, and many AI-pattern helpers: mcts, rlhf, debate, swarm, orchestration, etc.)
+- `src/utils/tracing.rs` — Tracing subscriber setup
+- `src/utils/otel.rs`, `src/utils/prometheus.rs` — Observability exporters
 - `logs/` — Runtime logs (`error_log.md`, `chat_log.md`, `bus_log.md`)
-- `src/tracing.rs` — Tracing subscriber setup
+- `src/io/web_server/` — Web UI display
+- `src/io/terminal/` — Terminal display
 
 ## Responsibilities
 - Structured logging to files

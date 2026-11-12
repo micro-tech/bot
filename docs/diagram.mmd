@@ -15,6 +15,9 @@ flowchart TB
         Skills["Skills & Hooks"]
         HyEvo["HyEvo Engine"]
         Reasoning["Reasoning Engine"]
+        SelfImprove["Self-Improve Loop"]
+        ChatCmd["Chat-Command Loop"]
+        OKF["OKF Knowledge"]
     end
 
     subgraph Interfaces["Interfaces"]
@@ -26,6 +29,8 @@ flowchart TB
         Heartbeat["Heartbeat"]
         Cron["Cron Jobs"]
         A2A["Agent-to-Agent"]
+        SupportWatch["Support Watch"]
+        Voice["Voice Box"]
     end
 
     User --> Web
@@ -37,6 +42,9 @@ flowchart TB
     CPU --> Skills
     CPU --> HyEvo
     CPU --> Reasoning
+    CPU --> SelfImprove
+    CPU --> ChatCmd
+    CPU --> OKF
     CPU <--> LLM
     Bus <--> Services
 
@@ -48,7 +56,7 @@ flowchart TB
 %% Layer 1: Core Bus & CPU Flow
 flowchart TD
     Main["main.rs"] -->|init| Bus["Bus (bus/mod.rs)"]
-    Main --> CPU["Cpu (cpu/cpu.rs)"]
+    Main --> CPU["Cpu (cpu/mod.rs)"]
 
     Bus <-->|messages| CPU
     CPU -->|handle_bus_message| State["AgentState (cpu/state.rs)"]
@@ -56,13 +64,17 @@ flowchart TD
     subgraph CPU_Modules["CPU Modules"]
         Executor["executor.rs"]
         Scheduler["scheduler.rs"]
-        TimeScheduler["time_scheduler.rs"]
+        Commands["commands.rs"]
+        Instructions["instructions.rs"]
+        Interfaces["interfaces.rs"]
         Interrupts["interrupts.rs"]
+        WorkflowExec["workflow_executor.rs"]
     end
 
     CPU --> Executor
     CPU --> Scheduler
-    CPU --> TimeScheduler
+    CPU --> Commands
+    CPU --> WorkflowExec
 
     style Bus fill:#f9f,stroke:#333,stroke-width:3px
     style CPU fill:#bbf,stroke:#33f
@@ -116,6 +128,8 @@ flowchart LR
     Hooks -->|phase hooks| HookImpl["HookInterface impls"]
     Tools -->|dispatch| FileTools["file_tools.rs"]
     Tools --> SystemTools["system_tools.rs"]
+    Tools --> EmailTools["email_tools.rs"]
+    Tools --> ShellSec["shell_security.rs"]
 
     style Skills fill:#fc9,stroke:#c83
     style Hooks fill:#fc9,stroke:#c83
@@ -149,13 +163,48 @@ flowchart TD
     Bus --> Web["Web Server<br/>(io/web_server/)"]
     Bus --> Term["Terminal CLI<br/>(io/terminal/)"]
     Bus --> Unix["UNIX Socket<br/>(io/unix_socket.rs)"]
+    Bus --> UnixCLI["UNIX CLI<br/>(io/unix_cli/)"]
 
     Web -->|HTTPS + WS| Clients["Browser Clients"]
 
-    Bus --> Heartbeat["TimeScheduler<br/>(cpu/time_scheduler.rs)"]
-    Bus --> Cron["Cron Handler<br/>(cron/cron_handler.rs)"]
+    Bus --> Scheduler["Scheduler<br/>(cpu/scheduler.rs)"]
+    Bus --> Cron["Cron<br/>(cron/mod.rs)"]
     Bus --> A2A["A2A Handler<br/>(a2a/a2a_handler.rs)"]
     Bus --> MCP["MCP Handler<br/>(mcp/mcp_handler.rs)"]
+    Bus --> MCPClient["MCP Client<br/>(mcp_client/)"]
+    Bus --> ACP["ACP Server<br/>(acp/server.rs)"]
 
     style Web fill:#9f9,stroke:#3a3
-    style Heartbeat fill:#f99,stroke:#933
+    style Scheduler fill:#f99,stroke:#933
+
+---
+
+%% Layer 7: Self-Improve, Chat-Command, Support Watch, Voice, OKF
+flowchart TB
+    CPU --> SelfImp["Self-Improve<br/>(self_improve/mod.rs)"]
+    SelfImp --> Eval["Evaluator<br/>(self_improve/evaluator.rs)"]
+    SelfImp --> Budgets["Budgets<br/>(self_improve/budgets.rs)"]
+    SelfImp --> Worker["Worker<br/>(self_improve/worker.rs)"]
+    Eval -->|applies diff in worktree + runs tests| Git["Git<br/>(self_improve/git.rs)"]
+    SelfImp -->|proposals| PR["PR Draft<br/>(self_improve/pr.rs)"]
+
+    Bus --> ChatCmd["Chat-Command<br/>(chat_command/mod.rs)"]
+    ChatCmd --> Envelope["Envelope<br/>(chat_command/envelope.rs)"]
+    ChatCmd --> MCPH["MCP Handler<br/>(chat_command/mcp_handler.rs)"]
+    ChatCmd --> Executor["Executor<br/>(chat_command/executor.rs)"]
+
+    Bus --> Support["Support Watch<br/>(support_watch/mod.rs)"]
+    Support --> Drafter["Drafter<br/>(support_watch/drafter.rs)"]
+    Support --> Drafts["Drafts<br/>(support_watch/drafts.rs)"]
+
+    CPU --> Voice["Voice<br/>(voice/mod.rs)"]
+    Voice --> VoiceClient["Voice Client<br/>(voice/client.rs)"]
+
+    CPU --> OKFMod["OKF<br/>(okf/mod.rs)"]
+    OKFMod --> Fetcher["Fetcher<br/>(okf/fetcher.rs)"]
+    OKFMod --> Validator["Validator<br/>(okf/validator.rs)"]
+    OKFMod --> Registry["Registry<br/>(okf/registry.rs)"]
+
+    style SelfImp fill:#ff9,stroke:#f66,stroke-width:2px
+    style ChatCmd fill:#9ff,stroke:#66f
+    style Support fill:#fc9,stroke:#c83

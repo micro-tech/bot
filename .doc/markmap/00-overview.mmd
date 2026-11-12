@@ -31,6 +31,24 @@
 - `src/tools/` — Tool dispatcher + file/system/email tools
 - `src/router/` — Context Engine / LLM Router (complexity scoring, schedule, fallback, health-aware routing)
 
+## Newer Subsystems (added after Task 160)
+- `src/self_improve/` — Self-improvement loop (phase 0 collect-only): proposal intake, evaluator (applies diffs in a disposable worktree + runs tests), budgets, PR drafting; eval set approved, D5 gate needs `[self_improve] eval_set_approved = true`
+- `src/chat_command/` — Chat-command loop: `command` room, `!` JSON envelope (`how`/`to`/`which`/`time`/`scope`), MCP path (`how: "mcp"`, `to` required), per-backend FIFO queue
+- `src/chat_history.rs` — Chat history persistence
+- `src/support_watch/` — Support-desk watcher (30 min night / 5 min business / 1-min burst), Gemini-pinned drafts, auto-send
+- `src/voice/` — Voice box client (STT citrinet-asr + TTS supertonic-tts, 192.168.1.142:8081)
+- `src/okf/` — OKF (Open Knowledge Format) client: manifest, fetcher, registry, validator; `mermaid` is a recognised diagram content type
+- `src/a2a/` — Agent-to-Agent protocol handler
+- `src/acp/` — Agent Client Protocol server (agent, protocol, server, tools, elicitation, status_bar)
+- `src/mcp_client/` — MCP client manager (naming, manager)
+- `src/mcp/` — Master Control Program (internal priority routing; distinct from Model Context Protocol)
+- `src/ssh/` — SSH server/handler
+- `src/events/` — Event bus/types
+- `src/commands/` — CLI command handlers (incl. `agent.run`)
+- `src/config/` — Manifest, MCP, OKF, reasoning, shell, socket, SSH, ACP config
+- `src/bayesian.rs` — BayesianReasoner + NaiveBayesMultinomial; `src/skills/bayesian.rs` — BayesianSkill
+- `src/chat_mcp_install.rs` — chat-mcp installer hook
+
 ---
 
 ## Key Data Flows (Detailed)
@@ -300,7 +318,7 @@ The **Arbitration Layer** decides *which* capability to invoke when the request 
 - Web UI served at `https://localhost:8443` (TLS by default)
 - CLI: `agent.run <goal> [--trace]`
 
-## Current State & Gaps (as of Task 160 completion)
+## Current State & Gaps (updated 2026-11-11)
 
 **Completed / Mature:**
 - WebSocket ↔ Bus round-trip is the most mature path
@@ -310,12 +328,18 @@ The **Arbitration Layer** decides *which* capability to invoke when the request 
 - Router config hot-reload + startup loading implemented
 - Comprehensive logging/audit bus + structured tracing (`RuntimeTrace`)
 - Skill Registry and MemoryManager fully functional and wired into HyEvo/CPU/RuntimeLoop
+- **WebSocket token gate (task 313, PR #39):** all mutating WS arms + `slash_cmd` are auth-gated; the `chat` WS arm stays ungated by design
+- **Auth dedupe (tasks 320/321, PR #44):** `src/io/web_server/auth.rs` is the single home for all auth helpers; OKF dual-token (web token OR grok-cli OKF token) + lowercase `bearer` accepted
+- **Chat-command loop (tasks 308–311, 318, 319):** `!` JSON envelope live, `to` addressing live, MCP path live (google + chat read tools); google-mcp on the R630 is currently not answering tool calls
+- **Self-improve loop armed (phase 0 collect-only):** evaluation arm wired (task 325), restart signal fixed (task 326); eval set approved by John; first-cycle ledger confirmation still pending
+- **Chat hub + chat-mcp live:** hub at chat.micro-tech.xyz, chat-mcp 0.1.0 (stdio), Helix reads `general` via MCP
 
 **In Progress / Partial:**
-- Terminal and UNIX socket I/O are under-connected
+- Terminal and UNIX socket I/O are under-connected (a full `src/io/unix_cli/` module now exists)
 - Health-aware fallback in router (`HealthStore`) is stubbed (needs async integration)
 - Schedule/profile system in router needs unification with `RouterConfig`
 - Arbitration layer is rudimentary (LLM-based skill picker only)
+- Self-improve loop gates 280/285/289/291 blocked on first-cycle ledger confirmation
 
 **Future / Not Yet Started:**
 - Full `ReflectionPlannerAdapter` integration into default runtime path

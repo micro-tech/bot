@@ -20,8 +20,10 @@
 
 ### Architecture
 - `src/io/web_server/mod.rs` — Axum router + WebSocket handler
+- `src/io/web_server/auth.rs` — single home for all auth helpers (token compare, OKF dual-token, lowercase `bearer`); see tasks 320/321
 - TLS enabled by default (self-signed certs generated on first run)
 - Port configurable via `config.toml` `[web] port` (default 8443)
+- WebSocket token gate (task 313): all mutating WS arms + `slash_cmd` require the web token; the `chat` arm stays ungated by design
 
 ### Full Data Flow (Web ↔ System)
 
@@ -112,9 +114,13 @@ WebSocket client receives:
 - Would publish `chat_request` / `user_input` the same way the WebSocket does
 
 ### UNIX Domain Socket
-- `src/io/unix_socket.rs`
-- Local IPC for other processes on the same machine
-- Not yet integrated into the main listener loop
+- `src/io/unix_socket.rs` — Local IPC for other processes on the same machine
+- `src/io/unix_cli/` — Full UNIX CLI module (auth, encryption, JSON-lines protocol, plugins, metrics, concurrent clients, resume/transfer)
+- `src/io/socket_permissions.rs`, `src/io/startup.rs`, `src/io/io.rs`, `src/io/json_lines.rs`
+
+### LLM I/O
+- `src/io/ollama/` — Ollama handler (llm, keepalive)
+- `src/io/llm_gemini/` — Gemini handler
 
 ### Cron / Autonomous Triggers
 - Heartbeat and cron jobs publish `agent_run` messages
@@ -126,7 +132,7 @@ WebSocket client receives:
 
 1. Terminal and UNIX socket are not subscribed to the bus at startup
 2. No streaming responses yet (all LLM calls are non-streaming)
-3. No authentication / multi-user support on the WebSocket
+3. WebSocket auth is token-gated for mutating arms (task 313); the `chat` arm is intentionally ungated
 4. Web UI is the only fully functional input path today
 
 ## Links
