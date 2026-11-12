@@ -33,7 +33,8 @@ impl OllamaLlm for OllamaLlmImpl {
             .json(&json!({
                 "model": self.model,
                 "prompt": prompt,
-                "stream": false
+                "stream": false,
+                "keep_alive": super::OLLAMA_KEEP_ALIVE
             }))
             .send()
             .await?;
@@ -55,7 +56,8 @@ impl OllamaLlm for OllamaLlmImpl {
             .json(&json!({
                 "model": self.model,
                 "messages": messages,
-                "stream": false
+                "stream": false,
+                "keep_alive": super::OLLAMA_KEEP_ALIVE
             }))
             .send()
             .await?;
@@ -87,7 +89,8 @@ impl OllamaLlm for OllamaLlmImpl {
                     "model": self.model,
                     "messages": history,
                     "tools": tools_json,
-                    "stream": false
+                    "stream": false,
+                    "keep_alive": super::OLLAMA_KEEP_ALIVE
                 }))
                 .send()
                 .await?;

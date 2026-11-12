@@ -33,7 +33,14 @@ use tokio::time::sleep;
 const CONNECT_TIMEOUT_SECS: u64 = 5;
 
 /// Maximum total seconds allowed per HTTP request (preload or keepalive).
-const REQUEST_TIMEOUT_SECS: u64 = 30;
+///
+/// 300 s, not 30 s: a cold model load alone takes ~54 s (gpt-oss-20b
+/// measured 2026-11-11: 53.6 s load on the .149 box), so the old 30 s
+/// budget meant the preload *always* timed out on the big model even
+/// though the load was progressing fine server-side. The heartbeat ping
+/// is cheap once warm (num_predict 0), so the long budget only bites
+/// when the model genuinely needs loading.
+const REQUEST_TIMEOUT_SECS: u64 = 300;
 
 /// How many attempts before giving up on a single preload or keepalive ping.
 const MAX_RETRIES: u32 = 3;
@@ -44,7 +51,8 @@ pub const DEFAULT_KEEP_ALIVE_SECS: u64 = 240;
 
 /// The `keep_alive` value sent to Ollama so it holds the model for at least
 /// one hour regardless of its own eviction setting.
-const OLLAMA_KEEP_ALIVE_FIELD: &str = "1h";
+/// (Single source of truth: [`super::OLLAMA_KEEP_ALIVE`].)
+const OLLAMA_KEEP_ALIVE_FIELD: &str = super::OLLAMA_KEEP_ALIVE;
 
 // ── HTTP client factory ───────────────────────────────────────────────────────
 
@@ -208,6 +216,11 @@ async fn send_keepalive_ping(client: &Client, url: &str, model: &str) {
                 "model":      model,
                 "prompt":     "",
                 "stream":     false,
+                // Zero tokens generated: the ping only needs to touch the
+                // model so Ollama resets its eviction timer. Without this
+                // the heartbeat would run a full generation on an empty
+                // prompt every interval — slow and wasteful.
+                "num_predict": 0,
                 "keep_alive": OLLAMA_KEEP_ALIVE_FIELD
             }))
             .send();
@@ -294,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_read_preload_flag_defaults_true_when_absent() {
-        std::env::remove_var("OLLAMA_PRELOAD");
+        unsafe { std::env::remove_var("OLLAMA_PRELOAD"); }
         assert!(
             read_preload_flag(),
             "Should default to true when OLLAMA_PRELOAD is not set"
@@ -303,57 +316,80 @@ mod tests {
 
     #[test]
     fn test_read_preload_flag_false() {
-        std::env::set_var("OLLAMA_PRELOAD", "false");
+        unsafe { std::env::set_var("OLLAMA_PRELOAD", "false"); }
         assert!(!read_preload_flag());
-        std::env::remove_var("OLLAMA_PRELOAD");
+        unsafe { std::env::remove_var("OLLAMA_PRELOAD"); }
     }
 
     #[test]
     fn test_read_preload_flag_false_uppercase() {
-        std::env::set_var("OLLAMA_PRELOAD", "FALSE");
+        unsafe { std::env::set_var("OLLAMA_PRELOAD", "FALSE"); }
         assert!(!read_preload_flag());
-        std::env::remove_var("OLLAMA_PRELOAD");
+        unsafe { std::env::remove_var("OLLAMA_PRELOAD"); }
     }
 
     #[test]
     fn test_read_preload_flag_true_explicit() {
-        std::env::set_var("OLLAMA_PRELOAD", "true");
+        unsafe { std::env::set_var("OLLAMA_PRELOAD", "true"); }
         assert!(read_preload_flag());
-        std::env::remove_var("OLLAMA_PRELOAD");
+        unsafe { std::env::remove_var("OLLAMA_PRELOAD"); }
     }
 
     #[test]
     fn test_read_preload_flag_garbage_defaults_true() {
-        std::env::set_var("OLLAMA_PRELOAD", "yes_please");
+        unsafe { std::env::set_var("OLLAMA_PRELOAD", "yes_please"); }
         assert!(read_preload_flag(), "Non-'false' values should be treated as true");
-        std::env::remove_var("OLLAMA_PRELOAD");
+        unsafe { std::env::remove_var("OLLAMA_PRELOAD"); }
     }
 
     #[test]
     fn test_read_keep_alive_secs_default_when_absent() {
-        std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS");
+        unsafe { std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS"); }
         assert_eq!(read_keep_alive_secs(), DEFAULT_KEEP_ALIVE_SECS);
     }
 
     #[test]
     fn test_read_keep_alive_secs_custom_value() {
-        std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "120");
+        unsafe { std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "120"); }
         assert_eq!(read_keep_alive_secs(), 120);
-        std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS");
+        unsafe { std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS"); }
     }
 
     #[test]
     fn test_read_keep_alive_secs_invalid_falls_back_to_default() {
-        std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "not_a_number");
+        unsafe { std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "not_a_number"); }
         assert_eq!(read_keep_alive_secs(), DEFAULT_KEEP_ALIVE_SECS);
-        std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS");
+        unsafe { std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS"); }
     }
 
     #[test]
     fn test_read_keep_alive_secs_zero_disables() {
-        std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "0");
+        unsafe { std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "0"); }
         assert_eq!(read_keep_alive_secs(), 0);
-        std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS");
+        unsafe { std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS"); }
+    }
+
+    // ── cold-load budget (2026-11-11) ─────────────────────────────────────
+
+    #[test]
+    fn test_preload_timeout_covers_cold_load() {
+        // gpt-oss-20b measured 53.6 s just to load on the .149 box. The
+        // old 30 s budget meant the preload always timed out on the big
+        // model even though the load was progressing fine server-side.
+        assert!(
+            REQUEST_TIMEOUT_SECS >= 300,
+            "preload timeout {}s is too tight for a cold load (need >= 300s)",
+            REQUEST_TIMEOUT_SECS
+        );
+    }
+
+    #[test]
+    fn test_keep_alive_field_is_one_hour() {
+        assert_eq!(OLLAMA_KEEP_ALIVE_FIELD, "1h");
+        assert_eq!(
+            OLLAMA_KEEP_ALIVE_FIELD,
+            crate::io::ollama::OLLAMA_KEEP_ALIVE
+        );
     }
 
     // ── network resilience tests (unreachable host → verify no panic / no hang) ─
@@ -362,6 +398,9 @@ mod tests {
     async fn test_preload_model_unreachable_returns_err() {
         // Port 19999 is never open in a normal test environment.
         // Verifies: returns Err, does not panic, does not hang indefinitely.
+        // (The lib test harness doesn't install a rustls crypto provider;
+        // the binary does it in main(). Without this, build_client panics.)
+        crate::io::ollama::ensure_crypto_provider();
         let result = preload_model("http://127.0.0.1:19999", "test_model").await;
         assert!(
             result.is_err(),

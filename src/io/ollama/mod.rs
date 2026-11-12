@@ -34,6 +34,12 @@ pub mod llm_trait;
 // OllamaLlm implementation (step 2)
 pub mod llm_impl;
 
+// Ollama model preload + keep-alive heartbeat (task 89). Declared here so
+// startup can warm each backend and keep its model resident; without this
+// the model is evicted 5 min after idle and the next turn pays a cold
+// load (gpt-oss-20b measured 53.6 s to load on the .149 box, 2026-11-11).
+pub mod keepalive;
+
 // ── OllamaRouter ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -67,7 +73,22 @@ impl OllamaRouter {
 const CONNECT_TIMEOUT_SECS: u64 = 5;
 
 /// Maximum seconds to wait for the full HTTP response once connected.
-const REQUEST_TIMEOUT_SECS: u64 = 90;
+///
+/// 300 s, not 90 s: the .149 box has no GPU, so a cold model load alone
+/// takes ~54 s (gpt-oss-20b measured 2026-11-11: 53.6 s load, 62.5 s total
+/// for a two-word reply), and a real turn adds prompt eval plus generation
+/// on top of the load. 90 s was tight enough that a cold first turn could
+/// die mid-load. This is a ceiling, not a delay — a warm call still
+/// returns in seconds. The health probe uses its own short-timeout client
+/// (see [`probe_client`]) so a wedged server can't stall a turn here.
+const REQUEST_TIMEOUT_SECS: u64 = 300;
+
+/// How long Ollama is asked to keep a model resident after a request
+/// (`keep_alive` field on `/api/chat` and `/api/generate`). Ollama evicts
+/// an idle model after 5 min by default; asking for 1 h on every turn
+/// means active use alone keeps the model warm even if the keepalive
+/// heartbeat task is ever disabled or dies.
+pub(crate) const OLLAMA_KEEP_ALIVE: &str = "1h";
 
 /// How many times to attempt a request before giving up.
 const MAX_RETRIES: u32 = 3;
@@ -104,6 +125,19 @@ static SHARED_CLIENT: OnceLock<Client> = OnceLock::new();
 /// Return the shared HTTP client, building it once on first use.
 pub fn shared_client() -> Client {
     SHARED_CLIENT.get_or_init(build_client).clone()
+}
+
+/// A short-timeout client for the `/api/tags` health/model probes only.
+/// The chat client allows up to [`REQUEST_TIMEOUT_SECS`] (300 s) so a cold
+/// model load can finish, but a probe must fail fast: it runs on the
+/// critical path of every chat turn (60 s cache), and a wedged server
+/// must not stall a turn for minutes before the real request is attempted.
+fn probe_client() -> Client {
+    Client::builder()
+        .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
+        .timeout(Duration::from_secs(10))
+        .build()
+        .expect("Failed to build reqwest probe HTTP client")
 }
 
 /// Install the rustls ring crypto provider for tests.
@@ -164,7 +198,9 @@ async fn probe_ollama(base_url: &str) -> OllamaProbe {
 
 /// Single fresh `/api/tags` probe (no cache).
 async fn probe_ollama_fresh(base_url: &str) -> OllamaProbe {
-    let client = shared_client();
+    // Short-timeout probe client: a health check must fail fast, never
+    // wait out the 300 s chat budget (see [`probe_client`]).
+    let client = probe_client();
     let url = format!("{}/api/tags", base_url);
     let resp = match client.get(&url).send().await {
         Ok(r) => r,
@@ -259,7 +295,8 @@ pub async fn check_ollama_health(base_url: &str) -> bool {
 /// Useful for startup diagnostics and for generating a helpful error message
 /// when the configured model is not found.
 pub async fn fetch_available_models(base_url: &str) -> Result<Vec<String>, String> {
-    let client = shared_client();
+    // Short-timeout probe client (see [`probe_client`]).
+    let client = probe_client();
     let url = format!("{}/api/tags", base_url);
 
     let resp = client
@@ -702,6 +739,22 @@ pub mod tools {
         }
     }
 
+    /// Build the `/api/chat` request body.
+    ///
+    /// `keep_alive` (see [`super::OLLAMA_KEEP_ALIVE`]) asks Ollama to hold
+    /// the model resident for an hour after the turn, so active use alone
+    /// keeps a backend warm between keepalive heartbeats instead of
+    /// letting it be evicted 5 min after idle and cold-loading next turn.
+    fn chat_request_json(model: &str, messages: &[Value], tools: &Value, stream: bool) -> Value {
+        json!({
+            "model": model,
+            "messages": messages,
+            "tools": tools,
+            "stream": stream,
+            "keep_alive": super::OLLAMA_KEEP_ALIVE,
+        })
+    }
+
     /// Agentic tool-calling loop:
     /// - Send the prompt.
     /// - If the model returns `tool_calls`, execute them locally and send results back.
@@ -752,12 +805,7 @@ pub mod tools {
 
             let resp = client
                 .post(format!("{}/api/chat", base_url))
-                .json(&json!({
-                    "model":    model,
-                    "messages": messages,
-                    "tools":    tools,
-                    "stream":   stream,
-                }))
+                .json(&chat_request_json(model, &messages, &tools, stream))
                 .send()
                 .await
                 .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
@@ -951,6 +999,22 @@ pub mod tools {
             assert_ne!(msgs[1]["role"], "tool", "orphaned tool result survived");
             assert!(msgs.len() <= MAX_HISTORY_MESSAGES);
         }
+
+        #[test]
+        fn test_chat_request_json_carries_keep_alive() {
+            // Cold-load fix (2026-11-11): every chat turn must ask Ollama
+            // to hold the model resident, or it is evicted 5 min after
+            // idle and the next turn pays a cold load.
+            let messages = vec![json!({"role": "user", "content": "hi"})];
+            let tools = json!([]);
+            let body = chat_request_json("gpt-oss:20b", &messages, &tools, true);
+            assert_eq!(body["keep_alive"], "1h");
+            // And the rest of the body passes through unchanged.
+            assert_eq!(body["model"], "gpt-oss:20b");
+            assert_eq!(body["messages"], json!([{"role": "user", "content": "hi"}]));
+            assert_eq!(body["tools"], json!([]));
+            assert_eq!(body["stream"], true);
+        }
     }
 }
 
@@ -1080,6 +1144,59 @@ mod tests {
         invalidate_ollama_probe("http://127.0.0.1:19999");
         let p2 = probe_ollama("http://127.0.0.1:19999").await;
         assert!(matches!(p2, OllamaProbe::Unreachable));
+    }
+
+    // ── cold-load budget (2026-11-11) ─────────────────────────────────────
+
+    #[test]
+    fn test_request_timeout_covers_cold_load() {
+        // gpt-oss-20b measured 53.6 s just to load on the .149 box
+        // (62.5 s total for a two-word reply), and a real turn adds prompt
+        // eval + generation on top. The chat timeout must clear that
+        // budget with room to spare or a cold first turn dies mid-load.
+        // (Warm calls are unaffected — this is a ceiling, not a delay.)
+        assert!(
+            REQUEST_TIMEOUT_SECS >= 300,
+            "chat timeout {}s is too tight for a cold load (need >= 300s)",
+            REQUEST_TIMEOUT_SECS
+        );
+    }
+
+    #[test]
+    fn test_chat_keep_alive_is_one_hour() {
+        // Every chat turn asks Ollama to hold the model for 1 h, so active
+        // use alone keeps a backend warm between keepalive heartbeats.
+        assert_eq!(OLLAMA_KEEP_ALIVE, "1h");
+    }
+
+    #[tokio::test]
+    async fn test_probe_client_fails_fast_on_hung_server() {
+        ensure_crypto_provider();
+        // A server that accepts the connection but never replies: the
+        // probe client must give up in ~10 s, not wait out the 300 s chat
+        // budget — otherwise a wedged Ollama stalls every turn on the
+        // health probe before the real request is even attempted.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            // Accept one connection, then hold it open without replying.
+            if let Ok((_stream, _)) = listener.accept() {
+                std::thread::sleep(Duration::from_secs(30));
+            }
+        });
+        let client = probe_client();
+        let start = std::time::Instant::now();
+        let result = client
+            .get(format!("http://{}/api/tags", addr))
+            .send()
+            .await;
+        let elapsed = start.elapsed();
+        assert!(result.is_err(), "hung server must produce an error, got Ok");
+        assert!(
+            elapsed < Duration::from_secs(60),
+            "probe client took {:?} on a hung server — must fail fast, not wait out the 300 s chat budget",
+            elapsed
+        );
     }
 
     // ── tool execution ────────────────────────────────────────────────────────
@@ -1218,8 +1335,11 @@ pub mod llm {
 
     impl OllamaLlm {
         pub fn new(router: Arc<OllamaRouter>) -> Self {
+            // Shared client: explicit 300 s request timeout (cold-load
+            // budget) instead of `Client::new()`, which has no timeout
+            // at all and could hang forever on a wedged server.
             Self {
-                client: Arc::new(Client::new()),
+                client: Arc::new(super::shared_client()),
                 router,
             }
         }
@@ -1240,7 +1360,8 @@ pub mod llm {
                 .json(&serde_json::json!({
                     "model": model,
                     "prompt": prompt,
-                    "stream": false
+                    "stream": false,
+                    "keep_alive": super::OLLAMA_KEEP_ALIVE
                 }))
                 .send()
                 .await
