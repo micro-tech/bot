@@ -76,9 +76,9 @@
     <p class="back"><a href="bot-architecture.html">← Helix architecture overview</a></p>
 
     <div class="diagram-container">
-      <svg viewBox="0 0 960 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-chat-command-flow-title bot-chat-command-flow-desc">
+      <svg viewBox="0 0 960 882" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-chat-command-flow-title bot-chat-command-flow-desc">
         <title id="bot-chat-command-flow-title">Helix — chat-command loop</title>
-        <desc id="bot-chat-command-flow-desc">Flowchart of the Helix chat-command loop (src/chat_command): a one-minute cron routine polls a chat-hub room via chat-mcp, gates on the sender, then either runs a plain allowlisted command locally or over SSH to the ASUS, hands an LLM task to a backend as a detached job, or invokes a read-only MCP tool in-tick (how: mcp); replies with an exit-status line are posted back to the same room.</desc>
+        <desc id="bot-chat-command-flow-desc">Flowchart of the Helix chat-command loop (src/chat_command): a one-minute cron routine polls a chat-hub room via chat-mcp, gates on the sender and on the optional to addressee, then either runs a plain allowlisted command locally or over SSH to the ASUS, hands an LLM task to a backend as a detached job, or invokes a read-only MCP tool in-tick (how: mcp); replies with an exit-status line are posted back to the same room.</desc>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
         </defs>
@@ -93,21 +93,26 @@
         <line x1="480" y1="192" x2="480" y2="216" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
         <!-- NO: Sender gate -> Ignored -->
         <line x1="580" y1="254" x2="700" y2="254" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <!-- YES: Sender gate -> Envelope -->
+        <!-- YES: Sender gate -> Addressing gate -->
         <line x1="480" y1="292" x2="480" y2="316" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <!-- LLM: Envelope -> LLM task -->
-        <line x1="590" y1="354" x2="700" y2="354" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <!-- MCP: Envelope -> MCP tool call -->
-        <line x1="370" y1="354" x2="260" y2="354" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <!-- PLAIN: Envelope -> Command -->
+        <!-- NO: Addressing gate -> Ignored (elbow into bottom edge) -->
+        <path d="M 590,354 H 800 V 286"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- YES: Addressing gate -> Envelope -->
         <line x1="480" y1="392" x2="480" y2="416" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- LLM: Envelope -> LLM task -->
+        <line x1="590" y1="454" x2="700" y2="454" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- MCP: Envelope -> MCP tool call -->
+        <line x1="370" y1="454" x2="260" y2="454" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- PLAIN: Envelope -> Command -->
+        <line x1="480" y1="492" x2="480" y2="516" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
         <!-- DONE: Command -> Reply -->
-        <line x1="480" y1="480" x2="480" y2="504" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="480" y1="580" x2="480" y2="604" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
         <!-- REPORT: LLM task -> Reply (elbow, enters right edge) -->
-        <path d="M 800,386 V 496 H 620 V 536 H 580"
+        <path d="M 800,486 V 596 H 620 V 640 H 580"
               fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
         <!-- RESULT: MCP tool call -> Reply (elbow, enters left edge) -->
-        <path d="M 160,386 V 536 H 380"
+        <path d="M 160,486 V 636 H 380"
               fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
 
         <!-- Arrow labels -->
@@ -123,23 +128,29 @@
         <rect x="490" y="296" width="40" height="14" rx="2" fill="#f5f5f5"/>
         <text x="510" y="306" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">YES</text>
 
-        <rect x="626" y="344" width="38" height="14" rx="2" fill="#f5f5f5"/>
-        <text x="645" y="354" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">LLM</text>
+        <rect x="631" y="344" width="28" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="645" y="354" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">NO</text>
 
-        <rect x="296" y="344" width="38" height="14" rx="2" fill="#f5f5f5"/>
-        <text x="315" y="354" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">MCP</text>
+        <rect x="490" y="396" width="40" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="510" y="406" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">YES</text>
 
-        <rect x="488" y="396" width="44" height="14" rx="2" fill="#f5f5f5"/>
-        <text x="510" y="406" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PLAIN</text>
+        <rect x="626" y="444" width="38" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="645" y="454" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">LLM</text>
 
-        <rect x="490" y="484" width="40" height="14" rx="2" fill="#f5f5f5"/>
-        <text x="510" y="494" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DONE</text>
+        <rect x="296" y="444" width="38" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="315" y="454" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">MCP</text>
 
-        <rect x="690" y="486" width="52" height="14" rx="2" fill="#f5f5f5"/>
-        <text x="716" y="496" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">REPORT</text>
+        <rect x="488" y="496" width="44" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="510" y="506" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PLAIN</text>
 
-        <rect x="243" y="526" width="56" height="14" rx="2" fill="#f5f5f5"/>
-        <text x="271" y="536" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RESULT</text>
+        <rect x="490" y="584" width="40" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="510" y="594" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DONE</text>
+
+        <rect x="690" y="586" width="52" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="716" y="596" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">REPORT</text>
+
+        <rect x="243" y="626" width="56" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="271" y="636" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RESULT</text>
 
         <!-- Node: Tick (start, oval) -->
         <rect x="380" y="40" width="200" height="64" rx="32" fill="#f5f5f5"/>
@@ -166,66 +177,72 @@
         <text x="800" y="258" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Ignored</text>
         <text x="800" y="274" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">audit-logged · no reply</text>
 
-        <!-- Node: Structured envelope? (decision) -->
+        <!-- Node: Addressing gate (decision) -->
         <polygon points="480,316 590,354 480,392 370,354" fill="#f5f5f5"/>
         <polygon points="480,316 590,354 480,392 370,354" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-        <text x="480" y="358" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Structured envelope?</text>
+        <text x="480" y="358" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Addressed to us?</text>
+
+        <!-- Node: Structured envelope? (decision) -->
+        <polygon points="480,416 590,454 480,492 370,454" fill="#f5f5f5"/>
+        <polygon points="480,416 590,454 480,492 370,454" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="480" y="458" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Structured envelope?</text>
 
         <!-- Node: Command -->
-        <rect x="380" y="416" width="200" height="64" rx="6" fill="#f5f5f5"/>
-        <rect x="380" y="416" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-        <rect x="388" y="424" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
-        <text x="402" y="433" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXEC</text>
-        <text x="480" y="452" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Command</text>
-        <text x="480" y="468" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">allowlist · no shell · asus: SSH</text>
+        <rect x="380" y="516" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="380" y="516" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="388" y="524" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="402" y="533" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXEC</text>
+        <text x="480" y="552" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Command</text>
+        <text x="480" y="568" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">allowlist · no shell · asus: SSH</text>
 
         <!-- Node: LLM task -->
-        <rect x="700" y="322" width="200" height="64" rx="6" fill="#f5f5f5"/>
-        <rect x="700" y="322" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-        <rect x="708" y="330" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
-        <text x="722" y="339" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LLM</text>
-        <text x="800" y="358" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">LLM task</text>
-        <text x="800" y="374" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">which: server · desktop · gemini</text>
+        <rect x="700" y="422" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="700" y="422" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="708" y="430" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="722" y="439" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LLM</text>
+        <text x="800" y="458" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">LLM task</text>
+        <text x="800" y="474" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">which: server · desktop · gemini</text>
 
         <!-- Node: MCP tool call -->
-        <rect x="60" y="322" width="200" height="64" rx="6" fill="#f5f5f5"/>
-        <rect x="60" y="322" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-        <rect x="68" y="330" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
-        <text x="82" y="339" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MCP</text>
-        <text x="160" y="358" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">MCP tool call</text>
-        <text x="160" y="374" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">how: mcp · read-only · 60 s</text>
+        <rect x="60" y="422" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="60" y="422" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="68" y="430" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="82" y="439" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MCP</text>
+        <text x="160" y="458" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">MCP tool call</text>
+        <text x="160" y="474" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">how: mcp · read-only · 60 s</text>
 
         <!-- Node: Reply to same room -->
-        <rect x="380" y="504" width="200" height="64" rx="6" fill="#f5f5f5"/>
-        <rect x="380" y="504" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-        <rect x="388" y="512" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
-        <text x="402" y="521" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SEND</text>
-        <text x="480" y="540" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Reply to same room</text>
-        <text x="480" y="556" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">chunked · [exit N] status line</text>
+        <rect x="380" y="604" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="380" y="604" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="388" y="612" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="402" y="621" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SEND</text>
+        <text x="480" y="640" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Reply to same room</text>
+        <text x="480" y="656" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">chunked · [exit N] status line</text>
 
         <!-- Callouts -->
-        <text x="480" y="612" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">Sender gate first — only cobble-jr and john; Helix's own replies never re-trigger. Ships disabled until John enables it.</text>
-        <text x="480" y="636" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">LLM tasks run detached and never block the tick; the in-memory queue drains reports back to the room.</text>
-        <text x="480" y="660" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">MCP (task 319, v1 read-only): `to` required; server + tool must be configured and allowlisted; in-tick within 60 s — a timeout moves on, the worker is not killed.</text>
+        <text x="480" y="712" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">Sender gate first — only cobble-jr and john; Helix's own replies never re-trigger. Ships disabled until John enables it.</text>
+        <text x="480" y="736" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">Addressing — a structured message whose `to` names another agent is ignored entirely (no run, no reply, no error); absent `to` is a broadcast.</text>
+        <text x="480" y="760" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">LLM tasks run detached and never block the tick; the in-memory queue drains reports back to the room.</text>
+        <text x="480" y="784" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">MCP (task 319, v1 read-only): `to` required; server + tool must be configured and allowlisted; in-tick within 60 s — a timeout moves on, the worker is not killed.</text>
 
         <!-- Legend strip -->
-        <line x1="40" y1="706" x2="920" y2="706" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
-        <text x="40" y="722" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+        <line x1="40" y1="824" x2="920" y2="824" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="40" y="816" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
 
-        <ellipse cx="47" cy="739" rx="7" ry="5" fill="#f5f5f5" stroke="#2d3142" stroke-width="1"/>
-        <text x="60" y="742" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Start / end</text>
+        <ellipse cx="47" cy="857" rx="7" ry="5" fill="#f5f5f5" stroke="#2d3142" stroke-width="1"/>
+        <text x="60" y="836" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Start / end</text>
 
-        <rect x="158" y="734" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-        <text x="178" y="742" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Step</text>
+        <rect x="158" y="828" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="178" y="836" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Step</text>
 
-        <polygon points="245,734 252,739 245,744 238,739" fill="#f5f5f5" stroke="#2d3142" stroke-width="1"/>
-        <text x="258" y="742" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Decision</text>
+        <polygon points="245,852 252,857 245,862 238,857" fill="#f5f5f5" stroke="#2d3142" stroke-width="1"/>
+        <text x="258" y="836" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Decision</text>
 
-        <polygon points="345,734 352,739 345,744 338,739" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
-        <text x="358" y="742" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Sender gate</text>
+        <polygon points="345,852 352,857 345,862 338,857" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+        <text x="358" y="836" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Sender gate</text>
 
-        <line x1="480" y1="739" x2="508" y2="739" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <text x="516" y="742" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Flow</text>
+        <line x1="480" y1="857" x2="508" y2="857" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="516" y="836" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Flow</text>
       </svg>
     </div>
   </div>
