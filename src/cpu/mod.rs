@@ -562,6 +562,17 @@ where
             Ok(s) => (s, None),
             Err(e) => (None, Some(e)),
         };
+        // Task 326 (H2): count_restarts is cumulative (total boot
+        // markers ever written under <rt>/logs/), so the "restarts
+        // detected" trigger must use the delta since the last cycle —
+        // otherwise it would fire every cycle after the first restart.
+        // The ledger records the raw cumulative count; the signal
+        // below uses new restarts only.
+        let restart_count = crate::self_improve::metrics::count_restarts(&rt);
+        let prev_restart_count = crate::self_improve::metrics::latest_entry(&rt, &cfg)
+            .map(|e| e.restart_count)
+            .unwrap_or(0);
+        let new_restarts = restart_count.saturating_sub(prev_restart_count);
         let mut inputs = crate::self_improve::metrics::CycleInputs {
             routine_outcomes: std::collections::BTreeMap::from([(
                 "self-improve".to_string(),
@@ -570,7 +581,7 @@ where
             support_stats: crate::support_watch::status_snapshot(),
             error_total: findings.total,
             error_by_file,
-            restart_count: crate::self_improve::metrics::count_restarts(&rt),
+            restart_count,
             qm_summary,
             qm_parse_error,
             proposal_outcomes: std::collections::BTreeMap::new(),
@@ -593,8 +604,8 @@ where
                 "{} genuine recent errors, worst file: {}",
                 inputs.error_total, worst
             ))
-        } else if inputs.restart_count > 0 {
-            Some(format!("{} restarts detected", inputs.restart_count))
+        } else if new_restarts > 0 {
+            Some(format!("{} restarts detected", new_restarts))
         } else {
             None
         };
@@ -697,6 +708,53 @@ where
             }
         };
         inputs.proposal_outcomes.insert("cycle".to_string(), outcome);
+        // Task 325 (H1): per-cycle evaluation arm — evaluate the
+        // oldest "proposed" record, now that intake is done. This is
+        // the wiring the evaluator's doc comment flagged as missing
+        // ("no task in 277–291 owns it"). The arm itself picks the
+        // record and skips when there is nothing evaluable (no
+        // "proposed" record, or the oldest one carries no diff files
+        // — the worker returns prose only, so today that is every
+        // record). The repo is the runtime dir: in the standard
+        // deployment it IS the Helix checkout the worktree is created
+        // from. The runner's work dir is set by evaluate_proposal
+        // once the worktree exists (it starts empty here).
+        // The cycle deadline bounds the evaluation: a fresh worktree
+        // build takes minutes, so skip it when the budget is spent.
+        let eval_now = crate::utils::now_ms();
+        if deadline.expired(eval_now) {
+            log_to_file("self_improve: evaluation skipped: cycle deadline expired");
+        } else {
+            let mut runner = crate::self_improve::evaluator::RealRunner {
+                work_dir: std::path::PathBuf::new(),
+            };
+            match crate::self_improve::evaluator::evaluate_oldest_proposal(
+                &rt, &rt, &cfg, &mut runner, eval_now,
+            ) {
+                Ok(Some(report)) => {
+                    let outcome = if report.promoted {
+                        format!("evaluated+promoted:{}", report.promotion_reason)
+                    } else {
+                        format!("evaluated:{}", report.promotion_reason)
+                    };
+                    log_to_file(&format!("self_improve: evaluation {outcome}"));
+                    inputs
+                        .proposal_outcomes
+                        .insert("evaluation".to_string(), outcome);
+                }
+                Ok(None) => {
+                    inputs
+                        .proposal_outcomes
+                        .insert("evaluation".to_string(), "eval-skipped".to_string());
+                }
+                Err(e) => {
+                    log_to_file(&format!("self_improve: evaluation error: {e}"));
+                    inputs
+                        .proposal_outcomes
+                        .insert("evaluation".to_string(), format!("eval-error:{e}"));
+                }
+            }
+        }
         // 6. One ledger entry with the outcome, then the log line.
         self.write_self_improve_entry(&rt, &cfg, inputs);
     }
@@ -2322,7 +2380,15 @@ mod nightly_tests {
             "aborted cycle must leave no proposal orphan"
         );
         // Re-enable all three mechanisms: cycle 3 proceeds again.
+        // Task 326: the restart signal fires only on NEW restarts
+        // since the last cycle, so simulate a second restart (one
+        // more marker line) or cycle 3 would idle with no signal.
         std::fs::remove_file(dir.join("SELF_IMPROVE_OFF")).unwrap();
+        std::fs::write(
+            log_dir.join("boot.log"),
+            "Helix is running...\nHelix is running...\n",
+        )
+        .unwrap();
         cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
         assert_eq!(self_improve_ledger(&dir).len(), 2);
         assert_eq!(crate::agents::subagent_registry::snapshot().len(), 2);

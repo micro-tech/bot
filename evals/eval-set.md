@@ -1,7 +1,7 @@
-# Helix Eval Set (DRAFT — needs John's approval)
+# Helix Eval Set (APPROVED by John, Nov 10, 2026)
 
-**Do not finalize without John's sign-off.** He must supply or approve the
-representative task list from his domain knowledge of what Helix is for.
+**Approved by John Nov 10, 2026** — the 10 deterministic evals below approved
+as-is (including the weak ones 6, 9, 10 — he did not ask to strengthen them).
 
 ## Deterministic evals (runnable now, no LLM)
 
@@ -35,8 +35,8 @@ tasks only John can supply:
 - **Conversation coherence**: two-turn "try again" follow-up resolves
   against history (task 223's live drill).
 
-## Proposed next step for John
+## Status
 
-Review the 10 deterministic evals above; add/replace with the tasks Helix
-actually performs for him; bless the set. Then we wire the LLM-dependent
-evals against his approved list.
+Approved by John Nov 10, 2026 (the 10 deterministic evals above, as-is).
+Next: wire the LLM-dependent evals against this approved list, and wire the
+per-cycle evaluation arm (task 325) so the evaluator actually runs.
