@@ -217,6 +217,24 @@ fn default_routines() -> Vec<Routine> {
             task: String::new(),
             backend: default_routine_backend(),
         },
+        // Task 314: nightly log maintenance — `Cpu::nightly_maintenance`
+        // was dead code (zero callers), so logs grew without bound.
+        // Seeding it as a routine makes it actually run. Daily inside
+        // the 1–7am hartbeat.md window, after consolidation (02:00),
+        // before the error-log review (06:30). The existing
+        // load_or_seed merge carries it to deployments seeded by an
+        // older binary without touching John's choices.
+        Routine {
+            id: "nightly_maintenance".to_string(),
+            name: "Nightly log maintenance".to_string(),
+            schedule: "daily 02:30".to_string(),
+            enabled: true,
+            last_run_ms: None,
+            next_run_ms: None,
+            agent_role: String::new(),
+            task: String::new(),
+            backend: default_routine_backend(),
+        },
         // Task 216: John's twice-daily mail check as a payload routine —
         // the template for "agent starts, does a task, stops".
         Routine {
@@ -936,6 +954,8 @@ mod registry_tests {
         let ids: Vec<&str> = reg.list().iter().map(|r| r.id.as_str()).collect();
         assert!(ids.contains(&"nightly_memory_consolidation"));
         assert!(ids.contains(&"error_log_review"));
+        // Task 314: the log-maintenance job is seeded too.
+        assert!(ids.contains(&"nightly_maintenance"));
         // Task 216: the mail_check example ships DISABLED (John enables it when
         // he wants the agent watching mail); task 281: self-improve ships
         // DISABLED (John enables it after gate 280); task 295:

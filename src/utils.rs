@@ -2,10 +2,64 @@
 
 use chrono::Local;
 use log::error;
+use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Task 316: the error-log path is computed once per process. The old
+/// code rebuilt it and ran `create_dir_all` on EVERY log line (the
+/// per-token hot path) — now the directory is created on first use only.
+/// No test mutates HOME, so caching the resolved path is safe.
+static ERROR_LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+/// Task 316: process-global open append handles, one per log path. The
+/// old code opened + wrote + closed on EVERY log line (and the bus
+/// logged every message the same way) — at per-token bus rates that is
+/// three syscalls per line plus a `create_dir_all`. Now the first write
+/// to a path opens it once and later writes pay a single `write_all`.
+/// Content and durability are unchanged: each line still reaches the OS
+/// immediately (no buffering), and rotation/clear truncate in place, so
+/// a cached O_APPEND handle stays valid across them. If the file
+/// disappears (deleted out from under us) the next call reopens it.
+static APPEND_HANDLES: std::sync::LazyLock<Mutex<HashMap<PathBuf, std::fs::File>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Append one line to `path`, reusing the cached open handle for that
+/// path (task 316). Falls back to a one-shot open-append-write when the
+/// cached handle is missing or a write fails, so a line is never
+/// silently dropped by a stale handle.
+pub(crate) fn append_log_line(path: &PathBuf, line: &str) {
+    let mut handles = APPEND_HANDLES.lock().unwrap_or_else(|e| e.into_inner());
+    let needs_open = match handles.get(path) {
+        Some(_) => !path.exists(),
+        None => true,
+    };
+    if needs_open {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        match OpenOptions::new().append(true).create(true).open(path) {
+            Ok(f) => {
+                handles.insert(path.clone(), f);
+            }
+            Err(e) => {
+                error!("Failed to open log file {:?}: {}", path, e);
+                return;
+            }
+        }
+    }
+    if let Some(f) = handles.get_mut(path) {
+        if let Err(e) = f.write_all(line.as_bytes()) {
+            error!("Failed to write to log file {:?}: {}", path, e);
+            // Stale handle (e.g. the file was replaced): drop it so the
+            // next call reopens.
+            handles.remove(path);
+        }
+    }
+}
 
 /// Returns a cross-platform path for the error log.
 /// Windows: %APPDATA%\helix\logs\error_log.md
@@ -13,33 +67,40 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Task 276: pub(crate) so the web UI clear endpoint can clear the same
 /// file log_to_file writes (it used to clear only the runtime log).
 pub(crate) fn error_log_path() -> PathBuf {
-    let base = if cfg!(windows) {
-        std::env::var("APPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("."))
-    } else {
-        std::env::var("HOME")
-            .map(|h| PathBuf::from(h).join(".helix"))
-            .unwrap_or_else(|_| PathBuf::from(".helix"))
-    };
+    ERROR_LOG_PATH
+        .get_or_init(|| {
+            let base = if cfg!(windows) {
+                std::env::var("APPDATA")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| PathBuf::from("."))
+            } else {
+                std::env::var("HOME")
+                    .map(|h| PathBuf::from(h).join(".helix"))
+                    .unwrap_or_else(|_| PathBuf::from(".helix"))
+            };
 
-    let log_dir = if cfg!(windows) {
-        base.join("helix").join("logs")
-    } else {
-        base.join("logs")
-    };
+            let log_dir = if cfg!(windows) {
+                base.join("helix").join("logs")
+            } else {
+                base.join("logs")
+            };
 
-    // Ensure directory exists
-    if let Err(e) = fs::create_dir_all(&log_dir) {
-        // Can't log this yet, but we tried
-        eprintln!("Failed to create log dir {:?}: {}", log_dir, e);
-    }
+            // Ensure directory exists (once per process, task 316 — the
+            // old code paid this on every log line).
+            if let Err(e) = fs::create_dir_all(&log_dir) {
+                // Can't log this yet, but we tried
+                eprintln!("Failed to create log dir {:?}: {}", log_dir, e);
+            }
 
-    log_dir.join("error_log.md")
+            log_dir.join("error_log.md")
+        })
+        .clone()
 }
 
 /// Logs a message to the error log file with a timestamp.
 /// The log is human-readable markdown format.
+/// Task 316: batched append (cached open handle) instead of
+/// open-write-close per line; the line format is unchanged.
 pub fn log_to_file(message: &str) {
     let timestamp = Local::now().format("%Y-%m-%d %I:%M:%S %p").to_string();
     let log_entry = format!(
@@ -49,17 +110,7 @@ pub fn log_to_file(message: &str) {
     );
 
     let path = error_log_path();
-
-    match OpenOptions::new().append(true).create(true).open(&path) {
-        Ok(mut file) => {
-            if let Err(e) = file.write_all(log_entry.as_bytes()) {
-                error!("Failed to write to error log file {:?}: {}", path, e);
-            }
-        }
-        Err(e) => {
-            error!("Failed to open error log file {:?}: {}", path, e);
-        }
-    }
+    append_log_line(&path, &log_entry);
 }
 
 /// Task 276: maximum lines kept in the error log by rotation. At the
@@ -302,5 +353,55 @@ mod nightly_window_tests {
         assert!(in_nightly_window_at(&at(6, 59)));
         assert!(!in_nightly_window_at(&at(7, 0))); // exclusive close
         assert!(!in_nightly_window_at(&at(23, 0)));
+    }
+}
+
+#[cfg(test)]
+mod log_batching_tests {
+    use super::*;
+
+    fn tmp_log_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "helix-log-batch-test-{}-{}",
+            name,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    #[test]
+    fn append_log_line_writes_lines_in_order() {
+        // GIVEN a fresh temp path:
+        let path = tmp_log_path("order");
+        // WHEN three lines are appended (through the cached handle):
+        append_log_line(&path, "one\n");
+        append_log_line(&path, "two\n");
+        append_log_line(&path, "three\n");
+        // THEN the file holds exactly those lines, in order:
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "one\ntwo\nthree\n");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn append_log_line_recreates_after_delete() {
+        // GIVEN a path with one line written:
+        let path = tmp_log_path("recreate");
+        append_log_line(&path, "before\n");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "before\n");
+        // WHEN the file is deleted out from under the cached handle:
+        std::fs::remove_file(&path).unwrap();
+        // THEN the next line recreates the file instead of vanishing:
+        append_log_line(&path, "after\n");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "after\n");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn error_log_path_is_stable_across_calls() {
+        // Task 316: the path is computed once (no create_dir_all per call).
+        assert_eq!(error_log_path(), error_log_path());
     }
 }

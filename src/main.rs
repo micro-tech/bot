@@ -377,6 +377,11 @@ async fn run_helix() {
             reasoning_config,
         ) {
             Ok(cpu) => {
+                // Task 315: the heartbeat loop locks ONLY the shared
+                // heartbeat state, never the Cpu mutex — a routine
+                // holding the Cpu for minutes can no longer starve the
+                // beat. Clone the Arc before wrapping the Cpu.
+                let hb_state = cpu.heartbeat_state.clone();
                 let cpu = std::sync::Arc::new(tokio::sync::Mutex::new(cpu));
                 println!(
                     "Heartbeat: live Cpu constructed (manifest: {}), ticking every {}s",
@@ -435,10 +440,15 @@ async fn run_helix() {
                     ticker.tick().await;
                     loop {
                         ticker.tick().await;
+                        // Task 315: the beat locks ONLY the shared
+                        // heartbeat state — never the Cpu mutex — so it
+                        // keeps landing while a routine holds the Cpu.
                         let (tick, uptime_secs) = {
-                            let mut guard = cpu.lock().await;
-                            guard.handle_heartbeat().await;
-                            (guard.state.tick_count, guard.state.uptime.as_secs())
+                            let mut hb = hb_state
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            hb.handle_heartbeat();
+                            (hb.tick_count, hb.uptime.as_secs())
                         };
                         // Task 200: observability. Every beat writes
                         // heartbeat.md and appends to logs/hartbeat_log.md.
