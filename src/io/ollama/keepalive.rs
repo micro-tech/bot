@@ -82,8 +82,12 @@ fn build_client() -> Client {
 ///
 /// # Example
 /// ```no_run
-/// if let Err(e) = preload_model("http://localhost:11434", "qwen3.5:0.8b").await {
-///     eprintln!("Preload warning: {}", e);
+/// #[tokio::main]
+/// async fn main() {
+///     use helix::io::ollama::keepalive::preload_model;
+///     if let Err(e) = preload_model("http://localhost:11434", "qwen3.5:0.8b").await {
+///         eprintln!("Preload warning: {}", e);
+///     }
 /// }
 /// ```
 pub async fn preload_model(base_url: &str, model: &str) -> Result<(), String> {

@@ -4068,6 +4068,34 @@
       "results": "Built on branch sapper-task-328-responsive-widths (src/io/web_server/static/index.html only). applyViewportLayout() reads window.innerWidth on load + resize/orientationchange and sets body[data-layout]=phone|dualscreen|desktop plus body[data-viewport-width]; logs '[viewport] width=... layout=...' on mode change. Breakpoints (INITIAL, NOT measured): phone <=600px, dual-screen 601-1100px, desktop >1100px. Sidebar-drawer media query moved 800px->600px to align with the phone breakpoint (cleanly separates Fold cover ~410px from unfolded ~770-850px); detail-drawer query unchanged at 1100px; desktop 3-column grid unchanged. Phone refinements: 44px touch targets, wrapping safe-area-aware header, 16px chat input (no auto-zoom on focus), messages 92% width. JS syntax-checked with node --check; cargo check --lib clean. STILL NEEDS: fold/unfold/fold-back login drill on the real Pixel 11 Pro Fold to verify/tune the 600/1100 breakpoints (phone could not load the page when this was built) and confirm desktop unchanged."
     },
     {
+      "id": 329,
+      "title": "Fix failing doctest in src/io/ollama/keepalive.rs (preload_model example)",
+      "description": "cargo test at PreRelese 5bebeb8 fails ONLY on one doctest: the # Example for preload_model in src/io/ollama/keepalive.rs (line 84) does not compile — it calls preload_model(...).await inside a non-async fn main and without the function in scope. All lib (660/0/4) and integration targets pass; JS voice-tuning 9/9. Fix the example so `cargo test` (including doctests) exits 0.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "FAILURE (Quartermaster nightly run 2026-11-12, verified in worktree at origin/PreRelese 5bebeb8): `cargo test -j2` exit 101, sole failure is the doctest `src/io/ollama/keepalive.rs - io::ollama::keepalive::preload_model (line 84)`. Errors: E0728 `await` is only allowed inside async functions and blocks (keepalive.rs:85) and E0425 cannot find function `preload_model` in this scope (keepalive.rs:85). ROOT CAUSE: the example text predates the wiring but keepalive.rs was an orphan file — never declared as a module, so its doctests never ran. PR #49 (10450b6, 'Wire up Ollama keepalive/preload', merged as 5bebeb8) declared `pub mod keepalive` and wired preload + heartbeat into the per-backend listener, which made this doctest reachable for the first time and exposed the two compile errors. RULED OUT: not a dependency problem; not the task-262 installer include_str! issue (full check/build pass with the two local compile stubs); not a lib/integration regression (lib 660 passed / 0 failed / 4 ignored; every integration target ok; JS voice-tuning 9/9). FIX (Surveyor 1 plan, 2026-11-12): wrap the doc example in `#[tokio::main] async fn main()` with `use helix::io::ollama::keepalive::preload_model;`, keeping the ```no_run marker; pattern verified to compile+pass in a scratch crate.",
+      "testStrategy": "Run `cargo test --doc` — the keepalive.rs preload_model doctest must pass. Then run full `cargo test` (lib + bins + tests + doctests) and confirm exit 0 with no new warnings. Confirm the preload/heartbeat runtime behavior is unchanged (lib tests 660 passed / 0 failed / 4 ignored).",
+      "subtasks": [
+        {
+          "id": "329.1",
+          "status": "done",
+          "title": "Rewrite the preload_model doc example so it compiles (async main + qualified path)"
+        },
+        {
+          "id": "329.2",
+          "status": "done",
+          "title": "Verify cargo test --doc passes, then full cargo test exits 0 with no new warnings"
+        },
+        {
+          "id": "329.3",
+          "status": "done",
+          "title": "Add a ### Fixed (task 329) entry at the top of CHANGELOG.md per repo convention"
+        }
+      ],
+      "results": "DONE 2026-11-14 by Ranger 1 on branch ranger-329-keepalive-doctest. Doc-comment-only fix in src/io/ollama/keepalive.rs: the preload_model # Example now wraps in `#[tokio::main] async fn main()` with `use helix::io::ollama::keepalive::preload_model;`, keeping the ```no_run fence (no ```ignore downgrade). Verification: cargo test --doc keepalive 1 passed / 0 failed; full cargo test exit 0 — lib 660/0/4, bin 645/0/4, all integration targets ok, doctests 1 passed / 0 failed / 1 ignored; cargo build exit 0. Only warnings are the 2 pre-existing task-273 unix_socket_test unused-import warnings. Note: full cargo test needs the two untracked local compile stubs (config.toml copy of example + .grok/docs/system_manifest_root.md) for the task-262 installer include_str! paths — both gitignored, not committed."
+    },
+    {
       "id": 330,
       "title": "Fix Gemini API key leak via URL query string (C1)",
       "description": "The Gemini client sends the API key as a ?key= URL query parameter (src/io/llm_gemini/mod.rs:100, :545, :575), so the key lands in URLs \u2014 visible in logs, proxies, and error reports. Send the key via the x-goog-api-key HTTP header instead and strip it from the URL.",
@@ -4150,5 +4178,6 @@
         }
       ],
       "results": "DONE 2026-11-14 by Ranger 1 (branch ranger-330-332). Added wire arm to read_tools_for: interfaces, analyze_pcap, capture (all read-only). New test read_allowlist_wire_reads_only asserts the three tools plus fail-closed cases. Lib 662/0/4."
-    }  ]
+    }
+  ]
 }
