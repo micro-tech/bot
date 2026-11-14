@@ -4211,6 +4211,39 @@
         }
       ],
       "results": "DONE 2026-11-14 by Ranger 1 (branch ranger-backend-label). Timeout already 300 (no change - PR #49 commit 10450b6). Backend label: backend_display_name + backend WS field + frontend backendLabel(); new test bridge_tags_llm_output_with_backend. Sanitizer: one-line remove + new test gemini_declarations_strip_additional_properties. cargo test --lib 669/0/4 (+2 new), cargo build clean exit 0, cargo test --doc 1/0/1, cargo check --lib zero warnings."
+    },
+    {
+      "id": 334,
+      "title": "Ollama tool-calling failure on desktop backend (gemma4:e4b returns empty content)",
+      "description": "Live 2026-11-14 16:09 EST: desktop backend (gemma4:e4b @ .196) answers plain chat (3+9 -> 12) but any tool question (check email / check the gmail) fails fast with 'Ollama returned an empty content field' on all 3 attempts. Failures return in seconds, NOT after the 300s timeout, so it is not a timeout. The model returns no content AND no tool call. Same code path serves the server backend (gpt-oss-20b); John's parallel server test decides whether it is model capability.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Findings (measured in sandbox, base PreRelese 52df1f7): (1) Tools ARE sent on every turn - call_ollama_tools sends the full tool_definitions() payload with each /api/chat call. Static payload: 25 tools / 10,979 bytes, ZERO additionalProperties/$schema/anyOf - the static schemas are clean and small, so the static payload is not the cause. Live payload adds MCP tools (google/chat/wire/mail) whose raw schemars schemas DO carry additionalProperties: false (chat-mcp all 5 tools, mcp-wire old binary 3 tools, google-mcp schemars-derived) - passed to Ollama unsanitized (unlike Gemini, which has sanitize_gemini_schema). (2) Streaming reader BUG: read_streaming_response only captured tool_calls from the final done:true line; a tool call in a non-final line was silently dropped, then the loop saw empty content + no tool calls = the exact observed error. Fixed: new extract_tool_calls() helper, called on every line + the trailing partial line. (3) The empty-content error discarded the raw model reply, so live failures were undiagnosable - now warn!-logs the raw msg (truncated to 500 chars) before returning the error. (4) NOT changed: no Ollama schema sanitizer (evidence does not support schema complexity as the cause - plain chat '3+9' works with the IDENTICAL full payload including MCP tools; the failure is in tool-call generation, not payload parsing) and no model swap (John's call). Most likely a gemma4:e4b tool-calling capability limitation; confirm with the server-backend test.",
+      "testStrategy": "New tests: static_tool_payload_is_small_and_clean (asserts 25 static tools, <50KB, no additionalProperties/$schema/anyOf) and extract_tool_calls_finds_non_final_line_call (tool call on a done:false line is found; lines without calls yield None). cargo test --lib green; cargo build clean.",
+      "subtasks": [
+        {
+          "id": "334.1",
+          "status": "done",
+          "title": "Measure tool payload sent to Ollama (count, bytes, schema fields)"
+        },
+        {
+          "id": "334.2",
+          "status": "done",
+          "title": "Fix streaming reader to capture tool_calls from any line + trailing line"
+        },
+        {
+          "id": "334.3",
+          "status": "done",
+          "title": "Log raw model reply (truncated) on empty-content error"
+        },
+        {
+          "id": "334.4",
+          "status": "done",
+          "title": "Run cargo test --lib and cargo build; confirm green"
+        }
+      ],
+      "results": "DONE 2026-11-14 by Ranger 1 (branch ranger-toolcall). Streaming fix: extract_tool_calls() helper + capture on every line and trailing line. Diagnostic: warn!-log of raw msg (500 chars) on empty content. Tests: static_tool_payload_is_small_and_clean + extract_tool_calls_finds_non_final_line_call. CONCLUSION: most likely gemma4:e4b tool-calling limitation (same payload + code path works for plain chat; server-backend test is the decider). No schema sanitizer and no model swap - see details."
     }
   ]
 }

@@ -623,6 +623,18 @@ pub fn parse_stream_line(line: &str) -> Option<(String, bool)> {
     Some((token, done))
 }
 
+/// Extract `message.tool_calls` from one NDJSON streaming line, if present.
+/// Used by `read_streaming_response` on EVERY line (not just the `done`
+/// line): some models emit the tool call in a non-final line, and dropping
+/// it made the loop see empty content + no tool calls (task 334).
+fn extract_tool_calls(line: &str) -> Option<Value> {
+    serde_json::from_str::<Value>(line.trim())
+        .ok()?
+        .get("message")
+        .and_then(|m| m.get("tool_calls"))
+        .cloned()
+}
+
 /// Consume a streaming `/api/chat` response, invoking `on_token` for each
 /// content token as it arrives. Returns the reassembled single `message`
 /// object (same shape as the non-streaming response's `message` field) so
@@ -664,20 +676,24 @@ async fn read_streaming_response(
                     cb(token.clone());
                 }
             }
+            // Task 334: capture tool_calls from ANY line, not just the
+            // final `done` line. Some models (small Gemma quants in
+            // particular) emit the tool call in a non-final streaming
+            // line; the old code only looked at the done line, so those
+            // calls were silently dropped and the loop then saw empty
+            // content + no tool calls ("Ollama returned an empty content
+            // field"). Later lines overwrite earlier ones, so the final
+            // line still wins when it carries the call.
+            if let Some(tc) = extract_tool_calls(&line) {
+                tool_calls = Some(tc);
+            }
             if done {
-                // Capture eval counts + any tool_calls from the final line.
+                // Capture eval counts from the final line.
                 if let Ok(v) = serde_json::from_str::<Value>(line.trim()) {
                     for k in ["prompt_eval_count", "eval_count"] {
                         if let Some(n) = v.get(k) {
                             eval_counts.insert(k.to_string(), n.clone());
                         }
-                    }
-                    if let Some(tc) = v
-                        .get("message")
-                        .and_then(|m| m.get("tool_calls"))
-                        .cloned()
-                    {
-                        tool_calls = Some(tc);
                     }
                 }
             }
@@ -692,6 +708,11 @@ async fn read_streaming_response(
                     cb(token.clone());
                 }
             }
+        }
+        // Task 334: same as the main loop — a tool call in the trailing
+        // partial line must not be dropped.
+        if let Some(tc) = extract_tool_calls(&buf) {
+            tool_calls = Some(tc);
         }
     }
 
@@ -904,6 +925,19 @@ pub mod tools {
                 // No tool calls → model produced its final answer.
                 let content = msg["content"].as_str().unwrap_or("").to_string();
                 if content.is_empty() {
+                    // Task 334: log the raw message the model actually
+                    // returned (truncated). The empty-content error used
+                    // to discard it, so a live failure was undiagnosable
+                    // — we could not tell a truly-empty reply from a
+                    // `thinking`-only reply or a malformed tool call.
+                    // (No secrets here: `msg` is model output, and the
+                    // truncate keeps the log line bounded.)
+                    let raw = serde_json::to_string(msg).unwrap_or_default();
+                    warn!(
+                        "Ollama empty content: model={} raw_msg={}",
+                        model,
+                        truncate(&raw, 500)
+                    );
                     return Err("Ollama returned an empty content field".into());
                 }
                 return Ok(content);
@@ -1080,7 +1114,8 @@ mod tests {
     #[test]
     fn stream_line_extracts_tool_calls_shape() {
         // Tool-call lines carry no content but the message shape survives
-        // reassembly (read_streaming_response merges tool_calls at done).
+        // reassembly (read_streaming_response merges tool_calls from any
+        // line, task 334 — not just the done line).
         let line = r#"{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"read_log"}}]},"done":false}"#;
         let (token, done) = parse_stream_line(line).unwrap();
         assert_eq!(token, "");
@@ -1452,5 +1487,50 @@ pub mod llm {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod measure_payload_tests {
+    use super::extract_tool_calls;
+
+    /// Task 334: the static tool payload sent to Ollama on every turn.
+    /// Guards the two facts the desktop tool-call investigation
+    /// established: the static schemas are small and clean (no
+    /// `additionalProperties` / `$schema` / `anyOf` — those arrive only
+    /// via raw MCP schemas), so a failure on tool questions is not the
+    /// static payload. If this count grows a lot, re-check the small
+    /// backends' tool-calling headroom.
+    #[test]
+    fn static_tool_payload_is_small_and_clean() {
+        let defs = crate::tools::tool_definitions();
+        let arr = defs.as_array().expect("tool_definitions is an array");
+        let bytes = serde_json::to_string(&defs).unwrap().len();
+        let raw = serde_json::to_string(&defs).unwrap();
+        assert!(
+            (20..=40).contains(&arr.len()),
+            "static tool count drifted: {}",
+            arr.len()
+        );
+        assert!(
+            bytes < 50_000,
+            "static tool payload grew past 50KB: {} bytes",
+            bytes
+        );
+        assert_eq!(raw.matches("additionalProperties").count(), 0);
+        assert_eq!(raw.matches("$schema").count(), 0);
+        assert_eq!(raw.matches("anyOf").count(), 0);
+    }
+
+    /// Task 334: `extract_tool_calls` finds a tool call on a non-final
+    /// (`done: false`) streaming line — the case the old reader dropped.
+    #[test]
+    fn extract_tool_calls_finds_non_final_line_call() {
+        let line = r#"{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"read_log"}}]},"done":false}"#;
+        let tc = extract_tool_calls(line).expect("tool_calls must be found");
+        assert_eq!(tc[0]["function"]["name"], "read_log");
+        // Lines without tool_calls yield None.
+        assert!(extract_tool_calls(r#"{"message":{"content":"hi"},"done":false}"#).is_none());
+        assert!(extract_tool_calls("not json").is_none());
     }
 }
