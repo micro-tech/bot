@@ -4178,6 +4178,39 @@
         }
       ],
       "results": "DONE 2026-11-14 by Ranger 1 (branch ranger-330-332). Added wire arm to read_tools_for: interfaces, analyze_pcap, capture (all read-only). New test read_allowlist_wire_reads_only asserts the three tools plus fail-closed cases. Lib 662/0/4."
+    },
+    {
+      "id": 333,
+      "title": "Backend label in web chat + Gemini additionalProperties strip (Ollama timeout already 300s)",
+      "description": "Three small items from John (2026-11-14): (1) Ollama request timeout 90s -> 300s; (2) show WHICH backend answered each web-chat reply (desktop / server / gemini); (3) Gemini 400s on MCP tool schemas carrying additionalProperties - strip it in the Gemini schema sanitizer.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "(1) Timeout: NO CHANGE NEEDED - src/io/ollama/mod.rs already has REQUEST_TIMEOUT_SECS = 300 (raised by PR #49, commit 10450b6). The 90s reading came from the stale dirty main checkout at 8f440e0, which predates 10450b6. (2) Backend label: the bus `from` (ollama_server / ollama_desktop / gemini) was already normalized to server/desktop/gemini by the main.rs CPU forwarder and forwarded by bridge_out_message, and the frontend appendChat already used msg.from as the sender - but the label was only implied by `from`. Now the bridge stamps an explicit `backend` field on every llm_output/ollama_response WS message (backend_display_name in src/io/web_server/mod.rs; unknown/cpu -> helix), and appendChat renders msg.backend (falling back to msg.from) through a backendLabel() normalizer that also strips a stray ollama_ prefix. Per-turn, not a global setting. (3) Sanitizer: src/io/llm_gemini/mod.rs sanitize_gemini_schema now removes additionalProperties alongside $schema/$id; recursion covers nested schemas, so all MCP servers (wire, google, chat) are fixed at once. This makes the mcp_wire PR #1 schema fix redundant for Gemini (still worth merging for correctness).",
+      "testStrategy": "New test gemini_declarations_strip_additional_properties (llm_gemini) builds a schema with additionalProperties at top, nested, deeply nested and inside array items, asserts it is gone at every level and the rest intact. New test bridge_tags_llm_output_with_backend (web_server) drives bridge_out_message with from=ollama_server/ollama_desktop/gemini/cpu/ollama_unknown and asserts the backend tag. cargo test --lib green; node --check on the extracted UI script.",
+      "subtasks": [
+        {
+          "id": "333.1",
+          "status": "done",
+          "title": "Verify Ollama REQUEST_TIMEOUT_SECS on current PreRelese (already 300 via PR #49 - no change)"
+        },
+        {
+          "id": "333.2",
+          "status": "done",
+          "title": "Bridge stamps explicit backend field on llm_output/ollama_response; frontend renders it per reply"
+        },
+        {
+          "id": "333.3",
+          "status": "done",
+          "title": "Strip additionalProperties in sanitize_gemini_schema + test"
+        },
+        {
+          "id": "333.4",
+          "status": "done",
+          "title": "Run cargo test --lib and cargo build; confirm green"
+        }
+      ],
+      "results": "DONE 2026-11-14 by Ranger 1 (branch ranger-backend-label). Timeout already 300 (no change - PR #49 commit 10450b6). Backend label: backend_display_name + backend WS field + frontend backendLabel(); new test bridge_tags_llm_output_with_backend. Sanitizer: one-line remove + new test gemini_declarations_strip_additional_properties. cargo test --lib 669/0/4 (+2 new), cargo build clean exit 0, cargo test --doc 1/0/1, cargo check --lib zero warnings."
     }
   ]
 }

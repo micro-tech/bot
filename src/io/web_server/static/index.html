@@ -2394,6 +2394,21 @@
                 }
             }
 
+            // Who answered this turn: the bridge stamps an explicit
+            // `backend` (server / desktop / gemini) on every reply; fall
+            // back to `from` for older/other paths. Anything that is not
+            // a backend reads as Helix, never "cpu" or "ollama_*".
+            function backendLabel(raw) {
+                const name = String(raw || "").replace(/^ollama_/, "");
+                if (
+                    name === "server" ||
+                    name === "desktop" ||
+                    name === "gemini"
+                )
+                    return name;
+                return "Helix";
+            }
+
             function appendChat(msg) {
                 console.log("[Chat] Appending message:", msg);
                 const div = document.getElementById("chat-messages");
@@ -2410,8 +2425,8 @@
                 } else if (msg.type === "warning") {
                     sender = "⚠️ Warning";
                 } else {
-                    // Use the actual from (e.g. "server", "desktop", "gemini") when available
-                    sender = msg.from || "Helix";
+                    // Who answered this turn (server / desktop / gemini).
+                    sender = backendLabel(msg.backend || msg.from);
                 }
 
                 // === VERY ROBUST TEXT EXTRACTION ===
