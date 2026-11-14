@@ -96,10 +96,10 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
 
     // ── 3. retry loop ─────────────────────────────────────────────────────────
     let client = build_client();
-    let url = format!(
-        "{}/{}:generateContent?key={}",
-        GEMINI_URL_BASE, model, api_key
-    );
+    // Task 330 (C1): the API key goes in the `x-goog-api-key` header,
+    // never in the URL — a `?key=` query string lands the key in logs,
+    // proxies, and error reports.
+    let url = format!("{}/{}:generateContent", GEMINI_URL_BASE, model);
 
     let mut last_err = String::new();
     let mut delay_ms = RETRY_DELAY_MS;
@@ -107,7 +107,7 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
     for attempt in 1..=MAX_RETRIES {
         // Task 221: agentic tool loop (function calling) instead of the old
         // single-shot call — this is what lets the commander delegate.
-        match call_gemini_tools(&client, &url, &prompt, bus).await {
+        match call_gemini_tools(&client, &url, &api_key, &prompt, bus).await {
             Ok(response) => {
                 info!(
                     "Gemini replied on attempt {}/{} -- {} chars",
@@ -185,6 +185,7 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
 async fn call_gemini(
     client: &Client,
     url: &str,
+    api_key: &str,
     prompt: &str,
     system_override: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
@@ -203,9 +204,13 @@ async fn call_gemini(
         });
     }
 
-    let resp = client.post(url).json(&body).send().await.map_err(
-        map_reqwest_err,
-    )?;
+    let resp = client
+        .post(url)
+        .header("x-goog-api-key", api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(map_reqwest_err)?;
 
     let status = resp.status();
     if !status.is_success() {
@@ -375,6 +380,7 @@ fn gemini_text_parts(parts: &Value) -> String {
 async fn call_gemini_tools(
     client: &Client,
     url: &str,
+    api_key: &str,
     prompt: &str,
     bus: &Arc<Bus>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
@@ -407,6 +413,7 @@ async fn call_gemini_tools(
 
         let resp = client
             .post(url)
+            .header("x-goog-api-key", api_key)
             .json(&body)
             .send()
             .await
@@ -542,13 +549,14 @@ pub(crate) async fn call_gemini_direct(prompt: &str, system: Option<&str>) -> Re
         .ok()
         .filter(|m| !m.is_empty())
         .unwrap_or_else(|| GEMINI_MODEL_DEFAULT.to_string());
-    let url = format!("{}/{}:generateContent?key={}", GEMINI_URL_BASE, model, api_key);
+    // Task 330 (C1): key in the `x-goog-api-key` header, never in the URL.
+    let url = format!("{}/{}:generateContent", GEMINI_URL_BASE, model);
     let client = build_client();
     // Count the spend BEFORE the call so a hung request still records intent;
     // the hook is cheap and idempotent per call.
     // (Task 236: call_gemini now meters real tokens internally, so no
     // separate note_api_call here — that would double-count.)
-    let out = call_gemini(&client, &url, prompt, system).await;
+    let out = call_gemini(&client, &url, &api_key, prompt, system).await;
     match out {
         Ok(text) => Ok(text),
         Err(e) => Err(e.to_string()),
@@ -571,11 +579,12 @@ pub fn call_gemini_sync(prompt: &str) -> Result<String, Box<dyn std::error::Erro
         .ok()
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| GEMINI_MODEL_DEFAULT.to_string());
+    // Task 330 (C1): key in the `x-goog-api-key` header, never in the URL.
     let url = format!(
-        "{}/{}:generateContent?key={}",
-        GEMINI_URL_BASE, resolved_model, api_key
+        "{}/{}:generateContent",
+        GEMINI_URL_BASE, resolved_model
     );
-    rt.block_on(call_gemini(&client, &url, prompt, None))
+    rt.block_on(call_gemini(&client, &url, &api_key, prompt, None))
         .map_err(|e| e.to_string().into())
 }
 
@@ -713,7 +722,10 @@ mod tests {
         let hits_cb = hits.clone();
         let mock = server
             .mock("POST", path)
-            .match_query(mockito::Matcher::Any)
+            // Task 330 (C1): the key must arrive as a header, never in
+            // the URL — the mock proves both (header present, no query).
+            .match_header("x-goog-api-key", "fake-test-key")
+            .match_query(mockito::Matcher::Missing)
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_chunked_body(move |w: &mut dyn std::io::Write| {
@@ -732,9 +744,15 @@ mod tests {
         let bus = Arc::new(Bus::new());
         let rx = bus.subscribe("web_interface");
         let client = build_client();
-        let url = format!("{}{}?key=fake-test-key", server.url(), path);
+        let url = format!("{}{}", server.url(), path);
 
-        let out = call_gemini_tools(&client, &url, "run a sub agent to plan a rust bot", &bus)
+        let out = call_gemini_tools(
+            &client,
+            &url,
+            "fake-test-key",
+            "run a sub agent to plan a rust bot",
+            &bus,
+        )
             .await
             .expect("tool loop should complete");
         assert!(
