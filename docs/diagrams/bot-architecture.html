@@ -68,7 +68,7 @@
     <div class="diagram-container">
       <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-architecture-title bot-architecture-desc">
         <title id="bot-architecture-title">Helix — architecture and data flow</title>
-        <desc id="bot-architecture-desc">Architecture and data-flow overview of the Helix agent: web UI, agent core with the commander pattern and sub-agents, LLM backends, MCP tools (including chat-mcp for the chat hub), the support watcher, the in-Helix OKF server, auth-gated web server routes (single token gate in auth.rs), chat history, the voice flow (mic push-to-talk to STT, agent replies to TTS), and the self-improve loop (now with a per-cycle evaluation arm) and the chat-command loop (now with a read-only MCP tool-call path, how: mcp) inside the core. The Support watcher, Web server routes, and Voice flow nodes link to detail diagrams, as do the self-improve and chat-command loop lines under Helix core.</desc>
+        <desc id="bot-architecture-desc">Architecture and data-flow overview of the Helix agent: web UI, agent core with the commander pattern and sub-agents, LLM backends (Ollama backends now get a startup model preload plus a keepalive heartbeat, and every chat request asks Ollama to hold the model resident for an hour), MCP tools (including chat-mcp for the chat hub), the support watcher, the in-Helix OKF server, auth-gated web server routes (single token gate in auth.rs), chat history, the voice flow (mic push-to-talk to STT, agent replies to TTS), and the self-improve loop (now with a per-cycle evaluation arm) and the chat-command loop (now with a read-only MCP tool-call path, how: mcp) inside the core. The Support watcher, Web server routes, and Voice flow nodes link to detail diagrams, as do the self-improve and chat-command loop lines under Helix core.</desc>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
           <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
@@ -175,12 +175,13 @@
         </a>
 
         <!-- Node: LLM backends -->
-        <rect x="660" y="50" width="200" height="64" rx="6" fill="#f5f5f5"/>
-        <rect x="660" y="50" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="660" y="50" width="200" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="660" y="50" width="200" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
         <rect x="668" y="58" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
         <text x="690" y="67" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">BACKEND</text>
         <text x="760" y="86" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">LLM backends</text>
         <text x="760" y="102" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">server · desktop · gemini</text>
+        <text x="760" y="118" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">preload · keepalive · 1h hold</text>
 
         <!-- Node: MCP tools -->
         <rect x="660" y="170" width="200" height="64" rx="6" fill="#f5f5f5"/>
