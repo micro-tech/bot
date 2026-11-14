@@ -295,6 +295,11 @@ fn sanitize_gemini_schema(schema: &mut Value) {
     // Gemini has no `$schema` / `$id` fields.
     obj.remove("$schema");
     obj.remove("$id");
+    // Gemini rejects `additionalProperties` in function declarations
+    // (400: Unknown name "additionalProperties"). MCP servers (schemars)
+    // emit it on every object schema, so strip it here — the recursion
+    // below covers nested schemas too.
+    obj.remove("additionalProperties");
     // schemars `Option<T>` pattern: `anyOf: [{...}, {"type": "null"}]`
     // → inner schema + `nullable: true` (the OpenAPI way).
     if let Some(any_of) = obj.get("anyOf").and_then(|v| v.as_array()).cloned() {
@@ -674,6 +679,65 @@ mod tests {
         assert_eq!(schema["properties"]["tags"]["items"]["nullable"], true);
         // Non-union schemas pass through untouched.
         assert_eq!(schema["type"], "object");
+        assert_eq!(schema["required"][0], "query");
+    }
+
+    #[test]
+    fn gemini_declarations_strip_additional_properties() {
+        // MCP servers (schemars) emit `"additionalProperties": false` on
+        // every object schema; Gemini's functionDeclarations API 400s on
+        // it (Unknown name "additionalProperties" at
+        // tools[0].function_declarations[N].parameters). The sanitizer
+        // must strip it at every level while leaving the rest intact.
+        let mut schema = serde_json::json!({
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "query": { "type": "string" },
+                "filter": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "tag": { "type": "string", "additionalProperties": false }
+                    }
+                },
+                "items": {
+                    "type": "array",
+                    "items": { "type": "object", "additionalProperties": false }
+                }
+            },
+            "required": ["query"]
+        });
+        sanitize_gemini_schema(&mut schema);
+        assert!(
+            schema.get("additionalProperties").is_none(),
+            "top-level additionalProperties must go"
+        );
+        assert!(
+            schema["properties"]["filter"]
+                .get("additionalProperties")
+                .is_none(),
+            "nested additionalProperties must go"
+        );
+        assert!(
+            schema["properties"]["filter"]["properties"]["tag"]
+                .get("additionalProperties")
+                .is_none(),
+            "deeply nested additionalProperties must go"
+        );
+        assert!(
+            schema["properties"]["items"]["items"]
+                .get("additionalProperties")
+                .is_none(),
+            "additionalProperties inside array items must go"
+        );
+        // Everything else survives.
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["properties"]["query"]["type"], "string");
+        assert_eq!(
+            schema["properties"]["filter"]["properties"]["tag"]["type"],
+            "string"
+        );
         assert_eq!(schema["required"][0], "query");
     }
 

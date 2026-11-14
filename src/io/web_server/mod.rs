@@ -647,6 +647,19 @@ fn build_agent_status(
 // messages that produce no UI output; dirty is true when an in-flight
 // backend entry was retired and the caller should re-broadcast
 // agent_status so the working indicator flips promptly.
+
+/// Normalize a bus `from` label into the backend name the web UI shows on
+/// each chat reply. `"ollama_server"` → `"server"`, `"ollama_desktop"` →
+/// `"desktop"`, `"gemini"` → `"gemini"`; anything else (e.g. `"cpu"`) is
+/// not a backend, so it reads as `"helix"`.
+fn backend_display_name(from: &str) -> &str {
+    let name = from.strip_prefix("ollama_").unwrap_or(from);
+    match name {
+        "server" | "desktop" | "gemini" => name,
+        _ => "helix",
+    }
+}
+
 fn bridge_out_message(
     msg: &Message,
     inflight: &Arc<Mutex<HashMap<u64, (String, u64)>>>,
@@ -728,7 +741,7 @@ fn bridge_out_message(
             let dirty = retire_inflight();
             (
                 Some(
-                    json!({ "type": "llm_output", "from": msg.from, "data": text, "correlation_id": cid })
+                    json!({ "type": "llm_output", "from": msg.from, "backend": backend_display_name(&msg.from), "data": text, "correlation_id": cid })
                         .to_string(),
                 ),
                 dirty,
@@ -743,7 +756,7 @@ fn bridge_out_message(
             let dirty = retire_inflight();
             (
                 Some(
-                    json!({ "type": "ollama_response", "from": from, "data": text, "correlation_id": cid })
+                    json!({ "type": "ollama_response", "from": from, "backend": backend_display_name(&from), "data": text, "correlation_id": cid })
                         .to_string(),
                 ),
                 dirty,
@@ -3464,6 +3477,44 @@ mod tests {
         assert!(out.is_some());
         assert!(!dirty);
         assert!(inflight.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn bridge_tags_llm_output_with_backend() {
+        // Each chat reply must say WHO answered (server / desktop /
+        // gemini), per turn — the UI reads `backend`, not `from`, so the
+        // label survives even when the sender is the raw bus name.
+        let inflight = Arc::new(Mutex::new(HashMap::new()));
+        let cases = [
+            ("ollama_server", "server"),
+            ("ollama_desktop", "desktop"),
+            ("gemini", "gemini"),
+            // Anything that is not a backend reads as Helix, never "cpu".
+            ("cpu", "helix"),
+            ("ollama_unknown", "helix"),
+        ];
+        for (from, want) in cases {
+            let msg = Message {
+                to: "web_interface".to_string(),
+                from: from.to_string(),
+                data: serde_json::json!({
+                    "type": "llm_output",
+                    "correlation_id": 1u64,
+                    "msg": "hi",
+                })
+                .to_string(),
+                timestamp: get_timestamp(),
+            };
+            let (out, _) = bridge_out_message(&msg, &inflight);
+            let v: serde_json::Value = serde_json::from_str(&out.unwrap()).unwrap();
+            assert_eq!(v["type"], "llm_output");
+            assert_eq!(
+                v["backend"], want,
+                "from={from} must tag backend={want}"
+            );
+            // `from` itself is still forwarded unchanged.
+            assert_eq!(v["from"], from);
+        }
     }
 
     // ── /support commands (task 257, SYSADMIN-01) ─────────────────────────
