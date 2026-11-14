@@ -46,11 +46,15 @@ pub const DEFAULT_MCP_TIME_SECS: u64 = 60;
 ///   `chat_health` are read-only. `chat_send` posts a message (a
 ///   write) and `chat_watch` is a long-poll, not a single call —
 ///   neither is listed.
+/// - `wire` (mcp_wire, packet capture / pcap analysis / interfaces):
+///   `interfaces`, `analyze_pcap`, and `capture` are all read-only
+///   (they observe traffic or files; none modifies state).
 /// - Any other server: no read tools known in v1 (fail closed).
 pub fn read_tools_for(server: &str) -> &'static [&'static str] {
     match server {
         "google" => &["gmail_search", "gmail_read", "calendar_list"],
         "chat" => &["chat_read", "chat_rooms", "chat_health"],
+        "wire" => &["interfaces", "analyze_pcap", "capture"],
         _ => &[],
     }
 }
@@ -316,6 +320,18 @@ mod tests {
         }
         assert!(!is_read_tool("google", "gmail_delete"));
         assert!(!is_read_tool("google", "calendar_create"));
+    }
+
+    #[test]
+    fn read_allowlist_wire_reads_only() {
+        // Task 332: all three mcp_wire tools are read-only.
+        assert!(is_read_tool("wire", "interfaces"));
+        assert!(is_read_tool("wire", "analyze_pcap"));
+        assert!(is_read_tool("wire", "capture"));
+        // Unknown tools on a known server are NOT read tools.
+        assert!(!is_read_tool("wire", "unknown_tool"));
+        // Unknown servers have no read tools (fail closed).
+        assert!(!is_read_tool("other", "interfaces"));
     }
 
     #[test]

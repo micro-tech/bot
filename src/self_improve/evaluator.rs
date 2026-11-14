@@ -227,7 +227,9 @@ pub fn slugify_signature(signature: &str) -> String {
     }
 }
 
-/// Validate a diff path: relative, no `..` segments, no absolute path.
+/// Validate a diff path: relative, no `..` segments, no absolute path,
+/// and never inside a `.git` directory (a diff writing into the
+/// worktree's `.git` could corrupt or replace the repository itself).
 /// Returns the resolved path under the worktree root.
 fn resolve_diff_path(worktree: &Path, path: &str) -> Result<PathBuf, String> {
     if path.is_empty() || Path::new(path).is_absolute() {
@@ -235,6 +237,12 @@ fn resolve_diff_path(worktree: &Path, path: &str) -> Result<PathBuf, String> {
     }
     if path.split('/').any(|seg| seg == "..") {
         return Err(format!("rejected diff path escaping worktree: {path}"));
+    }
+    // Task 331 (C2): a diff must never touch `.git` — at the root
+    // (`.git/config`) or nested (`sub/.git/config`). No legitimate
+    // source file lives inside a `.git` directory.
+    if path.split('/').any(|seg| seg == ".git") {
+        return Err(format!("rejected diff path inside .git: {path}"));
     }
     Ok(worktree.join(path))
 }
@@ -632,6 +640,23 @@ mod tests {
         assert_eq!(module_filter_for_path("Cargo.toml"), None);
         assert_eq!(module_filter_for_path("docs/x.md"), None);
         assert_eq!(module_filter_for_path("src/a/b/c.rs").as_deref(), Some("a::b::c"));
+    }
+
+    #[test]
+    fn diff_path_inside_git_is_rejected() {
+        // Task 331 (C2): a diff must never write into `.git` — the
+        // worktree's repository itself. `.gitignore` is a normal file
+        // and must still be allowed.
+        let wt = Path::new("/tmp/helix-eval-wt");
+        assert!(resolve_diff_path(wt, ".git/config").is_err());
+        assert!(resolve_diff_path(wt, ".git").is_err());
+        assert!(resolve_diff_path(wt, "sub/.git/hooks/pre-commit").is_err());
+        assert!(resolve_diff_path(wt, ".gitignore").is_ok());
+        assert!(resolve_diff_path(wt, "src/a.rs").is_ok());
+        assert_eq!(
+            resolve_diff_path(wt, "src/a.rs").unwrap(),
+            wt.join("src/a.rs")
+        );
     }
 
     #[test]
