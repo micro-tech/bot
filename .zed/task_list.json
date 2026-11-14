@@ -4066,6 +4066,89 @@
         }
       ],
       "results": "Built on branch sapper-task-328-responsive-widths (src/io/web_server/static/index.html only). applyViewportLayout() reads window.innerWidth on load + resize/orientationchange and sets body[data-layout]=phone|dualscreen|desktop plus body[data-viewport-width]; logs '[viewport] width=... layout=...' on mode change. Breakpoints (INITIAL, NOT measured): phone <=600px, dual-screen 601-1100px, desktop >1100px. Sidebar-drawer media query moved 800px->600px to align with the phone breakpoint (cleanly separates Fold cover ~410px from unfolded ~770-850px); detail-drawer query unchanged at 1100px; desktop 3-column grid unchanged. Phone refinements: 44px touch targets, wrapping safe-area-aware header, 16px chat input (no auto-zoom on focus), messages 92% width. JS syntax-checked with node --check; cargo check --lib clean. STILL NEEDS: fold/unfold/fold-back login drill on the real Pixel 11 Pro Fold to verify/tune the 600/1100 breakpoints (phone could not load the page when this was built) and confirm desktop unchanged."
-    }
-  ]
+    },
+    {
+      "id": 330,
+      "title": "Fix Gemini API key leak via URL query string (C1)",
+      "description": "The Gemini client sends the API key as a ?key= URL query parameter (src/io/llm_gemini/mod.rs:100, :545, :575), so the key lands in URLs \u2014 visible in logs, proxies, and error reports. Send the key via the x-goog-api-key HTTP header instead and strip it from the URL.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Source: Helix triple review (2026-11-11), finding C1, confirmed still present at 8f440e0. Fix: send the key via the x-goog-api-key HTTP header instead of the URL query string, and use without_url() (or equivalent) to strip the key from the URL. Verify no other call site in the Gemini client passes the key in the URL. Approved by John Nov 14, 2026 as part of the C1+C2+wire batch.",
+      "testStrategy": "Grep for ?key= / key= in src/io/llm_gemini/ to confirm zero URL-key usages after the fix; cargo test --lib plus relevant integration tests green. Note: live Gemini backend verification needs the R630 (sandbox has no live key).",
+      "subtasks": [
+        {
+          "id": "330.1",
+          "status": "done",
+          "title": "Move the Gemini API key from the ?key= URL query parameter to the x-goog-api-key header (mod.rs:100, :545, :575)"
+        },
+        {
+          "id": "330.2",
+          "status": "done",
+          "title": "Strip the key from the URL (without_url() or equivalent) and grep to confirm no other URL-key call site remains"
+        },
+        {
+          "id": "330.3",
+          "status": "done",
+          "title": "Run cargo test (lib + Gemini integration tests) and confirm green"
+        }
+      ],
+      "results": "DONE 2026-11-14 by Ranger 1 (branch ranger-330-332). Gemini API key moved from ?key= URL query to x-goog-api-key header: call_gemini and call_gemini_tools take api_key and set the header; all three URL sites build a bare generateContent URL. Mock test proves header present and query absent. Grep confirms zero ?key= in the Gemini client. Lib 662/0/4 (baseline 660/0/4, +2 new tests). Live Gemini verification needs the R630 (sandbox has no live key)."
+    },
+    {
+      "id": 331,
+      "title": "Exclude .git from self-improve diff application (C2)",
+      "description": "The self-improve evaluator applies proposal diffs without excluding the worktree's .git directory (src/self_improve/evaluator.rs:232), so a malicious or buggy proposal diff could overwrite git internals. This is LIVE, not latent, since PR #45 wired the evaluation arm. Reject any diff file path that is .git or resolves inside .git/.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Source: Helix triple review (2026-11-11), finding C2. Now LIVE since PR #45 wired the evaluation arm (task 325). Fix: exclude .git (and any path resolving inside it) from diff application \u2014 reject any diff file path that is .git or starts with .git/. Add a test with a diff targeting .git/config that must be rejected. Must land BEFORE Phase 2 is enabled. Approved by John Nov 14, 2026 as part of the C1+C2+wire batch.",
+      "testStrategy": "New unit test asserting a .git/config diff is rejected; cargo test --lib plus self_improve tests green.",
+      "subtasks": [
+        {
+          "id": "331.1",
+          "status": "done",
+          "title": "Reject diff file paths that are .git or resolve inside .git/ in the evaluator (evaluator.rs:232)"
+        },
+        {
+          "id": "331.2",
+          "status": "done",
+          "title": "Add a unit test with a .git/config diff that must be rejected"
+        },
+        {
+          "id": "331.3",
+          "status": "done",
+          "title": "Run cargo test (lib + self_improve tests) and confirm green"
+        }
+      ],
+      "results": "DONE 2026-11-14 by Ranger 1 (branch ranger-330-332). resolve_diff_path now rejects any path with a .git segment (root .git/config, bare .git, nested sub/.git/...); .gitignore still allowed. New unit test diff_path_inside_git_is_rejected asserts the rejections and allowances. Lib 662/0/4."
+    },
+    {
+      "id": 332,
+      "title": "Add wire MCP server to chat-command read-tool allowlist",
+      "description": "The Helix chat-command MCP path rejects all wire calls as not a read tool because read_tools_for (src/chat_command/mcp_handler.rs) is a hardcoded match with no wire arm \u2014 any server except google/chat gets an empty allowlist (fail closed). Add a wire arm listing its three read-only tools.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "Source: mcp_wire install (2026-11-14). Helix chat-command MCP test (hub msg 175) returned rejected: tool interfaces is not a read tool. Location: src/chat_command/mcp_handler.rs, function read_tools_for (around lines 48-55): google maps to gmail_search, gmail_read, calendar_list; chat maps to chat_read, chat_rooms, chat_health; the fallback arm maps to an empty list. Fix: add a wire arm with interfaces, analyze_pcap, capture. All three wire tools are read-only (capture reads packets, analyze_pcap reads a file, interfaces lists interfaces \u2014 none modify state). Note: the web UI chat path already works (it bypasses this allowlist); this unblocks the chat-command bang-JSON MCP path. Approved by John Nov 14, 2026 as part of the C1+C2+wire batch.",
+      "testStrategy": "Existing tests in src/chat_command/mcp_handler.rs (around lines 310-312) assert is_read_tool for google tools \u2014 add matching asserts for wire's three tools; cargo test --lib plus chat_command tests green.",
+      "subtasks": [
+        {
+          "id": "332.1",
+          "status": "done",
+          "title": "Add a wire arm to read_tools_for: interfaces, analyze_pcap, capture (mcp_handler.rs)"
+        },
+        {
+          "id": "332.2",
+          "status": "done",
+          "title": "Add is_read_tool asserts for wire's three tools alongside the existing google asserts"
+        },
+        {
+          "id": "332.3",
+          "status": "done",
+          "title": "Run cargo test (lib + chat_command tests) and confirm green"
+        }
+      ],
+      "results": "DONE 2026-11-14 by Ranger 1 (branch ranger-330-332). Added wire arm to read_tools_for: interfaces, analyze_pcap, capture (all read-only). New test read_allowlist_wire_reads_only asserts the three tools plus fail-closed cases. Lib 662/0/4."
+    }  ]
 }
