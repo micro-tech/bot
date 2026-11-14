@@ -16,7 +16,7 @@ use crate::reasoning::engine::ReasoningEngine;
 use crate::cpu::instructions::Instruction;
 #[allow(unused_imports)]
 use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
-use crate::cpu::state::AgentState;
+use crate::cpu::state::{AgentState, HeartbeatState};
 use log::{debug, error, info, warn};
 
 use crate::hy_evo::integration::{CpuExecutor as HyEvoCpuExecutor, HyEvoIntegration};
@@ -47,6 +47,11 @@ where
     L: ReflectionLlm + LlmInterface + Send + Sync + 'static,
 {
     pub state: AgentState,
+    /// Task 315: the heartbeat's timing state, shared behind its own
+    /// lock (std Mutex — the beat section never awaits). The heartbeat
+    /// loop locks ONLY this; routines keep holding the Cpu mutex for
+    /// their whole run, and the beat no longer starves behind them.
+    pub heartbeat_state: Arc<std::sync::Mutex<HeartbeatState>>,
     pub memory: MemoryManager,
     pub skills: Box<dyn SkillInterface>,
     pub llm: L,
@@ -153,6 +158,7 @@ where
 
         Ok(Self {
             state: AgentState::new(),
+            heartbeat_state: Arc::new(std::sync::Mutex::new(HeartbeatState::new())),
             memory,
             skills,
             llm,
@@ -210,7 +216,7 @@ where
                     "correction_cycles": state.correction_cycles,
                     "has_plan": state.current_plan.is_some(),
                     "plan_steps": state.current_plan.as_ref().map(|p| p.steps.len()).unwrap_or(0),
-                    "tick": self.state.tick_count
+                    "tick": self.heartbeat_tick()
                 })
             }
             None => serde_json::json!({
@@ -422,7 +428,7 @@ where
             "paused": paused,
             "metrics": metrics,
             "health": health,
-            "tick": self.state.tick_count
+            "tick": self.heartbeat_tick()
         })
     }
 
@@ -439,6 +445,9 @@ where
         match routine_id {
             "nightly_memory_consolidation" => self.routine_memory_consolidation().await,
             "error_log_review" => self.routine_error_log_review().await,
+            // Task 314: nightly log maintenance — was dead code (zero
+            // callers) until seeded as a cron routine; now it runs.
+            "nightly_maintenance" => self.nightly_maintenance().await,
             // Task 256 (SYSADMIN-01): support@ poll tick — in-process state
             // machine, deliberately no LLM (polling needs no model; John's
             // call is that drafting delegates to a capable backend, task 258).
@@ -1204,8 +1213,12 @@ where
     pub async fn nightly_maintenance(&mut self) {
         log_to_file("Starting nightly maintenance");
 
-        // Cleanup old logs
-        if let Ok(entries) = std::fs::read_dir("logs/") {
+        // Cleanup old logs. Task 314: paths resolve against the runtime
+        // dir (the live config's directory), not the process CWD — this
+        // routine was dead code until it was seeded as a cron job, and
+        // CWD-relative paths would have cleaned the wrong directory.
+        let logs_dir = self.runtime_dir.join("logs");
+        if let Ok(entries) = std::fs::read_dir(&logs_dir) {
             for entry in entries.flatten() {
                 if let Ok(metadata) = entry.metadata() {
                     if let Ok(modified) = metadata.modified() {
@@ -1221,8 +1234,12 @@ where
         }
 
         // Backup manifest
-        let backup_path = format!("backups/manifest_{}.md", chrono::Utc::now().timestamp());
-        let _ = std::fs::create_dir_all("backups");
+        let backups_dir = self.runtime_dir.join("backups");
+        let backup_path = backups_dir.join(format!(
+            "manifest_{}.md",
+            chrono::Utc::now().timestamp()
+        ));
+        let _ = std::fs::create_dir_all(&backups_dir);
         let _ = std::fs::write(&backup_path, &self.manifest.raw);
 
         log_to_file("Nightly maintenance completed");
@@ -1249,7 +1266,7 @@ where
                     health["message"].as_str().unwrap_or("unknown")
                 ));
                 // Optionally auto-reset if stuck
-                if self.state.tick_count % 200 == 0 {
+                if self.heartbeat_tick() % 200 == 0 {
                     self.reset_reasoning();
                     log_to_file("Auto-reset reasoning engine due to poor health");
                 }
@@ -1260,9 +1277,20 @@ where
         log_to_file("Manifest integrity OK");
 
         // Reset stuck state if uptime too long without tick
-        if self.state.uptime.as_secs() > 3600 && self.state.tick_count < 100 {
+        // (task 315: tick/uptime live on the shared heartbeat state).
+        let (uptime_secs, tick) = {
+            let hb = self
+                .heartbeat_state
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            (hb.uptime.as_secs(), hb.tick_count)
+        };
+        if uptime_secs > 3600 && tick < 100 {
             log_to_file("Detected stuck state, resetting tick");
-            self.state.tick_count = 0;
+            self.heartbeat_state
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .tick_count = 0;
         }
 
         log_to_file("Self-repair completed");
@@ -1682,17 +1710,19 @@ where
     /// The heartbeat is John's job pump (task 199): a scheduler tick that
     /// keeps the bot moving through jobs. After de-drift (task 202) it does
     /// exactly three things: tick bookkeeping, real manifest routines, and
-    /// nothing else. Scheduled nightly work arrives as `routine_run` bus
+    /// Task 315: one heartbeat beat. Takes `&self`, not `&mut self`,
+    /// and locks ONLY the shared heartbeat state — never the Cpu mutex —
+    /// so the beat lands even while a routine holds the Cpu for minutes.
+    /// The heartbeat loop (main.rs) calls this without taking the Cpu
+    /// lock at all; the unit tests call it on a bare Cpu.
+    /// Sync (not async): the beat section never awaits.
+    /// Nothing else. Scheduled nightly work arrives as `routine_run` bus
     /// messages via `handle_routine_run`, fired by the cron registry
     /// scheduler — not from here. Removed from this path as LLM-introduced
     /// drift: HyEvo evolution cycles, the reasoning-engine lifecycle
     /// (auto-start / cycle / metrics), self-repair, and the old 2am
     /// maintenance block. Those remain available as explicit calls.
-    pub async fn handle_heartbeat(&mut self) {
-        println!("Handling heartbeat: Tick {}", self.state.tick_count);
-        self.state.bump_tick();
-        self.state.last_heartbeat = Instant::now();
-        self.state.uptime = self.state.start_time.elapsed();
+    pub fn handle_heartbeat(&self) {
         // NOTE (task 205): the old manifest-routine hook is gone. The
         // heartbeat is a job pump: real work arrives as `routine_run`
         // messages from the cron registry via `handle_routine_run`, not from
@@ -1700,6 +1730,21 @@ where
         // ("summarize working memory" -> push_summary back into working
         // memory) was a dead end — summaries never reached long-term
         // storage — and is deleted; consolidation owns that path now.
+        let mut hb = self
+            .heartbeat_state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        hb.handle_heartbeat();
+    }
+
+    /// Current heartbeat tick (task 315): read from the shared heartbeat
+    /// state, not the Cpu lock — safe to call from status paths that
+    /// hold no lock.
+    pub fn heartbeat_tick(&self) -> u64 {
+        self.heartbeat_state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .tick_count
     }
 
     pub async fn run_hyevo_cycle(&mut self) -> anyhow::Result<()> {
@@ -2033,41 +2078,63 @@ mod heartbeat_tests {
 
     #[tokio::test]
     async fn handle_heartbeat_advances_tick_count_and_timestamp() {        // GIVEN a live Cpu with an empty manifest:
-        let mut cpu = test_cpu("");
+        let cpu = test_cpu("");
         let before = std::time::Instant::now();
 
-        // WHEN the heartbeat handler runs three times:
-        cpu.handle_heartbeat().await;
-        cpu.handle_heartbeat().await;
-        cpu.handle_heartbeat().await;
+        // WHEN the heartbeat handler runs three times (task 315: sync now,
+        // on the shared heartbeat state — no Cpu lock, no await):
+        cpu.handle_heartbeat();
+        cpu.handle_heartbeat();
+        cpu.handle_heartbeat();
 
         // THEN the tick count advanced and the beat timestamp is fresh:
-        assert_eq!(cpu.state.tick_count, 3);
-        assert!(cpu.state.last_heartbeat >= before);
-        assert!(cpu.state.last_heartbeat.elapsed() < std::time::Duration::from_secs(5));
+        let hb = cpu.heartbeat_state.lock().unwrap();
+        assert_eq!(hb.tick_count, 3);
+        assert!(hb.last_heartbeat >= before);
+        assert!(hb.last_heartbeat.elapsed() < std::time::Duration::from_secs(5));
     }
 
     #[tokio::test]
     async fn tick_loop_invokes_handler_on_cadence() {
-        // GIVEN a live Cpu behind a mutex and a 10ms tick loop (the same
-        // shape run_helix spawns in production):
-        let cpu = Arc::new(tokio::sync::Mutex::new(test_cpu("")));
-        let cpu_clone = cpu.clone();
+        // GIVEN a live Cpu and a 10ms tick loop beating on the shared
+        // heartbeat state (the production shape in main.rs — the loop
+        // never takes the Cpu lock):
+        let cpu = test_cpu("");
+        let hb_state = cpu.heartbeat_state.clone();
 
         let handle = tokio::spawn(async move {
             let mut ticker = tokio::time::interval(std::time::Duration::from_millis(10));
             ticker.tick().await; // skip immediate first tick, like production
             for _ in 0..4 {
                 ticker.tick().await;
-                let mut guard = cpu_clone.lock().await;
-                guard.handle_heartbeat().await;
+                hb_state.lock().unwrap().handle_heartbeat();
             }
         });
         handle.await.unwrap();
 
         // THEN the handler ran once per tick:
-        let guard = cpu.lock().await;
-        assert_eq!(guard.state.tick_count, 4);
+        assert_eq!(cpu.heartbeat_state.lock().unwrap().tick_count, 4);
+    }
+
+    #[tokio::test]
+    async fn heartbeat_beats_while_cpu_mutex_held_by_routine() {
+        // Task 315: the starvation proof. GIVEN a live Cpu behind a
+        // mutex, with the mutex held by a simulated long routine (the
+        // old code held it across the whole `handle_routine_run`, so
+        // the heartbeat could not fire at all):
+        let cpu = Arc::new(tokio::sync::Mutex::new(test_cpu("")));
+        let guard = cpu.lock().await; // held across the whole beat window
+        let hb_state = guard.heartbeat_state.clone();
+
+        // WHEN the heartbeat ticks on the shared state (the production
+        // shape: main.rs never takes the Cpu lock to beat):
+        for _ in 0..3 {
+            hb_state.lock().unwrap().handle_heartbeat();
+        }
+
+        // THEN the beats landed even though the Cpu mutex never released:
+        assert_eq!(hb_state.lock().unwrap().tick_count, 3);
+        drop(guard);
     }
 
     #[test]
@@ -2211,6 +2278,40 @@ mod nightly_tests {
             "tools-absent tick must not create state"
         );
         crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Task 314: nightly log maintenance is a live routine ──────────
+
+    #[tokio::test]
+    async fn nightly_maintenance_routine_cleans_old_logs() {
+        // GIVEN a scratch runtime dir with an old log and a fresh log:
+        let (mut cpu, dir) = test_cpu();
+        let logs = dir.join("logs");
+        std::fs::create_dir_all(&logs).unwrap();
+        let old_path = logs.join("old.md");
+        let fresh_path = logs.join("fresh.md");
+        std::fs::write(&old_path, "old\n").unwrap();
+        std::fs::write(&fresh_path, "fresh\n").unwrap();
+        // Backdate the old file 8 days (past the 7-day cleanup bound):
+        let eight_days_ago = std::time::SystemTime::now()
+            - std::time::Duration::from_secs(8 * 24 * 3600);
+        std::fs::File::open(&old_path)
+            .unwrap()
+            .set_times(std::fs::FileTimes::new().set_modified(eight_days_ago))
+            .unwrap();
+        // WHEN the seeded nightly routine fires:
+        cpu.handle_routine_run("nightly_maintenance", "Nightly log maintenance")
+            .await;
+        // THEN the old log is gone, the fresh log survives, and a
+        // manifest backup was written:
+        assert!(!old_path.exists(), "old log must be cleaned");
+        assert!(fresh_path.exists(), "fresh log must survive");
+        let backups: Vec<_> = std::fs::read_dir(dir.join("backups"))
+            .unwrap()
+            .flatten()
+            .collect();
+        assert!(!backups.is_empty(), "a manifest backup must be written");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

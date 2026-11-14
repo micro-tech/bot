@@ -3752,37 +3752,37 @@
       "id": 314,
       "title": "Log cleanup is dead code, so logs grow without bound",
       "description": "nightly_maintenance (7-day logs/ prune) has zero callers, so logs/chat_log.md, logs/hartbeat_log.md and logs/bus_log.md grow without bound; only error_log.md is capped.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "high",
       "details": "Bot review 2026-11-05 (PreRelese 17fddd7), Part B Must-fix 2. Evidence: src/cpu/mod.rs:1146 nightly_maintenance (7-day logs/ prune) has zero callers. logs/chat_log.md, logs/hartbeat_log.md (appended every 300 s beat) and logs/bus_log.md (appended on every bus publish) have no rotation - only error_log.md is capped (100k lines, src/utils.rs). Fix: call nightly_maintenance from a real routine, or rotate the three files like the error log.",
       "testStrategy": "Logs are pruned/rotated on schedule (verify by log sizes over a nightly cycle); cargo test --lib green.",
       "subtasks": [],
-      "results": ""
+      "results": "Done on branch ranger-314-316. nightly_maintenance seeded as cron routine (daily 02:30, enabled) in src/cron/registry.rs with dispatch arm in handle_routine_run; paths made runtime_dir-relative. New test nightly_maintenance_routine_cleans_old_logs proves old log deleted, fresh kept, manifest backup written; seed test asserts the routine is seeded. Full suite: lib 665/0/4, bin 649/0/4, integration green, JS 9/9 + 9/9."
     },
     {
       "id": 315,
       "title": "Cpu mutex held across whole routines, starving heartbeat",
       "description": "The Cpu mutex is held across whole routine runs, so a long self-improve cycle or nightly fix blocks the heartbeat tick and all other routines for minutes, tripping the missed-beat watchdog.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "high",
       "details": "Bot review 2026-11-05 (PreRelese 17fddd7), Part B Must-fix 3. Evidence: src/main.rs:401 spawns per-routine_run and holds cpu.lock() across handle_routine_run().await (src/cpu/mod.rs:436); the heartbeat tick takes the same lock (src/main.rs:429). A self-improve cycle (up to max_cycle_minutes of LLM work) or a nightly fix (LLM loop + cargo test --lib, src/cpu/mod.rs:1097) blocks all beats and all other routines for minutes. Also routine_chat_command_watch runs the sync tick() (up to the 45 s TICK_BUDGET) while holding the lock. Fix: do not hold the Cpu lock across routine execution - move the lock inside the short critical sections, or run routines on a dedicated task with the heartbeat on its own state.",
       "testStrategy": "Heartbeat beats continue during a long routine run (no missed-beat watchdog trips); cargo test --lib green.",
       "subtasks": [],
-      "results": ""
+      "results": "Done on branch ranger-314-316. Heartbeat timing state split into HeartbeatState (src/cpu/state.rs) behind its own std Mutex, shared as Arc<Mutex<HeartbeatState>> on the Cpu; Cpu::handle_heartbeat is sync &self and locks only that state; main.rs heartbeat loop beats without ever taking the Cpu mutex. New test heartbeat_beats_while_cpu_mutex_held_by_routine proves beats land while the Cpu mutex is held. Full suite: lib 665/0/4, bin 649/0/4, integration green, JS 9/9 + 9/9."
     },
     {
       "id": 316,
       "title": "Hot-path file I/O on every log line and bus message",
       "description": "error_log_path() runs fs::create_dir_all on every log_to_file() call and bus publish() opens/appends bus_log.md per message, including per streaming token - expensive file I/O on hot paths.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "high",
       "details": "Bot review 2026-11-05 (PreRelese 17fddd7), Part B Must-fix 4. Evidence: src/utils.rs:33 error_log_path() runs fs::create_dir_all on every log_to_file() call (:43, open + write + close per line) at ~54k lines/day; src/bus/mod.rs:98 publish() calls log_transaction() (:117), which opens/appends logs/bus_log.md per message - including per streaming token (llm_token publish, src/cpu/mod.rs:1430-ish). Fix: create_dir_all once (e.g. OnceLock), and batch/skip bus-log writes for high-frequency types.",
       "testStrategy": "Log/bus write volume drops (measure create_dir_all calls / bus_log writes per minute under load); cargo test --lib green.",
       "subtasks": [],
-      "results": ""
+      "results": "Done on branch ranger-314-316. Error-log path computed once (OnceLock); error_log and bus_log append through a process-global cached open handle (append_log_line, src/utils.rs) — one write_all per line, no buffering, content identical, deleted files recreated. New tests: 3 log-batching tests prove order/content and recreate-after-delete. Full suite: lib 665/0/4, bin 649/0/4, integration green, JS 9/9 + 9/9."
     },
     {
       "id": 317,

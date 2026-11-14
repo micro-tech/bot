@@ -8,8 +8,6 @@ use chrono::Local;
 use log::error;
 use serde::Serialize;
 use serde_json::Value;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
@@ -114,28 +112,23 @@ impl Bus {
     /// tracked file — bus messages carry chat text, drafts, and config,
     /// so that was a standing secret/body leak. Full content stays in
     /// the primary stores (chat history, drafts, notes).
+    /// Task 316: batched append (cached open handle in utils) instead of
+    /// open-write-close per message; the per-token bus rate made the old
+    /// pattern the hot path. Line content is identical.
     fn log_transaction(&self, message: &Message) {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
         let log_entry = format!(
-            "[{}] {} -> {} ({} chars)",
+            "[{}] {} -> {} ({} chars)\n",
             timestamp,
             message.from,
             message.to,
             message.data.len()
         );
 
-        // Try to write to bus_log.md, fall back gracefully on error
-        if let Ok(mut file) = OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open("logs/bus_log.md")
-        {
-            if let Err(e) = writeln!(file, "{}", log_entry) {
-                eprintln!("Warning: Failed to write to bus_log.md: {}", e);
-            }
-        } else {
-            eprintln!("Warning: Could not open logs/bus_log.md for writing");
-        }
+        crate::utils::append_log_line(
+            &std::path::PathBuf::from("logs/bus_log.md"),
+            &log_entry,
+        );
     }
 }
 
