@@ -5018,6 +5018,250 @@
         }
       ],
       "testStrategy": "Fresh install on a box without Firefox: installer installs Firefox 159 from the Mozilla repo (no snap present), geckodriver pre-warmed or warned, [browser] section present, dirs owned by the runtime user; re-run is a no-op. With apt blocked: installer warns loudly, completes, and the browser tool reports unavailable. Unit tests through the lib module (task 262 blocks the installer binary on a fresh checkout)."
+    },
+    {
+      "id": 361,
+      "title": "Self-skills: define what a skill is in Helix (skill contract)",
+      "description": "Define the skill contract precisely so the loop can draft what is defined. In Helix a skill is a SkillRegistry entry: a name mapped to a Fn(&Value) -> NodeResult closure, registered in SkillRegistry::new() (src/skills/mod.rs), callable through the SkillInterface into HyEvo (instantiated in main.rs). Built-ins today are mostly tool-bridge skills (read_log, write_note, send_email, get_beliefs, set_belief, etc.) plus noop. A new skill needs: the closure plus registration plus a tool-definition surface if the LLM should call it plus unit tests plus docs plus an eval proving it. Reconcile the two skill shapes in the tree: the registry closure shape (live) vs the standalone BayesianSkill struct in src/skills/bayesian.rs (never wired anywhere - zero usages outside its own file, trailing comment says register it) - decide which shape a loop-drafted skill takes (recommend the registry closure) and file the BayesianSkill wiring-or-removal as a cleanup inside this task. Note SkillMarketplace (src/skills/marketplace.rs) is metadata-only (publish/discover/install over an in-memory map, no code loading, never instantiated) - it is NOT the skill system and must not be confused with it. Also note src/skills/sandbox.rs is a 5-line placeholder from Task 40 (run_in_sandbox just formats a string, no WASM) - there is no real sandbox; that gap is owned by task 366, not this one.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Survey notes: SkillRegistry in src/skills/mod.rs (HashMap name to SkillFn, SkillInterface impl for HyEvo); main.rs instantiates Box::new(skills::SkillRegistry::new()); BayesianSkill is dead code (no callers); SkillMarketplace never instantiated; sandbox.rs is a stub. Output is a short SKILL CONTRACT note (in docs/ or in the task itself) naming the registration point, the test bar, and the eval bar, so task 362 can build on it.",
+      "subtasks": [
+        {
+          "id": "361.1",
+          "status": "pending",
+          "title": "Survey SkillRegistry plus HyEvo wiring plus main.rs instantiation"
+        },
+        {
+          "id": "361.2",
+          "status": "pending",
+          "title": "Reconcile BayesianSkill shape (wire it or remove it)"
+        },
+        {
+          "id": "361.3",
+          "status": "pending",
+          "title": "Write the skill contract (registration plus tests plus docs plus eval)"
+        },
+        {
+          "id": "361.4",
+          "status": "pending",
+          "title": "Note the marketplace and sandbox stubs as out of scope here"
+        }
+      ],
+      "testStrategy": "The contract note exists and names the registration point, the test bar, and the eval bar; cargo test --lib green."
+    },
+    {
+      "id": 362,
+      "title": "Self-skills: loop drafting path for a skill (draft, eval, PR for John's tap)",
+      "description": "Build the path by which the self-improve loop drafts a skill and delivers it as a PR for John's tap (never self-deployed). Triggers (recommend in this order): an eval finding or ledger signal first - a failing test name or metric key the worker can trace under the R3 rule - plus a user request; a gap the loop detects on its own is the long-term trigger, not the first one. Draft shape: whole-file DiffFiles (path plus content) per the evaluator's contract - the worker today returns prose diff_description only, so this task adds the code-drafting step that attaches real diff_files to a proposal (the evaluator skips records with no diff files). Validation: bounded subset for touched modules plus the approved eval set (cargo test --test evals) through the worktree evaluator, 500-line cap, audit (secrets plus sensitive paths). Delivery: PR payload via phase3_gate, target PreRelese only, John's merge tap. Phase needed: Phase 2 to evaluate, Phase 3 (pr_opening) to deliver - and the loop must actually be running first (dep 363). Hermes reference: adopt its skill as a versioned, testable unit with metadata shape; do NOT adopt its self-deployment - Helix keeps the PR plus John's tap.",
+      "status": "pending",
+      "dependencies": [
+        361,
+        363
+      ],
+      "priority": "high",
+      "details": "The worker allowlist today is read-only (8 tools, no writes, no shell, no spawn) - the drafting step must happen handler-side or via a new narrow drafting role; do not widen the loop-worker allowlist to include writes. Note the Gemini draft-path limit (call_gemini_direct takes no tool definitions - the brief plus persona bind it, not the filter). The drafting step attaches DiffFiles to the ProposalRecord; the evaluator then runs them in a disposable worktree.",
+      "subtasks": [
+        {
+          "id": "362.1",
+          "status": "pending",
+          "title": "Trigger rules (eval finding / ledger signal / user request)"
+        },
+        {
+          "id": "362.2",
+          "status": "pending",
+          "title": "Drafting step that attaches DiffFiles (handler-side, worker stays read-only)"
+        },
+        {
+          "id": "362.3",
+          "status": "pending",
+          "title": "Eval validation path (subset plus eval set through the worktree evaluator)"
+        },
+        {
+          "id": "362.4",
+          "status": "pending",
+          "title": "PR delivery via phase3_gate (PreRelese only)"
+        }
+      ],
+      "testStrategy": "A fixture skill proposal drafts, evaluates green in a worktree, and produces a PR payload; worker allowlist unchanged (no write tools added); cargo test --lib green."
+    },
+    {
+      "id": 363,
+      "title": "Self-skills: phase advancement - unblock the first cycle and walk the gates (ACTIVE PRIORITY)",
+      "description": "The loop is stuck at phase 0 and has NOT run its first real cycle yet. This is now an active priority, not background. Concrete order, and whose each step is: (1) John's step on the R630 - set [self_improve] eval_set_approved = true in the LIVE /home/cobble/helix/config.toml (never the web UI) and sudo systemctl restart helix. The eval set itself was approved by John Nov 10 (task 242); the flag in the live config is the missing piece - while it is false the evaluator never promotes anything (D5 gate). (2) First cycle - automatic once the flag is set: the 03:30 daily cycle collects the ledger; the crew confirms the first cycle in the ledger (morning ledger check). The one-week gate clock starts only from the first confirmed cycle. (3) Gate 280 - one week of gap-free ledger data plus John's review (John's eyeball, not code) - then John sets phase = 1 in the live config. (4) Gate 285 - two weeks of nightly cycles, zero violations, one correct proposal - then phase = 2. (5) Gate 289 - 5 evaluated proposals, cleanup verified, zero live-tree mods - then phase = 3. (6) Gate 291 - pr_opening is a separate D1 runtime decision (John's explicit enable); 3 loop PRs on PR evidence alone. Phase bumps are John's config edits only - the loop never writes config. The crew's job is the gate evidence (ledger checks, cycle counts, proposal counts, cleanup verification); John's job is the flag, the restarts, and the phase bumps.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "The first blocker is named explicitly - no first cycle yet; what unblocks it is the eval flag plus restart. Nov 14 state: eval_set_approved was still false in the pasted config; whether John set it since is unconfirmed - the morning ledger check settles it. This task is the tracking plus verification work, not a nudge; do not nag beyond the agreed cadence.",
+      "subtasks": [
+        {
+          "id": "363.1",
+          "status": "pending",
+          "title": "Confirm eval flag state in the live config (John's step plus restart)"
+        },
+        {
+          "id": "363.2",
+          "status": "pending",
+          "title": "Confirm the first cycle in the ledger (crew morning check)"
+        },
+        {
+          "id": "363.3",
+          "status": "pending",
+          "title": "One-week gap-free ledger for gate 280"
+        },
+        {
+          "id": "363.4",
+          "status": "pending",
+          "title": "Phase 1 to gate 285 evidence (two weeks, zero violations, one correct proposal)"
+        },
+        {
+          "id": "363.5",
+          "status": "pending",
+          "title": "Phase 2 to gate 289 evidence (5 evaluated, cleanup verified, zero live-tree mods)"
+        },
+        {
+          "id": "363.6",
+          "status": "pending",
+          "title": "Phase 3 plus pr_opening decision for gate 291"
+        }
+      ],
+      "testStrategy": "Ledger shows the first cycle (boot marker plus error counts present); each gate's evidence is recorded in the task before the phase bump; no phase bump without its gate evidence."
+    },
+    {
+      "id": 364,
+      "title": "Self-skills: dedicated git-push for the loop (feature-branch push for a PR, never master)",
+      "description": "Answer to John's question (if Helix changes its own code, can it push to GitHub?): the agent can - the R630 has a dedicated write SSH deploy key (as cobble, for micro-tech/bot) and [shell] enabled = true, so edit, commit, push works from the shell tool (nothing in shell_tool.rs blocks git push). But the LOOP cannot: its git wrapper (task 286) rejects push by construction (tested), forces -c credential.helper= and a local-only identity, and its docstring says loop branches never leave the machine. And the Phase 3 PR path (task 290) is queue-only - QueueBackend appends to rt/self_improve/pr_queue.jsonl and no GitHub call happens in-crate, ever; there is NO queue consumer anywhere in the codebase, so even with pr_opening on, a payload would sit in the queue forever. Decision: a DEDICATED narrow push op in the loop's git wrapper - NOT the shell tool. The shell tool is general-purpose with only a substring denylist and cannot enforce branch/target rules; a dedicated op enforces by construction, like the rest of the wrapper. Rule: push ONLY the evaluated/promoted branch, ONLY to origin, refspec HEAD:refs/heads/<branch> with the branch name validated (self-improve/<slug>, same safe-branch-name rules), never --force, never --tags, never master or PreRelese as the push target (the PR target is PreRelese; the push target is the feature branch). Uses the existing R630 SSH deploy key - no new secret, no credential helper, no HTTPS token. Gated by the Phase 3 gate (task 290): push happens only when the gate passes (promoted plus eval green plus clean audit plus eval_set_approved plus target PreRelese); while pr_opening is false, no push happens, same as today. The evaluator currently deletes the worktree plus branch after evaluation whether it passes or fails - this task must preserve the promoted branch (skip deletion on promotion) so there is something to push. PR opening stays with the queue consumer (external - Cobble jr opens PRs via the GitHub connector today, same as Ranger PRs); the loop never calls merge_pull_request.",
+      "status": "pending",
+      "dependencies": [
+        362
+      ],
+      "priority": "high",
+      "details": "Extend validate_argv with a narrow push shape (push origin <branch>, exactly, no flags); pin the remote to origin; pin cwd by the worktree-root parent rule; SSH auth via the R630's existing SSH config (do not strip SSH_AUTH_SOCK / HOME in a way that breaks the deploy key - verify). Add tests mirroring the existing rejection table (push to master, push --force, push --tags, push to a non-origin remote, push of a branch outside self-improve/ - all rejected). Branch preservation: evaluator keeps the promoted branch plus worktree until the push succeeds, then cleans up; a failed push leaves the branch in place with a log line, never a silent drop.",
+      "subtasks": [
+        {
+          "id": "364.1",
+          "status": "pending",
+          "title": "Narrow push op in the git wrapper (allowlist plus rejection-table tests)"
+        },
+        {
+          "id": "364.2",
+          "status": "pending",
+          "title": "Branch preservation on promotion in the evaluator"
+        },
+        {
+          "id": "364.3",
+          "status": "pending",
+          "title": "Phase 3 gate wiring (push only when the gate passes)"
+        },
+        {
+          "id": "364.4",
+          "status": "pending",
+          "title": "SSH deploy-key verification on the R630 (live check, John's side)"
+        }
+      ],
+      "testStrategy": "Rejection-table tests for every forbidden push shape; a fixture evaluated branch pushes to a local bare remote and the branch lands; cargo test --lib green; live R630 check confirms the deploy key works for the loop's push."
+    },
+    {
+      "id": 365,
+      "title": "Self-skills: context authoring - Helix drafts its own OKF context layers",
+      "description": "Same shape as skills, for context. Helix already writes its own memory/notes (beliefs via MemoryManager, notes via write_note, house rules) but does NOT author new structured OKF context layers - those are John's design. This task designs the authoring path: the loop drafts a new OKF bundle manifest (OkfBundleManifest: id plus version plus knowledge entries with inline markdown content or URLs plus tools plus schemas), validates it with OkfValidator (validate_manifest / validate_registry), and delivers it for John's tap - draft plus validation plus tap, never silent self-restructuring of its own knowledge. Delivery mechanics already exist: POST /okf/manifest pushes a manifest into the in-memory librarian registry (token-gated), POST /okf/bundles/{bundle}/concepts appends a knowledge concept (OKF write auth). Boundary: a locally-pushed manifest is in-memory and is overwritten by the next remote reload from the OKF server (.106) unless the bundle is also published to the server - so the durable path is publishing the bundle to the OKF server (John's step or a server-side write), and this task must say which. Note the OKF tool entries are descriptive only (try_execute_okf_tool simulates the call - TODO(real) dispatch is unimplemented) - an OKF tool entry is NOT a skill and must not be treated as one.",
+      "status": "pending",
+      "dependencies": [
+        361
+      ],
+      "priority": "medium",
+      "details": "Define what counts as a new layer (a new knowledge entry? a new bundle? a new schema?) and the validation bar (OkfValidator plus a human read); say what changes, if anything, in the OKF server code (likely nothing - the server already serves manifests; the change is the draft/validate/tap workflow); decide the durable-publish path (server-side bundle publish) vs the local-push preview path.",
+      "subtasks": [
+        {
+          "id": "365.1",
+          "status": "pending",
+          "title": "Define a layer (bundle vs knowledge entry vs schema)"
+        },
+        {
+          "id": "365.2",
+          "status": "pending",
+          "title": "Draft plus validate path (OkfValidator, John's tap)"
+        },
+        {
+          "id": "365.3",
+          "status": "pending",
+          "title": "Durable publish path (OKF server) vs local-push preview"
+        },
+        {
+          "id": "365.4",
+          "status": "pending",
+          "title": "Boundary note (never silent self-restructuring)"
+        }
+      ],
+      "testStrategy": "A fixture bundle manifest validates and loads into a registry; a drafted concept round-trips through the push endpoint in tests; cargo test --lib green."
+    },
+    {
+      "id": 366,
+      "title": "Self-skills: review gate for self-authored skills (and the sandbox gap, stated plainly)",
+      "description": "Define the review gate a self-authored skill must pass, at minimum: unit tests green plus bounded subset green plus the approved eval set green (cargo test --test evals) plus secrets/sensitive-path audit clean (task 288; sensitive-path proposals are queue-only forever, John opens any PR himself) plus John's read plus John's merge tap. Address the sandbox gap honestly: Helix runs shell as the user with safety rules but no isolation - flagged Oct 19 as the biggest structural gap. src/skills/sandbox.rs is a 5-line placeholder from Task 40 (run_in_sandbox just formats a string, no WASM) - there is no real sandbox. State plainly: a full sandbox IS a prerequisite for any self-deployment (a skill going live without John reading it first). Until then, every self-authored skill goes through John's merge tap and runs only after he merges it; the loop never self-deploys by construction. Do NOT design a full sandbox here - that is a separate workstream; this task defines the gate and the prerequisite, and files the sandbox workstream as a named follow-up (not built here).",
+      "status": "pending",
+      "dependencies": [
+        362,
+        364
+      ],
+      "priority": "high",
+      "details": "The gate is ordered (tests, eval, audit, John's read, merge tap) and any failure stops the chain; a skill touching a sensitive path (security.rs, web-auth surface, support auto-send, credential paths/content) never opens a PR - John opens it himself if he wants it. Name the sandbox follow-up explicitly so it is not lost.",
+      "subtasks": [
+        {
+          "id": "366.1",
+          "status": "pending",
+          "title": "Ordered gate definition (tests, eval, audit, read, tap)"
+        },
+        {
+          "id": "366.2",
+          "status": "pending",
+          "title": "Sensitive-path rules (queue-only forever)"
+        },
+        {
+          "id": "366.3",
+          "status": "pending",
+          "title": "Sandbox prerequisite statement plus follow-up filing"
+        }
+      ],
+      "testStrategy": "A fixture skill with a sensitive path is refused at the gate with zero backend calls (mirrors the existing pr.rs test); a clean skill passes the gate in tests; cargo test --lib green."
+    },
+    {
+      "id": 367,
+      "title": "Self-skills: live drill - first loop-drafted skill, John's side",
+      "description": "Live drill after the path is built and the loop has advanced (deps 362, 364, 365, 366 plus gate 285 passed so the loop is actually proposing). John picks a small, safe skill for the loop to draft (or the loop proposes one from a real eval finding); the loop drafts it, it evaluates green, the branch is pushed via the dedicated push op, the PR is opened (queue consumer / Cobble jr), John reads it and merges it, and Helix runs the new skill in a live session to confirm it works. Confirm: the skill is callable through the registry, its tests pass on the R630, and the loop's ledger records the full path (draft, eval, push, PR, merge).",
+      "status": "pending",
+      "dependencies": [
+        362,
+        364,
+        365,
+        366
+      ],
+      "priority": "medium",
+      "details": "John's side after merge; the drill needs a real eval finding or a John-picked skill - do not invent a trivial one. If the loop has not advanced far enough yet, the drill waits; do not force it.",
+      "subtasks": [
+        {
+          "id": "367.1",
+          "status": "pending",
+          "title": "John picks the skill (or the loop proposes one from a real finding)"
+        },
+        {
+          "id": "367.2",
+          "status": "pending",
+          "title": "Draft, eval, push, PR"
+        },
+        {
+          "id": "367.3",
+          "status": "pending",
+          "title": "John merges"
+        },
+        {
+          "id": "367.4",
+          "status": "pending",
+          "title": "Live run plus ledger confirmation"
+        }
+      ],
+      "testStrategy": "Live drill on the R630; skill callable via the registry; ledger shows the full path."
     }
   ]
 }
