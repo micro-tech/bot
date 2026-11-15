@@ -4692,6 +4692,295 @@
         }
       ],
       "testStrategy": "Manual spike — pass = a written note stating reachability and what each endpoint returns, with a go/no-go for using it in the map."
+    },
+    {
+      "id": 350,
+      "title": "Mini-browser: Firefox + geckodriver + thirtyfour 0.38 engine",
+      "description": "Add the browser engine dependency and verify it can drive a headless Firefox. Firefox via Mozilla's APT repo (NOT the Ubuntu snap - snap confinement breaks automation and profile paths); geckodriver via thirtyfour's `manager` feature (WebDriver::managed auto-downloads the matching geckodriver, caches it, and lifetime-manages the subprocess) - do not hand-roll driver download or version pinning. Pin thirtyfour 0.38 (0.38.3 released 2026-11-14; verify it compiles clean, fall back to 0.37.10 if it does not). Headless mode. Do NOT enable the `bidi` feature (BiDi is the future path, task 359 - not this build). Do NOT use headless_chrome (sync API fights tokio) or chromiumoxide (CDP - Firefox has no CDP since v141).",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "thirtyfour is async tokio, which fits Helix (tokio 1.54.1). The R630 is a headless Ubuntu server and almost certainly has no Firefox or geckodriver installed - the install itself is task 356 (John's side, doc first). The sandbox cannot verify the R630 install; this task verifies the dependency compiles and the client can talk to a WebDriver endpoint (stub/fake endpoint in unit tests, real-browser smoke test on the R630 during install). Firefox install must be verified on the R630 first (check Ubuntu version - 24.04's apt firefox is a snap).",
+      "subtasks": [
+        {
+          "id": "350.1",
+          "status": "pending",
+          "title": "Add thirtyfour = \"0.38\" + manager feature to Cargo.toml; cargo build clean"
+        },
+        {
+          "id": "350.2",
+          "status": "pending",
+          "title": "Verify headless Firefox session can start and navigate (stub endpoint in lib tests; real smoke test on R630 in task 356)"
+        },
+        {
+          "id": "350.3",
+          "status": "pending",
+          "title": "Confirm no blocking-API friction (async throughout; bridge() pattern for the sync tool boundary)"
+        }
+      ],
+      "testStrategy": "cargo build clean; cargo test --lib green; headless Firefox navigates to a local page and returns its title (real-browser check on R630 install, task 356)."
+    },
+    {
+      "id": 351,
+      "title": "Mini-browser: session module + lifecycle + [browser] config",
+      "description": "New module src/io/browser/ (a long-lived service like mcp_client, not a one-shot tool function): a BrowserSession manager holding ONE shared thirtyfour WebDriver session, spawned via tokio::process::Command following the mcp_client precedent (TokioChildProcess-style lifecycle), with start/stop/restart and recovery if geckodriver dies. Config section [browser] (enabled, firefox_binary, geckodriver path or managed, profile_dir, headless, timeouts) following the config/mcp.rs pattern (serde Deserialize, defaults, master switch - disabled = silent no-op, no browser advertised).",
+      "status": "pending",
+      "dependencies": [
+        350
+      ],
+      "priority": "high",
+      "details": "Single shared session: the browser is one page/tab the LLM and John share (the 'like Cobble jr's browser' model). A browser tool call never launches a fresh browser. If geckodriver dies mid-session, the next tool call reports the failure and the manager restarts it - do not silently swallow it. Headless always on the R630 (no display). Profile dir comes from config (see task 353). Shutdown on Helix stop must quit the driver cleanly (no orphan geckodriver/firefox processes).",
+      "subtasks": [
+        {
+          "id": "351.1",
+          "status": "pending",
+          "title": "[browser] config section + loader (serde, defaults, master switch)"
+        },
+        {
+          "id": "351.2",
+          "status": "pending",
+          "title": "BrowserSession manager (spawn, health check, restart on death, clean shutdown)"
+        },
+        {
+          "id": "351.3",
+          "status": "pending",
+          "title": "Unit tests against a stubbed WebDriver endpoint (no real Firefox in lib tests)"
+        }
+      ],
+      "testStrategy": "cargo test --lib green (manager tests against a stub endpoint); config loads from example + live config shape; restart-after-kill verified in the R630 drill (357)."
+    },
+    {
+      "id": 352,
+      "title": "Mini-browser: LLM tool surface - one `browser` tool with actions",
+      "description": "One tool `browser` with an `action` parameter (navigate / click / type / screenshot / get_text / current_url / back), registered in execute() dispatch + a json! schema in static_tool_definitions() (src/tools/mod.rs, following the create_artifact precedent). One tool, not separate tools per action - one session, one schema, keeps the tool count (28 today) from ballooning. The tool is a thin facade over the BrowserSession manager. The sync execute() boundary bridges into async thirtyfour via the bridge() pattern from src/mcp_client/mod.rs:180 (dedicated runtime; block_on with no ambient runtime, block_in_place inside one) - hoist bridge() to shared code if the build touches it, do not duplicate a second runtime.",
+      "status": "pending",
+      "dependencies": [
+        351
+      ],
+      "priority": "high",
+      "details": "Actions return short text results (URL + title for navigate, confirmation for click/type, base64 PNG length or a saved path for screenshot - screenshots are for the 2FA affordance in 355, not for the LLM to 'see' pages; the LLM works from get_text/DOM, not images). Timeouts per action (config), and a clear error string when the browser is disabled or the session is down. The tool must not be callable when [browser] enabled = false (return the disabled message, same posture as the MCP client).",
+      "subtasks": [
+        {
+          "id": "352.1",
+          "status": "pending",
+          "title": "Tool schema + execute() dispatch arm in src/tools/mod.rs"
+        },
+        {
+          "id": "352.2",
+          "status": "pending",
+          "title": "Each action against the session manager, with timeouts and error strings"
+        },
+        {
+          "id": "352.3",
+          "status": "pending",
+          "title": "Tests: definitions include `browser`; disabled-config returns the disabled message; stubbed session returns expected results"
+        }
+      ],
+      "testStrategy": "cargo test --lib green (new tests + full suite); list_tools shows browser; live check in drill (357)."
+    },
+    {
+      "id": 353,
+      "title": "Mini-browser: Firefox Sync profile - John's synced passwords in the Helix browser",
+      "description": "John's step + the code to use it. He closes Firefox on Windows, copies his signed-in Firefox profile (%APPDATA%\\Mozilla\\Firefox\\Profiles\\*.default-release) to the R630 (~/.mozilla/firefox/helix/ or the configured profile_dir), removes the lock file, sets perms 0700. The profile carries his Sync sign-in (signedInUser.json) and saved logins (logins.json + key4.db) - Sync then keeps passwords current from his account. Helix's [browser] config points at that profile dir. Do NOT use a fresh/anonymous profile (he explicitly wants his synced passwords, including Google). Do NOT copy his personal profile into the repo or any backup - it lives only on the R630, perms 0700, never committed, never shared with other tools.",
+      "status": "pending",
+      "dependencies": [
+        351
+      ],
+      "priority": "high",
+      "details": "Copying the whole profile also carries cookies (cookies.sqlite) - the R630 Firefox may already hold a live Google session, but a re-challenge on the new IP is likely, so the 2FA affordance (355) is still required. Firefox Sync syncs logins/bookmarks/history/tabs - NOT cookies - so the password is the durable win, not the session. After the copy, verify: profile loads, Sync reports signed in, saved-login count is non-zero (count only - never echo a password or a site password value). If Sync reports signed out, the fallback is re-sign-in through the minimal 2FA affordance (355) - do not build a separate Sync sign-in flow. SECURITY BOUNDARY: the profile holds his saved passwords on the R630 and the LLM driving the browser can use them via autofill. Scope the browser to OAuth + user-directed browsing only. The LLM must never exfiltrate or echo saved passwords (the task-265 secrets rule applies: log counts, never values).",
+      "subtasks": [
+        {
+          "id": "353.1",
+          "status": "pending",
+          "title": "John's profile copy (his step - close Windows Firefox first, copy, perms 0700)"
+        },
+        {
+          "id": "353.2",
+          "status": "pending",
+          "title": "Helix loads the profile dir from [browser] config"
+        },
+        {
+          "id": "353.3",
+          "status": "pending",
+          "title": "Verify Sync signed-in + login count (count only) in the R630 drill"
+        }
+      ],
+      "testStrategy": "R630 drill (357): profile loads, Sync signed in, login count > 0, no secret values in any log or tool output."
+    },
+    {
+      "id": 354,
+      "title": "Mini-browser: Gmail OAuth wiring - google-mcp auth through the Helix browser",
+      "description": "The concrete flow. Helix starts the google-mcp auth (google-mcp prints its consent URL / starts its loopback listener on a random port); the `browser` tool navigates to the consent URL; the Google password autofills from Sync; submit; John completes 2FA via the minimal affordance (355); the redirect lands on R630 localhost:<random-port> where google-mcp listens; token saved to /home/cobble/.config/google-mcp/token.json. The random port stops mattering once the browser is local - no SSH tunnel. PREREQUISITE (John's, unconfirmed): the NEW client secret (created Nov 14 17:17 EST, ending hhdr) must be in the live /home/cobble/helix/config.toml - he must confirm/write it before this flow can work; the old secret was deleted and is dead. If the secret is wrong, Google rejects the flow and the task fails at the consent step - the drill must check this first.",
+      "status": "pending",
+      "dependencies": [
+        352,
+        353,
+        355
+      ],
+      "priority": "high",
+      "details": "The flow is driven by a Helix command (or a slash command / chat instruction - decide in implementation; prefer a single entry point that runs the whole sequence and reports each step). Do not store the OAuth code or token in chat, logs, or the repo. After success, verify with a real gmail_search call through Helix.",
+      "subtasks": [
+        {
+          "id": "354.1",
+          "status": "pending",
+          "title": "Auth entry point (command/slash) that starts google-mcp auth and drives the browser to the consent URL"
+        },
+        {
+          "id": "354.2",
+          "status": "pending",
+          "title": "Password autofill + submit, token-file verification (scope gmail.modify, fresh expiry)"
+        },
+        {
+          "id": "354.3",
+          "status": "pending",
+          "title": "Live drill: gmail_search works through Helix after the flow (task 357)"
+        }
+      ],
+      "testStrategy": "R630 drill (357): token file exists with gmail.modify scope and fresh expiry; Helix gmail_search returns results; no secret values in logs/chat."
+    },
+    {
+      "id": 355,
+      "title": "Mini-browser: minimal 2FA affordance - one-shot screenshot + input, token-gated (REQUIRED for OAuth)",
+      "description": "The smallest possible takeover, scoped narrowly to completing the OAuth 2FA challenge - NOT the full live-view pane (that is task 358, later). Two token-gated HTTP endpoints on the protected router (require_web_token middleware, same as /ops/*): GET the current page as a one-shot PNG screenshot, and POST one input action (click at x,y / type text / press a key). Reuses the UI's existing opsFetch token prompt (sessionStorage helix_ops_token, 401 prompts once). No continuous polling, no browser pane UI, no click-mapping widget. This exists because the Google sign-in on a new device (R630 Firefox = new device/IP) will almost certainly 2FA-challenge, and the password autofills from Sync but the challenge needs John.",
+      "status": "pending",
+      "dependencies": [
+        351
+      ],
+      "priority": "high",
+      "details": "THE YUBIKEY LIMIT - John's YubiKey is on his Windows machine, not the R630, so a WebAuthn security-key challenge CANNOT be completed on the R630 browser. The flow must use a remote-completable 2FA method: Google prompt on his phone, or an authenticator-app code typed through this input endpoint. The affordance supports exactly that (see the challenge, click 'try another way' if the default is the security key, type the code). If Google offers only the security key, the flow cannot complete - state that in the drill and fall back to the phone/authenticator method. Screenshot size: cap the PNG (downscale if needed) so a single fetch stays small; no video, no stream. OPEN QUESTION FOR JOHN: confirm he has a phone-prompt or authenticator method available for this sign-in, since the security-key path cannot work on the R630.",
+      "subtasks": [
+        {
+          "id": "355.1",
+          "status": "pending",
+          "title": "Screenshot endpoint (token-gated, PNG, capped size)"
+        },
+        {
+          "id": "355.2",
+          "status": "pending",
+          "title": "Input endpoint (click/type/key, token-gated, coordinate input validated)"
+        },
+        {
+          "id": "355.3",
+          "status": "pending",
+          "title": "Unauthenticated requests return 401 (test)"
+        },
+        {
+          "id": "355.4",
+          "status": "pending",
+          "title": "UI: minimal trigger (a button/link in chat or a simple page - smallest change that lets John fetch the screenshot and send input; do not build the pane)"
+        }
+      ],
+      "testStrategy": "cargo test --lib green (endpoint tests incl. 401 without token); R630 drill (357): fetch a screenshot of the Google sign-in page, type into it, confirm the input lands."
+    },
+    {
+      "id": 356,
+      "title": "Mini-browser: R630 install docs + engine install",
+      "description": "Exact install commands for the R630, verified by John's install. Firefox via Mozilla's APT repo (NOT the Ubuntu snap - snap confinement breaks automation and profile paths); geckodriver via thirtyfour's manager auto-download on first run (or a pinned manual download - decide in the doc and say why). Steps: check Ubuntu version first; add Mozilla APT repo + install firefox; copy the Sync profile (353); set [browser] in ~/helix/config.toml; cp to /etc/helix/config.toml; restart Helix; verify with a headless navigation smoke test.",
+      "status": "pending",
+      "dependencies": [
+        350
+      ],
+      "priority": "high",
+      "details": "The sandbox cannot verify R630 install steps - the doc must be exact enough for John to run verbatim, and the drill (357) is the verification. Include the 'what if it fails' notes (snap installed by mistake, geckodriver download blocked, profile lock file left behind).",
+      "subtasks": [
+        {
+          "id": "356.1",
+          "status": "pending",
+          "title": "Write the install doc (docs/ or README section - decide, keep it with the browser module docs)"
+        },
+        {
+          "id": "356.2",
+          "status": "pending",
+          "title": "John's install (his step)"
+        },
+        {
+          "id": "356.3",
+          "status": "pending",
+          "title": "Smoke test: headless Firefox navigates and returns a title"
+        }
+      ],
+      "testStrategy": "John's install completes verbatim from the doc; smoke test passes; doc updated if any step differs."
+    },
+    {
+      "id": 357,
+      "title": "Mini-browser: live R630 drill - end-to-end Gmail OAuth via the browser",
+      "description": "John's side after merge + pull + rebuild + restart. Run the Gmail OAuth flow end to end (354): start auth, browser navigates, password autofills, complete 2FA via the minimal affordance (355) using the phone prompt / authenticator code (NOT the security key - it cannot work on the R630), token lands, then Helix gmail_search works. Confirm no SSH tunnel was needed at any step. Confirm the browser session stays usable for a second navigation (persistence).",
+      "status": "pending",
+      "dependencies": [
+        354,
+        356
+      ],
+      "priority": "high",
+      "details": "If the flow fails, capture which step (consent URL, autofill, 2FA challenge, redirect, token file) and the Helix log lines - do not re-run blindly.",
+      "subtasks": [
+        {
+          "id": "357.1",
+          "status": "pending",
+          "title": "Merge + pull + rebuild + restart (John)"
+        },
+        {
+          "id": "357.2",
+          "status": "pending",
+          "title": "Run the OAuth flow end to end"
+        },
+        {
+          "id": "357.3",
+          "status": "pending",
+          "title": "Verify gmail_search + session persistence"
+        }
+      ],
+      "testStrategy": "Live drill passes; gmail_search returns results through Helix; token file has fresh expiry."
+    },
+    {
+      "id": 358,
+      "title": "LATER: Mini-browser full live view + takeover UI (browser pane)",
+      "description": "LATER task, NOT in the core path (John deprioritized the live view). The full browser pane in the web UI: continuous screenshot polling over the existing WebSocket (new `browser_frame` message type via bridge_out_message, following the `artifact` arm pattern), click/key forwarding with coordinate mapping, and a browser pane UI in static/index.html (following the appendArtifact pattern). Token-gated takeover (same require_web_token posture as 355). This is the polished 'like Cobble jr's browser' experience; the core (350-357) ships without it.",
+      "status": "pending",
+      "dependencies": [
+        355
+      ],
+      "priority": "medium",
+      "details": "Polling interval / screenshot quality trade-off is decided in implementation, not in this scope. Reuses the 355 endpoints as the transport. NOTE: there is no screencast stream in Firefox/WebDriver - the live view is screenshots polled on an interval (e.g. every 500ms-1s), not a video stream. That is the main quality trade-off vs Chromium.",
+      "subtasks": [
+        {
+          "id": "358.1",
+          "status": "pending",
+          "title": "WS browser_frame message + polling loop"
+        },
+        {
+          "id": "358.2",
+          "status": "pending",
+          "title": "Browser pane UI + click/key forwarding"
+        },
+        {
+          "id": "358.3",
+          "status": "pending",
+          "title": "node --check + live check"
+        }
+      ],
+      "testStrategy": "node --check on the extracted script; live check: pane shows the page, clicks/keys land, unauthenticated input gets 401."
+    },
+    {
+      "id": 359,
+      "title": "LATER/spike: WebDriver BiDi migration (research only)",
+      "description": "Research spike only. WebDriver BiDi is the W3C standard Firefox is all-in on (CDP is gone in Fx 141+); thirtyfour 0.37+ has an opt-in `bidi` feature. Evaluate when screencast lands in Firefox BiDi (in-flight, M20 targets screen-recording) and when a Rust BiDi client is mature enough to replace the WebDriver + screenshot-polling approach. Do not build on BiDi in this batch; do not enable the `bidi` feature in 350.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "low",
+      "details": "Deliverable is a short written recommendation with version numbers and links. No code.",
+      "subtasks": [
+        {
+          "id": "359.1",
+          "status": "pending",
+          "title": "Check Firefox BiDi screencast status + thirtyfour BiDi maturity"
+        },
+        {
+          "id": "359.2",
+          "status": "pending",
+          "title": "Short recommendation (stay on WebDriver vs migrate)"
+        }
+      ],
+      "testStrategy": "Written recommendation with version numbers and links; no code."
     }
   ]
 }
