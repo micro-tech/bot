@@ -4249,29 +4249,29 @@
       "id": 335,
       "title": "Artifact tool: LLM can create charts/graphs/files (create_artifact)",
       "description": "John 2026-11-15 02:32 EST: Helix must output charts, graphs, and files the way Cobble jr does. Add a built-in tool create_artifact so the LLM can produce a file instead of a text-only reply. Follows the write_note precedent (src/tools/file_tools.rs:73, CWD-relative notes/ + sanitise_filename) and the registry pattern (src/tools/mod.rs: execute() dispatch arm + json! schema in static_tool_definitions(), cached by tool_definitions()). One generic tool with a kind parameter covers charts/graphs/files — do NOT build separate create_chart/create_diagram tools; they would duplicate the same plumbing.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "high",
       "details": "New pub fn create_artifact(args) in src/tools/file_tools.rs. Args: kind (required string enum: html | svg | mermaid | markdown | csv | text), title (required string), content (required string). Writes to CWD-relative artifacts/{sanitised-title}-{YYYYMMDD-HHMM}.{ext} (reuse sanitise_filename from file_tools.rs; ext maps from kind: html->html, svg->svg, mermaid->mmd, markdown->md, csv->csv, text->txt); create_dir_all(\"artifacts\") if missing; reject empty content and content over 512 KB with an error string (do not truncate silently). Returns exactly: ✅ Artifact saved: /artifacts/<filename> (kind, <bytes> bytes) — the path is the URL task 336 serves. Register: match arm in execute() + schema in static_tool_definitions(); the schema description must tell the model WHEN to use it (user asks for a chart, graph, diagram, map, or downloadable file — write the full file content here, then mention the URL in your reply). Publish a bus message {type:\"artifact\", url, kind, title} to web_interface on success so the UI can render it inline (see task 337): do it in call_ollama_tools (src/io/ollama/mod.rs) after execute() returns, keyed on tool name == create_artifact and parsing the returned URL — do NOT add bus plumbing into file_tools. The injection guard (task 235) already validates args before dispatch; the tool writes model-supplied content to disk, so the filename sanitising + size cap are the security boundary — no shell, no path input from the model beyond title.",
       "subtasks": [
         {
           "id": "335.1",
-          "status": "pending",
+          "status": "done",
           "title": "Write create_artifact + filename sanitising + 512 KB cap + artifacts/ dir creation"
         },
         {
           "id": "335.2",
-          "status": "pending",
+          "status": "done",
           "title": "Register schema in static_tool_definitions() + dispatch arm in execute()"
         },
         {
           "id": "335.3",
-          "status": "pending",
+          "status": "done",
           "title": "Publish artifact bus message to web_interface on success (from call_ollama_tools)"
         },
         {
           "id": "335.4",
-          "status": "pending",
+          "status": "done",
           "title": "Unit tests: happy-path write + URL string, oversize rejection, title with path separators sanitised (no .. escape), schema present in tool_definitions()"
         }
       ],
@@ -4281,7 +4281,7 @@
       "id": 336,
       "title": "Serve generated artifacts over HTTP: GET /artifacts/{name}",
       "description": "Add a public read-only route so the web UI (and John) can open/download files the artifact tool wrote. Follows the existing public read routes (/logs/*) in start_web_server (src/io/web_server/mod.rs main_app router). There is NO general static-file route today — serve_index is a single include_str! HTML file — so this is a new handler, not an extension of an existing one.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [
         335
       ],
@@ -4290,17 +4290,17 @@
       "subtasks": [
         {
           "id": "336.1",
-          "status": "pending",
+          "status": "done",
           "title": "Handler + route on the public router + extension-to-Content-Type map"
         },
         {
           "id": "336.2",
-          "status": "pending",
+          "status": "done",
           "title": "Traversal rejection (.., absolute, symlink-out) with tests"
         },
         {
           "id": "336.3",
-          "status": "pending",
+          "status": "done",
           "title": "Content-Type per extension + 404 tests; byte-identical serve of a file written by create_artifact"
         }
       ],
@@ -4310,7 +4310,7 @@
       "id": 337,
       "title": "Web UI renders artifact cards inline in chat",
       "description": "appendChat (src/io/web_server/static/index.html:2412, served via include_str! at web_server/mod.rs:1737) is textContent-only today, so an artifact URL would show as plain text. Add an artifact render branch so a chart/graph/file shows inline instead of just a link. Follow the PR #54 backend-field pattern (bridge stamps a field, appendChat renders it).",
-      "status": "pending",
+      "status": "done",
       "dependencies": [
         335,
         336
@@ -4320,17 +4320,17 @@
       "subtasks": [
         {
           "id": "337.1",
-          "status": "pending",
+          "status": "done",
           "title": "Bridge arm for type artifact + Rust test bridge_forwards_artifact_with_backend"
         },
         {
           "id": "337.2",
-          "status": "pending",
+          "status": "done",
           "title": "appendArtifact + kind renderers + .artifact-card CSS (DOM APIs only, no innerHTML)"
         },
         {
           "id": "337.3",
-          "status": "pending",
+          "status": "done",
           "title": "node --check on the extracted script; live browser render verified in task 339"
         }
       ],
@@ -4340,7 +4340,7 @@
       "id": 338,
       "title": "Network map: dedicated create_network_map tool (wire interfaces -> SVG artifact)",
       "description": "John's headline use case (2026-11-15 02:32 EST): ask Helix for a network map, get a real visual back. The LLM could compose two existing tools (wire interfaces via MCP + create_artifact), but gemma4:e4b is weak at multi-step tool composition (task 334), so build a dedicated one-call tool that does the whole flow server-side. Depends on task 335's artifact writer.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [
         335
       ],
@@ -4349,22 +4349,22 @@
       "subtasks": [
         {
           "id": "338.1",
-          "status": "pending",
+          "status": "done",
           "title": "Fetch + parse wire interfaces (unit test with canned interfaces JSON)"
         },
         {
           "id": "338.2",
-          "status": "pending",
+          "status": "done",
           "title": "Deterministic SVG layout render (hub + interface nodes, no external deps)"
         },
         {
           "id": "338.3",
-          "status": "pending",
+          "status": "done",
           "title": "Register schema + dispatch arm; wire-disabled error string"
         },
         {
           "id": "338.4",
-          "status": "pending",
+          "status": "done",
           "title": "Tests: SVG contains every interface name + address; artifact file written + URL returned"
         }
       ],

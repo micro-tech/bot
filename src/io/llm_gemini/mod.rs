@@ -491,6 +491,12 @@ async fn call_gemini_tools(
                 timestamp: now_ms(),
             });
 
+            // Task 335/338: same artifact hook as the Ollama loop, so the
+            // card renders whichever backend answered the turn.
+            crate::io::ollama::tools::publish_artifact_if_saved(
+                bus, "gemini", name, args, &result,
+            );
+
             response_parts.push(json!({
                 "functionResponse": {
                     "name": name,

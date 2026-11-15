@@ -462,10 +462,14 @@ pub async fn handle_ollama_message(
     let bus_clone = Arc::clone(bus);
     let backend_tag = format!("ollama_{}", backend_name);
     // Task 238: Arc<dyn Fn> so the callback is Send (spawned task bound).
+    // The token callback takes its own clone so `backend_tag` stays available
+    // below — it is also passed to `call_ollama` so artifact tool results
+    // (task 335) publish with the same backend identity as chat replies.
+    let token_tag = backend_tag.clone();
     let on_token: Arc<dyn Fn(String) + Send + Sync> = Arc::new(move |token: String| {
         let token_msg = crate::bus::Message {
             to: "cpu".to_string(),
-            from: backend_tag.clone(),
+            from: token_tag.clone(),
             data: serde_json::json!({
                 "type": "llm_token",
                 "correlation_id": correlation_id,
@@ -478,7 +482,7 @@ pub async fn handle_ollama_message(
     });
 
     for attempt in 1..=MAX_RETRIES {
-        match call_ollama(&client, base_url, model, &prompt, bus, Some(on_token.clone())).await {
+        match call_ollama(&client, base_url, model, &prompt, bus, &backend_tag, Some(on_token.clone())).await {
             // SUCCESS — Ollama returned a valid response
             Ok(response) => {
                 info!(
@@ -589,16 +593,19 @@ pub async fn handle_ollama_message(
 
 /// Wrapper that assembles the default tool-list and delegates to the loop.
 /// `on_token` (Arc, Send) enables streaming (task 238); `None` = buffered (sub-agents).
+/// `backend_from` is the bus identity for this backend (`ollama_server` /
+/// `ollama_desktop`); artifact tool results publish under it (task 335).
 async fn call_ollama(
     client: &Client,
     base_url: &str,
     model: &str,
     prompt: &str,
     bus: &Arc<Bus>,
+    backend_from: &str,
     on_token: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let tool_defs = crate::tools::tool_definitions();
-    tools::call_ollama_tools(client, base_url, model, prompt, tool_defs, bus, on_token).await
+    tools::call_ollama_tools(client, base_url, model, prompt, tool_defs, bus, backend_from, on_token).await
 }
 
 // ── Task 238: streaming NDJSON support ─────────────────────────────────────
@@ -786,6 +793,62 @@ pub mod tools {
     /// arrives — the caller forwards them to the UI for time-to-first-token.
     /// `None` keeps the legacy buffered behavior (sub-agents need the
     /// complete text before proceeding).
+    /// Parse a `✅ Artifact saved: /artifacts/<file> (<kind>, <n> bytes)`
+    /// tool result. Returns (url, kind) on success, None otherwise.
+    /// The format is owned by `artifact_saved_string` (tools::file_tools)
+    /// — keep the two in sync.
+    pub fn parse_artifact_saved(result: &str) -> Option<(String, String)> {
+        let rest = result.strip_prefix("✅ Artifact saved: ")?;
+        let (url, tail) = rest.split_once(" (")?;
+        let kind = tail.split(',').next()?.trim();
+        if url.is_empty() || kind.is_empty() {
+            return None;
+        }
+        Some((url.to_string(), kind.to_string()))
+    }
+
+    /// If `result` is a successful `create_artifact` / `create_network_map`
+    /// outcome, publish a `{type:"artifact", url, kind, title}` bus message
+    /// to `web_interface` so the UI renders the artifact card inline.
+    /// No-op for any other tool or result. `from` is the backend tag
+    /// (`ollama_server` / `ollama_desktop` / `gemini`) so the bridge can
+    /// stamp the same `backend` label as chat replies (PR #54).
+    pub fn publish_artifact_if_saved(
+        bus: &Arc<Bus>,
+        from: &str,
+        name: &str,
+        args: &Value,
+        result: &str,
+    ) {
+        if name != "create_artifact" && name != "create_network_map" {
+            return;
+        }
+        let Some((url, kind)) = parse_artifact_saved(result) else {
+            return;
+        };
+        let title = args
+            .get("title")
+            .and_then(|t| t.as_str())
+            .filter(|t| !t.is_empty())
+            .unwrap_or(if name == "create_network_map" {
+                "Network Map"
+            } else {
+                "Artifact"
+            });
+        let _ = bus.publish(crate::bus::Message {
+            to: "web_interface".to_string(),
+            from: from.to_string(),
+            data: serde_json::json!({
+                "type": "artifact",
+                "url": url,
+                "kind": kind,
+                "title": title,
+            })
+            .to_string(),
+            timestamp: now_ms(),
+        });
+    }
+
     pub async fn call_ollama_tools(
         client: &Client,
         base_url: &str,
@@ -793,6 +856,7 @@ pub mod tools {
         prompt: &str,
         tools: Value,
         bus: &Arc<Bus>,
+        backend_from: &str,
         on_token: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Task 215: commander system prompt — the model needs to know it
@@ -914,6 +978,12 @@ pub mod tools {
                         timestamp: now_ms(),
                     });
 
+                    // Task 335/338: an artifact tool success also publishes
+                    // an artifact bus message so the web UI renders the
+                    // artifact card inline (the model's text reply is
+                    // separate and unchanged).
+                    publish_artifact_if_saved(bus, backend_from, name, &args, &tool_result);
+
                     messages.push(json!({
                         "role":         "tool",
                         "tool_call_id": tool["id"],
@@ -994,6 +1064,25 @@ pub mod tools {
             let input = "a💣b"; // 5 bytes
             let truncated = truncate(input, 4);
             assert_eq!(truncated, "a"); // Safe boundary
+        }
+
+        #[test]
+        fn parse_artifact_saved_extracts_url_and_kind() {
+            let (url, kind) = parse_artifact_saved(
+                "✅ Artifact saved: /artifacts/network_map-20261115-0236.svg (svg, 1234 bytes)",
+            )
+            .expect("must parse");
+            assert_eq!(url, "/artifacts/network_map-20261115-0236.svg");
+            assert_eq!(kind, "svg");
+        }
+
+        #[test]
+        fn parse_artifact_saved_rejects_non_artifact_results() {
+            assert!(parse_artifact_saved("✅ Note 'x' saved to notes/x.md").is_none());
+            assert!(parse_artifact_saved("Error: something broke").is_none());
+            assert!(parse_artifact_saved("").is_none());
+            assert!(parse_artifact_saved("✅ Artifact saved:  (, 0 bytes)").is_none());
+            assert!(parse_artifact_saved("✅ Artifact saved: /artifacts/x.txt").is_none());
         }
 
         #[test]

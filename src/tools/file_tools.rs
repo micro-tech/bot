@@ -144,6 +144,321 @@ fn sanitise_filename(s: &str) -> String {
     result.trim_matches('_').to_string()
 }
 
+// ── Artifact tools (tasks 335, 338) ─────────────────────────────────────────
+
+/// Max bytes of artifact content the model may write in one call.
+/// Over-cap content is REJECTED (never silently truncated) — the model must
+/// split it or summarise instead.
+pub const MAX_ARTIFACT_BYTES: usize = 512 * 1024;
+
+/// Map an artifact `kind` to its file extension. None = unknown kind.
+pub fn artifact_extension(kind: &str) -> Option<&'static str> {
+    match kind {
+        "html" => Some("html"),
+        "svg" => Some("svg"),
+        "mermaid" => Some("mmd"),
+        "markdown" => Some("md"),
+        "csv" => Some("csv"),
+        "text" => Some("txt"),
+        _ => None,
+    }
+}
+
+/// Shared artifact writer (task 335): the one place that puts model-produced
+/// files on disk. `create_artifact` and `create_network_map` both go
+/// through here — no duplicated file-writing plumbing.
+/// Returns (url, kind, bytes) on success; the url is the path task 336
+/// serves (`/artifacts/<file>`). If a file with the computed name already
+/// exists (same title, same minute), a `-2`/`-3` suffix is added so a
+/// second artifact never silently overwrites the first.
+pub fn write_artifact_file(
+    kind: &str,
+    title: &str,
+    content: &str,
+) -> Result<(String, String, usize), String> {
+    let ext = artifact_extension(kind).ok_or_else(|| {
+        format!(
+            "Error: unknown artifact kind '{}'. Use one of: html, svg, mermaid, markdown, csv, text.",
+            kind
+        )
+    })?;
+    let safe = sanitise_filename(title);
+    if safe.is_empty() {
+        return Err(
+            "Error: artifact title must contain at least one alphanumeric character.".to_string(),
+        );
+    }
+    if content.is_empty() {
+        return Err("Error: artifact content is empty — nothing to save.".to_string());
+    }
+    if content.len() > MAX_ARTIFACT_BYTES {
+        return Err(format!(
+            "Error: artifact content is {} bytes, over the {} KB cap. Split it into smaller artifacts or summarise instead.",
+            content.len(),
+            MAX_ARTIFACT_BYTES / 1024
+        ));
+    }
+    if let Err(e) = fs::create_dir_all("artifacts") {
+        return Err(format!("Error creating artifacts/ directory: {}", e));
+    }
+    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M");
+    let mut filename = format!("{}-{}.{}", safe, stamp, ext);
+    let mut n = 2usize;
+    while Path::new("artifacts").join(&filename).exists() {
+        filename = format!("{}-{}-{}.{}", safe, stamp, n, ext);
+        n += 1;
+    }
+    let rel = format!("artifacts/{}", filename);
+    match fs::write(&rel, content) {
+        Ok(_) => Ok((format!("/artifacts/{}", filename), kind.to_string(), content.len())),
+        Err(e) => Err(format!("Error saving artifact to '{}': {}", rel, e)),
+    }
+}
+
+/// Format the success string the model sees. The Ollama loop parses this
+/// exact shape (see `parse_artifact_saved` in io::ollama::tools) to publish
+/// the artifact bus message — keep the format stable.
+fn artifact_saved_string(url: &str, kind: &str, bytes: usize) -> String {
+    format!("✅ Artifact saved: {} ({}, {} bytes)", url, kind, bytes)
+}
+
+/// create_artifact(kind, title, content) — task 335.
+/// One generic tool for charts/graphs/files: the model writes the full file
+/// content, Helix saves it under artifacts/ and serves it at /artifacts/*.
+pub fn create_artifact(args: &Value) -> String {
+    let kind = args["kind"].as_str().unwrap_or("");
+    let title = args["title"].as_str().unwrap_or("");
+    let content = args["content"].as_str().unwrap_or("");
+    match write_artifact_file(kind, title, content) {
+        Ok((url, kind, bytes)) => artifact_saved_string(&url, &kind, bytes),
+        Err(e) => e,
+    }
+}
+
+/// Escape text for embedding in SVG/XML element content or attributes.
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// One interface entry from mcp_wire `interfaces` (live shape, Nov 14).
+struct WireInterface {
+    name: String,
+    description: String,
+    mac: String,
+    mtu: String,
+    operstate: String,
+    speed: String,
+    link_label: String,
+    addresses: Vec<String>,
+}
+
+/// Leniently read a field that may be a JSON string or a JSON number.
+fn field_as_string(v: &Value, key: &str) -> String {
+    match v.get(key) {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Number(n)) => n.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// Parse the mcp_wire `interfaces` result. Accepts `{"interfaces": [...]}` or
+/// a bare `[...]` array; every field is optional and defaults to empty, so a
+/// schema drift degrades to a sparse map instead of an error.
+fn parse_wire_interfaces(raw: &str) -> Result<Vec<WireInterface>, String> {
+    let v: Value = serde_json::from_str(raw).map_err(|e| {
+        format!(
+            "Error: wire interfaces output is not JSON ({}): {}",
+            e,
+            crate::utils::truncate_str(raw, 200)
+        )
+    })?;
+    let arr = v
+        .get("interfaces")
+        .and_then(|i| i.as_array())
+        .or_else(|| v.as_array())
+        .ok_or_else(|| "Error: wire interfaces output has no 'interfaces' array.".to_string())?;
+    let mut out = Vec::new();
+    for it in arr {
+        let speed = match it.get("speed_mbps") {
+            Some(Value::Number(n)) => {
+                let mbps = n.as_u64().unwrap_or(0);
+                if mbps > 0 {
+                    format!("{} Mbps", mbps)
+                } else {
+                    String::new()
+                }
+            }
+            Some(Value::String(s)) if !s.is_empty() => s.clone(),
+            _ => String::new(),
+        };
+        let link_label = it
+            .get("link_type")
+            .and_then(|l| l.get("label"))
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let addresses: Vec<String> = it
+            .get("addresses")
+            .and_then(|a| a.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        out.push(WireInterface {
+            name: field_as_string(it, "name"),
+            description: field_as_string(it, "description"),
+            mac: field_as_string(it, "mac"),
+            mtu: field_as_string(it, "mtu"),
+            operstate: field_as_string(it, "operstate"),
+            speed,
+            link_label,
+            addresses,
+        });
+    }
+    Ok(out)
+}
+
+/// Render the network map as a standalone SVG (task 338).
+/// One card per R630 interface + a notes footer. No host discovery, no
+/// traffic flows — those need wire `capture` (task 341).
+fn render_network_map_svg(title: &str, ifaces: &[WireInterface]) -> String {
+    let card_h: i32 = 118;
+    let header_h: i32 = 76;
+    let footer_h: i32 = 88;
+    let width: i32 = 920;
+    let height = header_h + (ifaces.len() as i32) * card_h + footer_h;
+    let mut s = String::new();
+    s.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\" font-family=\"sans-serif\">\n",
+        width, height, width, height
+    ));
+    s.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#111827\"/>\n");
+    s.push_str(&format!(
+        "<text x=\"24\" y=\"34\" font-size=\"22\" font-weight=\"bold\" fill=\"#e5e7eb\">{}</text>\n",
+        xml_escape(title)
+    ));
+    s.push_str("<text x=\"24\" y=\"58\" font-size=\"13\" fill=\"#9ca3af\">R630 (Helix) — interfaces from mcp_wire</text>\n");
+    let mut y = header_h;
+    for it in ifaces {
+        let state_color = if it.operstate.eq_ignore_ascii_case("up") {
+            "#34d399"
+        } else {
+            "#f87171"
+        };
+        let state_label = if it.operstate.is_empty() {
+            "?"
+        } else {
+            &it.operstate
+        };
+        let mut meta = Vec::new();
+        if !it.mac.is_empty() {
+            meta.push(format!("MAC {}", it.mac));
+        }
+        if !it.mtu.is_empty() {
+            meta.push(format!("MTU {}", it.mtu));
+        }
+        if !it.speed.is_empty() {
+            meta.push(it.speed.clone());
+        }
+        if !it.link_label.is_empty() {
+            meta.push(it.link_label.clone());
+        }
+        let meta_line = if meta.is_empty() {
+            "—".to_string()
+        } else {
+            meta.join("  ·  ")
+        };
+        let addr_line = if it.addresses.is_empty() {
+            "no addresses".to_string()
+        } else {
+            it.addresses.join(", ")
+        };
+        let desc = if it.description.is_empty() {
+            it.name.clone()
+        } else {
+            it.description.clone()
+        };
+        s.push_str(&format!(
+            "<rect x=\"24\" y=\"{}\" width=\"872\" height=\"102\" rx=\"10\" fill=\"#1f2937\" stroke=\"#374151\"/>\n",
+            y
+        ));
+        s.push_str(&format!(
+            "<circle cx=\"48\" cy=\"{}\" r=\"7\" fill=\"{}\"/>\n",
+            y + 26,
+            state_color
+        ));
+        s.push_str(&format!(
+            "<text x=\"64\" y=\"{}\" font-size=\"16\" font-weight=\"bold\" fill=\"#e5e7eb\">{}  ({})</text>\n",
+            y + 32,
+            xml_escape(&it.name),
+            xml_escape(state_label)
+        ));
+        s.push_str(&format!(
+            "<text x=\"64\" y=\"{}\" font-size=\"13\" fill=\"#9ca3af\">{}</text>\n",
+            y + 56,
+            xml_escape(&desc)
+        ));
+        s.push_str(&format!(
+            "<text x=\"64\" y=\"{}\" font-size=\"13\" fill=\"#d1d5db\">{}</text>\n",
+            y + 78,
+            xml_escape(&meta_line)
+        ));
+        s.push_str(&format!(
+            "<text x=\"64\" y=\"{}\" font-size=\"13\" fill=\"#93c5fd\">{}</text>\n",
+            y + 98,
+            xml_escape(&addr_line)
+        ));
+        y += card_h;
+    }
+    if ifaces.is_empty() {
+        s.push_str(&format!(
+            "<text x=\"24\" y=\"{}\" font-size=\"14\" fill=\"#f87171\">No interfaces returned by wire.</text>\n",
+            header_h + 24
+        ));
+    }
+    let footer_y = header_h + (ifaces.len() as i32) * card_h;
+    s.push_str(&format!(
+        "<text x=\"24\" y=\"{}\" font-size=\"12\" fill=\"#9ca3af\">Known LAN hosts (from Helix config, not discovered): 192.168.1.149 Ollama server (gpt-oss:20b)  ·  192.168.1.196 desktop (gemma4:e4b)</text>\n",
+        footer_y + 24
+    ));
+    s.push_str(&format!(
+        "<text x=\"24\" y=\"{}\" font-size=\"12\" fill=\"#9ca3af\">Interfaces only — other LAN hosts, traffic flows, and live hosts need wire capture (task 341).</text>\n",
+        footer_y + 46
+    ));
+    s.push_str("</svg>\n");
+    s
+}
+
+/// create_network_map — task 338. Dedicated one-call tool: fetches mcp_wire
+/// `interfaces` server-side and renders the SVG itself, because gemma4:e4b
+/// is weak at multi-step tool composition (task 334). The LLM does NOT need
+/// to call wire + create_artifact separately. Reuses the `create_artifact`
+/// writer — no duplicated file-writing code.
+pub fn create_network_map(args: &Value) -> String {
+    let title = args["title"].as_str().unwrap_or("Network Map");
+    let raw = match crate::mcp_client::try_execute("mcp__wire__interfaces", &serde_json::json!({})) {
+        Some(r) => r,
+        None => {
+            return "Error: wire MCP server is not available — is [mcp] enabled and the wire server configured in config.toml?"
+                .to_string();
+        }
+    };
+    let ifaces = match parse_wire_interfaces(&raw) {
+        Ok(i) => i,
+        Err(e) => return e,
+    };
+    let svg = render_network_map_svg(title, &ifaces);
+    match write_artifact_file("svg", title, &svg) {
+        Ok((url, kind, bytes)) => artifact_saved_string(&url, &kind, bytes),
+        Err(e) => e,
+    }
+}
+
 // ── NEW: Repo Explorer Tools (read-only) ─────────────────────────────────────
 
 /// tool_glob: list files matching a glob pattern (e.g. "**/*.rs").
@@ -523,5 +838,154 @@ mod tests {
     fn test_repo_read_missing_is_error_not_panic() {
         let result = repo_read(&json!({"path": "no_such_file_xyz.rs"}));
         assert!(result.contains("Error reading"), "got: {}", result);
+    }
+
+    // ── Artifact tools (tasks 335, 338) ─────────────────────────────────────
+
+    /// Extract the `/artifacts/<file>` path from a create_artifact success
+    /// string. None unless the string matches the success shape.
+    fn artifact_path_from_result(result: &str) -> Option<String> {
+        let rest = result.strip_prefix("✅ Artifact saved: ")?;
+        let end = rest.find(" (")?;
+        Some(rest[..end].to_string())
+    }
+
+    /// Remove a created artifact file (and the dir if it ends up empty).
+    /// Tests must not leak files into the worktree.
+    fn remove_artifact(rel_url: &str) {
+        let path = rel_url.trim_start_matches('/');
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir("artifacts");
+    }
+
+    #[test]
+    fn create_artifact_writes_file_and_returns_url() {
+        let content = "<html><body><h1>test</h1></body></html>";
+        let result =
+            create_artifact(&json!({"kind": "html", "title": "Test Chart", "content": content}));
+        let url =
+            artifact_path_from_result(&result).expect(&format!("expected success, got: {}", result));
+        // sanitise_filename preserves case (spaces -> underscores).
+        assert!(url.starts_with("/artifacts/Test_Chart-"), "url: {}", url);
+        assert!(url.ends_with(".html"), "url: {}", url);
+        assert!(result.contains("(html,"), "result: {}", result);
+        let _cleanup = Cleanup::new(|| remove_artifact(&url));
+        let on_disk =
+            std::fs::read_to_string(url.trim_start_matches('/')).expect("artifact file must exist");
+        assert_eq!(on_disk, content);
+    }
+
+    #[test]
+    fn create_artifact_rejects_unknown_kind() {
+        let result = create_artifact(&json!({"kind": "pdf", "title": "x", "content": "hi"}));
+        assert!(result.contains("unknown artifact kind"), "got: {}", result);
+        assert!(!result.contains("Artifact saved"), "got: {}", result);
+    }
+
+    #[test]
+    fn create_artifact_rejects_oversize_content() {
+        let big = "x".repeat(MAX_ARTIFACT_BYTES + 1);
+        let result = create_artifact(&json!({"kind": "text", "title": "big", "content": big}));
+        assert!(result.contains("over the 512 KB cap"), "got: {}", result);
+    }
+
+    #[test]
+    fn create_artifact_rejects_empty_content() {
+        let result = create_artifact(&json!({"kind": "text", "title": "empty", "content": ""}));
+        assert!(result.contains("empty"), "got: {}", result);
+    }
+
+    #[test]
+    fn create_artifact_sanitises_path_traversal_title() {
+        let result =
+            create_artifact(&json!({"kind": "text", "title": "../../etc/passwd", "content": "pwn"}));
+        let url =
+            artifact_path_from_result(&result).expect(&format!("expected success, got: {}", result));
+        assert!(!url.contains(".."), "url must not contain ..: {}", url);
+        assert!(
+            !url["/artifacts/".len()..].contains('/'),
+            "flat filename: {}",
+            url
+        );
+        let _cleanup = Cleanup::new(|| remove_artifact(&url));
+        assert!(std::path::Path::new(url.trim_start_matches('/')).exists());
+    }
+
+    #[test]
+    fn create_artifact_second_same_minute_does_not_overwrite() {
+        let r1 = create_artifact(&json!({"kind": "text", "title": "Dup Title", "content": "one"}));
+        let u1 = artifact_path_from_result(&r1).expect(&r1);
+        let _c1 = Cleanup::new(|| remove_artifact(&u1));
+        let r2 = create_artifact(&json!({"kind": "text", "title": "Dup Title", "content": "two"}));
+        let u2 = artifact_path_from_result(&r2).expect(&r2);
+        let _c2 = Cleanup::new(|| remove_artifact(&u2));
+        assert_ne!(u1, u2, "second write must get a distinct filename");
+        assert_eq!(
+            std::fs::read_to_string(u1.trim_start_matches('/')).unwrap(),
+            "one"
+        );
+        assert_eq!(
+            std::fs::read_to_string(u2.trim_start_matches('/')).unwrap(),
+            "two"
+        );
+    }
+
+    const WIRE_INTERFACES_STUB: &str = r#"{"interfaces": [
+        {"name": "ens18", "description": "Ethernet", "mac": "aa:bb:cc:dd:ee:ff", "mtu": 1500, "operstate": "up", "speed_mbps": 1000, "link_type": {"arphrd": 1, "label": "Ethernet"}, "addresses": ["192.168.1.168/24"], "link_layer_types": ["ethernet"]},
+        {"name": "tailscale0", "description": "Tailscale", "mac": "", "mtu": 1280, "operstate": "up", "speed_mbps": 0, "link_type": {"arphrd": 65534, "label": "None"}, "addresses": ["100.84.56.110/32"], "link_layer_types": []},
+        {"name": "lo", "description": "Loopback", "mac": "", "mtu": 65536, "operstate": "up", "speed_mbps": 0, "link_type": {"arphrd": 772, "label": "Loopback"}, "addresses": ["127.0.0.1/8", "::1/128"], "link_layer_types": []}
+    ]}"#;
+
+    #[test]
+    fn create_network_map_renders_wire_interfaces() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
+        crate::mcp_client::stub_try_execute_for_tests("mcp__wire__interfaces", WIRE_INTERFACES_STUB);
+        let _cleanup_overrides = Cleanup::new(crate::mcp_client::clear_test_overrides);
+        let result = create_network_map(&json!({"title": "Test Net Map"}));
+        let url =
+            artifact_path_from_result(&result).expect(&format!("expected success, got: {}", result));
+        assert!(url.ends_with(".svg"), "url: {}", url);
+        let _cleanup = Cleanup::new(|| remove_artifact(&url));
+        let svg =
+            std::fs::read_to_string(url.trim_start_matches('/')).expect("svg must exist");
+        assert!(svg.contains("ens18"), "svg must name ens18");
+        assert!(svg.contains("tailscale0"), "svg must name tailscale0");
+        assert!(svg.contains("192.168.1.168/24"), "svg must show the address");
+        assert!(
+            svg.contains("100.84.56.110/32"),
+            "svg must show the tailscale address"
+        );
+        assert!(svg.starts_with("<svg"), "must be an SVG document");
+    }
+
+    #[test]
+    fn create_network_map_reports_wire_unavailable() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
+        crate::mcp_client::override_config_for_tests(crate::config::mcp::McpConfig::default());
+        let _cleanup_overrides = Cleanup::new(crate::mcp_client::clear_test_overrides);
+        let result = create_network_map(&json!({}));
+        assert!(
+            result.contains("wire MCP server is not available"),
+            "got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn render_network_map_svg_escapes_xml() {
+        let ifaces = vec![WireInterface {
+            name: "eth0".to_string(),
+            description: "<script>alert(1)</script> & friends".to_string(),
+            mac: "aa:bb".to_string(),
+            mtu: "1500".to_string(),
+            operstate: "up".to_string(),
+            speed: "100 Mbps".to_string(),
+            link_label: "Ethernet".to_string(),
+            addresses: vec!["10.0.0.1/24".to_string()],
+        }];
+        let svg = render_network_map_svg("Map <&>", &ifaces);
+        assert!(!svg.contains("<script>"), "raw script tag must not appear");
+        assert!(svg.contains("&lt;script&gt;"), "must be escaped");
+        assert!(svg.contains("Map &lt;&amp;&gt;"), "title must be escaped");
     }
 }

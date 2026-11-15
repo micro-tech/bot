@@ -5,10 +5,10 @@ use crate::utils::error_log_path;
 use axum::{
     Router,
     extract::{
-        Multipart, State, WebSocketUpgrade,
+        Multipart, Path as AxumPath, State, WebSocketUpgrade,
         ws::{Message as WsMessage, WebSocket},
     },
-    http::{header, StatusCode},
+    http::{HeaderMap, header, StatusCode},
     middleware,
     response::{Html, IntoResponse, Json},
     routing::{get, post},
@@ -465,6 +465,9 @@ pub async fn start_web_server(
         .route("/logs/error", get(serve_error_log))
         .route("/logs/bus", get(serve_bus_log))
         .route("/logs/hartbeat", get(serve_hartbeat_log))
+        // Task 336: public read-only artifact download (outputs of ungated
+        // chat turns, same posture as the /logs/* reads).
+        .route("/artifacts/{name}", get(serve_artifact))
         // Task 259 (SYSADMIN-01): read-only support endpoints.
         .route("/support/status", get(support_status))
         .route("/support/drafts", get(support_drafts))
@@ -760,6 +763,23 @@ fn bridge_out_message(
                         .to_string(),
                 ),
                 dirty,
+            )
+        }
+        // Task 337: artifact cards. Well-formed (has url) -> forward with
+        // backend label stamped; malformed (empty url) -> drop, mirroring
+        // the llm_output rule. No in-flight retire (artifacts carry no
+        // correlation_id).
+        "artifact" => {
+            let url = inner["url"].as_str().unwrap_or("");
+            if url.is_empty() {
+                return (None, false);
+            }
+            (
+                Some(
+                    json!({ "type": "artifact", "from": msg.from, "backend": backend_display_name(&msg.from), "url": url, "kind": inner["kind"].as_str().unwrap_or(""), "title": inner["title"].as_str().unwrap_or("Artifact") })
+                        .to_string(),
+                ),
+                false,
             )
         }
         // Well-formed UI messages — forward as-is (including errors so they are visible)
@@ -1616,6 +1636,77 @@ async fn serve_index() -> Html<String> {
 }
 
 // ── Log file handlers ────────────────────────────────────────────────────────
+
+/// GET /artifacts/{name} — public read-only artifact download (task 336).
+/// Same posture as the /logs/* reads: artifacts are outputs of ungated chat
+/// turns. The name must be a bare filename (no `/`, `\`, NUL, or `"`); the
+/// path is canonicalized under `artifacts/` and symlink escapes are rejected
+/// with 400, missing files return 404. No POST/upload — writes happen only
+/// server-side via the create_artifact tool, so no new mutation surface.
+async fn serve_artifact(AxumPath(name): AxumPath<String>) -> impl IntoResponse {
+    let bad = |msg: &'static str| (StatusCode::BAD_REQUEST, HeaderMap::new(), msg.as_bytes().to_vec());
+    let not_found = || (StatusCode::NOT_FOUND, HeaderMap::new(), b"artifact not found".to_vec());
+
+    if name.is_empty()
+        || name == "."
+        || name == ".."
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains('\0')
+        || name.contains('"')
+    {
+        return bad("invalid artifact name");
+    }
+    let base = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join("artifacts");
+    let base_canon = match base.canonicalize() {
+        Ok(p) => p,
+        Err(_) => return not_found(),
+    };
+    let canon = match base_canon.join(&name).canonicalize() {
+        Ok(p) => p,
+        Err(_) => return not_found(),
+    };
+    if !canon.starts_with(&base_canon) {
+        return bad("artifact path escapes the artifacts directory");
+    }
+    let bytes = match fs::read(&canon) {
+        Ok(b) => b,
+        Err(_) => return not_found(),
+    };
+    let ext = canon
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let (content_type, attachment): (&str, bool) = match ext.as_str() {
+        "html" => ("text/html; charset=utf-8", false),
+        "svg" => ("image/svg+xml", false),
+        "md" => ("text/markdown; charset=utf-8", false),
+        "csv" => ("text/csv; charset=utf-8", false),
+        "txt" => ("text/plain; charset=utf-8", false),
+        "json" => ("application/json", false),
+        "png" => ("image/png", false),
+        _ => ("application/octet-stream", true),
+    };
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        content_type.parse().unwrap_or_else(|_| {
+            header::HeaderValue::from_static("application/octet-stream")
+        }),
+    );
+    if attachment {
+        headers.insert(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", name)
+                .parse()
+                .unwrap_or_else(|_| header::HeaderValue::from_static("attachment")),
+        );
+    }
+    (StatusCode::OK, headers, bytes)
+}
 
 async fn serve_chat_log(State(state): State<AppState>) -> impl IntoResponse {
     let path = &state.logging.chat_log;
@@ -3515,6 +3606,107 @@ mod tests {
             // `from` itself is still forwarded unchanged.
             assert_eq!(v["from"], from);
         }
+    }
+
+    #[test]
+    fn bridge_tags_artifact_with_backend() {
+        // Task 337: artifact messages forward with the backend label stamped
+        // (same rule as llm_output), url/kind/title preserved, no in-flight
+        // retire; a malformed artifact (empty url) is dropped.
+        let inflight = Arc::new(Mutex::new(HashMap::new()));
+        let msg = bus_msg(json!({
+            "type": "artifact",
+            "url": "/artifacts/network_map-20261115-0236.svg",
+            "kind": "svg",
+            "title": "Network Map",
+        }));
+        let msg = Message { from: "ollama_desktop".to_string(), ..msg };
+        let (out, dirty) = bridge_out_message(&msg, &inflight);
+        assert!(!dirty, "artifact must not retire in-flight entries");
+        let out = out.expect("well-formed artifact must forward");
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["type"], "artifact");
+        assert_eq!(v["backend"], "desktop");
+        assert_eq!(v["from"], "ollama_desktop");
+        assert_eq!(v["url"], "/artifacts/network_map-20261115-0236.svg");
+        assert_eq!(v["kind"], "svg");
+        assert_eq!(v["title"], "Network Map");
+
+        let empty = bus_msg(json!({
+            "type": "artifact",
+            "url": "",
+            "kind": "svg",
+            "title": "Network Map",
+        }));
+        let (out, _) = bridge_out_message(&empty, &inflight);
+        assert!(out.is_none(), "artifact with empty url must be dropped");
+    }
+
+    #[tokio::test]
+    async fn serve_artifact_serves_file_with_content_type() {
+        // Task 336: a file written by create_artifact is served
+        // byte-identical with the right Content-Type; traversal and
+        // missing files are rejected. Removes only its own probe file,
+        // never the shared artifacts/ dir, so parallel artifact tests
+        // cannot race on dir removal.
+        use axum::body::to_bytes;
+        let written = crate::tools::file_tools::create_artifact(&json!({
+            "kind": "text",
+            "title": "Serve Artifact Probe",
+            "content": "probe-content",
+        }));
+        assert!(
+            written.starts_with("✅ Artifact saved: /artifacts/"),
+            "got: {}",
+            written
+        );
+        let name = written
+            .strip_prefix("✅ Artifact saved: /artifacts/")
+            .and_then(|r| r.split(" (").next())
+            .expect("artifact result shape")
+            .to_string();
+        let path = format!("artifacts/{}", name);
+        let resp = serve_artifact(AxumPath(name)).await.into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok()),
+            Some("text/plain; charset=utf-8")
+        );
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(&body[..], b"probe-content");
+        let _ = std::fs::remove_file(&path);
+
+        // Traversal: 400, never the file outside artifacts/.
+        let resp = serve_artifact(AxumPath("../example.config.toml".to_string()))
+            .await
+            .into_response();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let resp = serve_artifact(AxumPath("..".to_string())).await.into_response();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        // Missing: 404.
+        let resp = serve_artifact(AxumPath("no_such_artifact_xyz.txt".to_string()))
+            .await
+            .into_response();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn serve_artifact_rejects_symlink_escape() {
+        // Task 336: a symlink inside artifacts/ pointing outside must not
+        // serve the target.
+        let _ = std::fs::create_dir_all("artifacts");
+        let link = "artifacts/serve_artifact_escape_link";
+        let _ = std::fs::remove_file(link);
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("../example.config.toml", link).unwrap();
+        let resp = serve_artifact(AxumPath("serve_artifact_escape_link".to_string()))
+            .await
+            .into_response();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let _ = std::fs::remove_file(link);
     }
 
     // ── /support commands (task 257, SYSADMIN-01) ─────────────────────────
