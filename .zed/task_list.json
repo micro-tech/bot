@@ -4244,6 +4244,249 @@
         }
       ],
       "results": "DONE 2026-11-14 by Ranger 1 (branch ranger-toolcall). Streaming fix: extract_tool_calls() helper + capture on every line and trailing line. Diagnostic: warn!-log of raw msg (500 chars) on empty content. Tests: static_tool_payload_is_small_and_clean + extract_tool_calls_finds_non_final_line_call. CONCLUSION: most likely gemma4:e4b tool-calling limitation (same payload + code path works for plain chat; server-backend test is the decider). No schema sanitizer and no model swap - see details."
+    },
+    {
+      "id": 335,
+      "title": "Artifact tool: LLM can create charts/graphs/files (create_artifact)",
+      "description": "John 2026-11-15 02:32 EST: Helix must output charts, graphs, and files the way Cobble jr does. Add a built-in tool create_artifact so the LLM can produce a file instead of a text-only reply. Follows the write_note precedent (src/tools/file_tools.rs:73, CWD-relative notes/ + sanitise_filename) and the registry pattern (src/tools/mod.rs: execute() dispatch arm + json! schema in static_tool_definitions(), cached by tool_definitions()). One generic tool with a kind parameter covers charts/graphs/files — do NOT build separate create_chart/create_diagram tools; they would duplicate the same plumbing.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "New pub fn create_artifact(args) in src/tools/file_tools.rs. Args: kind (required string enum: html | svg | mermaid | markdown | csv | text), title (required string), content (required string). Writes to CWD-relative artifacts/{sanitised-title}-{YYYYMMDD-HHMM}.{ext} (reuse sanitise_filename from file_tools.rs; ext maps from kind: html->html, svg->svg, mermaid->mmd, markdown->md, csv->csv, text->txt); create_dir_all(\"artifacts\") if missing; reject empty content and content over 512 KB with an error string (do not truncate silently). Returns exactly: ✅ Artifact saved: /artifacts/<filename> (kind, <bytes> bytes) — the path is the URL task 336 serves. Register: match arm in execute() + schema in static_tool_definitions(); the schema description must tell the model WHEN to use it (user asks for a chart, graph, diagram, map, or downloadable file — write the full file content here, then mention the URL in your reply). Publish a bus message {type:\"artifact\", url, kind, title} to web_interface on success so the UI can render it inline (see task 337): do it in call_ollama_tools (src/io/ollama/mod.rs) after execute() returns, keyed on tool name == create_artifact and parsing the returned URL — do NOT add bus plumbing into file_tools. The injection guard (task 235) already validates args before dispatch; the tool writes model-supplied content to disk, so the filename sanitising + size cap are the security boundary — no shell, no path input from the model beyond title.",
+      "subtasks": [
+        {
+          "id": "335.1",
+          "status": "pending",
+          "title": "Write create_artifact + filename sanitising + 512 KB cap + artifacts/ dir creation"
+        },
+        {
+          "id": "335.2",
+          "status": "pending",
+          "title": "Register schema in static_tool_definitions() + dispatch arm in execute()"
+        },
+        {
+          "id": "335.3",
+          "status": "pending",
+          "title": "Publish artifact bus message to web_interface on success (from call_ollama_tools)"
+        },
+        {
+          "id": "335.4",
+          "status": "pending",
+          "title": "Unit tests: happy-path write + URL string, oversize rejection, title with path separators sanitised (no .. escape), schema present in tool_definitions()"
+        }
+      ],
+      "testStrategy": "cargo test --lib: new tests assert the artifact file lands under artifacts/ with the expected name pattern and the return string contains the /artifacts/ URL; oversize (>512 KB) and empty content are rejected; a title like ../../etc/passwd is sanitised to a flat filename inside artifacts/; tool_definitions() contains create_artifact with kind/title/content required. cargo build clean, zero warnings."
+    },
+    {
+      "id": 336,
+      "title": "Serve generated artifacts over HTTP: GET /artifacts/{name}",
+      "description": "Add a public read-only route so the web UI (and John) can open/download files the artifact tool wrote. Follows the existing public read routes (/logs/*) in start_web_server (src/io/web_server/mod.rs main_app router). There is NO general static-file route today — serve_index is a single include_str! HTML file — so this is a new handler, not an extension of an existing one.",
+      "status": "pending",
+      "dependencies": [
+        335
+      ],
+      "priority": "high",
+      "details": "New handler serve_artifact(Path<String>) mounted on the PUBLIC main_app router (NOT the token-gated protected router): artifacts are outputs of ungated chat turns, same posture as /logs/* reads and OKF reads. Handler: resolve name under CWD artifacts/; canonicalize and reject any path escaping the dir (.., absolute paths, symlinks out) with 400 and a log line (do not leak the resolved path); 404 if missing. Content-Type by extension: .html text/html, .svg image/svg+xml, .md text/markdown, .csv text/csv, .txt text/plain, .json application/json, .png image/png; unknown types get application/octet-stream + Content-Disposition: attachment. No POST/upload route — writes happen ONLY server-side via the tool, so no new mutation surface is added.",
+      "subtasks": [
+        {
+          "id": "336.1",
+          "status": "pending",
+          "title": "Handler + route on the public router + extension-to-Content-Type map"
+        },
+        {
+          "id": "336.2",
+          "status": "pending",
+          "title": "Traversal rejection (.., absolute, symlink-out) with tests"
+        },
+        {
+          "id": "336.3",
+          "status": "pending",
+          "title": "Content-Type per extension + 404 tests; byte-identical serve of a file written by create_artifact"
+        }
+      ],
+      "testStrategy": "Tests driving the handler (use the existing web_server test harness): each extension returns the right Content-Type; ../ and absolute paths return 400; missing file 404; a real artifact file written by create_artifact serves byte-identical. cargo test --lib green, cargo build clean."
+    },
+    {
+      "id": 337,
+      "title": "Web UI renders artifact cards inline in chat",
+      "description": "appendChat (src/io/web_server/static/index.html:2412, served via include_str! at web_server/mod.rs:1737) is textContent-only today, so an artifact URL would show as plain text. Add an artifact render branch so a chart/graph/file shows inline instead of just a link. Follow the PR #54 backend-field pattern (bridge stamps a field, appendChat renders it).",
+      "status": "pending",
+      "dependencies": [
+        335,
+        336
+      ],
+      "priority": "high",
+      "details": "Backend: new bridge_out_message arm (src/io/web_server/mod.rs:663) for bus type artifact -> WS JSON {type:\"artifact\", url, kind, title, backend}, stamping backend from msg.from via backend_display_name exactly like the llm_output/ollama_response arms (PR #54). Frontend: in the WS dispatch (~line 1814) route type artifact to a new appendArtifact(msg); also handle an artifact attached to an llm_output message (defensive: if msg.artifact is present, render the card under the bubble). Rendering by kind, using DOM APIs only (createElement/textContent — NEVER innerHTML, preserves the XSS posture): html -> sandboxed <iframe sandbox=\"\"> (EMPTY sandbox = no scripts, no same-origin; LLM-generated HTML must never run scripts); svg -> <img> (SVG served as image/svg+xml renders as an image, no script execution); markdown/csv/text -> a download link + a <details> preview of the first ~40 lines fetched via fetch(); unknown kind -> download link. Every card shows title + kind + a Download link (href=url, download attr) and an Open link (target _blank). Keep the model's text reply as-is (it mentions the URL) — the card is additive, not a replacement. Add a small .artifact-card CSS block reusing the existing bubble styles. The final llm_output still delivers the complete text (chat_token streaming is unchanged); the artifact card attaches to the final message, not the stream.",
+      "subtasks": [
+        {
+          "id": "337.1",
+          "status": "pending",
+          "title": "Bridge arm for type artifact + Rust test bridge_forwards_artifact_with_backend"
+        },
+        {
+          "id": "337.2",
+          "status": "pending",
+          "title": "appendArtifact + kind renderers + .artifact-card CSS (DOM APIs only, no innerHTML)"
+        },
+        {
+          "id": "337.3",
+          "status": "pending",
+          "title": "node --check on the extracted script; live browser render verified in task 339"
+        }
+      ],
+      "testStrategy": "New Rust test bridge_forwards_artifact_with_backend (bridge arm forwards url/kind/title/backend, unknown from reads as helix); frontend JS validated with node --check on the extracted script (same as PR #54 verification); live browser render is verified in task 339, not here. cargo test --lib green, cargo build clean."
+    },
+    {
+      "id": 338,
+      "title": "Network map: dedicated create_network_map tool (wire interfaces -> SVG artifact)",
+      "description": "John's headline use case (2026-11-15 02:32 EST): ask Helix for a network map, get a real visual back. The LLM could compose two existing tools (wire interfaces via MCP + create_artifact), but gemma4:e4b is weak at multi-step tool composition (task 334), so build a dedicated one-call tool that does the whole flow server-side. Depends on task 335's artifact writer.",
+      "status": "pending",
+      "dependencies": [
+        335
+      ],
+      "priority": "high",
+      "details": "New tool create_network_map in file_tools.rs (or a new network_tools.rs if it grows). It calls crate::mcp_client::try_execute with the wire interfaces tool — CHECK src/mcp_client.rs first for the exact name the LLM sees (mcp__wire__interfaces vs interfaces) and use the same name; do not guess. Parse {\"interfaces\": [...]} (fields per mcp-wire/src/tshark.rs:581, live-verified 2026-11-14: name, description, mac, mtu, operstate, speed_mbps, link_type{arphrd,label}, addresses[], link_layer_types) and render a standalone SVG: the R630 as the hub node, one node per interface (name, MAC, MTU, speed, operstate, link-type label, addresses/subnets), tailscale0 as a separate segment. Reuse the create_artifact writer (same artifacts/ dir, same filename sanitising, same ✅ return string) — factor the writer into a shared helper if it is not already one. Register schema + dispatch arm like task 335; the schema description must say the model should call this tool directly when asked for a network map. If the wire MCP server is disabled/missing, return a clear error string (wire MCP server not configured — enable [mcp] wire in config) instead of failing silently. SCOPE — state this in the tool description and the task results: the map shows R630 interfaces + their subnets ONLY. It CANNOT show other LAN hosts (no discovery/ARP scan), traffic flows (needs capture — task 341), or the .149/.196 boxes except as labelled notes.",
+      "subtasks": [
+        {
+          "id": "338.1",
+          "status": "pending",
+          "title": "Fetch + parse wire interfaces (unit test with canned interfaces JSON)"
+        },
+        {
+          "id": "338.2",
+          "status": "pending",
+          "title": "Deterministic SVG layout render (hub + interface nodes, no external deps)"
+        },
+        {
+          "id": "338.3",
+          "status": "pending",
+          "title": "Register schema + dispatch arm; wire-disabled error string"
+        },
+        {
+          "id": "338.4",
+          "status": "pending",
+          "title": "Tests: SVG contains every interface name + address; artifact file written + URL returned"
+        }
+      ],
+      "testStrategy": "cargo test --lib: canned-interfaces test asserts every interface name/MAC/address appears in the SVG and the file is written under artifacts/ with the URL returned; wire-disabled test asserts the error string; tool_definitions() contains create_network_map. cargo build clean, zero warnings."
+    },
+    {
+      "id": 339,
+      "title": "Live drill on R630: network map end-to-end (merge -> pull -> restart -> ask -> verify)",
+      "description": "Verification task for 335-338. Not a code task — the drill that proves the feature works on the real box. Run after John merges the PR.",
+      "status": "pending",
+      "dependencies": [
+        336,
+        337,
+        338
+      ],
+      "priority": "high",
+      "details": "On the R630: git pull PreRelese, cargo build --release, restart Helix. Then in web chat ask 'draw me a network map' on the desktop backend AND on the server backend (one each). Verify: (1) the artifact card renders inline in the chat (SVG visible, not just a URL in text); (2) the Download/Open links work and the file opens at /artifacts/<name>; (3) the map shows ens18, tailscale0, lo with correct IPs/MACs; (4) ask for a second artifact ('make me a bar chart of ...') to prove the generic create_artifact path, not just the map tool; (5) confirm the sandbox cargo test suite was already green on the branch (no need to re-run full suite on the R630). Record pass/fail per check in the task results. If the card does not render, capture whether the WS artifact message arrived (browser devtools WS tab) vs the bridge never sent it — that split decides whether the fix is frontend or backend.",
+      "subtasks": [
+        {
+          "id": "339.1",
+          "status": "pending",
+          "title": "R630 pull / build / restart"
+        },
+        {
+          "id": "339.2",
+          "status": "pending",
+          "title": "Network map on desktop + server backends, verify card + contents"
+        },
+        {
+          "id": "339.3",
+          "status": "pending",
+          "title": "Generic artifact (chart) check via create_artifact"
+        },
+        {
+          "id": "339.4",
+          "status": "pending",
+          "title": "Record pass/fail per check in results"
+        }
+      ],
+      "testStrategy": "The drill itself IS the test strategy; each check in details is a pass/fail line in results. No new automated tests."
+    },
+    {
+      "id": 340,
+      "title": "Artifact retention: cap artifacts dir (nightly cleanup)",
+      "description": "Later task (NOT in the morning-PR critical path): artifacts/ grows without bound since every chart/map is a file. Add a nightly cleanup that deletes artifacts older than 30 days (or keeps the newest 100, whichever is smaller) and logs the count.",
+      "status": "pending",
+      "dependencies": [
+        335
+      ],
+      "priority": "medium",
+      "details": "Reuse the nightly_maintenance seeded routine (task 314). Config: [artifacts] max_age_days = 30, max_files = 100 (defaults; 0 = keep forever). Never delete files younger than max_age; log deletions. Unit test with a temp dir (old file deleted, new file kept, cap respected).",
+      "subtasks": [
+        {
+          "id": "340.1",
+          "status": "pending",
+          "title": "Cleanup routine + config knobs + logging"
+        },
+        {
+          "id": "340.2",
+          "status": "pending",
+          "title": "Unit test with temp dir (old deleted, new kept, cap respected)"
+        }
+      ],
+      "testStrategy": "Unit test with a temp dir; cargo test --lib green."
+    },
+    {
+      "id": 341,
+      "title": "Network map v2: overlay live hosts from wire capture",
+      "description": "Later task (NOT in the morning-PR critical path): the v1 map (task 338) shows interfaces only. Add a live-host overlay: run wire capture (short, e.g. 30s) and list distinct source hosts seen, then add them as nodes on the map with a 'seen in traffic' badge. BLOCKED on capture being live-tested on the R630 first (not yet done — needs sudo usermod -a -G wireshark cobble + Helix restart; interfaces and analyze_pcap do not need it).",
+      "status": "pending",
+      "dependencies": [
+        338
+      ],
+      "priority": "medium",
+      "details": "Extend create_network_map (or add a capture_hosts step before it): call wire capture for a bounded window, parse distinct source IPs/MACs, add them as map nodes. Keep the capture window short and the host count capped so the SVG stays readable. If capture is unavailable (permissions), fall back to the interfaces-only map and say so in the return string.",
+      "subtasks": [
+        {
+          "id": "341.1",
+          "status": "pending",
+          "title": "Capture call + distinct-host parse (unit test with canned capture output)"
+        },
+        {
+          "id": "341.2",
+          "status": "pending",
+          "title": "Map overlay + fallback when capture is unavailable"
+        },
+        {
+          "id": "341.3",
+          "status": "pending",
+          "title": "Live test on R630 after capture works there"
+        }
+      ],
+      "testStrategy": "Unit test with canned capture output; live test on R630 after capture works. cargo test --lib green."
+    },
+    {
+      "id": 342,
+      "title": "Render Mermaid diagrams in chat (generate_mermaid_project_map output)",
+      "description": "Later task (NOT in the morning-PR critical path): generate_mermaid_project_map already returns Mermaid text, but appendChat is textContent-only so it shows as raw text. Add a client-side Mermaid renderer that detects ```mermaid fences in agent replies and renders them to SVG inline.",
+      "status": "pending",
+      "dependencies": [
+        337
+      ],
+      "priority": "medium",
+      "details": "Vendor mermaid.js locally (NO CDN — the page is served from the R630 with no external deps). index.html is a single include_str! file, so either inline the lib or add a second served file — decide in implementation, prefer the smallest change that keeps the page self-contained. Fence detection in appendChat, render on append, keep the raw text as a fallback under a <details> if rendering fails. XSS review: Mermaid HTML labels must be sanitised or disabled via securityLevel:'strict' — model content is data, never markup.",
+      "subtasks": [
+        {
+          "id": "342.1",
+          "status": "pending",
+          "title": "Vendor mermaid.js + fence detection + render path in appendChat"
+        },
+        {
+          "id": "342.2",
+          "status": "pending",
+          "title": "Fallback to raw text on render failure; strict securityLevel"
+        },
+        {
+          "id": "342.3",
+          "status": "pending",
+          "title": "node --check on the extracted script; live check with a project-map request"
+        }
+      ],
+      "testStrategy": "node --check on the extracted script; live check with a project-map request; cargo test --lib green (Rust side unchanged)."
     }
   ]
 }
