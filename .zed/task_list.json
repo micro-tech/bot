@@ -4487,6 +4487,211 @@
         }
       ],
       "testStrategy": "node --check on the extracted script; live check with a project-map request; cargo test --lib green (Rust side unchanged)."
+    },
+    {
+      "id": 343,
+      "title": "Fix create_network_map parse: doubled MCP JSON breaks strict parse (live failure 2026-11-15)",
+      "description": "Live failure 2026-11-15 17:41 EST (desktop backend): John asked for a network map, Helix replied the interfaces tool 'failed to return the data in the expected format'. Root cause (Surveyor 1, code reading): mcp-wire tool_ok_json returns BOTH a text block (compact JSON) AND structuredContent (same value); the bot's result_to_string (src/mcp_client/manager.rs) concatenates both (pretty-printed structured content + text block, joined with newline), so create_network_map receives TWO JSON documents back to back. parse_wire_interfaces does a single serde_json::from_str and fails on trailing characters. The unit test stub (WIRE_INTERFACES_STUB) is a single JSON document, so the test passes while live fails. The direct 'list interfaces' call works because the LLM just reads the doubled text; only the strict parse breaks. Prime suspect, deterministic on every backend.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "Fix parse_wire_interfaces (src/tools/file_tools.rs) to tolerate the doubled payload: parse the FIRST JSON document from the string (serde_json Deserializer stream / from_str on the first complete value), or strip to the first object, or prefer structured content if the MCP layer exposes it. Do NOT fix it in mcp-wire alone (the bot must tolerate any MCP server that returns both text + structuredContent) and do NOT fix it by dropping structuredContent from result_to_string (other consumers may rely on it). Regression test is mandatory: add a test that feeds the LIVE shape (pretty-printed {\"interfaces\": [...]} + newline + compact {\"interfaces\": [...]} — i.e. what result_to_string actually returns) into parse_wire_interfaces / create_network_map and asserts success. Keep the existing single-document stub test too. Decisive R630 check for John (to confirm before building): grep \"create_network_map\" ~/.helix/logs/error_log.md — expect \"Tool 'create_network_map' execution reported error\" (proves the tool ran and errored, ruling out gemma never calling it); then web chat 'list interfaces' — if interfaces return, wire is up (ruling out wire-down). Both together leave only this parse bug.",
+      "subtasks": [
+        {
+          "id": "343.1",
+          "status": "pending",
+          "title": "Reproduce with a doubled-payload regression test (pretty + compact JSON, the live result_to_string shape)"
+        },
+        {
+          "id": "343.2",
+          "status": "pending",
+          "title": "Make parse_wire_interfaces tolerate the doubled payload (parse first JSON document)"
+        },
+        {
+          "id": "343.3",
+          "status": "pending",
+          "title": "Live verify on R630: network map returns an SVG artifact card on the desktop backend"
+        }
+      ],
+      "testStrategy": "cargo test --lib: new doubled-payload regression test passes; existing single-document test still passes; cargo build clean, zero warnings. Live drill on R630 after merge/pull/restart: ask Helix for a network map, confirm the SVG card renders."
+    },
+    {
+      "id": 344,
+      "title": "Full network map: gateway detection + ARP neighbor discovery (read-only)",
+      "description": "Full-network map, step 1 (John 2026-11-15 17:42 EST: 'can we fix it to do full net work'). Detect the default gateway (the Starlink router) and read the ARP neighbor table. Both are read-only, no probing, no new permissions. The gateway is the root node of the map; ARP gives the instant baseline of recently-seen LAN devices (IP + MAC).",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "New discovery helper (new file src/tools/network_discovery.rs, or inside file_tools.rs if it stays small). Gateway: parse /proc/net/route (destination 00000000 row) for the default gateway IP, falling back to `ip route show default` only if /proc is unavailable — prefer /proc, no shell-out. ARP: parse /proc/net/arp (IP address, HW address, device columns) into (ip, mac, interface, flags). Return a structured value (gateway ip + Vec of arp entries). Skip entries with incomplete MAC (00:00:00:00:00:00) and the loopback interface. No shell, no network traffic, no config change. Unit tests use canned /proc/net/route and /proc/net/arp fixtures.",
+      "subtasks": [
+        {
+          "id": "344.1",
+          "status": "pending",
+          "title": "Gateway detection from /proc/net/route (unit test with canned fixture)"
+        },
+        {
+          "id": "344.2",
+          "status": "pending",
+          "title": "ARP table parse from /proc/net/arp (unit test with canned fixture)"
+        },
+        {
+          "id": "344.3",
+          "status": "pending",
+          "title": "Discovery helper returns gateway + ARP entries as a structured value"
+        }
+      ],
+      "testStrategy": "cargo test --lib: canned /proc fixtures assert the gateway IP and ARP entries (ip/mac/interface) parse correctly; incomplete-MAC and loopback entries are skipped. cargo build clean, zero warnings."
+    },
+    {
+      "id": 345,
+      "title": "Full network map: bounded ping sweep discovery (192.168.1.0/24, ICMP only)",
+      "description": "Full-network map, step 2: active discovery. ARP alone only shows cached entries, so quiet devices are missed. A bounded ICMP echo sweep of the LAN /24 finds live hosts that answer ping. ICMP ONLY — no port scanning, no service probing. Scope: John's own LAN only, single /24 taken from the detected gateway subnet. NEEDS JOHN'S EXPLICIT APPROVAL for active probing (he asked for full network work, but the sweep is active traffic — confirm before building).",
+      "status": "pending",
+      "dependencies": [
+        344
+      ],
+      "priority": "high",
+      "details": "Sweep the /24 from task 344's gateway/subnet: 254 addresses, bounded concurrency (32 parallel), 1s per-host timeout, total wall time under ~30s. Implementation: prefer a Rust ICMP approach (tokio + a small ICMP crate) or the system `ping` binary via direct exec (argv only, no shell) — decide in implementation, prefer whichever needs no new setuid/caps. Raw ICMP sockets need CAP_NET_RAW; if the Helix process lacks it, fall back to the ping binary. Dedupe against ARP results (same host found both ways is one node). Return (ip, responded bool) per address. The sweep runs only when the map tool is called, never on a timer. Hard caps: one /24, ICMP echo only, no retries beyond one re-ping for timeouts.",
+      "subtasks": [
+        {
+          "id": "345.1",
+          "status": "pending",
+          "title": "Ping sweep implementation (ICMP only, 32-way concurrency, 1s timeout, under 30s wall)"
+        },
+        {
+          "id": "345.2",
+          "status": "pending",
+          "title": "Dedupe sweep results against ARP entries"
+        },
+        {
+          "id": "345.3",
+          "status": "pending",
+          "title": "Live test on R630: sweep finds .149 (Ollama) and .196 (desktop) plus Helix itself"
+        }
+      ],
+      "testStrategy": "Unit test: sweep of 127.0.0.0/30 (loopback subset) returns localhost as live and others as silent, within the timeout. Live test on R630 after merge: sweep finds the known hosts .149 and .196. cargo test --lib green; cargo build clean, zero warnings."
+    },
+    {
+      "id": 346,
+      "title": "Full network map: hostname resolution for discovered hosts (best-effort)",
+      "description": "Full-network map, step 3: give discovered hosts names where possible. Reverse DNS first (no new dependencies — the router/DNS may or may not answer for local hosts), mDNS if avahi tools are present on the R630, else the host renders with IP + MAC only. A host without a hostname is still a node; resolution failure must never drop a host from the map.",
+      "status": "pending",
+      "dependencies": [
+        345
+      ],
+      "priority": "medium",
+      "details": "Resolve each discovered IP best-effort: (1) reverse DNS lookup (std::net lookup / getent-style, short timeout, ignore failures); (2) mDNS (avahi-browse / dns-sd) only if the binary exists on the box — probe at runtime, do not hard-require it; (3) NetBIOS only if nmblookup exists — same runtime probe. Cache results per sweep so one map call does not re-resolve the same IP repeatedly. Every failure path returns None and the node falls back to IP + MAC + discovery tag. Unit tests use 127.0.0.1 (localhost) and an unresolvable TEST-NET address.",
+      "subtasks": [
+        {
+          "id": "346.1",
+          "status": "pending",
+          "title": "Reverse DNS resolution with short timeout and graceful failure"
+        },
+        {
+          "id": "346.2",
+          "status": "pending",
+          "title": "mDNS probe (avahi) only if present on the box; NetBIOS only if nmblookup present"
+        },
+        {
+          "id": "346.3",
+          "status": "pending",
+          "title": "Unresolved hosts still render with IP + MAC (never dropped)"
+        }
+      ],
+      "testStrategy": "Unit tests: 127.0.0.1 resolves to localhost; an unresolvable TEST-NET address returns None without error and still renders. cargo test --lib green."
+    },
+    {
+      "id": 347,
+      "title": "Full network map: hierarchical SVG render, gateway at top (create_full_network_map)",
+      "description": "Full-network map, step 4: render. New tool create_full_network_map (or extend create_network_map if the diff stays small): the Starlink router (gateway) is the root node at the top, Helix (R630, .168) is highlighted as 'this machine', discovered devices hang below with IP, MAC, hostname if known, and a discovery-method tag (arp / ping / capture / configured). Known-config hosts (.149 Ollama, .196 desktop) are shown with a 'configured' tag even if they do not answer the sweep. Reuse the task-335 artifact writer and the task-337 artifact card — no new serving or UI work.",
+      "status": "pending",
+      "dependencies": [
+        343,
+        344,
+        345,
+        346
+      ],
+      "priority": "high",
+      "details": "New tool create_full_network_map in file_tools.rs (or network_discovery.rs if task 344 put discovery there). Flow: gateway + ARP (344) -> ping sweep (345) -> hostnames (346) -> merge into one node list (dedupe by IP; a host found by ARP and ping is one node with both tags) -> hierarchical SVG: gateway row at top, Helix node emphasized, device nodes in rows below with IP / MAC / hostname / discovery tags. Footer states the limits: silent hosts (no ping answer, not in ARP) are invisible; hosts on other subnets/VLANs are not shown; the Starlink dish is upstream of the router and appears only as a note, not a discovered node. Register schema + dispatch arm like task 335; the schema description must say to call this tool when the user asks for a full / whole-network map (vs create_network_map for the Helix-interfaces-only map). Keep create_network_map as-is (interfaces-only) — do not delete or rename it.",
+      "subtasks": [
+        {
+          "id": "347.1",
+          "status": "pending",
+          "title": "Discovery aggregation: merge gateway + ARP + sweep + hostnames, dedupe by IP"
+        },
+        {
+          "id": "347.2",
+          "status": "pending",
+          "title": "Hierarchical SVG render (gateway top, Helix emphasized, device rows, discovery tags, limits footer)"
+        },
+        {
+          "id": "347.3",
+          "status": "pending",
+          "title": "Register schema + dispatch arm; schema tells the model when to use full vs interfaces-only map"
+        },
+        {
+          "id": "347.4",
+          "status": "pending",
+          "title": "Unit tests with canned discovery data: every node renders with IP/MAC/tag"
+        }
+      ],
+      "testStrategy": "cargo test --lib: canned discovery input asserts the gateway is the root node, Helix is marked, every device shows IP/MAC/tag, and known-config hosts appear with the 'configured' tag. cargo build clean, zero warnings. Live drill is task 348."
+    },
+    {
+      "id": 348,
+      "title": "Live R630 drill: full network map from the Starlink router",
+      "description": "John's live verification (his side, after merge + pull + restart): ask Helix for a full network map starting at the Starlink router working back to his devices. Confirm the gateway sits at the top, Helix is highlighted, discovered devices are listed with IP/MAC/hostname, and the map matches the known LAN (.168 Helix, .149 Ollama, .196 desktop). Confirm the SVG card renders inline in chat.",
+      "status": "pending",
+      "dependencies": [
+        347
+      ],
+      "priority": "high",
+      "details": "Steps: (1) merge the 343-347 branch, pull on the R630, cargo build --release, restart Helix; (2) in web chat ask 'build me a network map starting at the starlink router working back to my devices'; (3) confirm the artifact card renders with the gateway at top and the known hosts present; (4) report any host that is missing (silent host) or any wrong node so the discovery can be tuned. This task is done when the live map matches the known LAN, not when the code merely compiles.",
+      "subtasks": [
+        {
+          "id": "348.1",
+          "status": "pending",
+          "title": "Ask Helix for the full network map in web chat"
+        },
+        {
+          "id": "348.2",
+          "status": "pending",
+          "title": "Verify nodes against the known LAN (.168/.149/.196) and note any missing host"
+        },
+        {
+          "id": "348.3",
+          "status": "pending",
+          "title": "Confirm the SVG artifact card renders inline"
+        }
+      ],
+      "testStrategy": "Live drill on the R630 only — no sandbox substitute. Pass = gateway at top, known hosts present, card renders."
+    },
+    {
+      "id": 349,
+      "title": "Spike: Starlink router/dish gRPC endpoints (research only, NOT a map dependency)",
+      "description": "Research spike, not a build dependency: check whether the Starlink router gRPC endpoint (192.168.1.1:9000, SpaceX.API.Device.Device, router.protoset) exposes a connected-device list, and whether the dish gRPC endpoint (192.168.100.1:9200) is reachable from the R630. The dish endpoint gives dish telemetry only (signal, obstruction, GPS) — it does NOT list connected devices, so it cannot replace the sweep. The router endpoint MIGHT list devices (the Starlink app shows them) but that is unproven and the API is unofficial/unauthenticated, so it needs a live probe with grpcurl before any code depends on it. If the router endpoint gives devices, it becomes a future enhancement; if not, the sweep (task 345) stands as the discovery method.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "low",
+      "details": "Manual spike on the R630 (John's side, or a guided check): install grpcurl if missing, then `grpcurl -plaintext 192.168.1.1:9000 list` and `grpcurl -plaintext 192.168.100.1:9200 list`. Record: does each endpoint answer, what services it lists, and whether any request returns a connected-device list. Do NOT write Helix code against gRPC (tonic + protobuf defs) until the spike proves the router endpoint returns devices. Caveats: if John's LAN uses the Starlink router in bypass mode with his own router as gateway, 192.168.1.1 is not the Starlink router and the router endpoint will not answer — note the actual gateway in the result. The dish endpoint needs a route to 192.168.100.0/24 in bypass mode.",
+      "subtasks": [
+        {
+          "id": "349.1",
+          "status": "pending",
+          "title": "Probe the router endpoint (192.168.1.1:9000) with grpcurl: list services, look for a device list"
+        },
+        {
+          "id": "349.2",
+          "status": "pending",
+          "title": "Probe the dish endpoint (192.168.100.1:9200) with grpcurl: confirm reachability and telemetry-only scope"
+        },
+        {
+          "id": "349.3",
+          "status": "pending",
+          "title": "Write a short go/no-go note: use the router API, or keep the sweep"
+        }
+      ],
+      "testStrategy": "Manual spike — pass = a written note stating reachability and what each endpoint returns, with a go/no-go for using it in the map."
     }
   ]
 }
