@@ -4981,6 +4981,43 @@
         }
       ],
       "testStrategy": "Decision recorded in this task and in tasks 350-352; no code."
+    },
+    {
+      "id": 360,
+      "title": "Mini-browser: installer checks + installs Firefox and browser deps",
+      "description": "The Helix installer (src/bin/installer.rs) checks for Firefox and everything else the mini-browser needs and installs what is missing, so the R630 install is one step instead of the manual doc in 356. CHECK-VS-INSTALL DECISION: install, not check-and-report. The installer already re-execs under sudo and runs as root, and already installs things (chat-mcp binary + config in task 295) - APT install is the same privilege it already exercises. John explicitly asked for install. Check-only would just reprint 356's doc and leave him running the same commands by hand. Firefox check: `firefox --version` (minimum 141, target 159 per 350) plus whether the installed Firefox is the Mozilla APT build or the Ubuntu snap. If missing, a snap, or below 141: add the Mozilla APT repo (key + sources list, idempotently) and `apt install firefox`. NEVER install the snap. geckodriver: do NOT hand-download or pin a version - thirtyfour's `manager` feature (350) owns it. The installer pre-warms the manager cache for the installed Firefox version when the manager API allows it, and always verifies the cache dir is writable by the runtime user; if the download cannot happen at install time, warn and continue (first browser use retries). Config: ensure the [browser] section exists in the live config with safe defaults (same pattern as the 295 chat-block append - only if missing, never overwrite existing values). Ownership: the installer runs as root, so every dir/file the browser needs (profile dir, manager cache) must be created with runtime-user ownership (same set_ownership pattern as the chat-mcp hook) - root-owned dirs would break the cobble runtime. MUST NOT touch John's personal Firefox profile (the 353 Sync copy is his step, not the installer's). Failure: if the Firefox install fails, warn loudly, record it, and continue the rest of the install (same fail-soft pattern as 295) - Helix still works without the browser, and the browser tool reports 'browser unavailable' at runtime until Firefox is present. Same pattern as 295: the check/install logic lives in a shared lib module (e.g. src/browser_install.rs) so it compiles and tests through the lib even though the installer binary itself is blocked by task 262 on a fresh checkout.",
+      "status": "pending",
+      "dependencies": [350, 356],
+      "priority": "high",
+      "details": "Runs after config.toml is deployed (the [browser] section edit needs it) and before the service starts (same ordering as the 295 chat-mcp hook). Idempotent: check first, install only what is missing or wrong; a re-run is a no-op. The Mozilla APT repo add must be idempotent too (do not duplicate the sources entry on re-run). APT needs network - if apt update fails, that is the loud-warning path, not a silent skip. Firefox headless still needs its APT dependencies (GTK libs etc.) - `apt install firefox` from the Mozilla repo pulls them; do not hand-list system libs unless the smoke test proves one missing.",
+      "subtasks": [
+        {
+          "id": "360.1",
+          "status": "pending",
+          "title": "Firefox check in the installer (version + APT-vs-snap detection)"
+        },
+        {
+          "id": "360.2",
+          "status": "pending",
+          "title": "Mozilla APT repo add (idempotent) + apt install firefox; never the snap"
+        },
+        {
+          "id": "360.3",
+          "status": "pending",
+          "title": "Geckodriver pre-warm via thirtyfour manager + cache-dir writability/ownership check"
+        },
+        {
+          "id": "360.4",
+          "status": "pending",
+          "title": "[browser] config section ensure-if-missing + browser dirs with runtime-user ownership"
+        },
+        {
+          "id": "360.5",
+          "status": "pending",
+          "title": "Fail-soft reporting: loud warning + continue install, browser tool reports unavailable"
+        }
+      ],
+      "testStrategy": "Fresh install on a box without Firefox: installer installs Firefox 159 from the Mozilla repo (no snap present), geckodriver pre-warmed or warned, [browser] section present, dirs owned by the runtime user; re-run is a no-op. With apt blocked: installer warns loudly, completes, and the browser tool reports unavailable. Unit tests through the lib module (task 262 blocks the installer binary on a fresh checkout)."
     }
   ]
 }
