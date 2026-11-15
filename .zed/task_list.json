@@ -4491,11 +4491,11 @@
     {
       "id": 350,
       "title": "Mini-browser: Firefox + geckodriver + thirtyfour 0.38 engine",
-      "description": "Add the browser engine dependency and verify it can drive a headless Firefox. Firefox via Mozilla's APT repo (NOT the Ubuntu snap - snap confinement breaks automation and profile paths); geckodriver via thirtyfour's `manager` feature (WebDriver::managed auto-downloads the matching geckodriver, caches it, and lifetime-manages the subprocess) - do not hand-roll driver download or version pinning. Pin thirtyfour 0.38 (0.38.3 released 2026-11-14; verify it compiles clean, fall back to 0.37.10 if it does not). Headless mode. Do NOT enable the `bidi` feature (BiDi is the future path, task 359 - not this build). Do NOT use headless_chrome (sync API fights tokio) or chromiumoxide (CDP - Firefox has no CDP since v141).",
+      "description": "Add the browser engine dependency and verify it can drive a headless Firefox. Firefox via Mozilla's APT repo (NOT the Ubuntu snap - snap confinement breaks automation and profile paths); geckodriver via thirtyfour's `manager` feature (WebDriver::managed auto-downloads the matching geckodriver, caches it, and lifetime-manages the subprocess) - do not hand-roll driver download or version pinning. Pin thirtyfour 0.38 (0.38.3 released 2026-11-14; verify it compiles clean, fall back to 0.37.10 if it does not) with features [\"bidi\", \"manager\"]. DRIVER DECISION (BiDi-first, decided 2026-11-15): the session uses WebDriver BiDi, not classic WebDriver request/response - enable it with caps.enable_bidi() before starting the session; geckodriver >= 0.31 negotiates the BiDi WebSocket via the webSocketUrl capability. BiDi is Firefox's native protocol (CDP is gone in Fx 141+) and its event stream (navigation, dialogs, console, network pushed to the client) fits an agent driving a browser better than polling. thirtyfour's BiDi is typed and spec-complete (PR #318, 100% W3C BiDi spec coverage, May 2026) and tested against geckodriver - it is NOT a thin client. Headless mode. Do NOT use headless_chrome (sync API fights tokio) or chromiumoxide (CDP - Firefox has no CDP since v141).",
       "status": "pending",
       "dependencies": [],
       "priority": "high",
-      "details": "thirtyfour is async tokio, which fits Helix (tokio 1.54.1). The R630 is a headless Ubuntu server and almost certainly has no Firefox or geckodriver installed - the install itself is task 356 (John's side, doc first). The sandbox cannot verify the R630 install; this task verifies the dependency compiles and the client can talk to a WebDriver endpoint (stub/fake endpoint in unit tests, real-browser smoke test on the R630 during install). Firefox install must be verified on the R630 first (check Ubuntu version - 24.04's apt firefox is a snap).",
+      "details": "thirtyfour is async tokio, which fits Helix (tokio 1.54.1). The R630 is a headless Ubuntu server and almost certainly has no Firefox or geckodriver installed - the install itself is task 356 (John's side, doc first). The sandbox cannot verify the R630 install; this task verifies the dependency compiles and the client can talk to a WebDriver endpoint (stub/fake endpoint in unit tests, real-browser smoke test on the R630 during install). Firefox install must be verified on the R630 first (check Ubuntu version - 24.04's apt firefox is a snap). BiDi negotiation: the session is created with webSocketUrl: true and geckodriver >= 0.31 returns the BiDi WebSocket URL; thirtyfour connects its BiDi client to it. Screencast is still missing from BiDi (in-flight, Firefox M20 targets screen-recording) - that is NOT a blocker here because live video is deprioritized; the event stream is the reason for BiDi. FIREFOX PIN: target Firefox 159 (current stable, Nov 2026); minimum 141 (BiDi requires it - CDP is gone). Re-verify the current stable at build time and record the version the build was verified against; update the pin as Firefox releases. TRACK AS BIDI EVOLVES: W3C BiDi spec version, Firefox release notes (BiDi conformance), thirtyfour releases (BiDi improvements), and screencast/screen-recording landing (for the later live view, task 358).",
       "subtasks": [
         {
           "id": "350.1",
@@ -4518,13 +4518,13 @@
     {
       "id": 351,
       "title": "Mini-browser: session module + lifecycle + [browser] config",
-      "description": "New module src/io/browser/ (a long-lived service like mcp_client, not a one-shot tool function): a BrowserSession manager holding ONE shared thirtyfour WebDriver session, spawned via tokio::process::Command following the mcp_client precedent (TokioChildProcess-style lifecycle), with start/stop/restart and recovery if geckodriver dies. Config section [browser] (enabled, firefox_binary, geckodriver path or managed, profile_dir, headless, timeouts) following the config/mcp.rs pattern (serde Deserialize, defaults, master switch - disabled = silent no-op, no browser advertised).",
+      "description": "New module src/io/browser/ (a long-lived service like mcp_client, not a one-shot tool function): a BrowserSession manager holding ONE shared thirtyfour session driven over WebDriver BiDi (WebDriver::bidi(), caps.enable_bidi()), spawned via tokio::process::Command following the mcp_client precedent (TokioChildProcess-style lifecycle), with start/stop/restart and recovery if geckodriver dies. The session subscribes to BiDi events (navigation committed/failed, load, dialogs, console/log) so the agent reacts to pushed events instead of polling. Classic WebDriver methods on the same session remain the fallback for anything BiDi does not cover. Config section [browser] (enabled, firefox_binary, geckodriver path or managed, profile_dir, headless, timeouts) following the config/mcp.rs pattern (serde Deserialize, defaults, master switch - disabled = silent no-op, no browser advertised).",
       "status": "pending",
       "dependencies": [
         350
       ],
       "priority": "high",
-      "details": "Single shared session: the browser is one page/tab the LLM and John share (the 'like Cobble jr's browser' model). A browser tool call never launches a fresh browser. If geckodriver dies mid-session, the next tool call reports the failure and the manager restarts it - do not silently swallow it. Headless always on the R630 (no display). Profile dir comes from config (see task 353). Shutdown on Helix stop must quit the driver cleanly (no orphan geckodriver/firefox processes).",
+      "details": "Single shared session: the browser is one page/tab the LLM and John share (the 'like Cobble jr's browser' model). A browser tool call never launches a fresh browser. If geckodriver dies mid-session, the next tool call reports the failure and the manager restarts it - do not silently swallow it. Headless always on the R630 (no display). Profile dir comes from config (see task 353). Shutdown on Helix stop must quit the driver cleanly (no orphan geckodriver/firefox processes). SINGLE-SESSION RULE (BiDi): Firefox allows exactly ONE BiDi session and it outlives its WebSocket - always call session.end on shutdown; if a client dies without ending it, Firefox refuses new sessions until restarted, so on startup a refused session means restart Firefox (do not retry the same session). EVOLUTION SEAM: keep all BiDi usage behind a thin isolated layer inside src/io/browser/ (e.g. a bidi.rs module) - the rest of the browser module talks to the seam, not directly to thirtyfour's BiDi types - so spec and Firefox updates are cheap to absorb. Do NOT scatter BiDi calls through the tool surface or the web server.",
       "subtasks": [
         {
           "id": "351.1",
@@ -4547,7 +4547,7 @@
     {
       "id": 352,
       "title": "Mini-browser: LLM tool surface - one `browser` tool with actions",
-      "description": "One tool `browser` with an `action` parameter (navigate / click / type / screenshot / get_text / current_url / back), registered in execute() dispatch + a json! schema in static_tool_definitions() (src/tools/mod.rs, following the create_artifact precedent). One tool, not separate tools per action - one session, one schema, keeps the tool count (28 today) from ballooning. The tool is a thin facade over the BrowserSession manager. The sync execute() boundary bridges into async thirtyfour via the bridge() pattern from src/mcp_client/mod.rs:180 (dedicated runtime; block_on with no ambient runtime, block_in_place inside one) - hoist bridge() to shared code if the build touches it, do not duplicate a second runtime.",
+      "description": "One tool `browser` with an `action` parameter (navigate / click / type / screenshot / get_text / current_url / back), registered in execute() dispatch + a json! schema in static_tool_definitions() (src/tools/mod.rs, following the create_artifact precedent). One tool, not separate tools per action - one session, one schema, keeps the tool count (28 today) from ballooning. The tool is a thin facade over the BrowserSession manager. The sync execute() boundary bridges into async thirtyfour via the bridge() pattern from src/mcp_client/mod.rs:180 (dedicated runtime; block_on with no ambient runtime, block_in_place inside one) - hoist bridge() to shared code if the build touches it, do not duplicate a second runtime. Navigation and load-wait use BiDi events (navigationCommitted/navigationFailed, load) instead of polling or sleeping; element interaction (find/click/type) and screenshots use the classic WebDriver API on the same session (mature, proven). FALLBACK RULE: if a BiDi command fails because geckodriver does not implement it yet (the spec runs ahead of implementations), fall back to the classic equivalent and log it - do not fail the action. If neither BiDi nor classic covers a feature we need, defer that feature and note it - do not force BiDi to be production-perfect on day one; the driver evolves with the spec and Firefox (see the tracking note in 350).",
       "status": "pending",
       "dependencies": [
         351
@@ -4757,25 +4757,25 @@
     },
     {
       "id": 359,
-      "title": "LATER/spike: WebDriver BiDi migration (research only)",
-      "description": "Research spike only. WebDriver BiDi is the W3C standard Firefox is all-in on (CDP is gone in Fx 141+); thirtyfour 0.37+ has an opt-in `bidi` feature. Evaluate when screencast lands in Firefox BiDi (in-flight, M20 targets screen-recording) and when a Rust BiDi client is mature enough to replace the WebDriver + screenshot-polling approach. Do not build on BiDi in this batch; do not enable the `bidi` feature in 350.",
-      "status": "pending",
+      "title": "BiDi driver decision (research only) - CLOSED: BiDi-first via thirtyfour",
+      "description": "CLOSED by John's decision 2026-11-15: BiDi is THE driver, by his choice - he likes that it is the W3C standard, and he is NOT in a rush; the posture is 'work along with it as they keep updating it.' It is the primary driver, not a future migration. thirtyfour's BiDi (0.37+, opt-in `bidi` feature) is typed and spec-complete (PR #318, 100% W3C BiDi spec coverage, May 2026) and tested against geckodriver - the earlier 'Rust BiDi client is thin' concern is outdated. Dedicated BiDi crates exist (webdriver-bidi is types-only, not a client; webdriverbidi 0.2.2 and bidi-lite/bidi-browser-lite are real but smaller/niche; hand-rolling was considered and rejected - thirtyfour already provides the typed client). Screencast is still missing from BiDi, but live video is deprioritized, so it is not a blocker. Tasks 350-352 now build BiDi-first.",
+      "status": "done",
       "dependencies": [],
       "priority": "low",
-      "details": "Deliverable is a short written recommendation with version numbers and links. No code.",
+      "details": "Decision record only. Recommendation: BiDi-first via thirtyfour's `bidi` feature (caps.enable_bidi(), geckodriver >= 0.31, webSocketUrl negotiation), classic WebDriver on the same session as fallback. Residual risks: BiDi is newer than classic WebDriver (0.37, May 2026) so geckodriver may not implement every spec command yet (fallback rule in 352 covers this); the single-session rule (always session.end, restart Firefox on a stale session - see 351). Evolution plan: Firefox pinned to 159 (minimum 141) in 350; BiDi usage isolated behind a thin seam in 351; track the W3C BiDi spec version, Firefox release notes, thirtyfour releases, and screencast landing (task 358). Hand-rolled BiDi client: NOT needed - thirtyfour's BiDi is the usable Rust client (typed, spec-complete, tested against geckodriver); do not hand-roll one.",
       "subtasks": [
         {
           "id": "359.1",
-          "status": "pending",
+          "status": "done",
           "title": "Check Firefox BiDi screencast status + thirtyfour BiDi maturity"
         },
         {
           "id": "359.2",
-          "status": "pending",
-          "title": "Short recommendation (stay on WebDriver vs migrate)"
+          "status": "done",
+          "title": "Short recommendation (BiDi-first via thirtyfour)"
         }
       ],
-      "testStrategy": "Written recommendation with version numbers and links; no code."
+      "testStrategy": "Decision recorded in this task and in tasks 350-352; no code."
     }
   ]
 }
