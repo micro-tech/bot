@@ -808,11 +808,12 @@ pub mod tools {
     }
 
     /// If `result` is a successful `create_artifact` / `create_network_map`
-    /// outcome, publish a `{type:"artifact", url, kind, title}` bus message
-    /// to `web_interface` so the UI renders the artifact card inline.
-    /// No-op for any other tool or result. `from` is the backend tag
-    /// (`ollama_server` / `ollama_desktop` / `gemini`) so the bridge can
-    /// stamp the same `backend` label as chat replies (PR #54).
+    /// / `create_full_network_map` outcome, publish a
+    /// `{type:"artifact", url, kind, title}` bus message to `web_interface`
+    /// so the UI renders the artifact card inline. No-op for any other
+    /// tool or result. `from` is the backend tag (`ollama_server` /
+    /// `ollama_desktop` / `gemini`) so the bridge can stamp the same
+    /// `backend` label as chat replies (PR #54).
     pub fn publish_artifact_if_saved(
         bus: &Arc<Bus>,
         from: &str,
@@ -820,7 +821,10 @@ pub mod tools {
         args: &Value,
         result: &str,
     ) {
-        if name != "create_artifact" && name != "create_network_map" {
+        if name != "create_artifact"
+            && name != "create_network_map"
+            && name != "create_full_network_map"
+        {
             return;
         }
         let Some((url, kind)) = parse_artifact_saved(result) else {
@@ -832,6 +836,8 @@ pub mod tools {
             .filter(|t| !t.is_empty())
             .unwrap_or(if name == "create_network_map" {
                 "Network Map"
+            } else if name == "create_full_network_map" {
+                "Full Network Map"
             } else {
                 "Artifact"
             });
