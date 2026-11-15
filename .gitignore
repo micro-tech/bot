@@ -67,3 +67,6 @@ key.pem
 .tmp.driveupload
 .tmp.drivedownload
 config.toml
+
+# Helix artifact outputs (create_artifact / create_network_map)
+artifacts/

@@ -46,6 +46,8 @@ pub fn execute(name: &str, args: &Value) -> String {
     let result = match name {
         "read_log" => file_tools::read_log(args),
         "write_note" => file_tools::write_note(args),
+        "create_artifact" => file_tools::create_artifact(args),
+        "create_network_map" => file_tools::create_network_map(args),
         "read_note" => file_tools::read_note(args),
         "list_notes" => file_tools::list_notes(),
         "send_email" => email_tools::send_email(args),
@@ -188,6 +190,36 @@ fn static_tool_definitions() -> &'static Vec<Value> {
                             "content": { "type": "string", "description": "Full content of the note in markdown format" }
                         },
                         "required": ["title", "content"]
+                    }
+                }
+            }),
+            serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": "create_artifact",
+                    "description": "Create a file the user can see and download — a chart, graph, diagram, map, or any downloadable file. Use this when the user asks for a chart, graph, diagram, map, or file (not a text-only answer): write the FULL file content here, then mention the returned /artifacts/ URL in your reply so the UI renders it inline. The file is served at /artifacts/<name> and shown as a card in chat.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "kind":   { "type": "string", "description": "File kind: html (interactive chart/page), svg (diagram/chart), mermaid (Mermaid diagram source), markdown, csv, or text" },
+                            "title":   { "type": "string", "description": "Short title (used as filename, e.g. 'Network Map')" },
+                            "content": { "type": "string", "description": "The complete file content (max 512 KB). For html, a full standalone page; for svg, a complete <svg> document; for mermaid, the diagram source." }
+                        },
+                        "required": ["kind", "title", "content"]
+                    }
+                }
+            }),
+            serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": "create_network_map",
+                    "description": "Build a network map of this machine (the R630 running Helix) as an SVG file and return its /artifacts/ URL. Use this when the user asks for a network map. One call does the whole flow: reads the live interfaces from the wire tool and renders the map. Shows R630 interfaces and subnets only; it cannot show other LAN hosts or traffic flows.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": { "type": "string", "description": "Optional map title (default: 'Network Map')" }
+                        },
+                        "required": []
                     }
                 }
             }),
@@ -826,6 +858,71 @@ mod tests {
                 == Some("generate_project_map_from_scan")
         });
         assert!(has_generate_map, "generate_project_map_from_scan should be registered");
+    }
+
+    #[test]
+    fn test_artifact_tools_registered_in_definitions() {
+        // Tasks 335 + 338: both artifact tools must be advertised to the
+        // model with kind/title/content (create_artifact) and the optional
+        // title (create_network_map).
+        let _tl = crate::tools::subagent_tool::test_env_lock();
+        let defs = tool_definitions();
+        let arr = defs.as_array().expect("tool_definitions must return array");
+
+        let find = |name: &str| {
+            arr.iter().find(|t| {
+                t.get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|n| n.as_str())
+                    == Some(name)
+            })
+        };
+
+        let artifact = find("create_artifact").expect("create_artifact must be registered");
+        let req = artifact["function"]["parameters"]["required"]
+            .as_array()
+            .expect("create_artifact must declare required");
+        for field in ["kind", "title", "content"] {
+            assert!(
+                req.iter().any(|r| r.as_str() == Some(field)),
+                "create_artifact must require {}, got {:?}",
+                field,
+                req
+            );
+        }
+        let kind_enum = artifact["function"]["parameters"]["properties"]["kind"]
+            .get("description")
+            .and_then(|d| d.as_str())
+            .unwrap_or("");
+        assert!(
+            kind_enum.contains("html") && kind_enum.contains("svg"),
+            "kind description must name the kinds, got: {}",
+            kind_enum
+        );
+
+        assert!(
+            find("create_network_map").is_some(),
+            "create_network_map must be registered"
+        );
+    }
+
+    #[test]
+    fn test_execute_create_artifact_roundtrip() {
+        // End-to-end through the main execute() entrypoint; cleans up after
+        // itself so no artifact file leaks into the worktree.
+        let result = execute(
+            "create_artifact",
+            &json!({"kind": "text", "title": "Registry Probe", "content": "hello"}),
+        );
+        assert!(result.starts_with("✅ Artifact saved: /artifacts/"), "got: {}", result);
+        let rel = result
+            .strip_prefix("✅ Artifact saved: ")
+            .and_then(|r| r.split(" (").next())
+            .unwrap_or("");
+        let path = rel.trim_start_matches('/');
+        assert!(std::path::Path::new(path).exists(), "artifact file must exist");
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir("artifacts");
     }
 
     #[test]
