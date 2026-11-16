@@ -38,6 +38,13 @@
 //! `QueueBackend`), marks the record `withdrawn`, and appends the
 //! regression note — so a failed close still leaves a manual-close
 //! note for John instead of a silent open PR.
+//!
+//! Delivery (task 364): `deliver_promoted_proposal` is the full Phase
+//! 3 path — gate, then push the preserved eval branch to `origin`
+//! via the dedicated `Git::push_branch` op (`push origin
+//! HEAD:refs/heads/self-improve/<slug>`), then queue the payload.
+//! `request_pr_open` remains the gate+queue primitive for callers
+//! that push by another (human) path.
 
 use crate::self_improve::audit::{AuditReport, audit_outcome, AuditOutcome};
 use crate::self_improve::evaluator::EvalReport;
@@ -268,6 +275,106 @@ impl PrBackend for QueueBackend {
     }
 }
 
+/// Deliver a promoted proposal end to end (task 364): gate → push
+/// the preserved eval branch to `origin` → queue the PR payload →
+/// mark `queued`. The push is the ONLY push the loop ever does, and
+/// it happens only after `phase3_gate` passes (promoted + eval green
+/// + clean audit + `eval_set_approved` + target PreRelese +
+/// `pr_opening` true). The branch must exist locally
+/// (`proposal.eval_branch`, recorded by the evaluator on promotion);
+/// a missing/empty branch is an error and nothing is pushed or
+/// queued. The PR itself is opened by the queue consumer (external —
+/// Cobble jr via the GitHub connector today); the loop never calls
+/// `merge_pull_request`.
+///
+/// Failure ordering is deliberate: a failed push leaves the proposal
+/// `evaluated` and the branch in place (retryable); the payload is
+/// only queued AFTER the push succeeds, so the queue consumer never
+/// opens a PR for a branch that isn't on origin. The temp worktree
+/// used for the push is removed either way.
+pub fn deliver_promoted_proposal(
+    backend: &mut dyn PrBackend,
+    repo: &Path,
+    rt_dir: &Path,
+    proposal: &mut ProposalRecord,
+    audit: &AuditReport,
+    cfg: &crate::self_improve::SelfImproveConfig,
+    target_branch: &str,
+    now_ms: u64,
+) -> Result<String, String> {
+    let head_branch = proposal.eval_branch.clone();
+    if head_branch.is_empty() {
+        return Err(
+            "no eval branch recorded on proposal (not promoted?)".to_string(),
+        );
+    }
+    match phase3_gate(proposal, audit, cfg, target_branch, &head_branch) {
+        GateDecision::Refuse(reason) => Err(format!("PR refused: {reason}")),
+        GateDecision::Open(payload) => {
+            let root = rt_dir.join(&cfg.worktree_dir);
+            std::fs::create_dir_all(&root)
+                .map_err(|e| format!("worktree root create failed: {e}"))?;
+            let git = crate::self_improve::git::Git::new(repo.to_path_buf(), root);
+            let wt_name = format!(
+                "push-{}-{now_ms}",
+                crate::self_improve::evaluator::slugify_signature(&head_branch)
+            );
+            let worktree = git.attach_worktree(&wt_name, &head_branch)?;
+            let push = git.push_branch(&worktree, &head_branch);
+            // Always remove the temp worktree, push or not.
+            if let Err(e) = git.remove_worktree(&wt_name) {
+                eprintln!("self_improve: push worktree cleanup failed for {wt_name}: {e}");
+            }
+            push?;
+            let id = backend.open_pr(&payload)?;
+            proposal.status = "queued".to_string();
+            proposal.updated_at = now_ms;
+            upsert_proposal(rt_dir, proposal)?;
+            Ok(id)
+        }
+    }
+}
+
+/// Per-cycle Phase 3 delivery arm (task 364): deliver the oldest
+/// promoted proposal. Finds the oldest record with status
+/// "evaluated" and `promoted=true`, audits its diff, applies the
+/// audit status (a dirty audit re-marks the record and delivery
+/// stops — sensitive-path proposals are queue-only forever), and
+/// otherwise calls `deliver_promoted_proposal` (gate → push →
+/// queue). Returns `Ok(Some(id))` when a proposal was delivered
+/// (the backend id), `Ok(Some(reason))` when delivery was skipped
+/// or refused (reason string, for the ledger), and `Ok(None)` when
+/// no promoted proposal is waiting. A delivery failure leaves the
+/// proposal `evaluated` (retryable) — the branch stays in place.
+pub fn deliver_oldest_promoted_proposal(
+    repo: &Path,
+    rt_dir: &Path,
+    cfg: &crate::self_improve::SelfImproveConfig,
+    now_ms: u64,
+) -> Result<Option<String>, String> {
+    let mut proposals = crate::self_improve::worker::read_proposals(rt_dir)?;
+    proposals.sort_by_key(|p| p.created_at);
+    let Some(mut record) = proposals
+        .into_iter()
+        .find(|p| p.status == "evaluated" && p.promoted)
+    else {
+        return Ok(None);
+    };
+    let audit = crate::self_improve::audit::audit_diff(&record.diff_files);
+    let outcome = crate::self_improve::audit::apply_audit_status(&mut record, &audit, now_ms);
+    if outcome != crate::self_improve::audit::AuditOutcome::Clean {
+        upsert_proposal(rt_dir, &record)?;
+        return Ok(Some(format!("audit-not-clean:{outcome:?}")));
+    }
+    let mut backend = QueueBackend::new(rt_dir);
+    match deliver_promoted_proposal(
+        &mut backend, repo, rt_dir, &mut record, &audit, cfg, "PreRelese", now_ms,
+    ) {
+        Ok(id) => Ok(Some(id)),
+        Err(e) => Ok(Some(format!("delivery-failed:{e}"))),
+    }
+}
+
 /// Request a PR open through the gate. On refuse, nothing is called
 /// and (for the D1-disabled case) the `pr-opening-disabled` line is
 /// logged — the proposal stays as it was, never dropped. On open, the
@@ -390,6 +497,7 @@ mod tests {
             promotion_reason: "ok".to_string(),
             eval_report_json: serde_json::to_value(&report).unwrap(),
             diff_files: Vec::new(),
+            eval_branch: String::new(),
             notes: Vec::new(),
         }
     }
@@ -610,6 +718,160 @@ mod tests {
             &entries[1],
             QueueEntry::Close { pull_number: 7, .. }
         ));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Task 364: deliver_promoted_proposal (gate → push → queue) ───
+
+    fn git(args: &[&str], cwd: &Path) -> String {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_ASKPASS")
+            .output()
+            .expect("test git spawn");
+        assert!(
+            out.status.success(),
+            "test git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    }
+
+    /// Fixture repo with a bare `origin` remote (file path).
+    /// Returns (dir, repo, remote).
+    fn fixture_repo_with_remote(name: &str) -> (PathBuf, PathBuf, PathBuf) {
+        let dir = tmpdir(name);
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git(&["init", "-b", "main"], &repo);
+        git(&["config", "user.email", "t@t"], &repo);
+        git(&["config", "user.name", "t"], &repo);
+        std::fs::write(repo.join("a.txt"), "hello\n").unwrap();
+        git(&["add", "a.txt"], &repo);
+        git(&["commit", "-m", "init"], &repo);
+        let remote = dir.join("remote.git");
+        git(&["init", "--bare", remote.to_str().unwrap()], &dir);
+        git(&["remote", "add", "origin", remote.to_str().unwrap()], &repo);
+        (dir, repo, remote)
+    }
+
+    /// Create the eval branch the way the evaluator would: a worktree
+    /// commit, then worktree removal (branch preserved).
+    fn make_eval_branch(repo: &Path, rt: &Path, branch: &str) {
+        let git_wrap = crate::self_improve::git::Git::new(
+            repo.to_path_buf(),
+            rt.join("self_improve").join("worktrees"),
+        );
+        let wt = git_wrap.add_worktree("eval-x", branch).unwrap();
+        std::fs::write(wt.join("b.txt"), "deliver me\n").unwrap();
+        git_wrap.add_files(&wt, &["b.txt"]).unwrap();
+        git_wrap.commit(&wt, "eval commit").unwrap();
+        git_wrap.remove_worktree("eval-x").unwrap();
+    }
+
+    #[test]
+    fn deliver_promoted_proposal_pushes_branch_then_queues_payload() {
+        // GIVEN a promoted proposal whose eval branch exists locally
+        // with a bare origin, WHEN delivered with the gate open, THEN
+        // the branch is pushed to origin FIRST, the payload is queued,
+        // and the record becomes queued — and no temp push worktree
+        // is left behind.
+        let (dir, repo, remote) = fixture_repo_with_remote("helix-self-improve-pr-deliver");
+        let rt = dir.join("rt");
+        std::fs::create_dir_all(&rt).unwrap();
+        make_eval_branch(&repo, &rt, "self-improve/deliver-test");
+        let mut backend = RecordingBackend::new();
+        let mut p = green_proposal();
+        p.eval_branch = "self-improve/deliver-test".to_string();
+        let r = deliver_promoted_proposal(
+            &mut backend,
+            &repo,
+            &rt,
+            &mut p,
+            &clean_audit(),
+            &cfg_open(),
+            "PreRelese",
+            2_000,
+        );
+        assert!(r.is_ok(), "delivery must succeed: {:?}", r);
+        let ls = git(&["ls-remote", "--heads", remote.to_str().unwrap()], &repo);
+        assert!(
+            ls.contains("refs/heads/self-improve/deliver-test"),
+            "branch must be on origin: {ls}"
+        );
+        assert_eq!(backend.opened.len(), 1);
+        assert_eq!(backend.opened[0].head_branch, "self-improve/deliver-test");
+        assert_eq!(backend.opened[0].target_branch, "PreRelese");
+        assert_eq!(p.status, "queued");
+        let root = rt.join("self_improve/worktrees");
+        assert_eq!(
+            std::fs::read_dir(&root).map(|rd| rd.flatten().count()).unwrap_or(0),
+            0,
+            "no temp push worktree may remain"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn deliver_refuses_without_push_when_gate_closed() {
+        // GIVEN the same promoted proposal but pr_opening=false, WHEN
+        // delivered, THEN nothing is pushed and nothing is queued —
+        // the gate refuses before any git op.
+        let (dir, repo, remote) =
+            fixture_repo_with_remote("helix-self-improve-pr-deliver-closed");
+        let rt = dir.join("rt");
+        std::fs::create_dir_all(&rt).unwrap();
+        make_eval_branch(&repo, &rt, "self-improve/deliver-test");
+        let mut backend = RecordingBackend::new();
+        let mut p = green_proposal();
+        p.eval_branch = "self-improve/deliver-test".to_string();
+        let cfg = crate::self_improve::SelfImproveConfig::default(); // pr_opening false
+        let r = deliver_promoted_proposal(
+            &mut backend,
+            &repo,
+            &rt,
+            &mut p,
+            &clean_audit(),
+            &cfg,
+            "PreRelese",
+            2_000,
+        );
+        assert!(r.is_err());
+        assert!(r.unwrap_err().contains("pr-opening-disabled"));
+        let ls = git(&["ls-remote", "--heads", remote.to_str().unwrap()], &repo);
+        assert!(
+            !ls.contains("self-improve/deliver-test"),
+            "nothing may be pushed: {ls}"
+        );
+        assert!(backend.opened.is_empty());
+        assert_eq!(p.status, "evaluated");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn deliver_refuses_without_eval_branch() {
+        // GIVEN a promoted proposal with NO eval branch recorded, WHEN
+        // delivered, THEN it errors before any git or backend call.
+        let dir = tmpdir("helix-self-improve-pr-deliver-nobranch");
+        let mut backend = RecordingBackend::new();
+        let mut p = green_proposal();
+        assert!(p.eval_branch.is_empty());
+        let r = deliver_promoted_proposal(
+            &mut backend,
+            Path::new("/nonexistent"),
+            &dir,
+            &mut p,
+            &clean_audit(),
+            &cfg_open(),
+            "PreRelese",
+            2_000,
+        );
+        assert!(r.is_err());
+        assert!(r.unwrap_err().contains("no eval branch"));
+        assert!(backend.opened.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

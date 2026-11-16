@@ -18,6 +18,13 @@
 //! - `evaluator` (287): worktree evaluation, D5 gate, 500-line cap.
 //! - `audit` (288): metadata-only secrets scan + sensitive paths.
 //! - `pr` (290): PR payload + target allowlist + pr_opening flag.
+//! - `draft` (362): loop drafting path — the loop-drafter role turns
+//!   an intaked proposal into whole-file `DiffFile`s (same 8
+//!   read-only tools as the worker; allowlist NOT widened).
+//! - `context` (365): OKF context authoring — loop-drafted
+//!   `OkfBundleManifest`s, validated, stored for John's tap.
+//! - `review` (366): the review gate checklist (machine checks +
+//!   John's read + merge tap) and the sandbox prerequisite.
 //!
 //! Phase gates (280, 285, 289, 291) are John's eyeball + elapsed time —
 //! they are NOT code and this module never claims to pass them.
@@ -25,10 +32,13 @@
 pub mod audit;
 pub mod budgets;
 pub mod config;
+pub mod context;
+pub mod draft;
 pub mod evaluator;
 pub mod git;
 pub mod metrics;
 pub mod pr;
+pub mod review;
 pub mod worker;
 
 // Later tasks add their modules here in dependency order:

@@ -1,6 +1,12 @@
 //! Skill Marketplace
 //!
 //! Allows publishing, discovering, and installing skills at runtime.
+//!
+//! Metadata-only (task 361): `publish` / `discover` / `install` store and
+//! list `SkillMetadata` in an in-memory map. This loads NO code, executes
+//! nothing, and is NEVER instantiated anywhere in Helix — it is NOT the
+//! skill system. The skill system is `SkillRegistry` (`mod.rs`): a name
+//! maps to a closure and `call(name, params)` runs it.
 
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};

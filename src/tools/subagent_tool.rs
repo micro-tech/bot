@@ -557,10 +557,18 @@ async fn run_subagent(
     // Task 282: the loop worker's filter FAILS CLOSED on a zero match
     // (unlike the general mechanism's full-toolset fallback) — a typo'd
     // persona must never silently grant the loop worker the full set.
+    // Task 362: the loop drafter gets the SAME fail-closed filter and
+    // the SAME 8 read-only tools — the allowlist is NOT widened for
+    // drafting.
     let tools = if role_hint == "loop-worker" {
         match crate::self_improve::worker::loop_worker_tool_definitions() {
             Ok(t) => t,
             Err(e) => return Err(format!("loop-worker spawn refused: {e}")),
+        }
+    } else if role_hint == "loop-drafter" {
+        match crate::self_improve::draft::loop_drafter_tool_definitions() {
+            Ok(t) => t,
+            Err(e) => return Err(format!("loop-drafter spawn refused: {e}")),
         }
     } else {
         crate::persona::subagent_tool_definitions(role_hint)

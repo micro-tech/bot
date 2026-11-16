@@ -5,8 +5,12 @@
 //! modules plus (when the D5 gate is open) the approved eval set, and
 //! report. The live tree is never touched — every git op runs through
 //! the task-286 wrapper with cwd pinned to the worktree, and the
-//! worktree + branch are removed afterwards whether the eval passes
-//! or fails.
+//! worktree dir is removed afterwards whether the eval passes or
+//! fails. The BRANCH is removed too — EXCEPT when the proposal is
+//! promoted (task 364): a promoted branch is preserved, its name
+//! recorded on the proposal as `eval_branch`, so the Phase 3 delivery
+//! path can push it. A non-promoted branch is deleted with the
+//! worktree.
 //!
 //! The diff is a list of `DiffFile{path, content}` WHOLE-FILE writes,
 //! not a unified diff: `git apply` is deliberately excluded from the
@@ -355,19 +359,28 @@ pub fn evaluate_proposal(
     let branch = format!("self-improve/{slug}-{now_ms}");
     let git = Git::new(repo.to_path_buf(), root.clone());
     let worktree = git.add_worktree(&wt_name, &branch)?;
+    // Task 364: record the branch on the proposal now — the Phase 3
+    // delivery path reads it to push a promoted branch. It is set
+    // even when the eval later fails (the branch is then deleted with
+    // the worktree, and the record is not the delivery path).
+    proposal.eval_branch = branch.clone();
     // Task 325: point the runner at the fresh worktree so cargo runs
     // against the PATCHED code. Before this, RealRunner kept whatever
     // work_dir it was constructed with (nothing set it), so a
     // production evaluation would have tested the wrong tree.
     runner.set_work_dir(&worktree);
-    // Cleanup helper: remove worktree + branch, logging (never masking
-    // the eval result). Runs on every exit path after creation.
-    let cleanup = |git: &Git, name: &str, branch: &str| {
+    // Cleanup helper: remove the worktree, and the branch unless the
+    // eval promoted (task 364: a promoted branch is preserved for
+    // the Phase 3 push). Logs failures, never masks the eval result.
+    // Runs on every exit path after creation.
+    let cleanup = |git: &Git, name: &str, branch: &str, keep_branch: bool| {
         if let Err(e) = git.remove_worktree(name) {
             eprintln!("self_improve: worktree cleanup failed for {name}: {e}");
         }
-        if let Err(e) = git.delete_branch(branch) {
-            eprintln!("self_improve: branch cleanup failed for {branch}: {e}");
+        if !keep_branch {
+            if let Err(e) = git.delete_branch(branch) {
+                eprintln!("self_improve: branch cleanup failed for {branch}: {e}");
+            }
         }
     };
     // Apply: read old lines first (for the stat), then write.
@@ -392,7 +405,7 @@ pub fn evaluate_proposal(
         Ok(())
     })();
     if let Err(e) = apply {
-        cleanup(&git, &wt_name, &branch);
+        cleanup(&git, &wt_name, &branch, false);
         return Err(e);
     }
     let stat = DiffStat {
@@ -404,7 +417,7 @@ pub fn evaluate_proposal(
         .add_files(&worktree, &paths.iter().map(|s| s.as_str()).collect::<Vec<_>>())
         .and_then(|_| git.commit(&worktree, &format!("self-improve eval: {}", proposal.signature)))
     {
-        cleanup(&git, &wt_name, &branch);
+        cleanup(&git, &wt_name, &branch, false);
         return Err(format!("eval commit failed: {e}"));
     }
     // Bounded subset: one cargo run per touched lib module (or the full
@@ -454,11 +467,19 @@ pub fn evaluate_proposal(
     proposal.eval_passed = passed;
     proposal.promoted = promoted;
     proposal.promotion_reason = promotion_reason;
+    // Task 364: the persisted record names the branch only when it
+    // survives — a non-promoted branch is deleted in cleanup, so a
+    // stale name on the record would point at nothing.
+    if !promoted {
+        proposal.eval_branch = String::new();
+    }
     proposal.eval_report_json =
         serde_json::to_value(&report).unwrap_or(serde_json::Value::Null);
     proposal.updated_at = now_ms;
     upsert_proposal(rt_dir, proposal)?;
-    cleanup(&git, &wt_name, &branch);
+    // Task 364: a promoted branch survives for the Phase 3 push; the
+    // worktree dir is still removed (the branch is a ref, not a dir).
+    cleanup(&git, &wt_name, &branch, promoted);
     Ok(report)
 }
 
@@ -617,6 +638,7 @@ mod tests {
             promotion_reason: String::new(),
             eval_report_json: serde_json::Value::Null,
             diff_files: Vec::new(),
+            eval_branch: String::new(),
             notes: Vec::new(),
         }
     }
@@ -768,6 +790,65 @@ mod tests {
         assert!(report.promoted);
         assert_eq!(report.promotion_reason, "ok");
         assert!(runner.eval_set_called);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn promoted_eval_preserves_branch_and_records_eval_branch() {
+        // GIVEN the D5 gate open and all-green runners, WHEN evaluated,
+        // THEN promoted=true, the branch SURVIVES (the Phase 3 push
+        // needs it), the worktree dir is still removed, and the
+        // record carries the branch name in eval_branch (task 364).
+        // A non-promoted record must NOT name a branch (the branch
+        // is deleted in cleanup, so a stale name would point at
+        // nothing).
+        let (dir, repo, rt) = fixture("helix-self-improve-eval-preserve");
+        let mut cfg = cfg_gate_closed();
+        cfg.eval_set_approved = true;
+        let mut p = proposal("errors:logs/error_log.md");
+        let diff = vec![DiffFile {
+            path: "src/a.rs".to_string(),
+            content: "x\n".to_string(),
+        }];
+        let mut runner = FakeRunner::passing();
+        let report =
+            evaluate_proposal(&repo, &rt, &cfg, &mut p, &diff, &mut runner, 5_000).unwrap();
+        assert!(report.promoted);
+        assert!(!p.eval_branch.is_empty());
+        assert!(p.eval_branch.starts_with("self-improve/"));
+        let branches = git(&["branch", "--format=%(refname:short)"], &repo);
+        assert!(branches.contains(&p.eval_branch), "promoted branch must survive: {branches}");
+        let root = rt.join("self_improve/worktrees");
+        assert_eq!(
+            std::fs::read_dir(&root).map(|rd| rd.flatten().count()).unwrap_or(0),
+            0,
+            "worktree dir must still be removed"
+        );
+        let stored = crate::self_improve::worker::read_proposals(&rt).unwrap();
+        assert_eq!(stored[0].eval_branch, p.eval_branch);
+        // Tidy: remove the preserved branch so the fixture dir is clean.
+        git(&["branch", "-D", &p.eval_branch], &repo);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn non_promoted_eval_clears_eval_branch() {
+        // GIVEN the D5 gate closed (no promotion), WHEN evaluated,
+        // THEN the branch is deleted AND the record names no branch.
+        let (dir, repo, rt) = fixture("helix-self-improve-eval-nopreserve");
+        let cfg = cfg_gate_closed();
+        let mut p = proposal("errors:logs/error_log.md");
+        let diff = vec![DiffFile {
+            path: "src/a.rs".to_string(),
+            content: "x\n".to_string(),
+        }];
+        let mut runner = FakeRunner::passing();
+        let report =
+            evaluate_proposal(&repo, &rt, &cfg, &mut p, &diff, &mut runner, 5_000).unwrap();
+        assert!(!report.promoted);
+        assert!(p.eval_branch.is_empty());
+        let branches = git(&["branch", "--format=%(refname:short)"], &repo);
+        assert!(!branches.lines().any(|b| b.starts_with("self-improve/")));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

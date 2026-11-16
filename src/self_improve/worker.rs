@@ -56,8 +56,9 @@ pub const LOOP_WORKER_PERSONA: &str = include_str!("../../agents/loop-worker.md"
 
 /// Intersect persona-filtered tool definitions with the loop allowlist.
 /// Returns Err on a zero match — fail-closed, never the full toolset.
-/// `spawn_subagent` is excluded even if present in the input.
-pub fn filter_loop_worker_tools(defs: &serde_json::Value) -> Result<serde_json::Value, String> {
+/// `spawn_subagent` is excluded even if present in the input. `role`
+/// names the role in the error (loop-worker / loop-drafter).
+pub(crate) fn filter_loop_tools(defs: &serde_json::Value, role: &str) -> Result<serde_json::Value, String> {
     let arr = defs.as_array().cloned().unwrap_or_default();
     let filtered: Vec<serde_json::Value> = arr
         .into_iter()
@@ -71,13 +72,19 @@ pub fn filter_loop_worker_tools(defs: &serde_json::Value) -> Result<serde_json::
         })
         .collect();
     if filtered.is_empty() {
-        return Err(
-            "loop-worker allowlist matched zero known tools; refusing to fall back \
-             to the full toolset (fail-closed — fix agents/loop-worker.md)"
-                .to_string(),
-        );
+        return Err(format!(
+            "{role} allowlist matched zero known tools; refusing to fall back \
+             to the full toolset (fail-closed — fix agents/{role}.md)"
+        ));
     }
     Ok(serde_json::Value::Array(filtered))
+}
+
+/// Intersect persona-filtered tool definitions with the loop allowlist.
+/// Returns Err on a zero match — fail-closed, never the full toolset.
+/// `spawn_subagent` is excluded even if present in the input.
+pub fn filter_loop_worker_tools(defs: &serde_json::Value) -> Result<serde_json::Value, String> {
+    filter_loop_tools(defs, "loop-worker")
 }
 
 /// The fail-closed tool definitions for a `loop-worker` spawn: the
@@ -172,6 +179,13 @@ pub struct ProposalRecord {
     pub promotion_reason: String,
     #[serde(default)]
     pub eval_report_json: serde_json::Value,
+    /// The branch the evaluator created for this proposal (task 364):
+    /// `self-improve/<slug>-<ms>`. Empty until evaluation creates it.
+    /// The branch is preserved when the proposal is promoted (so the
+    /// Phase 3 delivery path can push it) and deleted otherwise.
+    /// Default empty; Phase 1 records still parse.
+    #[serde(default)]
+    pub eval_branch: String,
     /// Free-form notes appended by later phases (task 290: withdrawal
     /// + regression notes). Default empty; Phase 1 records still parse.
     #[serde(default)]
@@ -363,6 +377,7 @@ pub fn intake_proposal(
         promotion_reason: String::new(),
         eval_report_json: serde_json::Value::Null,
         diff_files: Vec::new(),
+        eval_branch: String::new(),
             notes: Vec::new(),
     };
     let mut all = prior;

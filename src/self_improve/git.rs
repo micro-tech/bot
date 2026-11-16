@@ -8,6 +8,9 @@
 //! Allowed (and nothing else):
 //! - `worktree add <name> -b <branch>` — create a disposable worktree
 //!   under the worktree root (cwd = the repo).
+//! - `worktree add <name> <branch>` — attach a worktree on an EXISTING
+//!   branch (cwd = the repo). The Phase 3 delivery path uses this to
+//!   push a promoted branch the evaluator preserved (task 364).
 //! - `branch <name>` — create a branch (cwd = the repo: a ref-only op,
 //!   and after worktree removal no worktree cwd exists).
 //! - `worktree remove --force <name>` — remove a worktree dir + its
@@ -20,13 +23,21 @@
 //!   worktree). See below: a deliberate, minimal extension.
 //! - `commit -m <message>` — commit staged changes (cwd = the worktree,
 //!   NEVER the live checkout).
+//! - `push origin HEAD:refs/heads/<branch>` — the ONLY push (task 364):
+//!   `<branch>` must be `self-improve/<slug>`, cwd = a worktree whose
+//!   HEAD is the evaluated branch. Never `--force`, never `--tags`,
+//!   never another remote, never another refspec, never master or
+//!   PreRelese as the push target (the PR target is PreRelese; the
+//!   push target is always the feature branch). Gated by `phase3_gate`
+//!   in `pr.rs` — while `pr_opening` is false, no push happens.
 //!
-//! Rejected by construction (each tested): push, merge, checkout,
-//! reset --hard, fetch, pull, clone, stash, rebase, cherry-pick,
-//! revert, tag, remote, submodule, `--amend`, `-C` pointing outside
-//! the worktree root, `--git-dir`, `--work-tree`, `--upload-pack`,
-//! and every other subcommand or flag. Path arguments must resolve
-//! inside the worktree root (no `..`, no absolute path outside it).
+//! Rejected by construction (each tested): push in any other shape,
+//! merge, checkout, reset --hard, fetch, pull, clone, stash, rebase,
+//! cherry-pick, revert, tag, remote, submodule, `--amend`, `-C`
+//! pointing outside the worktree root, `--git-dir`, `--work-tree`,
+//! `--upload-pack`, and every other subcommand or flag. Path arguments
+//! must resolve inside the worktree root (no `..`, no absolute path
+//! outside it).
 //!
 //! `add`: the spec's allowlist names worktree add / branch / commit /
 //! branch -D, and its end-to-end test reads as worktree-add → commit
@@ -43,10 +54,13 @@
 //! `GIT_OBJECT_DIRECTORY`, and `GIT_ALTERNATE_OBJECT_DIRECTORIES` are
 //! removed (an inherited `GIT_DIR` would redirect git at the wrong
 //! repo), and `-c credential.helper=` is forced (no credential use,
-//! ever — loop branches never leave the machine). Commits use a fixed
-//! local-only identity via `-c user.name/user.email`: loop branches
-//! are never pushed (Phase 3 is queue-only), so no real identity is
-//! needed or wanted.
+//! ever — the loop's push uses the machine's SSH deploy key; SSH
+//! remotes don't use credential helpers, and the forced empty helper
+//! is a belt-and-braces guard against a misconfigured remote).
+//! Commits use a fixed local-only identity via `-c
+//! user.name/user.email`: loop branches are pushed only through the
+//! Phase 3 gate (`push_branch`, task 364) and never to master or
+//! PreRelese, so no real identity is needed or wanted.
 //!
 //! On "never writes the live tree": `worktree add` writes linked-worktree
 //! metadata under the repo's `.git` directory — that is the mechanism
@@ -74,6 +88,17 @@ fn is_safe_branch_name(name: &str) -> bool {
         && name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '/'))
+}
+
+/// A pushable branch (task 364): `self-improve/<slug>` where the slug
+/// is non-empty and the whole name is a safe branch name. The
+/// `self-improve/` prefix is the loop's namespace — master and
+/// PreRelese can never be push targets.
+fn is_safe_push_branch(name: &str) -> bool {
+    let Some(slug) = name.strip_prefix("self-improve/") else {
+        return false;
+    };
+    !slug.is_empty() && is_safe_branch_name(name)
 }
 
 /// Resolve `name` under `root`, rejecting `..` escapes and absolute
@@ -202,7 +227,30 @@ impl Git {
                 }
                 Ok(())
             }
-            // Everything else is rejected: push, merge, checkout,
+            "push" => {
+                // Exactly one shape (task 364):
+                // push origin HEAD:refs/heads/<branch>, where <branch>
+                // is `self-improve/<slug>`. Anything else — a bare
+                // `push`, another remote, another refspec, `--force`,
+                // `--tags`, master/PreRelese as the target — is
+                // rejected. The PR target is PreRelese; the push
+                // target is always the feature branch.
+                if argv.len() != 3 {
+                    return Err(format!("rejected git push op: {argv:?}"));
+                }
+                if argv.get(1).map(|s| s.as_str()) != Some("origin") {
+                    return Err(format!("rejected git push remote: {argv:?}"));
+                }
+                let refspec = &argv[2];
+                let Some(branch) = refspec.strip_prefix("HEAD:refs/heads/") else {
+                    return Err(format!("rejected git push refspec: {argv:?}"));
+                };
+                if !is_safe_push_branch(branch) {
+                    return Err(format!("rejected git push branch: {branch}"));
+                }
+                Ok(())
+            }
+            // Everything else is rejected: merge, checkout,
             // reset, fetch, pull, clone, stash, rebase, cherry-pick,
             // revert, tag, remote, submodule, and anything unlisted.
             other => Err(format!("rejected git subcommand: {other}")),
@@ -263,6 +311,28 @@ impl Git {
             return Err(format!("rejected branch name: {branch}"));
         }
         self.spawn(&argv, &self.repo)?;
+        Ok(path)
+    }
+
+    /// Attach a worktree at `<root>/<name>` on an EXISTING branch (no
+    /// `-b`). Used by the Phase 3 delivery path (task 364) to push a
+    /// promoted branch: the branch already exists (the evaluator
+    /// preserved it), so the worktree just checks it out. Runs with
+    /// cwd = the repo.
+    pub fn attach_worktree(&self, name: &str, branch: &str) -> Result<PathBuf, String> {
+        let path = resolve_under_root(&self.worktree_root, name)?;
+        if !is_safe_branch_name(branch) {
+            return Err(format!("rejected branch name: {branch}"));
+        }
+        self.spawn(
+            &[
+                "worktree".to_string(),
+                "add".to_string(),
+                path.display().to_string(),
+                branch.to_string(),
+            ],
+            &self.repo,
+        )?;
         Ok(path)
     }
 
@@ -332,6 +402,31 @@ impl Git {
                 "commit".to_string(),
                 "-m".to_string(),
                 message.to_string(),
+            ],
+            &worktree,
+        )
+    }
+
+    /// Push the current HEAD of a worktree to `origin` as
+    /// `refs/heads/<branch>` (task 364). The ONLY push the loop may
+    /// ever do: `push origin HEAD:refs/heads/<branch>` where branch is
+    /// `self-improve/<slug>`. Runs with cwd = the worktree (HEAD is
+    /// the evaluated branch there). Never `--force`, never `--tags`,
+    /// never master/PreRelese. Uses the machine's SSH deploy key —
+    /// no new secret, no credential helper, no HTTPS token. Callers
+    /// must gate this through `phase3_gate` in `pr.rs` (promoted +
+    /// eval green + clean audit + `eval_set_approved` + target
+    /// PreRelese); while `pr_opening` is false, no push happens.
+    pub fn push_branch(&self, worktree: &Path, branch: &str) -> Result<String, String> {
+        if !is_safe_push_branch(branch) {
+            return Err(format!("rejected push branch: {branch}"));
+        }
+        let worktree = self.check_worktree(worktree)?;
+        self.spawn(
+            &[
+                "push".to_string(),
+                "origin".to_string(),
+                format!("HEAD:refs/heads/{branch}"),
             ],
             &worktree,
         )
@@ -458,6 +553,46 @@ mod tests {
     }
 
     #[test]
+    fn push_branch_pushes_only_the_self_improve_branch_to_origin() {
+        // GIVEN a fixture repo with a bare origin, WHEN a worktree is
+        // committed on a self-improve/<slug> branch and push_branch
+        // runs, THEN the branch lands on origin and nothing else does;
+        // AND attach_worktree can re-attach the same branch later.
+        let (dir, repo, remote, g) = fixture_with_remote("helix-self-improve-git-push");
+        let wt = g.add_worktree("wt1", "self-improve/test-push").unwrap();
+        std::fs::write(wt.join("b.txt"), "push me\n").unwrap();
+        g.add_files(&wt, &["b.txt"]).unwrap();
+        g.commit(&wt, "push test commit").unwrap();
+        g.push_branch(&wt, "self-improve/test-push").unwrap();
+        let ls = git(&["ls-remote", "--heads", remote.to_str().unwrap()], &repo);
+        assert!(ls.contains("refs/heads/self-improve/test-push"), "branch must land on origin: {ls}");
+        assert!(!ls.contains("refs/heads/main"), "main must not be pushed: {ls}");
+        // Pushing a non-self-improve branch is rejected before spawn.
+        assert!(g.push_branch(&wt, "main").is_err());
+        assert!(g.push_branch(&wt, "PreRelese").is_err());
+        assert!(g.push_branch(&wt, "other/branch").is_err());
+        // Attach a fresh worktree on the preserved branch and confirm
+        // the committed file is there.
+        g.remove_worktree("wt1").unwrap();
+        let wt2 = g.attach_worktree("wt2", "self-improve/test-push").unwrap();
+        assert!(wt2.join("b.txt").exists());
+        assert_eq!(std::fs::read_to_string(wt2.join("b.txt")).unwrap(), "push me\n");
+        g.remove_worktree("wt2").unwrap();
+        g.delete_branch("self-improve/test-push").unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Fixture repo with a bare `origin` remote (file path), so a
+    /// push can be exercised end to end without any network.
+    fn fixture_with_remote(name: &str) -> (PathBuf, PathBuf, PathBuf, Git) {
+        let (dir, repo, g) = fixture(name);
+        let remote = dir.join("remote.git");
+        git(&["init", "--bare", remote.to_str().unwrap()], &dir);
+        git(&["remote", "add", "origin", remote.to_str().unwrap()], &repo);
+        (dir, repo, remote, g)
+    }
+
+    #[test]
     fn rejected_ops_fail_closed_with_no_side_effect() {
         // GIVEN a fixture repo, WHEN each rejected op is attempted
         // through the raw gate, THEN it errors AND leaves no trace:
@@ -469,6 +604,17 @@ mod tests {
         let rejected: Vec<Vec<String>> = vec![
             vec!["push".into()],
             vec!["push".into(), "origin".into(), "main".into()],
+            // Task 364: only `push origin HEAD:refs/heads/self-improve/<slug>`
+            // is allowed — every other push shape stays rejected.
+            vec!["push".into(), "origin".into(), "HEAD:refs/heads/master".into()],
+            vec!["push".into(), "origin".into(), "HEAD:refs/heads/PreRelese".into()],
+            vec!["push".into(), "origin".into(), "HEAD:refs/heads/other/branch".into()],
+            vec!["push".into(), "--force".into(), "origin".into(), "HEAD:refs/heads/self-improve/x".into()],
+            vec!["push".into(), "origin".into(), "HEAD:refs/heads/self-improve/x".into(), "--tags".into()],
+            vec!["push".into(), "upstream".into(), "HEAD:refs/heads/self-improve/x".into()],
+            vec!["push".into(), "origin".into(), "HEAD:refs/heads/self-improve/".into()],
+            vec!["push".into(), "origin".into(), "HEAD:refs/heads/self-improve/../evil".into()],
+            vec!["push".into(), "origin".into(), "self-improve/x".into()],
             vec!["merge".into(), "main".into()],
             vec!["checkout".into(), "main".into()],
             vec!["reset".into(), "--hard".into()],
