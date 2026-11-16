@@ -451,6 +451,11 @@ pub async fn start_web_server(
         .route("/api/voice/transcribe", post(voice_transcribe))
         // Task 275: non-sensitive voice UI knobs (hotkey, autoplay default).
         .route("/api/voice/config", get(voice_config))
+        // Tasks 350/355: minimal 2FA affordance — one-shot screenshot +
+        // click/type/key for the remote-completable 2FA flow (phone prompt
+        // or authenticator code). Token-gated like the other ops endpoints.
+        .route("/browser/screenshot", get(browser_screenshot))
+        .route("/browser/input", post(browser_input))
         // Task 279: self-improving loop status — token-gated, read-only.
         .route("/self_improve/status", get(self_improve_status))
         .route_layer(middleware::from_fn_with_state(
@@ -1706,6 +1711,80 @@ async fn serve_artifact(AxumPath(name): AxumPath<String>) -> impl IntoResponse {
         );
     }
     (StatusCode::OK, headers, bytes)
+}
+
+// ── Mini-browser 2FA affordance (tasks 350/355) ──────────────────────────
+
+/// GET /browser/screenshot — one-shot screenshot of the headless Firefox
+/// (task 355, minimal 2FA affordance: John sees the Google 2FA challenge
+/// in the UI). Returns the PNG bytes. Token-gated via the protected
+/// router. When the browser is disabled or unavailable the handler
+/// answers 503 with a plain-text reason (the UI shows it) instead of
+/// panicking or starting a browser on a GET.
+async fn browser_screenshot() -> impl IntoResponse {
+    if crate::io::browser::session_manager().is_none() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            HeaderMap::new(),
+            b"browser unavailable: [browser] is disabled or Firefox is not installed".to_vec(),
+        );
+    }
+    match crate::io::browser::screenshot_png() {
+        Ok(png) => {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                header::CONTENT_TYPE,
+                header::HeaderValue::from_static("image/png"),
+            );
+            (StatusCode::OK, headers, png)
+        }
+        Err(msg) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            HeaderMap::new(),
+            msg.into_bytes(),
+        ),
+    }
+}
+
+/// POST /browser/input — one-shot click/type/key into the headless
+/// Firefox (task 355: type an authenticator code, or click "try another
+/// way"). Body: {"kind": "click"|"type"|"key", "x": n, "y": n,
+/// "text": "...", "key": "Enter"}. Token-gated via the protected router.
+/// Validation errors (bad coords, unknown key, text too long) are 400;
+/// a disabled/unavailable browser is 503.
+#[derive(Deserialize)]
+struct BrowserInputRequest {
+    kind: String,
+    // i64 (not u32): the session validates the 0..=10000 range, and a
+    // negative JSON number must deserialize so it can be rejected there.
+    x: Option<i64>,
+    y: Option<i64>,
+    text: Option<String>,
+    key: Option<String>,
+}
+
+async fn browser_input(Json(req): Json<BrowserInputRequest>) -> impl IntoResponse {
+    if crate::io::browser::session_manager().is_none() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"ok": false, "error": "browser unavailable"})),
+        )
+            .into_response();
+    }
+    match crate::io::browser::browser_input(
+        &req.kind,
+        req.x,
+        req.y,
+        req.text,
+        req.key,
+    ) {
+        Ok(out) => (StatusCode::OK, Json(json!({"ok": true, "result": out}))).into_response(),
+        Err(msg) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "error": msg})),
+        )
+            .into_response(),
+    }
 }
 
 async fn serve_chat_log(State(state): State<AppState>) -> impl IntoResponse {
@@ -3287,6 +3366,91 @@ mod tests {
             assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "{method} {uri}");
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Mini-browser 2FA endpoints (tasks 350/355) ───────────────────────
+
+    /// Build the browser route assembly used in `start_web_server`:
+    /// both routes behind require_web_token, same as the ops endpoints.
+    fn browser_test_app() -> Router {
+        let token_state = Arc::new("s3cret".to_string());
+        Router::new()
+            .route("/browser/screenshot", get(browser_screenshot))
+            .route("/browser/input", post(browser_input))
+            .route_layer(middleware::from_fn_with_state(
+                token_state,
+                require_web_token,
+            ))
+            .with_state(())
+    }
+
+    #[tokio::test]
+    async fn browser_endpoints_reject_missing_token() {
+        // GIVEN a token is configured,
+        use tower::ServiceExt;
+        let app = browser_test_app();
+        // WHEN each browser endpoint is hit without credentials,
+        // THEN both reject with 401 (the screenshot handler never runs,
+        // so no browser is started on an unauthenticated GET):
+        for (method, uri) in [
+            ("GET", "/browser/screenshot"),
+            ("POST", "/browser/input"),
+        ] {
+            let req = axum::http::Request::builder()
+                .method(method)
+                .uri(uri)
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(
+                    r#"{"kind":"click","x":100,"y":100}"#,
+                ))
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "{method} {uri}");
+        }
+    }
+
+    #[tokio::test]
+    async fn browser_endpoints_reject_wrong_token() {
+        use tower::ServiceExt;
+        let app = browser_test_app();
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/browser/screenshot")
+            .header("authorization", "Bearer wrong-token")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn browser_input_authed_reaches_browser_layer() {
+        // GIVEN an authed request with an unknown input kind,
+        use tower::ServiceExt;
+        let app = browser_test_app();
+        let req = axum::http::Request::builder()
+            .method("POST")
+            .uri("/browser/input")
+            .header("content-type", "application/json")
+            .header("authorization", "Bearer s3cret")
+            .body(axum::body::Body::from(r#"{"kind":"bogus"}"#))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        // THEN the request reaches the browser layer (not 401, not a
+        // 500): 503 when the browser is disabled in the test env, 400
+        // when a browser session is up and rejects the kind. Either way
+        // the body is JSON with ok:false.
+        assert!(
+            resp.status() == StatusCode::SERVICE_UNAVAILABLE
+                || resp.status() == StatusCode::BAD_REQUEST,
+            "unexpected status: {}",
+            resp.status()
+        );
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["ok"], false);
     }
 
     #[tokio::test]

@@ -81,6 +81,7 @@ pub fn list_tools() -> String {
        • system_status()                  Log sizes, note/belief counts\n\
        • list_tools()                     This list\n\
        • list_okf_tools()                 List tools loaded from remote OKF bundles\n\
+       • browser(action, ...)             Drive the headless Firefox (navigate/click/type/key/screenshot/get_text/evaluate/gmail_oauth/status)\n\
      \n\
      Memory / beliefs:\n\
        • get_beliefs()                    Read all beliefs from beliefs.json\n\
@@ -297,6 +298,7 @@ mod tests {
             "send_email",
             "read_email",
             "check_inbox",
+            "browser",
         ] {
             assert!(
                 result.contains(tool),

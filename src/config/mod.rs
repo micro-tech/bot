@@ -1,5 +1,6 @@
 pub mod manifest;
 pub mod mcp;
+pub mod browser; // tasks 350+: [browser] mini-browser config
 pub mod acp;
 pub mod shell;
 pub mod ssh;

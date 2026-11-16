@@ -1030,6 +1030,13 @@
                     >
                         Restart
                     </button>
+                    <button
+                        class="ops-btn"
+                        onclick="document.getElementById('browser-2fa').style.display='block'"
+                        title="show the headless-browser 2FA box (screenshot + click/type)"
+                    >
+                        Browser 2FA
+                    </button>
                     <span id="ops-status"></span>
                     <span id="conn-dot" title="connection status"></span>
                 </header>
@@ -1048,6 +1055,94 @@
                         </button>
                     </div>
                     <pre id="ops-log"></pre>
+                </div>
+                <!-- Browser 2FA (tasks 350/355): one-shot screenshot + click/type/key
+                     for the Google sign-in 2FA challenge on the headless Firefox.
+                     Minimal only — NOT the task-358 live-view pane. -->
+                <div
+                    id="browser-2fa"
+                    style="
+                        border: 1px solid var(--border);
+                        border-radius: 8px;
+                        padding: 8px;
+                        margin: 8px 0;
+                        display: none;
+                    "
+                >
+                    <div
+                        style="
+                            display: flex;
+                            gap: 8px;
+                            align-items: center;
+                            flex-wrap: wrap;
+                        "
+                    >
+                        <strong>Browser 2FA</strong>
+                        <button class="ops-btn" onclick="browserShot()">
+                            Screenshot
+                        </button>
+                        <button
+                            class="ops-btn"
+                            onclick="
+                                document.getElementById(
+                                    'browser-2fa',
+                                ).style.display = 'none'
+                            "
+                        >
+                            hide
+                        </button>
+                    </div>
+                    <img
+                        id="browser-shot"
+                        style="max-width: 100%; margin-top: 8px; display: none"
+                        alt="browser screenshot"
+                    />
+                    <div
+                        style="
+                            display: flex;
+                            gap: 6px;
+                            margin-top: 8px;
+                            flex-wrap: wrap;
+                        "
+                    >
+                        <input
+                            id="browser-x"
+                            type="number"
+                            placeholder="x"
+                            style="width: 70px"
+                        />
+                        <input
+                            id="browser-y"
+                            type="number"
+                            placeholder="y"
+                            style="width: 70px"
+                        />
+                        <button class="ops-btn" onclick="browserClick()">
+                            Click
+                        </button>
+                        <input
+                            id="browser-text"
+                            type="text"
+                            placeholder="code / text to type"
+                            style="width: 140px"
+                        />
+                        <button class="ops-btn" onclick="browserType()">
+                            Type
+                        </button>
+                        <input
+                            id="browser-key"
+                            type="text"
+                            placeholder="key (Enter, Tab…)"
+                            style="width: 110px"
+                        />
+                        <button class="ops-btn" onclick="browserKey()">
+                            Key
+                        </button>
+                    </div>
+                    <div
+                        id="browser-status"
+                        style="color: var(--muted); margin-top: 6px"
+                    ></div>
                 </div>
                 <div id="chat-messages"></div>
                 <div id="chat-input-row">
@@ -1639,6 +1734,72 @@
                 } catch (e) {
                     alert("restart error: " + e.message);
                 }
+            }
+
+            // ── BROWSER 2FA (tasks 350/355) ─────────────────────────────
+            // One-shot screenshot + click/type/key for the Google sign-in
+            // 2FA challenge on the headless Firefox. All calls go through
+            // opsFetch (token-gated on the backend). Screenshot is a PNG
+            // blob; input posts JSON to /browser/input.
+            function browserSetStatus(text) {
+                const el = document.getElementById("browser-status");
+                if (el) el.textContent = text;
+            }
+
+            async function browserShot() {
+                browserSetStatus("loading screenshot…");
+                try {
+                    const r = await opsFetch("/browser/screenshot");
+                    if (!r.ok) {
+                        browserSetStatus(
+                            "screenshot failed: " + r.status + " " + (await r.text()),
+                        );
+                        return;
+                    }
+                    const blob = await r.blob();
+                    const img = document.getElementById("browser-shot");
+                    if (img) {
+                        img.src = URL.createObjectURL(blob);
+                        img.style.display = "block";
+                    }
+                    browserSetStatus("");
+                } catch (e) {
+                    browserSetStatus("screenshot error: " + e.message);
+                }
+            }
+
+            async function browserPostInput(body) {
+                try {
+                    const r = await opsFetch("/browser/input", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body),
+                    });
+                    const j = await r.json();
+                    browserSetStatus(
+                        j.ok ? j.result || "ok" : "error: " + (j.error || r.status),
+                    );
+                } catch (e) {
+                    browserSetStatus("input error: " + e.message);
+                }
+            }
+
+            function browserClick() {
+                const x = Number(document.getElementById("browser-x").value);
+                const y = Number(document.getElementById("browser-y").value);
+                browserPostInput({ kind: "click", x, y });
+            }
+
+            function browserType() {
+                const x = Number(document.getElementById("browser-x").value);
+                const y = Number(document.getElementById("browser-y").value);
+                const text = document.getElementById("browser-text").value;
+                browserPostInput({ kind: "type", x, y, text });
+            }
+
+            function browserKey() {
+                const key = document.getElementById("browser-key").value;
+                browserPostInput({ kind: "key", key });
             }
 
             // ── SUPPORT PANEL (task 259, SYSADMIN-01) ─────────────────────

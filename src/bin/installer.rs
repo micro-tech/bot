@@ -12,6 +12,8 @@ use std::process::Command;
 // on a fresh checkout (see the include_str! lines below).
 #[path = "../chat_mcp_install.rs"]
 mod chat_mcp_install;
+#[path = "../browser_install.rs"]
+mod browser_install;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -377,6 +379,41 @@ fn install() {
         }
         Err(e) => eprintln!(
             "WARNING: chat-mcp step failed: {} — continuing without it.",
+            e
+        ),
+    }
+
+    // ── mini-browser deps (tasks 350/360) ─────────────────────────────────
+    // Checks for Firefox and installs it from the Mozilla APT repo when
+    // missing, a snap, or below 141; ensures the [browser] section exists
+    // in the live config (fail-closed: enabled=false); creates the profile
+    // + geckodriver-cache dirs. Runs after config.toml is deployed (the
+    // section edit needs it) and before the service starts (so the first
+    // start can pick the browser up). This runs inside the same privileged
+    // (sudo re-exec) section as the chat-mcp hook — the installer already
+    // asked for the password, so there is no separate privilege step.
+    // A failure here warns and continues — Helix works without the browser,
+    // and the browser tool reports "browser unavailable" at runtime until
+    // Firefox is present. The hook never touches John's personal Firefox
+    // profile (the task-353 Sync copy is his step, not the installer's).
+    match browser_install::install_browser_deps(&runtime_user, &primary_runtime_dir) {
+        Ok(report) => {
+            println!(
+                "browser: firefox {:?}, installed: {}, repo added: {}, [browser] section appended: {}, config: {}",
+                report.firefox_status,
+                report.firefox_installed,
+                report.repo_added,
+                report.browser_section_appended,
+                report.layout.helix_config_path.display()
+            );
+            // The installer runs as root; the runtime user must own the
+            // dirs it will use (profile + geckodriver manager cache).
+            for dir in &report.dirs_to_own {
+                set_ownership(&dir.to_string_lossy(), &runtime_user, &runtime_user);
+            }
+        }
+        Err(e) => eprintln!(
+            "WARNING: browser step failed: {} — continuing without it.",
             e
         ),
     }

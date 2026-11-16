@@ -190,3 +190,21 @@ auto_send = true
 # asus_host = "100.112.110.14"  # ASUS Tailscale IP (REQUIRED for Phase 2; no default)
 # asus_user = ""                # Windows username (REQUIRED for Phase 2; supplied by John)
 # asus_key_path = ""            # e.g. ~/.ssh/id_helix_asus (REQUIRED for Phase 2; path only)
+
+# ── Mini-browser (tasks 350–360) ──────────────────────────────────────
+# Headless Firefox, driven by the `browser` tool (WebDriver BiDi via
+# thirtyfour) — used for Google sign-in / Gmail OAuth and user-directed
+# browsing. The installer (task 360) appends this section to the LIVE
+# config when missing; the values here are the safe defaults.
+# The browser stays DISABLED until you enable it (after copying your
+# signed-in Firefox profile per docs/mini-browser-install.md, task 353).
+# [browser]
+# enabled = false            # fail-closed: false until the profile is copied and you opt in
+# firefox_binary = ""        # path to the firefox binary (empty = PATH lookup)
+# profile_dir = ""           # e.g. "~/.mozilla/firefox/helix" — your copied Sync profile (0700); empty = thirtyfour default
+# headless = true            # always true on the R630 (no display)
+# geckodriver_url = ""       # empty = thirtyfour's manager downloads + spawns geckodriver
+# action_timeout_secs = 30   # per-action timeout (navigate / click / type)
+# screenshot_max_bytes = 512000  # warn-only cap on returned screenshots
+# allowed_hosts = ["google.com", "localhost", "127.0.0.1"]  # navigation allowlist (exact or subdomain); other hosts need your confirmation
+# gmail_token_path = ""      # e.g. "~/.config/google-mcp/token.json" (empty = default)

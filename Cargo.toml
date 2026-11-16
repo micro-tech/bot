@@ -78,6 +78,16 @@ sqlx = { version = "0.9.0", features = [
 ] }
 sha2 = "0.11.1"
 
+# === Mini-browser (tasks 350+) ===
+# Firefox automation over WebDriver BiDi (W3C standard, Firefox-native since
+# CDP was removed in Fx 141). thirtyfour's BiDi is typed and spec-complete
+# (PR #318, 100% W3C BiDi coverage). `manager` auto-downloads the matching
+# geckodriver (WebDriver::managed) — no hand-rolled driver download.
+# Firefox pinned 159 (min 141) in the [browser] config; see src/io/browser/.
+thirtyfour = { version = "0.38.3", features = ["bidi", "manager"] }
+# URL parsing for the browser navigation allowlist (src/config/browser.rs).
+url = "2.5"
+
 # === MCP (Model Context Protocol) client support ===
 # Lets Helix spawn external MCP servers (e.g. the standalone google-mcp
 # Gmail/Calendar server) as subprocesses over stdio and expose their tools.
