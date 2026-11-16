@@ -537,6 +537,13 @@ where
     ///    cycle, logged as `phase_failure`, never a quiet skip — and an
     ///    allowed proposal is intaked handler-side (the worker writes
     ///    nothing itself, task 282). Lessons land in durable memory.
+    ///    Then, in order, the drafting arm (task 362: the oldest
+    ///    diff-less "proposed" record gets whole-file diffs from the
+    ///    loop-drafter role), the evaluation arm (task 325), and the
+    ///    Phase 3 delivery arm (task 364: the oldest promoted
+    ///    proposal is gated, pushed to origin, and queued — only
+    ///    when `pr_opening` is true). Each arm is bounded by the
+    ///    cycle deadline and records its outcome in the ledger entry.
     /// 6. One ledger entry is appended with the outcome, then the
     ///    counts-only log line.
     ///
@@ -717,6 +724,39 @@ where
             }
         };
         inputs.proposal_outcomes.insert("cycle".to_string(), outcome);
+        // Task 362: per-cycle drafting arm — draft the oldest
+        // "proposed" record that still has no diff files, via the
+        // loop-drafter role (same 8 read-only tools as the worker).
+        // Runs after intake (it drafts what the worker intaked) and
+        // before the eval arm (the evaluator skips diff-less records,
+        // so drafting is what makes the eval arm fire). The cycle
+        // deadline bounds it: skip when the budget is spent.
+        let draft_now = crate::utils::now_ms();
+        if deadline.expired(draft_now) {
+            log_to_file("self_improve: drafting skipped: cycle deadline expired");
+        } else {
+            match crate::self_improve::draft::draft_oldest_proposal(&rt, &cfg, draft_now).await {
+                Ok(Some(count)) => {
+                    log_to_file(&format!(
+                        "self_improve: drafted {count} file(s) for oldest proposal"
+                    ));
+                    inputs
+                        .proposal_outcomes
+                        .insert("drafting".to_string(), format!("drafted:{count}"));
+                }
+                Ok(None) => {
+                    inputs
+                        .proposal_outcomes
+                        .insert("drafting".to_string(), "draft-skipped".to_string());
+                }
+                Err(e) => {
+                    log_to_file(&format!("self_improve: drafting error: {e}"));
+                    inputs
+                        .proposal_outcomes
+                        .insert("drafting".to_string(), format!("draft-error:{e}"));
+                }
+            }
+        }
         // Task 325 (H1): per-cycle evaluation arm — evaluate the
         // oldest "proposed" record, now that intake is done. This is
         // the wiring the evaluator's doc comment flagged as missing
@@ -761,6 +801,40 @@ where
                     inputs
                         .proposal_outcomes
                         .insert("evaluation".to_string(), format!("eval-error:{e}"));
+                }
+            }
+        }
+        // Task 364: per-cycle Phase 3 delivery arm — deliver the
+        // oldest promoted proposal (gate → push the preserved eval
+        // branch to origin → queue the PR payload). Runs only when
+        // pr_opening is true; the gate itself would refuse otherwise,
+        // but skipping the work (and the log spam) when off is
+        // cleaner. The cycle deadline bounds it.
+        let deliver_now = crate::utils::now_ms();
+        if !cfg.pr_opening {
+            log_to_file("self_improve: delivery skipped: pr_opening is false");
+        } else if deadline.expired(deliver_now) {
+            log_to_file("self_improve: delivery skipped: cycle deadline expired");
+        } else {
+            match crate::self_improve::pr::deliver_oldest_promoted_proposal(
+                &rt, &rt, &cfg, deliver_now,
+            ) {
+                Ok(Some(id)) => {
+                    log_to_file(&format!("self_improve: delivery {id}"));
+                    inputs
+                        .proposal_outcomes
+                        .insert("delivery".to_string(), id);
+                }
+                Ok(None) => {
+                    inputs
+                        .proposal_outcomes
+                        .insert("delivery".to_string(), "delivery-skipped".to_string());
+                }
+                Err(e) => {
+                    log_to_file(&format!("self_improve: delivery error: {e}"));
+                    inputs
+                        .proposal_outcomes
+                        .insert("delivery".to_string(), format!("delivery-error:{e}"));
                 }
             }
         }

@@ -353,6 +353,7 @@ mod tests {
             promotion_reason: "ok".to_string(),
             eval_report_json: serde_json::Value::Null,
             diff_files: Vec::new(),
+            eval_branch: String::new(),
             notes: Vec::new(),
         };
         let report = audit_diff(&[diff("src/security.rs", "pub fn check() {}\n")]);

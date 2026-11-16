@@ -48,4 +48,6 @@ impl BayesianSkill {
     }
 }
 
-// Register in Helix skills system (e.g., tools or mcp)
+// Registered as the `bayes` skill in `SkillRegistry::new()`
+// (src/skills/mod.rs, task 361): the registry closure maps the `command`
+// string param onto `BayesianSkill::handle`.
