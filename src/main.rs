@@ -186,7 +186,10 @@ async fn run_helix() {
         std::path::PathBuf::from(config_path_used)
     };
     crate::mcp_client::set_config_path(mcp_config_path.clone());
-    crate::tools::shell_tool::set_config_path(mcp_config_path);
+    crate::tools::shell_tool::set_config_path(mcp_config_path.clone());
+    // Mini-browser (tasks 350+): the browser reads [browser] from the
+    // same live config file.
+    crate::io::browser::set_config_path(mcp_config_path);
 
     if config_str.is_empty() {
         eprintln!("Warning: Could not find config.toml in any standard location.");

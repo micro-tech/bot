@@ -10,6 +10,7 @@ pub mod ollama;
 pub mod web_server;
 pub mod terminal;
 pub mod llm_gemini;
+pub mod browser; // tasks 350+: headless Firefox over WebDriver BiDi
 
 // Test modules are typically not declared in mod.rs for library use,
 // but for clarity, they are included in the project structure.

@@ -79,6 +79,9 @@ pub fn execute(name: &str, args: &Value) -> String {
         "generate_okf_project_map_knowledge" => file_tools::generate_okf_project_map_knowledge(args),
         "scan_projects" => project_scanner::scan_projects(args),
         "generate_project_map_from_scan" => project_scanner::generate_project_map_from_scan(args),
+        // Mini-browser (tasks 350-355): one headless Firefox session, driven
+        // by action. BiDi-first with classic fallback inside the module.
+        "browser" => crate::io::browser::tool::browser_tool(args),
 
         // SSH-dependent tools are behind the optional "ssh" feature.
         // When the feature is off we return a helpful message instead of failing at runtime.
@@ -236,6 +239,27 @@ fn static_tool_definitions() -> &'static Vec<Value> {
                             "title": { "type": "string", "description": "Optional map title (default: 'Full Network Map')" }
                         },
                         "required": []
+                    }
+                }
+            }),
+            serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": "browser",
+                    "description": "Drive the headless Firefox on this machine (one browser session). Use for Google sign-in / OAuth and user-directed browsing only. Actions: navigate (url), click (x, y), type (x, y, text), key (key), screenshot, get_text, current_url, back, evaluate (js), gmail_oauth, gmail_oauth_check, restart, status. Navigation is allowlisted (google.com by default) — other hosts need the user to confirm. Never read or repeat password field contents.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "action": { "type": "string", "description": "navigate, click, type, key, screenshot, get_text, current_url, back, evaluate, gmail_oauth, gmail_oauth_check, restart, status" },
+                            "url": { "type": "string", "description": "URL for navigate" },
+                            "selector": { "type": "string", "description": "CSS selector for click/type (alternative to x/y)" },
+                            "x": { "type": "number", "description": "X coordinate (0-10000) for click/type (alternative to selector)" },
+                            "y": { "type": "number", "description": "Y coordinate (0-10000) for click/type (alternative to selector)" },
+                            "text": { "type": "string", "description": "Text to type (max 1000 chars)" },
+                            "key": { "type": "string", "description": "Key name for key (Enter, Tab, Escape, Backspace, Delete, arrows, Home, End, PageUp, PageDown, Space)" },
+                            "js": { "type": "string", "description": "JavaScript for evaluate (no password values)" }
+                        },
+                        "required": ["action"]
                     }
                 }
             }),
