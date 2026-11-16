@@ -1,5 +1,9 @@
 //! File-based tools: log reading, note writing/reading/listing, and repo exploration tools.
 
+use crate::tools::network_discovery::{
+    aggregate_hosts, discover, ping_sweep_subnet, resolve_hostnames, subnet_base, DiscoveredHost,
+    KNOWN_CONFIG_HOSTS,
+};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -267,14 +271,34 @@ fn field_as_string(v: &Value, key: &str) -> String {
 /// Parse the mcp_wire `interfaces` result. Accepts `{"interfaces": [...]}` or
 /// a bare `[...]` array; every field is optional and defaults to empty, so a
 /// schema drift degrades to a sparse map instead of an error.
+///
+/// Task 343: mcp-wire returns the data TWICE — `result_to_string`
+/// (src/mcp_client/manager.rs) concatenates the pretty-printed
+/// structuredContent AND the compact text block, joined with "\n". A strict
+/// `from_str` fails on the trailing second document, which is exactly the
+/// live failure John hit ("failed to return the data in the expected
+/// format"). So parse the FIRST JSON document in the string and ignore
+/// anything after it. The fix belongs here, not in `result_to_string`
+/// (other tools rely on its shape) and not in mcp-wire alone (the bot must
+/// tolerate any MCP server that returns both text + structuredContent).
 fn parse_wire_interfaces(raw: &str) -> Result<Vec<WireInterface>, String> {
-    let v: Value = serde_json::from_str(raw).map_err(|e| {
-        format!(
-            "Error: wire interfaces output is not JSON ({}): {}",
-            e,
-            crate::utils::truncate_str(raw, 200)
-        )
-    })?;
+    let mut stream = serde_json::Deserializer::from_str(raw).into_iter::<Value>();
+    let v: Value = match stream.next() {
+        Some(Ok(v)) => v,
+        Some(Err(e)) => {
+            return Err(format!(
+                "Error: wire interfaces output is not JSON ({}): {}",
+                e,
+                crate::utils::truncate_str(raw, 200)
+            ));
+        }
+        None => {
+            return Err(format!(
+                "Error: wire interfaces output is not JSON (empty input): {}",
+                crate::utils::truncate_str(raw, 200)
+            ));
+        }
+    };
     let arr = v
         .get("interfaces")
         .and_then(|i| i.as_array())
@@ -453,6 +477,237 @@ pub fn create_network_map(args: &Value) -> String {
         Err(e) => return e,
     };
     let svg = render_network_map_svg(title, &ifaces);
+    match write_artifact_file("svg", title, &svg) {
+        Ok((url, kind, bytes)) => artifact_saved_string(&url, &kind, bytes),
+        Err(e) => e,
+    }
+}
+
+/// Render the full network map as a standalone SVG (task 347).
+/// Gateway (Starlink router) is the root node at the top, Helix is
+/// highlighted as "this machine" on its own row, discovered devices hang
+/// below in a 3-per-row grid with IP, MAC, hostname and discovery tags.
+fn render_full_network_map_svg(
+    title: &str,
+    gateway: Option<&str>,
+    hosts: &[DiscoveredHost],
+) -> String {
+    let width: i32 = 920;
+    let margin: i32 = 24;
+    let full_w: i32 = width - 2 * margin; // 872
+    let header_h: i32 = 76;
+    let gw_h: i32 = 84;
+    let helix_h: i32 = 96;
+    let card_w: i32 = 280;
+    let card_h: i32 = 118;
+    let gap: i32 = 12;
+    let footer_h: i32 = 88;
+    let cols: i32 = 3;
+
+    let helix = hosts.iter().find(|h| h.is_helix);
+    let devices: Vec<&DiscoveredHost> = hosts.iter().filter(|h| !h.is_helix).collect();
+    let rows = (devices.len() as i32 + cols - 1) / cols;
+    let helix_row_h = if helix.is_some() { helix_h + gap } else { 0 };
+    let height = header_h + gw_h + gap + helix_row_h + rows * (card_h + gap) + footer_h;
+
+    let mut s = String::new();
+    s.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\" font-family=\"sans-serif\">\n",
+        width, height, width, height
+    ));
+    s.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#111827\"/>\n");
+    s.push_str(&format!(
+        "<text x=\"24\" y=\"34\" font-size=\"22\" font-weight=\"bold\" fill=\"#e5e7eb\">{}</text>\n",
+        xml_escape(title)
+    ));
+    s.push_str("<text x=\"24\" y=\"58\" font-size=\"13\" fill=\"#9ca3af\">Starlink router → LAN — gateway + discovered devices</text>\n");
+
+    // Gateway root node.
+    let mut y = header_h;
+    let gw_label = gateway.unwrap_or("not detected");
+    let gw_fill = if gateway.is_some() { "#1f2937" } else { "#3f1d1d" };
+    s.push_str(&format!(
+        "<rect x=\"24\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"10\" fill=\"{}\" stroke=\"#34d399\" stroke-width=\"2\"/>\n",
+        y, full_w, gw_h, gw_fill
+    ));
+    s.push_str(&format!(
+        "<text x=\"48\" y=\"{}\" font-size=\"16\" font-weight=\"bold\" fill=\"#e5e7eb\">⬢ Starlink router (gateway) — {}</text>\n",
+        y + 32,
+        xml_escape(gw_label)
+    ));
+    s.push_str(&format!(
+        "<text x=\"48\" y=\"{}\" font-size=\"13\" fill=\"#9ca3af\">Root node — every LAN device hangs off this router</text>\n",
+        y + 58
+    ));
+    y += gw_h + gap;
+
+    // Helix, emphasized on its own row.
+    if let Some(h) = helix {
+        s.push_str(&format!(
+            "<rect x=\"24\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"10\" fill=\"#1f2937\" stroke=\"#34d399\" stroke-width=\"2\"/>\n",
+            y, full_w, helix_h
+        ));
+        let name = h
+            .hostname
+            .clone()
+            .unwrap_or_else(|| "Helix (R630)".to_string());
+        s.push_str(&format!(
+            "<text x=\"48\" y=\"{}\" font-size=\"16\" font-weight=\"bold\" fill=\"#e5e7eb\">★ {} — this machine</text>\n",
+            y + 30,
+            xml_escape(&name)
+        ));
+        let mac = h.mac.clone().unwrap_or_else(|| "no MAC".to_string());
+        s.push_str(&format!(
+            "<text x=\"48\" y=\"{}\" font-size=\"13\" fill=\"#d1d5db\">{}  ·  {}</text>\n",
+            y + 54,
+            xml_escape(&h.ip),
+            xml_escape(&mac)
+        ));
+        let tags = h
+            .methods
+            .iter()
+            .map(|m| m.tag())
+            .collect::<Vec<_>>()
+            .join(" · ");
+        s.push_str(&format!(
+            "<text x=\"48\" y=\"{}\" font-size=\"13\" fill=\"#9ca3af\">{}</text>\n",
+            y + 78,
+            xml_escape(&tags)
+        ));
+        y += helix_h + gap;
+    }
+
+    // Device grid.
+    for (i, h) in devices.iter().enumerate() {
+        let col = (i as i32) % cols;
+        let row = (i as i32) / cols;
+        let x = margin + col * (card_w + gap);
+        let cy = y + row * (card_h + gap);
+        s.push_str(&format!(
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"10\" fill=\"#1f2937\" stroke=\"#374151\"/>\n",
+            x, cy, card_w, card_h
+        ));
+        let name = h.hostname.clone().unwrap_or_else(|| h.ip.clone());
+        s.push_str(&format!(
+            "<text x=\"{}\" y=\"{}\" font-size=\"15\" font-weight=\"bold\" fill=\"#e5e7eb\">{}</text>\n",
+            x + 16,
+            cy + 28,
+            xml_escape(&name)
+        ));
+        s.push_str(&format!(
+            "<text x=\"{}\" y=\"{}\" font-size=\"13\" fill=\"#93c5fd\">{}</text>\n",
+            x + 16,
+            cy + 50,
+            xml_escape(&h.ip)
+        ));
+        let mac = h.mac.clone().unwrap_or_else(|| "no MAC".to_string());
+        s.push_str(&format!(
+            "<text x=\"{}\" y=\"{}\" font-size=\"12\" fill=\"#d1d5db\">{}</text>\n",
+            x + 16,
+            cy + 72,
+            xml_escape(&mac)
+        ));
+        let tags = h
+            .methods
+            .iter()
+            .map(|m| m.tag())
+            .collect::<Vec<_>>()
+            .join(" · ");
+        s.push_str(&format!(
+            "<text x=\"{}\" y=\"{}\" font-size=\"12\" fill=\"#9ca3af\">{}</text>\n",
+            x + 16,
+            cy + 94,
+            xml_escape(&tags)
+        ));
+    }
+    y += rows * (card_h + gap);
+
+    if hosts.is_empty() {
+        s.push_str(&format!(
+            "<text x=\"24\" y=\"{}\" font-size=\"14\" fill=\"#f87171\">No devices discovered — nothing answered ARP or the ping sweep.</text>\n",
+            y + 24
+        ));
+        y += 28;
+    }
+
+    // Footer limits.
+    s.push_str(&format!(
+        "<text x=\"24\" y=\"{}\" font-size=\"12\" fill=\"#9ca3af\">Discovery: ARP neighbours + ICMP ping sweep of the gateway /24 (+ known-config hosts). Silent hosts (no ping answer, not in ARP) are invisible.</text>\n",
+        y + 24
+    ));
+    s.push_str(&format!(
+        "<text x=\"24\" y=\"{}\" font-size=\"12\" fill=\"#9ca3af\">Hosts on other subnets/VLANs are not shown. The Starlink dish is upstream of the router — a note only, not a discovered node.</text>\n",
+        y + 46
+    ));
+    s.push_str("</svg>\n");
+    s
+}
+
+/// Helix's own LAN IPs, from wire interfaces (best effort). Used to mark
+/// "this machine" on the full map. Falls back to the gateway subnet's
+/// .168 (the R630's Helix address) when wire is unavailable.
+fn helix_own_ips(gateway_base: &str) -> Vec<String> {
+    if let Some(raw) =
+        crate::mcp_client::try_execute("mcp__wire__interfaces", &serde_json::json!({}))
+    {
+        if let Ok(ifaces) = parse_wire_interfaces(&raw) {
+            let mut ips: Vec<String> = ifaces
+                .iter()
+                .flat_map(|i| {
+                    i.addresses
+                        .iter()
+                        .map(|a| a.split('/').next().unwrap_or("").to_string())
+                })
+                .filter(|a| !a.is_empty() && !a.starts_with("127.") && !a.starts_with("::"))
+                .collect();
+            ips.sort();
+            ips.dedup();
+            if !ips.is_empty() {
+                return ips;
+            }
+        }
+    }
+    if gateway_base == "192.168.1" {
+        vec!["192.168.1.168".to_string()]
+    } else {
+        Vec::new()
+    }
+}
+
+/// create_full_network_map — task 347. Full-network map: gateway
+/// (Starlink router) at the top, Helix highlighted, discovered devices
+/// below. Discovery: gateway + ARP (344) -> ping sweep (345) ->
+/// hostnames (346) -> merge (dedupe by IP) -> hierarchical SVG.
+/// The sweep runs only when this tool is called, never on a timer.
+/// Keeps `create_network_map` (interfaces-only) as-is.
+pub fn create_full_network_map(args: &Value) -> String {
+    let title = args["title"].as_str().unwrap_or("Full Network Map");
+    let disc = discover();
+    let base = disc
+        .gateway
+        .as_deref()
+        .and_then(subnet_base)
+        .unwrap_or_else(|| "192.168.1".to_string());
+    let ping_live = ping_sweep_subnet(&base);
+    let mut to_resolve: Vec<String> = disc
+        .arp_entries
+        .iter()
+        .map(|e| e.ip.clone())
+        .collect();
+    to_resolve.extend(ping_live.iter().cloned());
+    to_resolve.extend(KNOWN_CONFIG_HOSTS.iter().map(|c| c.ip.to_string()));
+    to_resolve.sort();
+    to_resolve.dedup();
+    let hostnames = resolve_hostnames(&to_resolve);
+    let helix_ips = helix_own_ips(&base);
+    let hosts = aggregate_hosts(
+        disc.gateway.as_deref(),
+        &disc.arp_entries,
+        &ping_live,
+        &hostnames,
+        &helix_ips,
+    );
+    let svg = render_full_network_map_svg(title, disc.gateway.as_deref(), &hosts);
     match write_artifact_file("svg", title, &svg) {
         Ok((url, kind, bytes)) => artifact_saved_string(&url, &kind, bytes),
         Err(e) => e,
@@ -731,6 +986,7 @@ pub fn generate_okf_project_map_knowledge(args: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::network_discovery::DiscoveryMethod;
     use serde_json::json;
 
     /// Scope guard: runs cleanup even if the test panics, so probe files and
@@ -850,12 +1106,16 @@ mod tests {
         Some(rest[..end].to_string())
     }
 
-    /// Remove a created artifact file (and the dir if it ends up empty).
+    /// Remove a created artifact file. Deliberately does NOT remove the
+    /// `artifacts/` directory: parallel artifact tests share it, and a
+    /// `remove_dir` here races with another test's write — the directory
+    /// vanishing between its `create_dir_all` and its `fs::write` fails
+    /// that write with ENOENT ("No such file or directory"). The empty
+    /// dir is gitignored and harmless (same as `logs/`).
     /// Tests must not leak files into the worktree.
     fn remove_artifact(rel_url: &str) {
         let path = rel_url.trim_start_matches('/');
         let _ = std::fs::remove_file(path);
-        let _ = std::fs::remove_dir("artifacts");
     }
 
     #[test]
@@ -959,6 +1219,36 @@ mod tests {
     }
 
     #[test]
+    fn create_network_map_tolerates_doubled_mcp_payload() {
+        // Task 343 regression: live, `result_to_string` returns the
+        // pretty-printed structuredContent + "\n" + the compact text block
+        // — two JSON documents back to back. A strict `from_str` fails on
+        // the trailing second document; the parser must use the first and
+        // ignore the rest. This test FAILS on the old strict parse.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
+        let value: Value =
+            serde_json::from_str(WIRE_INTERFACES_STUB).expect("stub must be valid JSON");
+        let pretty = serde_json::to_string_pretty(&value).expect("pretty-print must succeed");
+        let doubled = format!("{}\n{}", pretty, WIRE_INTERFACES_STUB);
+        // Direct parser check on the doubled payload.
+        let ifaces = parse_wire_interfaces(&doubled).expect("doubled payload must parse");
+        assert_eq!(ifaces.len(), 3, "all three stub interfaces must parse");
+        assert_eq!(ifaces[0].name, "ens18");
+        // End-to-end through the tool, as the live path runs it.
+        crate::mcp_client::stub_try_execute_for_tests("mcp__wire__interfaces", &doubled);
+        let _cleanup_overrides = Cleanup::new(crate::mcp_client::clear_test_overrides);
+        let result = create_network_map(&json!({"title": "Test Doubled Map"}));
+        let url =
+            artifact_path_from_result(&result).expect(&format!("expected success, got: {}", result));
+        assert!(url.ends_with(".svg"), "url: {}", url);
+        let _cleanup = Cleanup::new(|| remove_artifact(&url));
+        let svg =
+            std::fs::read_to_string(url.trim_start_matches('/')).expect("svg must exist");
+        assert!(svg.contains("ens18"), "svg must name ens18");
+        assert!(svg.contains("192.168.1.168/24"), "svg must show the address");
+    }
+
+    #[test]
     fn create_network_map_reports_wire_unavailable() {
         let _tl = crate::tools::subagent_tool::test_env_lock();
         crate::mcp_client::override_config_for_tests(crate::config::mcp::McpConfig::default());
@@ -969,6 +1259,82 @@ mod tests {
             "got: {}",
             result
         );
+    }
+
+    #[test]
+    fn render_full_network_map_shows_gateway_helix_and_tags() {
+        // Task 347.4: canned discovery input — gateway is the root node,
+        // Helix is marked, every device shows IP/MAC/tag, known-config
+        // hosts appear with the 'configured' tag.
+        let hosts = vec![
+            DiscoveredHost {
+                ip: "192.168.1.168".to_string(),
+                mac: Some("aa:bb:cc:dd:ee:ff".to_string()),
+                interface: Some("ens18".to_string()),
+                hostname: Some("bot".to_string()),
+                methods: vec![DiscoveryMethod::Ping],
+                is_helix: true,
+            },
+            DiscoveredHost {
+                ip: "192.168.1.149".to_string(),
+                mac: None,
+                interface: None,
+                hostname: Some("Ollama server (gpt-oss:20b)".to_string()),
+                methods: vec![DiscoveryMethod::Configured],
+                is_helix: false,
+            },
+            DiscoveredHost {
+                ip: "192.168.1.196".to_string(),
+                mac: Some("aa:bb:cc:dd:ee:02".to_string()),
+                interface: Some("ens18".to_string()),
+                hostname: Some("desktop".to_string()),
+                methods: vec![
+                    DiscoveryMethod::Arp,
+                    DiscoveryMethod::Ping,
+                    DiscoveryMethod::Configured,
+                ],
+                is_helix: false,
+            },
+        ];
+        let svg = render_full_network_map_svg("Full Network Map", Some("192.168.1.1"), &hosts);
+        assert!(svg.starts_with("<svg"), "must be an SVG document");
+        assert!(
+            svg.contains("Starlink router (gateway) — 192.168.1.1"),
+            "gateway must be the root node"
+        );
+        assert!(svg.contains("this machine"), "Helix must be marked");
+        assert!(svg.contains("192.168.1.168"), "Helix IP must show");
+        assert!(
+            svg.contains("192.168.1.149"),
+            "configured host must show even when silent"
+        );
+        assert!(svg.contains("configured"), "configured tag must show");
+        assert!(svg.contains("192.168.1.196"), "desktop must show");
+        assert!(svg.contains("desktop"), "hostname must show");
+        assert!(
+            svg.contains("arp · ping · configured"),
+            "merged tags must show"
+        );
+        assert!(
+            svg.contains("Starlink dish is upstream"),
+            "limits footer must state the dish note"
+        );
+    }
+
+    #[test]
+    fn render_full_network_map_escapes_xml_and_handles_no_gateway() {
+        let hosts = vec![DiscoveredHost {
+            ip: "192.168.1.50".to_string(),
+            mac: None,
+            interface: None,
+            hostname: Some("<script>alert(1)</script>".to_string()),
+            methods: vec![DiscoveryMethod::Ping],
+            is_helix: false,
+        }];
+        let svg = render_full_network_map_svg("Map <&>", None, &hosts);
+        assert!(!svg.contains("<script>"), "raw script tag must not appear");
+        assert!(svg.contains("&lt;script&gt;"), "must be escaped");
+        assert!(svg.contains("not detected"), "missing gateway must be stated");
     }
 
     #[test]

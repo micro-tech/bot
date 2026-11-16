@@ -9,6 +9,7 @@
 
 pub mod email_tools;
 pub mod file_tools;
+pub mod network_discovery;
 pub mod project_scanner;
 pub mod shell_security;
 pub mod shell_tool;
@@ -48,6 +49,7 @@ pub fn execute(name: &str, args: &Value) -> String {
         "write_note" => file_tools::write_note(args),
         "create_artifact" => file_tools::create_artifact(args),
         "create_network_map" => file_tools::create_network_map(args),
+        "create_full_network_map" => file_tools::create_full_network_map(args),
         "read_note" => file_tools::read_note(args),
         "list_notes" => file_tools::list_notes(),
         "send_email" => email_tools::send_email(args),
@@ -218,6 +220,20 @@ fn static_tool_definitions() -> &'static Vec<Value> {
                         "type": "object",
                         "properties": {
                             "title": { "type": "string", "description": "Optional map title (default: 'Network Map')" }
+                        },
+                        "required": []
+                    }
+                }
+            }),
+            serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": "create_full_network_map",
+                    "description": "Build a FULL network map of the whole LAN as an SVG file and return its /artifacts/ URL. Use this when the user asks for a full / whole-network map, a map starting at the router, or a map of all their devices. One call does the whole flow: finds the default gateway (the Starlink router, root node), discovers LAN devices via the ARP table and a bounded ICMP ping sweep of the gateway /24, resolves hostnames best-effort, and renders a hierarchical map with the gateway at the top, Helix highlighted as 'this machine', and each device with IP, MAC, hostname and a discovery tag (arp / ping / configured). Use create_network_map instead when the user only wants the Helix machine's own interfaces. Cannot show hosts that answer neither ping nor ARP, hosts on other subnets/VLANs, or the Starlink dish (upstream of the router, a note only). Takes ~20s (the sweep runs only when this tool is called).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": { "type": "string", "description": "Optional map title (default: 'Full Network Map')" }
                         },
                         "required": []
                     }
@@ -903,6 +919,17 @@ mod tests {
         assert!(
             find("create_network_map").is_some(),
             "create_network_map must be registered"
+        );
+        // Task 347: the full-network map tool must be registered too, and
+        // its description must tell the model when to use it (full /
+        // whole-network map, starting at the router) vs the
+        // interfaces-only create_network_map.
+        let full = find("create_full_network_map").expect("create_full_network_map must be registered");
+        let full_desc = full["function"]["description"].as_str().unwrap_or("");
+        assert!(
+            full_desc.contains("FULL") && full_desc.contains("create_network_map"),
+            "full map description must say when to use it vs create_network_map, got: {}",
+            full_desc
         );
     }
 
