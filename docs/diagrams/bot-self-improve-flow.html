@@ -76,9 +76,9 @@
     <p class="back"><a href="bot-architecture.html">← Helix architecture overview</a></p>
 
     <div class="diagram-container">
-      <svg viewBox="0 0 960 430" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-self-improve-flow-title bot-self-improve-flow-desc">
+      <svg viewBox="0 0 960 570" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-self-improve-flow-title bot-self-improve-flow-desc">
         <title id="bot-self-improve-flow-title">Helix — self-improve loop</title>
-        <desc id="bot-self-improve-flow-desc">Flowchart of the Helix self-improving loop (src/self_improve): a daily cron routine checks kill switches, collects health counts only, and on a failing signal dispatches one read-only loop-worker subagent; its proposal passes a budgets gate, then a per-cycle evaluation arm evaluates the oldest stored 'proposed' record in a disposable worktree (skipping records with no diff files), and the result waits in a PR queue for John to merge. GET /self_improve/status (token-gated) shows the loop snapshot; the restart signal counts only restarts since the last cycle (boot marker written at startup).</desc>
+        <desc id="bot-self-improve-flow-desc">Flowchart of the Helix self-improving loop (src/self_improve): a daily cron routine checks kill switches, collects health counts only, and on a failing signal dispatches one read-only loop-worker subagent; the per-cycle drafting arm (loop-drafter role, same 8 read-only tools) turns the oldest intaked proposal into whole-file diffs, the proposal passes a budgets gate, then the per-cycle evaluation arm evaluates the oldest stored 'proposed' record in a disposable worktree (skipping records with no diff files), and the Phase 3 delivery arm pushes the promoted branch (Git::push_branch, origin only, self-improve/&lt;slug&gt;) into the PR queue, where John merges. The review gate (task 366) is a read-only checklist — unit tests, bounded subset, approved eval set, secrets audit, then John's read and merge tap, the human checks always PendingHuman. Self-authored skills (SkillRegistry) and OKF context drafts are proposals only; no real sandbox exists yet. GET /self_improve/status (token-gated) shows the loop snapshot; the restart signal counts only restarts since the last cycle (boot marker written at startup).</desc>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
           <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
@@ -96,12 +96,14 @@
         <line x1="680" y1="72" x2="700" y2="72" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
         <!-- SIGNAL: Phase gate -> Loop worker -->
         <line x1="800" y1="104" x2="800" y2="190" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
-        <!-- PROPOSAL: Loop worker -> Budgets gate -->
+        <!-- DRAFT: Loop worker -> Drafting arm -->
         <line x1="700" y1="222" x2="680" y2="222" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <!-- ALLOWED: Budgets gate -> Evaluate -->
+        <!-- ALLOWED: Drafting arm -> Budgets gate -->
         <line x1="480" y1="222" x2="460" y2="222" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <!-- READY: Evaluate -> PR queue -->
+        <!-- READY: Budgets gate -> Evaluate -->
         <line x1="260" y1="222" x2="240" y2="222" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- DELIVER: Evaluate -> PR queue -->
+        <line x1="140" y1="254" x2="140" y2="340" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
 
         <!-- Arrow labels -->
         <rect x="230" y="62" width="40" height="14" rx="2" fill="#f5f5f5"/>
@@ -116,14 +118,17 @@
         <rect x="808" y="140" width="52" height="14" rx="2" fill="#f5f5f5"/>
         <text x="834" y="150" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SIGNAL</text>
 
-        <rect x="658" y="212" width="64" height="14" rx="2" fill="#f5f5f5"/>
-        <text x="690" y="222" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PROPOSAL</text>
+        <rect x="662" y="212" width="56" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="690" y="222" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DRAFT</text>
 
         <rect x="441" y="212" width="58" height="14" rx="2" fill="#f5f5f5"/>
         <text x="470" y="222" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ALLOWED</text>
 
         <rect x="227" y="212" width="46" height="14" rx="2" fill="#f5f5f5"/>
         <text x="250" y="222" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">READY</text>
+
+        <rect x="148" y="290" width="56" height="14" rx="2" fill="#f5f5f5"/>
+        <text x="176" y="300" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DELIVER</text>
 
         <!-- Node: Cron tick -->
         <rect x="40" y="40" width="200" height="64" rx="6" fill="#f5f5f5"/>
@@ -165,52 +170,60 @@
         <text x="800" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Loop worker</text>
         <text x="800" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">read-only · draft backend</text>
 
-        <!-- Node: Budgets gate -->
+        <!-- Node: Drafting arm -->
         <rect x="480" y="190" width="200" height="64" rx="6" fill="#f5f5f5"/>
         <rect x="480" y="190" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-        <rect x="488" y="198" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
-        <text x="502" y="207" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GATE</text>
-        <text x="580" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Budgets gate</text>
-        <text x="580" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">caps · cooldowns · dedupe</text>
+        <rect x="488" y="198" width="36" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="506" y="207" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DRAFT</text>
+        <text x="580" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Drafting arm</text>
+        <text x="580" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">read-only · whole-file diffs</text>
 
-        <!-- Node: Evaluate -->
+        <!-- Node: Budgets gate -->
         <rect x="260" y="190" width="200" height="64" rx="6" fill="#f5f5f5"/>
         <rect x="260" y="190" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
         <rect x="268" y="198" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
-        <text x="282" y="207" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EVAL</text>
-        <text x="360" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Evaluate (per-cycle)</text>
-        <text x="360" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">oldest 'proposed' · worktree</text>
+        <text x="282" y="207" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GATE</text>
+        <text x="360" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Budgets gate</text>
+        <text x="360" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">caps · cooldowns · dedupe</text>
 
-        <!-- Node: PR queue -->
+        <!-- Node: Evaluate -->
         <rect x="40" y="190" width="200" height="64" rx="6" fill="#f5f5f5"/>
-        <rect x="40" y="190" width="200" height="64" rx="6" fill="rgba(191,69,32,0.05)" stroke="rgba(191,69,32,0.50)" stroke-width="1" stroke-dasharray="4,4"/>
-        <rect x="48" y="198" width="20" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
-        <text x="58" y="207" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PR</text>
-        <text x="140" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">PR queue</text>
-        <text x="140" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">John merges — never auto</text>
+        <rect x="40" y="190" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="48" y="198" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="62" y="207" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EVAL</text>
+        <text x="140" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Evaluate (per-cycle)</text>
+        <text x="140" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">oldest 'proposed' · worktree</text>
+
+        <!-- Node: PR queue (delivery arm folded in) -->
+        <rect x="40" y="340" width="200" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="40" y="340" width="200" height="64" rx="6" fill="rgba(191,69,32,0.05)" stroke="rgba(191,69,32,0.50)" stroke-width="1" stroke-dasharray="4,4"/>
+        <rect x="48" y="348" width="20" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+        <text x="58" y="357" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PR</text>
+        <text x="140" y="376" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">PR queue</text>
+        <text x="140" y="392" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">dedicated push · John merges</text>
 
         <!-- Callouts -->
-        <text x="480" y="300" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">Every cycle appends one ledger entry; the eval arm skips records with no diff files; restarts count only since the last cycle.</text>
-        <text x="480" y="324" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">The loop never merges, never pushes to master, never restarts the service, never writes the live tree or config, never sends mail or chat.</text>
+        <text x="480" y="440" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">Per cycle: drafting arm (whole-file diffs, 500-line cap) → evaluation arm → delivery arm (dedicated push, self-improve/&lt;slug&gt;).</text>
+        <text x="480" y="464" fill="#4f5d75" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">Self-skills are proposals only — no sandbox yet (task 368); the loop never merges, pushes to master, restarts, or sends mail/chat.</text>
 
         <!-- Legend strip -->
-        <line x1="40" y1="368" x2="920" y2="368" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
-        <text x="40" y="384" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+        <line x1="40" y1="508" x2="920" y2="508" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="40" y="524" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
 
-        <rect x="40" y="396" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
-        <text x="60" y="404" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Focal</text>
+        <rect x="40" y="536" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+        <text x="60" y="544" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Focal</text>
 
-        <rect x="120" y="396" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-        <text x="140" y="404" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Step</text>
+        <rect x="120" y="536" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="140" y="544" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Step</text>
 
-        <rect x="210" y="396" width="14" height="10" rx="2" fill="rgba(191,69,32,0.05)" stroke="rgba(191,69,32,0.50)" stroke-width="1" stroke-dasharray="4,4"/>
-        <text x="230" y="404" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Gated handoff</text>
+        <rect x="210" y="536" width="14" height="10" rx="2" fill="rgba(191,69,32,0.05)" stroke="rgba(191,69,32,0.50)" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="230" y="544" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Gated handoff</text>
 
-        <line x1="360" y1="401" x2="388" y2="401" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
-        <text x="396" y="404" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Headline flow</text>
+        <line x1="360" y1="541" x2="388" y2="541" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <text x="396" y="544" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Headline flow</text>
 
-        <line x1="520" y1="401" x2="548" y2="401" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-        <text x="556" y="404" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Flow</text>
+        <line x1="520" y1="541" x2="548" y2="541" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="556" y="544" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Flow</text>
       </svg>
     </div>
   </div>
