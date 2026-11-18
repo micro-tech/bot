@@ -8,7 +8,7 @@ use axum::{
         Multipart, Path as AxumPath, State, WebSocketUpgrade,
         ws::{Message as WsMessage, WebSocket},
     },
-    http::{HeaderMap, header, StatusCode},
+    http::{HeaderMap, StatusCode, Uri, header, uri::Authority},
     middleware,
     response::{Html, IntoResponse, Json},
     routing::{get, post},
@@ -963,7 +963,10 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     // slash_cmd) are rejected until the client sends
     // {"type":"auth","token":"..."}. When no token is configured the
     // endpoints stay open (startup warns loudly about this). `chat` is
-    // deliberately NOT gated — that is a product decision, not yet made.
+    // deliberately NOT gated — that is a product decision. The upgrade
+    // itself is Origin-checked in ws_handler (task 369): only this
+    // server's own origin — or a non-browser client with no Origin —
+    // gets a socket.
     let mut authed = false;
     while let Some(msg) = ws_receiver.next().await {
         let msg = match msg {
@@ -1632,8 +1635,61 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
 
 // ── Axum route helpers ────────────────────────────────────────────────────────
 
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_ws(socket, state))
+// ── WebSocket Origin check (review H1, task 369) ─────────────────────────────
+// A malicious web page can open a WebSocket to this server from the victim's
+// browser once the self-signed cert is accepted, so the /ws upgrade must
+// only come from this server's own origin. Browsers always send `Origin` on
+// a WS upgrade; non-browser clients (scripts, tests) send none, so an absent
+// Origin is allowed — the threat is browser-driven. When Origin is present
+// it must match the request `Host` (same host, same effective port,
+// case-insensitive host); anything else — including `null` and malformed
+// values — is rejected. This does NOT touch the `chat` arm's auth status:
+// the ungated `chat` arm is a decided product choice.
+fn ws_origin_allowed(headers: &HeaderMap) -> bool {
+    let Some(origin) = headers.get(header::ORIGIN) else {
+        return true; // Not a browser request.
+    };
+    let Ok(origin) = origin.to_str() else {
+        return false;
+    };
+    if origin == "null" {
+        return false;
+    }
+    let Ok(uri) = origin.parse::<Uri>() else {
+        return false;
+    };
+    let Some(o_auth) = uri.authority() else {
+        return false;
+    };
+    // Effective port of the Origin: explicit, else the scheme default.
+    let scheme_default = match uri.scheme_str() {
+        Some("https") | Some("wss") => 443,
+        _ => 80,
+    };
+    let o_port = o_auth.port_u16().unwrap_or(scheme_default);
+    let Some(host) = headers.get(header::HOST) else {
+        return false;
+    };
+    let Ok(host) = host.to_str() else {
+        return false;
+    };
+    let Ok(h_auth) = host.parse::<Authority>() else {
+        return false;
+    };
+    let h_port = h_auth.port_u16().unwrap_or(scheme_default);
+    o_auth.host().eq_ignore_ascii_case(h_auth.host()) && o_port == h_port
+}
+
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
+    if !ws_origin_allowed(&headers) {
+        warn!("rejected WS upgrade: Origin not allowed");
+        return Err((StatusCode::FORBIDDEN, "websocket origin not allowed"));
+    }
+    Ok(ws.on_upgrade(move |socket| handle_ws(socket, state)))
 }
 
 async fn serve_index() -> Html<String> {
@@ -3971,10 +4027,13 @@ mod tests {
     }
 
     /// Test AppState: a token IS configured, routines + config live in temp
-    /// files. Nothing points at the real tree.
-    fn ws_auth_test_state() -> (AppState, std::path::PathBuf, std::path::PathBuf) {
-        let routines_path = ws_auth_tmp_path("routines.json");
-        let config_path = ws_auth_tmp_path("config.toml");
+    /// files. Nothing points at the real tree. `tag` keeps the temp files
+    /// unique per test — the paths are per-process, so two WS tests running
+    /// in parallel in one process would otherwise share (and delete) each
+    /// other's files.
+    fn ws_auth_test_state(tag: &str) -> (AppState, std::path::PathBuf, std::path::PathBuf) {
+        let routines_path = ws_auth_tmp_path(&format!("{tag}-routines.json"));
+        let config_path = ws_auth_tmp_path(&format!("{tag}-config.toml"));
         // Sentinel content: the config_save negative test asserts this exact
         // text survives an unauthenticated save attempt.
         let _ = std::fs::write(&config_path, "[web]\nport = 8443\n");
@@ -4073,7 +4132,7 @@ mod tests {
     async fn ws_mutating_arms_require_auth() {
         // GIVEN a token is configured and the server is up on a live socket:
         let _manifest_guard = WsAuthManifestGuard::new();
-        let (state, routines_path, config_path) = ws_auth_test_state();
+        let (state, routines_path, config_path) = ws_auth_test_state("auth");
         let routines = state.routines.clone();
         let app = Router::new()
             .route("/ws", get(ws_handler))
@@ -4355,6 +4414,110 @@ mod tests {
         // Cleanup: close the socket, stop the server, remove temp files.
         // system_manifest.md is handled by the Drop guard above.
         let _ = ws.close(None).await;
+        server.abort();
+        let _ = std::fs::remove_file(&routines_path);
+        let _ = std::fs::remove_file(&config_path);
+    }
+
+    // ── WebSocket Origin check (review H1, task 369) ────────────────────────
+
+    #[test]
+    fn ws_origin_allowed_cases() {
+        fn headers(origin: Option<&str>, host: Option<&str>) -> HeaderMap {
+            let mut h = HeaderMap::new();
+            if let Some(o) = origin {
+                h.insert(header::ORIGIN, o.parse().unwrap());
+            }
+            if let Some(host) = host {
+                h.insert(header::HOST, host.parse().unwrap());
+            }
+            h
+        }
+        // No Origin (non-browser client): allowed.
+        assert!(ws_origin_allowed(&headers(None, Some("127.0.0.1:8443"))));
+        // Same-origin: allowed (explicit ports, default ports,
+        // case-insensitive host).
+        assert!(ws_origin_allowed(&headers(
+            Some("http://127.0.0.1:8443"),
+            Some("127.0.0.1:8443")
+        )));
+        assert!(ws_origin_allowed(&headers(
+            Some("https://192.168.1.168:8443"),
+            Some("192.168.1.168:8443")
+        )));
+        assert!(ws_origin_allowed(&headers(
+            Some("https://example.com"),
+            Some("example.com")
+        )));
+        assert!(ws_origin_allowed(&headers(
+            Some("https://EXAMPLE.com:8443"),
+            Some("example.com:8443")
+        )));
+        // Cross-origin: rejected (different host, different port).
+        assert!(!ws_origin_allowed(&headers(
+            Some("http://evil.example.com"),
+            Some("127.0.0.1:8443")
+        )));
+        assert!(!ws_origin_allowed(&headers(
+            Some("http://127.0.0.1:9999"),
+            Some("127.0.0.1:8443")
+        )));
+        // Opaque / malformed: rejected.
+        assert!(!ws_origin_allowed(&headers(
+            Some("null"),
+            Some("127.0.0.1:8443")
+        )));
+        assert!(!ws_origin_allowed(&headers(
+            Some("not a uri :::"),
+            Some("127.0.0.1:8443")
+        )));
+        assert!(!ws_origin_allowed(&headers(
+            Some("http://127.0.0.1:8443"),
+            None
+        )));
+    }
+
+    #[tokio::test]
+    async fn ws_origin_check_rejects_cross_origin() {
+        // GIVEN the server is up on a live socket:
+        let _manifest_guard = WsAuthManifestGuard::new();
+        let (state, routines_path, config_path) = ws_auth_test_state("origin");
+        let app = Router::new()
+            .route("/ws", get(ws_handler))
+            .with_state(state);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test listener");
+        let port = listener.local_addr().expect("listener addr").port();
+        let server = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        // WHEN a browser from another origin upgrades,
+        // THEN the handshake is rejected (403).
+        // ClientRequestBuilder builds the required WS headers from the URI
+        // and appends the Origin; a bare Request::builder would miss
+        // Sec-WebSocket-Key and fail the handshake client-side.
+        let cross = tokio_tungstenite::connect_async(
+            tokio_tungstenite::tungstenite::ClientRequestBuilder::new(
+                format!("ws://127.0.0.1:{port}/ws").parse().unwrap(),
+            )
+            .with_header("Origin", "http://evil.example.com"),
+        )
+        .await;
+        assert!(cross.is_err(), "cross-origin WS upgrade must be rejected");
+
+        // WHEN the same origin upgrades, THEN it connects.
+        let (mut ws, _) = tokio_tungstenite::connect_async(
+            tokio_tungstenite::tungstenite::ClientRequestBuilder::new(
+                format!("ws://127.0.0.1:{port}/ws").parse().unwrap(),
+            )
+            .with_header("Origin", format!("http://127.0.0.1:{port}")),
+        )
+        .await
+        .expect("same-origin WS connect");
+        let _ = ws.close(None).await;
+
         server.abort();
         let _ = std::fs::remove_file(&routines_path);
         let _ = std::fs::remove_file(&config_path);
