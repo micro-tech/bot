@@ -5291,6 +5291,39 @@
         }
       ],
       "testStrategy": "Escape tests (no filesystem/network breakout), resource-limit tests, and a self-authored skill running inside the sandbox end to end."
+    },
+    {
+      "id": 371,
+      "title": "Warning-free bar: 3 unused-dep manifest warnings + 2 unused-import warnings in unix_socket_test",
+      "description": "Nightly Quartermaster 2026-11-18 found `cargo build` (with a temporary config.toml copy masking known task 262) passing but NOT warning-free on PreRelese 2454ee3: 3x `cargo::unused_dependencies` manifest warnings \u2014 `pulldown-cmark` (Cargo.toml:71; only reference is a commented-out `use` in src/config/manifest.rs:3), `tower-http` (Cargo.toml:45, cors feature; no code reference \u2014 CORS was removed Oct 4), `tracing-subscriber` (Cargo.toml:41; no code reference). Plus 2x unused-import warnings in tests/unix_socket_test.rs (`tokio::net::UnixStream`; `AsyncBufReadExt`, `AsyncWriteExt`, `BufReader`). Surveyor 1 verified 2026-11-18 by re-running `cargo build` (3 manifest warnings reproduced) and `cargo check --test unix_socket_test` (2 import warnings reproduced). Renumbered from 369 to 371 on 2026-11-18 to avoid colliding with H1/H2 tasks 369/370 on branch ranger-helix-h1h2.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "low",
+      "details": "Verified zero-reference (Surveyor 1, 2026-11-18): grep over src/, tests/, build.rs and Cargo.toml finds `pulldown-cmark` only at Cargo.toml:71 and the commented-out `use` in src/config/manifest.rs:3; `tower-http` only at Cargo.toml:45; `tracing-subscriber` only at Cargo.toml:41. No benches/ dir exists; examples/ holds only project_scanner_config.toml (not Rust); build.rs references none of the three. No [features] entry pulls any of them, and the only `cors` mentions left are comments stating CORS was removed (src/io/web_server/mod.rs:483, :2192; src/voice/mod.rs:7). The `tracing` crate itself is used widely (tracing::{info, warn, debug} across src/) and STAYS \u2014 only `tracing-subscriber` goes. `tracing-subscriber` is not re-exported by `tracing`, and removing a direct dep leaves any transitive copy intact, so no other crate is affected.\n\nFix: (1) delete the three dep lines from Cargo.toml; delete the stale commented-out `// use pulldown_cmark::Parser;` line in src/config/manifest.rs:3 so nothing references the removed crate; run `cargo check` so Cargo.lock drops them and commit the lockfile change. (2) In tests/unix_socket_test.rs delete the two unused imports (lines 5-6). The test body is a placeholder (asserts on a string literal, no socket code \u2014 the real socket test was never written), so the imports are simply dead; do not expand the placeholder test here, that is separate work.\n\nRuled out: NOT a build or test failure \u2014 lib 773 passed / 0 failed / 6 ignored, bin helix 748 / 0 / 6, integration 35 / 0, doctests 1 / 0 / 1, all green; PR #63 (diagrams only) changed no code, so these warnings pre-date this run's HEAD and are not a regression. Do NOT fix task 262 here \u2014 the installer include_str! failure is a separate, already-filed issue; this task only covers the warnings. (Task 262 workaround for verification: temporary config.toml copy, removed afterwards \u2014 same as the Quartermaster run.)",
+      "testStrategy": "`cargo check --lib --test unix_socket_test` emits 0 warnings; `cargo build` (with temporary config.toml copy per task 262, removed after) emits 0 warnings including 0 unused-dependency manifest warnings; `cargo test --lib --bin helix` stays green; `git diff Cargo.lock` shows only the three removed crates.",
+      "subtasks": [
+        {
+          "id": 371.1,
+          "title": "Remove pulldown-cmark, tower-http, tracing-subscriber from Cargo.toml (+ stale commented use in src/config/manifest.rs:3); update Cargo.lock",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 371.2,
+          "title": "Drop the 2 unused imports in tests/unix_socket_test.rs:5-6",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 371.3,
+          "title": "Verify: check/build 0 warnings, lib+bin tests green, lockfile diff clean",
+          "status": "pending",
+          "dependencies": [
+            371.1,
+            371.2
+          ]
+        }
+      ]
     }
   ]
 }
