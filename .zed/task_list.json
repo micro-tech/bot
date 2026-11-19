@@ -5380,6 +5380,133 @@
           ]
         }
       ]
+    },
+    {
+      "id": 372,
+      "title": "H3: Retry policy can't survive real Starlink drops — shared retry_with_backoff helper",
+      "description": "Helix triple review H3 (Claude + Grok). Ollama uses a fixed 2.5s delay and Gemini 2s then 4s, giving up after ~5-6s; call_gemini_direct and the OKF fetcher have limited/no retry; IMAP has no retry at all. Fix: one shared retry_with_backoff helper with jittered exponential backoff (~2s rising to a 60s cap, ~5 attempts), honouring Retry-After on 429/503 and failing fast on other 4xx. Wire it into the Ollama + Gemini per-round calls, call_gemini_direct, the OKF fetcher, and the IMAP connect.",
+      "status": "done",
+      "results": "Done 2026-11-19 (branch ranger-helix-h3h4h5): shared retry_with_backoff helper in src/io/retry.rs (jittered exponential backoff 2s -> 60s cap, 5 attempts, Retry-After honoured on 429/503, fail-fast on other 4xx) wired into Ollama + Gemini per-round calls, call_gemini, OKF fetcher, and IMAP connect. Full cargo +1.99 test suite green: 1601 passed, 0 failed, 13 ignored (lib 783/0/6, bin helix 758/0/6, bin installer 24/0/0, integration 35/0/0, doctests 1/0/1). 8 retry-helper unit tests pass.",
+      "dependencies": [],
+      "priority": "high",
+      "details": "New module src/io/retry.rs: RetryPolicy (max_attempts 5, base 2000ms, cap 60000ms), exponential_delay_ms (pure, exact), backoff_delay (jittered, +0-25%), retry_after (parses Retry-After seconds, capped; HTTP-date form falls back to backoff), delay_for_response (Retry-After wins, else backoff), is_retryable_status (429/503/5xx only), is_retryable_reqwest_error (timeout/connect), RetryError enum (Retryable{source, delay} / Fatal), async retry_with_backoff driver + sync retry_with_backoff_sync driver. Wired into: Ollama call_ollama_tools per-round HTTP call, Gemini call_gemini_tools per-round HTTP call, call_gemini (single-shot, used by call_gemini_direct + call_gemini_sync), OKF fetcher fetch_manifest/fetch_knowledge/health_check (304 treated as a valid response for conditional requests), IMAP imap_connect (sync retry of TCP connect + TLS handshake; login done once, not retried, so a bad-password failure cannot lock the account). Note: the only proper exponential backoff in the tree was in io/ollama/keepalive.rs, which L5 flagged as undeclared/uncompiled — that was already fixed by PR #49 (keepalive is now a declared module and wired up), so no L5 work here.",
+      "testStrategy": "Retry helper unit tests in src/io/retry.rs (backoff timing, Retry-After honoring, fail-fast on 4xx, driver retry-then-succeed / fatal / exhaustion for both async and sync drivers). Full cargo +1.99 test suite green (lib + bin helix + bin installer + integration + doctests).",
+      "subtasks": [
+        {
+          "id": 372.1,
+          "title": "Shared retry helper module src/io/retry.rs + unit tests",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 372.2,
+          "title": "Wire retry into Ollama + Gemini per-round calls and call_gemini",
+          "status": "done",
+          "dependencies": [
+            372.1
+          ]
+        },
+        {
+          "id": 372.3,
+          "title": "Wire retry into OKF fetcher + IMAP connect (sync driver)",
+          "status": "done",
+          "dependencies": [
+            372.1
+          ]
+        },
+        {
+          "id": 372.4,
+          "title": "Verify: full cargo +1.99 test suite green",
+          "status": "done",
+          "dependencies": [
+            372.2,
+            372.3
+          ]
+        }
+      ]
+    },
+    {
+      "id": 373,
+      "title": "H4: Retries re-run the whole tool loop (duplicate side effects)",
+      "description": "Helix triple review H4 (Claude only). The bus-handler retry loops retry the ENTIRE tool loop: a failure in round 3 replays rounds 1-2, duplicating send_email and write_note side effects, re-billing Gemini, and re-streaming tokens the UI already showed. Fix: retry each HTTP call INSIDE the loop (per-round, via the shared H3 helper), and remove the outer retry loops so a late failure is final for the turn.",
+      "status": "done",
+      "results": "Done 2026-11-19 (branch ranger-helix-h3h4h5): per-round retry inside call_ollama_tools and call_gemini_tools via the shared H3 helper; outer retry loops removed from handle_ollama_message and handle_gemini_bus_message (MAX_RETRIES/RETRY_DELAY_MS consts removed). Regression test gemini_tool_loop_transient_503_does_not_replay_tool_calls passes (mockito: round 2 returns 503, retry succeeds, spawn_subagent tool_call bus message appears exactly once). Full cargo +1.99 test suite green: 1601 passed, 0 failed, 13 ignored.",
+      "dependencies": [
+        372
+      ],
+      "priority": "high",
+      "details": "Ollama: call_ollama_tools wraps each round's POST /api/chat (send + status check) in retry_with_backoff; handle_ollama_message is now a single attempt (outer for loop removed, MAX_RETRIES/RETRY_DELAY_MS consts removed, 404 hint kept as a log line). Gemini: call_gemini_tools wraps each round's POST generateContent the same way; handle_gemini_bus_message is now a single attempt (outer for loop + delay_ms removed, MAX_RETRIES/RETRY_DELAY_MS consts removed). The body parse stays outside the per-round retry (a parse error is deterministic, not transient). A mid-stream failure is not retried (replaying would duplicate already-streamed tokens).",
+      "testStrategy": "H4 regression test gemini_tool_loop_transient_503_does_not_replay_tool_calls (mockito): round 1 returns a spawn_subagent functionCall, round 2 first returns 503, round 2 retry returns final text; asserts the tool loop completes AND the spawn_subagent tool_call bus message appears exactly once. Full cargo +1.99 test suite green.",
+      "subtasks": [
+        {
+          "id": 373.1,
+          "title": "Per-round retry in call_ollama_tools + remove Ollama outer retry loop",
+          "status": "done",
+          "dependencies": [
+            372
+          ]
+        },
+        {
+          "id": 373.2,
+          "title": "Per-round retry in call_gemini_tools + remove Gemini outer retry loop",
+          "status": "done",
+          "dependencies": [
+            372
+          ]
+        },
+        {
+          "id": 373.3,
+          "title": "H4 regression test (transient 503, tool runs exactly once)",
+          "status": "done",
+          "dependencies": [
+            373.2
+          ]
+        },
+        {
+          "id": 373.4,
+          "title": "Verify: full cargo +1.99 test suite green",
+          "status": "done",
+          "dependencies": [
+            373.1,
+            373.2,
+            373.3
+          ]
+        }
+      ]
+    },
+    {
+      "id": 374,
+      "title": "H5: IMAP and SSH2 connections have no timeouts",
+      "description": "Helix triple review H5 (Claude only). src/tools/email_tools.rs imap_connect uses TcpStream::connect with no timeout (can hang indefinitely on a dead route); src/tools/project_scanner.rs walk_ssh_directory never calls sess.set_timeout on the ssh2 session. Fix: bound the IMAP TCP connect with a 10s connect timeout (tcp_connect_timeout helper, tries each resolved address), and set the ssh2 session timeout to 30s plus a 10s TCP connect timeout.",
+      "status": "done",
+      "results": "Done 2026-11-19 (branch ranger-helix-h3h4h5): IMAP imap_connect now uses tcp_connect_timeout (10s, tries each resolved address) inside the sync retry driver; SSH2 walk_ssh_directory uses a 10s TCP connect timeout and sess.set_timeout(30000) after Session::new. H5 tests tcp_connect_timeout_fails_fast_on_refused_port and tcp_connect_timeout_reaches_a_listening_socket pass. cargo +1.99 check --features ssh passes (exit 0). Full cargo +1.99 test suite green: 1601 passed, 0 failed, 13 ignored. Note: a true blackhole test is not possible in the sandbox (proxy accepts outbound public IPs instantly; private IPs fail fast with EPERM) — live blackhole behaviour is a drill for the R630.",
+      "dependencies": [],
+      "priority": "high",
+      "details": "IMAP: new tcp_connect_timeout(host, port, timeout) helper (resolves via ToSocketAddrs, tries each address with TcpStream::connect_timeout); imap_connect uses it with IMAP_CONNECT_TIMEOUT_SECS=10 inside the sync retry driver (H3). SSH2: walk_ssh_directory uses a 10s TCP connect timeout and calls sess.set_timeout(SSH_SESSION_TIMEOUT_MS=30000) right after Session::new, before set_tcp_stream/handshake. Note: the ssh feature is NOT in the default features, so walk_ssh_directory is not compiled by the default cargo test; the SSH2 change must be verified with cargo check --features ssh.",
+      "testStrategy": "H5 tests tcp_connect_timeout_fails_fast_on_refused_port (closed loopback port, must fail promptly not hang) and tcp_connect_timeout_reaches_a_listening_socket (loopback listener, must succeed) in src/tools/email_tools.rs. A true blackhole test is not possible in the sandbox (its proxy accepts outbound public IPs instantly; private IPs fail fast with EPERM), so the live blackhole behaviour is a drill for the R630. SSH2: cargo +1.99 check --features ssh must pass (no test target for the ssh walk without a live SSH server). Full cargo +1.99 test suite green.",
+      "subtasks": [
+        {
+          "id": 374.1,
+          "title": "IMAP connect timeout (tcp_connect_timeout helper) + tests",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 374.2,
+          "title": "SSH2 set_timeout (30s) + TCP connect timeout (10s)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 374.3,
+          "title": "Verify: full cargo +1.99 test suite green + check --features ssh",
+          "status": "done",
+          "dependencies": [
+            374.1,
+            374.2
+          ]
+        }
+      ]
     }
   ]
 }

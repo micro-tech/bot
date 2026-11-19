@@ -15,9 +15,10 @@ use std::time::Duration;
 
 const CONNECT_TIMEOUT_SECS: u64 = 10;
 const REQUEST_TIMEOUT_SECS: u64 = 60;
-const MAX_RETRIES: u32 = 3;
-/// Initial delay between retries; doubles each round (exponential back-off).
-const RETRY_DELAY_MS: u64 = 2_000;
+/// Retry policy now lives in the shared helper (`crate::io::retry`):
+/// up to 5 attempts, jittered exponential backoff 2 s -> 60 s cap.
+/// (The old per-handler MAX_RETRIES / RETRY_DELAY_MS are gone with the
+/// outer retry loop — see H4, task 373.)
 
 // ── Gemini API endpoint ───────────────────────────────────────────────────────
 
@@ -94,90 +95,61 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
         &prompt[..prompt.len().min(120)]
     );
 
-    // ── 3. retry loop ─────────────────────────────────────────────────────────
+    // ── 3. single attempt ─────────────────────────────────────────────────────
+    // H4 (task 373): no outer retry around the whole tool loop. Transient
+    // HTTP failures are retried per-round INSIDE call_gemini_tools (task
+    // 373), so a failure in round 3 no longer replays rounds 1-2. Retrying
+    // the whole loop here would duplicate tool side effects and re-bill.
+    // A failure that escapes the inner retry is final for this turn.
     let client = build_client();
     // Task 330 (C1): the API key goes in the `x-goog-api-key` header,
     // never in the URL — a `?key=` query string lands the key in logs,
     // proxies, and error reports.
     let url = format!("{}/{}:generateContent", GEMINI_URL_BASE, model);
 
-    let mut last_err = String::new();
-    let mut delay_ms = RETRY_DELAY_MS;
+    // Task 221: agentic tool loop (function calling) instead of the old
+    // single-shot call — this is what lets the commander delegate.
+    match call_gemini_tools(&client, &url, &api_key, &prompt, bus).await {
+        Ok(response) => {
+            info!(
+                "Gemini replied -- {} chars",
+                response.len()
+            );
 
-    for attempt in 1..=MAX_RETRIES {
-        // Task 221: agentic tool loop (function calling) instead of the old
-        // single-shot call — this is what lets the commander delegate.
-        match call_gemini_tools(&client, &url, &api_key, &prompt, bus).await {
-            Ok(response) => {
-                info!(
-                    "Gemini replied on attempt {}/{} -- {} chars",
-                    attempt,
-                    MAX_RETRIES,
-                    response.len()
-                );
+            // Task 223: record the completed turn for conversation history.
+            crate::chat_history::record_turn(&prompt, &response);
 
-                // Task 223: record the completed turn for conversation history.
-                crate::chat_history::record_turn(&prompt, &response);
-
-                // Forward ONLY to CPU as llm_response (single source of truth)
-                if correlation_id != 0 {
-                    let _ = bus.publish(Message {
-                        to: "cpu".to_string(),
-                        from: "gemini".to_string(),
-                        data: json!({
-                            "type": "llm_response",
-                            "correlation_id": correlation_id,
-                            "msg": response,
-                        })
-                        .to_string(),
-                        timestamp: now_ms(),
-                    });
-                }
-
-                // REMOVED: direct publish to web_interface to avoid duplicate replies.
-                // The CPU forwarder in main.rs will convert llm_response → llm_output.
-
-                return;
+            // Forward ONLY to CPU as llm_response (single source of truth)
+            if correlation_id != 0 {
+                let _ = bus.publish(Message {
+                    to: "cpu".to_string(),
+                    from: "gemini".to_string(),
+                    data: json!({
+                        "type": "llm_response",
+                        "correlation_id": correlation_id,
+                        "msg": response,
+                    })
+                    .to_string(),
+                    timestamp: now_ms(),
+                });
             }
-            Err(e) => {
-                last_err = e.to_string();
-                warn!(
-                    "Gemini attempt {}/{} failed: {}",
-                    attempt, MAX_RETRIES, last_err
-                );
 
-                if attempt < MAX_RETRIES {
-                    let _ = bus.publish(Message {
-                        to: "web_interface".to_string(),
-                        from: "gemini".to_string(),
-                        data: json!({
-                            "type": "warning",
-                            "msg": format!(
-                                "Gemini request failed (attempt {}/{}), retrying... ({})",
-                                attempt, MAX_RETRIES, last_err
-                            ),
-                        })
-                        .to_string(),
-                        timestamp: now_ms(),
-                    });
+            // REMOVED: direct publish to web_interface to avoid duplicate replies.
+            // The CPU forwarder in main.rs will convert llm_response → llm_output.
 
-                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                    delay_ms *= 2; // exponential back-off
-                }
-            }
+            return;
+        }
+        Err(e) => {
+            let last_err = e.to_string();
+            warn!("Gemini turn failed: {}", last_err);
+            let err = format!("Gemini failed: {}", last_err);
+            error!("{}", err);
+            // Task 223: keep the failed turn so "try again" still resolves against
+            // the original request.
+            crate::chat_history::record_turn(&prompt, "");
+            publish_error(bus, &err);
         }
     }
-
-    // ── 4. all retries exhausted ──────────────────────────────────────────────
-    let err = format!(
-        "Gemini failed after {} attempt(s): {}",
-        MAX_RETRIES, last_err
-    );
-    error!("{}", err);
-    // Task 223: keep the failed turn so "try again" still resolves against
-    // the original request.
-    crate::chat_history::record_turn(&prompt, "");
-    publish_error(bus, &err);
 }
 
 // ── HTTP call ─────────────────────────────────────────────────────────────────
@@ -204,19 +176,59 @@ async fn call_gemini(
         });
     }
 
-    let resp = client
-        .post(url)
-        .header("x-goog-api-key", api_key)
-        .json(&body)
-        .send()
-        .await
-        .map_err(map_reqwest_err)?;
-
-    let status = resp.status();
-    if !status.is_success() {
-        let body_text = resp.text().await.unwrap_or_default();
-        return Err(format!("Gemini returned HTTP {}: {}", status, body_text).into());
-    }
+    // H3 (task 372): retry this single-shot call with the shared backoff,
+    // so a Starlink drop does not fail a sub-agent turn outright. 429/503/
+    // 5xx retry (honouring Retry-After); other 4xx fail fast. The body
+    // parse below stays outside the retry — a parse error is deterministic.
+    let policy = crate::io::retry::RetryPolicy::default();
+    let client_owned: reqwest::Client = (*client).clone();
+    let resp = crate::io::retry::retry_with_backoff(&policy, |attempt| {
+        let client = client_owned.clone();
+        let url = url.to_string();
+        let api_key = api_key.to_string();
+        let body = body.clone();
+        async move {
+            match client
+                .post(url)
+                .header("x-goog-api-key", api_key)
+                .json(&body)
+                .send()
+                .await
+            {
+                Err(e) => {
+                    let retryable = crate::io::retry::is_retryable_reqwest_error(&e);
+                    let mapped = map_reqwest_err(e);
+                    if retryable {
+                        Err(crate::io::retry::RetryError::Retryable {
+                            source: mapped,
+                            delay: policy.backoff_delay(attempt),
+                        })
+                    } else {
+                        Err(crate::io::retry::RetryError::Fatal(mapped))
+                    }
+                }
+                Ok(resp) => {
+                    let status = resp.status();
+                    if status.is_success() {
+                        Ok(resp)
+                    } else if crate::io::retry::is_retryable_status(status) {
+                        let delay = policy.delay_for_response(attempt, resp.headers());
+                        Err(crate::io::retry::RetryError::Retryable {
+                            source: format!("Gemini returned HTTP {}", status).into(),
+                            delay,
+                        })
+                    } else {
+                        // Fatal: read the body so the error is diagnosable.
+                        let body_text = resp.text().await.unwrap_or_default();
+                        Err(crate::io::retry::RetryError::Fatal(
+                            format!("Gemini returned HTTP {}: {}", status, body_text).into(),
+                        ))
+                    }
+                }
+            }
+        }
+    })
+    .await?;
 
     let parsed: Value = resp.json().await.map_err(|e| {
         let e: Box<dyn std::error::Error + Send + Sync> =
@@ -416,19 +428,61 @@ async fn call_gemini_tools(
             });
         }
 
-        let resp = client
-            .post(url)
-            .header("x-goog-api-key", api_key)
-            .json(&body)
-            .send()
-            .await
-            .map_err(map_reqwest_err)?;
-
-        let status = resp.status();
-        if !status.is_success() {
-            let body_text = resp.text().await.unwrap_or_default();
-            return Err(format!("Gemini returned HTTP {}: {}", status, body_text).into());
-        }
+        // H4 (task 373): retry THIS round's HTTP call inside the loop,
+        // not the loop as a whole. A failure in round 3 used to replay
+        // rounds 1-2 (duplicating tool side effects and re-billing);
+        // now only the failed HTTP call is retried, with the shared
+        // backoff (H3, task 372). 429/503/5xx retry (honouring
+        // Retry-After); other 4xx fail fast.
+        let policy = crate::io::retry::RetryPolicy::default();
+        let client_owned: reqwest::Client = (*client).clone();
+        let resp = crate::io::retry::retry_with_backoff(&policy, |attempt| {
+            let client = client_owned.clone();
+            let url = url.to_string();
+            let api_key = api_key.to_string();
+            let body = body.clone();
+            async move {
+                match client
+                    .post(url)
+                    .header("x-goog-api-key", api_key)
+                    .json(&body)
+                    .send()
+                    .await
+                {
+                    Err(e) => {
+                        let retryable = crate::io::retry::is_retryable_reqwest_error(&e);
+                        let mapped = map_reqwest_err(e);
+                        if retryable {
+                            Err(crate::io::retry::RetryError::Retryable {
+                                source: mapped,
+                                delay: policy.backoff_delay(attempt),
+                            })
+                        } else {
+                            Err(crate::io::retry::RetryError::Fatal(mapped))
+                        }
+                    }
+                    Ok(resp) => {
+                        let status = resp.status();
+                        if status.is_success() {
+                            Ok(resp)
+                        } else if crate::io::retry::is_retryable_status(status) {
+                            let delay = policy.delay_for_response(attempt, resp.headers());
+                            Err(crate::io::retry::RetryError::Retryable {
+                                source: format!("Gemini returned HTTP {}", status).into(),
+                                delay,
+                            })
+                        } else {
+                            // Fatal: read the body so the error is diagnosable.
+                            let body_text = resp.text().await.unwrap_or_default();
+                            Err(crate::io::retry::RetryError::Fatal(
+                                format!("Gemini returned HTTP {}: {}", status, body_text).into(),
+                            ))
+                        }
+                    }
+                }
+            }
+        })
+        .await?;
 
         let parsed: Value = resp.json().await.map_err(|e| {
             let e: Box<dyn std::error::Error + Send + Sync> =
@@ -849,6 +903,106 @@ mod tests {
             }
         }
         assert!(saw_spawn, "expected a spawn_subagent tool_call on the bus");
+
+        unsafe {
+            std::env::remove_var("HELIX_SUBAGENT_TEST_STUB");
+            std::env::remove_var("HELIX_SPEND_FILE");
+        }
+    }
+
+    // NOTE: multi_thread flavor — tool_definitions() bridges into the MCP
+    // runtime via block_in_place, which panics on a current-thread runtime.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn gemini_tool_loop_transient_503_does_not_replay_tool_calls() {
+        // H4 (task 373): a transient failure in round 2 must retry only
+        // round 2's HTTP call — round 1's tool must NOT be re-executed.
+        // Before the fix the outer retry replayed the whole loop, so the
+        // tool ran twice (duplicate side effects, double billing).
+        crate::io::ollama::ensure_crypto_provider();
+        let _tl = crate::tools::subagent_tool::test_env_lock();
+        // SAFETY: test-scoped env manipulation under the shared test lock.
+        unsafe {
+            std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1");
+            std::env::set_var(
+                "HELIX_SPEND_FILE",
+                std::env::temp_dir().join("helix-test-spend-373.json"),
+            );
+        }
+
+        let mut server = mockito::Server::new_async().await;
+        let path = "/v1beta/models/test-model:generateContent";
+        // Round 1: a functionCall. Round 2, first try: 503 (transient).
+        // Round 2, retry: final text. Mockito matches same-path mocks in
+        // creation order (FIFO), so the three mocks fire in sequence.
+        let mock1 = server
+            .mock("POST", path)
+            .match_header("x-goog-api-key", "fake-test-key")
+            .match_query(mockito::Matcher::Missing)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"spawn_subagent","args":{"task":"plan a rust bot app","backend":"auto"}}}]}}]}"#)
+            .expect(1)
+            .create_async()
+            .await;
+        let mock2 = server
+            .mock("POST", path)
+            .match_header("x-goog-api-key", "fake-test-key")
+            .match_query(mockito::Matcher::Missing)
+            .with_status(503)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"error":{"message":"overloaded"}}"#)
+            .expect(1)
+            .create_async()
+            .await;
+        let mock3 = server
+            .mock("POST", path)
+            .match_header("x-goog-api-key", "fake-test-key")
+            .match_query(mockito::Matcher::Missing)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"candidates":[{"content":{"role":"model","parts":[{"text":"Delegated. The sub-agent is planning the Rust bot."}]}}]}"#)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let bus = Arc::new(Bus::new());
+        let rx = bus.subscribe("web_interface");
+        let client = build_client();
+        let url = format!("{}{}", server.url(), path);
+
+        let out = call_gemini_tools(
+            &client,
+            &url,
+            "fake-test-key",
+            "run a sub agent to plan a rust bot",
+            &bus,
+        )
+        .await
+        .expect("tool loop should complete after the transient 503");
+        assert!(
+            out.contains("Delegated"),
+            "expected the model's final text, got: {}",
+            out
+        );
+
+        mock1.assert_async().await;
+        mock2.assert_async().await;
+        mock3.assert_async().await;
+
+        // The tool must have run exactly once — a replay would publish
+        // its tool_call bus message twice.
+        let mut spawn_calls = 0;
+        while let Ok(msg) = rx.try_recv() {
+            if let Ok(v) = serde_json::from_str::<Value>(&msg.data) {
+                if v["type"] == "tool_call" && v["tool"] == "spawn_subagent" {
+                    spawn_calls += 1;
+                }
+            }
+        }
+        assert_eq!(
+            spawn_calls, 1,
+            "round-1 tool must not be replayed after a round-2 failure"
+        );
 
         unsafe {
             std::env::remove_var("HELIX_SUBAGENT_TEST_STUB");

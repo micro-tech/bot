@@ -90,12 +90,10 @@ const REQUEST_TIMEOUT_SECS: u64 = 300;
 /// heartbeat task is ever disabled or dies.
 pub(crate) const OLLAMA_KEEP_ALIVE: &str = "1h";
 
-/// How many times to attempt a request before giving up.
-const MAX_RETRIES: u32 = 3;
-
-/// Milliseconds to wait between retry attempts.
-const RETRY_DELAY_MS: u64 = 2_500;
-
+/// Retry policy now lives in the shared helper (`crate::io::retry`):
+/// up to 5 attempts, jittered exponential backoff 2 s -> 60 s cap.
+/// (The old per-handler MAX_RETRIES / RETRY_DELAY_MS are gone with the
+/// outer retry loop — see H4, task 373.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LlmTarget {
     OllamaLan,   // your server Ollama
@@ -354,8 +352,10 @@ pub async fn check_model_exists(base_url: &str, model: &str) -> Result<bool, Str
 ///    installed, publish a clear error listing what IS available and return.
 ///    This prevents burning the full retry budget on a 404 that will never
 ///    succeed, and gives the user an actionable fix immediately.
-/// 3. Call `/api/chat` with up to `MAX_RETRIES` attempts and a delay between each.
-///    A 404 "model not found" mid-flight also aborts the retry loop early.
+/// 3. Call `/api/chat` once. Transient HTTP failures are retried per-round
+///    INSIDE the tool loop (H4, task 373) with the shared backoff (H3);
+///    a 404 "model not found" fails fast there. There is no outer retry
+///    around the whole loop, so a late failure never replays earlier rounds.
 /// 4. On success:
 ///    - Publish the LLM text to `message.from`  (reply to original sender).
 ///    - Publish a structured `ollama_response` JSON to `"web_interface"`.
@@ -440,8 +440,12 @@ pub async fn handle_ollama_message(
         }
     }
 
-    // ── 3. retry loop ─────────────────────────────────────────────────────────
-    let mut last_err = String::new();
+    // ── 3. single attempt ─────────────────────────────────────────────────────
+    // H4 (task 373): no outer retry around the whole tool loop. Transient
+    // HTTP failures are retried per-round INSIDE call_ollama (task 373), so
+    // a failure in round 3 no longer replays rounds 1-2. Retrying the whole
+    // loop here would duplicate tool side effects and re-bill. A failure
+    // that escapes the inner retry is final for this turn.
 
     // Extract the actual prompt text from the JSON payload (if any).
     let prompt: String = serde_json::from_str::<serde_json::Value>(&message.data)
@@ -481,112 +485,81 @@ pub async fn handle_ollama_message(
         let _ = bus_clone.publish(token_msg);
     });
 
-    for attempt in 1..=MAX_RETRIES {
-        match call_ollama(&client, base_url, model, &prompt, bus, &backend_tag, Some(on_token.clone())).await {
-            // SUCCESS — Ollama returned a valid response
-            Ok(response) => {
-                info!(
-                    "Ollama ✅  replied on attempt {}/{} — {} chars",
-                    attempt,
-                    MAX_RETRIES,
-                    response.len()
-                );
+    match call_ollama(&client, base_url, model, &prompt, bus, &backend_tag, Some(on_token.clone())).await {
+        // SUCCESS — Ollama returned a valid response
+        Ok(response) => {
+            info!(
+                "Ollama ✅  replied — {} chars",
+                response.len()
+            );
 
-                // Task 223: record the completed turn for conversation history.
-                crate::chat_history::record_turn(&prompt, &response);
+            // Task 223: record the completed turn for conversation history.
+            crate::chat_history::record_turn(&prompt, &response);
 
-                // correlation_id was extracted up front (task 238) for token messages.
+            // correlation_id was extracted up front (task 238) for token messages.
 
-                // Build the correct CPU-bound message
-                let response_msg = Message {
-                    to: "cpu".to_string(),
-                    from: format!("ollama_{}", backend_name),
-                    data: serde_json::json!({
-                        "type": "llm_response",
-                        "correlation_id": correlation_id,
-                        "msg": response,
-                    })
-                    .to_string(),
-                    timestamp: now_ms(),
-                };
+            // Build the correct CPU-bound message
+            let response_msg = Message {
+                to: "cpu".to_string(),
+                from: format!("ollama_{}", backend_name),
+                data: serde_json::json!({
+                    "type": "llm_response",
+                    "correlation_id": correlation_id,
+                    "msg": response,
+                })
+                .to_string(),
+                timestamp: now_ms(),
+            };
 
-                // Publish to CPU (single source of truth for responses).
-                // Task 265: server diagnostic → log::, not println!.
-                info!("[ollama_{}] ✅ SUCCESS from Ollama, publishing llm_response to 'cpu' ({} chars)", backend_name, response.len());
-                if let Err(e) = bus.publish(response_msg.clone()) {
-                    let error_msg = format!("Ollama {} failed to publish LLM response: {}", backend_name, e);
-                    log_to_file(&error_msg);
-                    error!("{}", error_msg);
-                } else {
-                    debug!("Ollama {} published LLM response to CPU", backend_name);
-                    log_to_file(&format!("Ollama {} published LLM response to CPU", backend_name));
-                }
-
-                // REMOVED: direct publish to web_interface to avoid duplicate replies.
-                // The CPU forwarder will handle turning llm_response into llm_output.
-
-                return Some(response);
+            // Publish to CPU (single source of truth for responses).
+            // Task 265: server diagnostic → log::, not println!.
+            info!("[ollama_{}] ✅ SUCCESS from Ollama, publishing llm_response to 'cpu' ({} chars)", backend_name, response.len());
+            if let Err(e) = bus.publish(response_msg.clone()) {
+                let error_msg = format!("Ollama {} failed to publish LLM response: {}", backend_name, e);
+                log_to_file(&error_msg);
+                error!("{}", error_msg);
+            } else {
+                debug!("Ollama {} published LLM response to CPU", backend_name);
+                log_to_file(&format!("Ollama {} published LLM response to CPU", backend_name));
             }
 
-            Err(e) => {
-                last_err = e.to_string();
-                warn!(
-                    "Ollama attempt {}/{} failed: {}",
-                    attempt, MAX_RETRIES, last_err
+            // REMOVED: direct publish to web_interface to avoid duplicate replies.
+            // The CPU forwarder will handle turning llm_response into llm_output.
+
+            return Some(response);
+        }
+
+        Err(e) => {
+            let last_err = e.to_string();
+            warn!("Ollama turn failed: {}", last_err);
+            // Task 265: the println! duplicate of the warn! above is
+            // gone — one report per failure, through log::.
+
+            // A 404 "model not found" is already failed-fast inside the
+            // per-round retry; log the hint so the operator sees the fix.
+            if last_err.contains("404")
+                || (last_err.to_lowercase().contains("model")
+                    && last_err.to_lowercase().contains("not found"))
+            {
+                error!(
+                    "Model '{}' not found in Ollama. \
+                     Check config.toml [ollama] model or run `ollama pull {}`.",
+                    model, model
                 );
-                // Task 265: the println! duplicate of the warn! above is
-                // gone — one report per failure, through log::.
-
-                // A 404 "model not found" will never succeed — abort immediately
-                // rather than exhausting all retry attempts uselessly.
-                if last_err.contains("404")
-                    || (last_err.to_lowercase().contains("model")
-                        && last_err.to_lowercase().contains("not found"))
-                {
-                    error!(
-                        "Aborting retries — model '{}' not found in Ollama. \
-                         Check config.toml [ollama] model or run `ollama pull {}`.",
-                        model, model
-                    );
-                    break;
-                }
-
-                if attempt < MAX_RETRIES {
-                    // Publish a transient warning so the UI knows we are retrying
-                    let _ = bus.publish(Message {
-                        to: "web_interface".to_string(),
-                        from: "ollama".to_string(),
-                        data: json!({
-                            "type": "warning",
-                            "msg": format!(
-                                "Ollama request failed (attempt {}/{}), retrying… ({})",
-                                attempt, MAX_RETRIES, last_err
-                            )
-                        })
-                        .to_string(),
-                        timestamp: now_ms(),
-                    });
-
-                    tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
-                }
             }
+
+            // The server may have gone away: drop the cached probe so the
+            // next turn re-validates instead of trusting a stale "healthy".
+            invalidate_ollama_probe(base_url);
+            let err = format!("Ollama failed: {}", last_err);
+            error!("{}", err);
+            // Task 223: keep the failed turn so "try again" still resolves against
+            // the original request.
+            crate::chat_history::record_turn(&prompt, "");
+            publish_error(bus, &err);
+            None
         }
     }
-
-    // ── 4. all retries exhausted ──────────────────────────────────────────────
-    // The server may have gone away: drop the cached probe so the next turn
-    // re-validates instead of trusting a stale "healthy".
-    invalidate_ollama_probe(base_url);
-    let err = format!(
-        "Ollama failed after {} attempt(s): {}",
-        MAX_RETRIES, last_err
-    );
-    error!("{}", err);
-    // Task 223: keep the failed turn so "try again" still resolves against
-    // the original request.
-    crate::chat_history::record_turn(&prompt, "");
-    publish_error(bus, &err);
-    None
 }
 
 // ── internal HTTP helpers ─────────────────────────────────────────────────────
@@ -894,27 +867,63 @@ pub mod tools {
             // bound across tool rounds, re-sending everything every turn.
             cap_history(&mut messages);
 
-            let resp = client
-                .post(format!("{}/api/chat", base_url))
-                .json(&chat_request_json(model, &messages, &tools, stream))
-                .send()
-                .await
-                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                    if e.is_timeout() {
-                        format!("request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, e).into()
-                    } else if e.is_connect() {
-                        format!("connection error: {}", e).into()
-                    } else {
-                        format!("HTTP error: {}", e).into()
+            // H4 (task 373): retry THIS round's HTTP call inside the loop,
+            // not the loop as a whole. A failure in round 3 used to replay
+            // rounds 1-2 (duplicating tool side effects and re-billing);
+            // now only the failed HTTP call is retried, with the shared
+            // backoff (H3, task 372). 429/503/5xx retry (honouring
+            // Retry-After); other 4xx fail fast. The body is only read for
+            // a fatal status, so a retryable response is dropped unparsed.
+            let request_body = chat_request_json(model, &messages, &tools, stream);
+            let policy = crate::io::retry::RetryPolicy::default();
+            let client_owned: reqwest::Client = (*client).clone();
+            let resp = crate::io::retry::retry_with_backoff(&policy, |attempt| {
+                let client = client_owned.clone();
+                let url = format!("{}/api/chat", base_url);
+                let body = request_body.clone();
+                async move {
+                    match client.post(url).json(&body).send().await {
+                        Err(e) => {
+                            let mapped: Box<dyn std::error::Error + Send + Sync> =
+                                if e.is_timeout() {
+                                    format!("request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, e).into()
+                                } else if e.is_connect() {
+                                    format!("connection error: {}", e).into()
+                                } else {
+                                    format!("HTTP error: {}", e).into()
+                                };
+                            if crate::io::retry::is_retryable_reqwest_error(&e) {
+                                Err(crate::io::retry::RetryError::Retryable {
+                                    source: mapped,
+                                    delay: policy.backoff_delay(attempt),
+                                })
+                            } else {
+                                Err(crate::io::retry::RetryError::Fatal(mapped))
+                            }
+                        }
+                        Ok(resp) => {
+                            let status = resp.status();
+                            if status.is_success() {
+                                Ok(resp)
+                            } else if crate::io::retry::is_retryable_status(status) {
+                                let delay =
+                                    policy.delay_for_response(attempt, resp.headers());
+                                Err(crate::io::retry::RetryError::Retryable {
+                                    source: format!("Ollama returned HTTP {}", status).into(),
+                                    delay,
+                                })
+                            } else {
+                                // Fatal: read the body so the error is diagnosable.
+                                let body = resp.text().await.unwrap_or_default();
+                                Err(crate::io::retry::RetryError::Fatal(
+                                    format!("Ollama returned HTTP {}: {}", status, body).into(),
+                                ))
+                            }
+                        }
                     }
-                })?;
-
-            // Surface non-2xx as an error so the retry loop can handle them.
-            let status = resp.status();
-            if !status.is_success() {
-                let body = resp.text().await.unwrap_or_default();
-                return Err(format!("Ollama returned HTTP {}: {}", status, body).into());
-            }
+                }
+            })
+            .await?;
 
             // Task 238: streaming NDJSON vs buffered single-JSON.
             // Reborrow the callback each round (short-lived, no cross-iteration borrow).

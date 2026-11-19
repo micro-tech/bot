@@ -57,24 +57,67 @@ impl OkfFetcher {
             format!("{}/okf/manifest.json", base.trim_end_matches('/'))
         };
 
-        let mut req = self.client.get(&url);
-
-        if let Some(etag) = if_none_match {
-            if !etag.is_empty() {
-                req = req.header("If-None-Match", etag);
+        // H3 (task 372): retry the send with the shared backoff, so a
+        // Starlink drop does not fail a manifest fetch outright. 304 is a
+        // valid response (conditional request) and is returned, not retried.
+        let policy = crate::io::retry::RetryPolicy::default();
+        let client = self.client.clone();
+        let url_owned = url.clone();
+        let etag_owned = if_none_match.map(|s| s.to_string());
+        let token_owned = self.config.auth_token.clone();
+        let resp = crate::io::retry::retry_with_backoff(&policy, |attempt| {
+            let client = client.clone();
+            let url = url_owned.clone();
+            let etag = etag_owned.clone();
+            let token = token_owned.clone();
+            async move {
+                let mut req = client.get(&url);
+                if let Some(etag) = etag {
+                    if !etag.is_empty() {
+                        req = req.header("If-None-Match", etag);
+                    }
+                }
+                if let Some(token) = token {
+                    if !token.is_empty() {
+                        req = req.bearer_auth(token);
+                    }
+                }
+                match req.send().await {
+                    Err(e) => {
+                        let retryable = crate::io::retry::is_retryable_reqwest_error(&e);
+                        let msg = format!("HTTP request failed: {}", e);
+                        if retryable {
+                            Err(crate::io::retry::RetryError::Retryable {
+                                source: msg,
+                                delay: policy.backoff_delay(attempt),
+                            })
+                        } else {
+                            Err(crate::io::retry::RetryError::Fatal(msg))
+                        }
+                    }
+                    Ok(resp) => {
+                        let status = resp.status();
+                        if status.is_success()
+                            || status == reqwest::StatusCode::NOT_MODIFIED
+                        {
+                            Ok(resp)
+                        } else if crate::io::retry::is_retryable_status(status) {
+                            let delay = policy.delay_for_response(attempt, resp.headers());
+                            Err(crate::io::retry::RetryError::Retryable {
+                                source: format!("Server returned status {}", status),
+                                delay,
+                            })
+                        } else {
+                            Err(crate::io::retry::RetryError::Fatal(format!(
+                                "Server returned status {}",
+                                status
+                            )))
+                        }
+                    }
+                }
             }
-        }
-
-        if let Some(token) = &self.config.auth_token {
-            if !token.is_empty() {
-                req = req.bearer_auth(token);
-            }
-        }
-
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| format!("HTTP request failed: {}", e))?;
+        })
+        .await?;
 
         if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
             // No change — we can signal this upstream
@@ -115,12 +158,47 @@ impl OkfFetcher {
             knowledge_id
         );
 
-        let resp = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| format!("Request failed: {}", e))?;
+        // H3 (task 372): retry the send with the shared backoff.
+        let policy = crate::io::retry::RetryPolicy::default();
+        let client = self.client.clone();
+        let resp = crate::io::retry::retry_with_backoff(&policy, |attempt| {
+            let client = client.clone();
+            let url = url.clone();
+            async move {
+                match client.get(&url).send().await {
+                    Err(e) => {
+                        let retryable = crate::io::retry::is_retryable_reqwest_error(&e);
+                        let msg = format!("Request failed: {}", e);
+                        if retryable {
+                            Err(crate::io::retry::RetryError::Retryable {
+                                source: msg,
+                                delay: policy.backoff_delay(attempt),
+                            })
+                        } else {
+                            Err(crate::io::retry::RetryError::Fatal(msg))
+                        }
+                    }
+                    Ok(resp) => {
+                        let status = resp.status();
+                        if status.is_success() {
+                            Ok(resp)
+                        } else if crate::io::retry::is_retryable_status(status) {
+                            let delay = policy.delay_for_response(attempt, resp.headers());
+                            Err(crate::io::retry::RetryError::Retryable {
+                                source: format!("Server error: {}", status),
+                                delay,
+                            })
+                        } else {
+                            Err(crate::io::retry::RetryError::Fatal(format!(
+                                "Server error: {}",
+                                status
+                            )))
+                        }
+                    }
+                }
+            }
+        })
+        .await?;
 
         if !resp.status().is_success() {
             return Err(format!("Server error: {}", resp.status()));
@@ -140,9 +218,35 @@ impl OkfFetcher {
         let base = self.config.server_url();
         let url = format!("{}/okf/health", base.trim_end_matches('/'));
 
-        match self.client.get(&url).send().await {
-            Ok(resp) if resp.status().is_success() => Ok(true),
-            Ok(_resp) => Ok(false),
+        // H3 (task 372): retry the probe with the shared backoff, so a
+        // brief drop does not report the server down. A failure that
+        // survives all retries still reports false, as before.
+        let policy = crate::io::retry::RetryPolicy::default();
+        let client = self.client.clone();
+        let sent = crate::io::retry::retry_with_backoff(&policy, |attempt| {
+            let client = client.clone();
+            let url = url.clone();
+            async move {
+                match client.get(&url).send().await {
+                    Err(e) => {
+                        let retryable = crate::io::retry::is_retryable_reqwest_error(&e);
+                        let msg = format!("health check failed: {}", e);
+                        if retryable {
+                            Err(crate::io::retry::RetryError::Retryable {
+                                source: msg,
+                                delay: policy.backoff_delay(attempt),
+                            })
+                        } else {
+                            Err(crate::io::retry::RetryError::Fatal(msg))
+                        }
+                    }
+                    Ok(resp) => Ok(resp),
+                }
+            }
+        })
+        .await;
+        match sent {
+            Ok(resp) => Ok(resp.status().is_success()),
             Err(_) => Ok(false),
         }
     }

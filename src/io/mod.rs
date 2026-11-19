@@ -7,6 +7,7 @@ pub mod unix_socket;
 
 // Including sub-modules with test files to run their tests
 pub mod ollama;
+pub mod retry; // tasks 372-374 (H3/H4/H5): shared retry_with_backoff helper
 pub mod web_server;
 pub mod terminal;
 pub mod llm_gemini;
