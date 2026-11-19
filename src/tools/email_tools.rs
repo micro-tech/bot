@@ -30,7 +30,8 @@ use log::{error, info, warn};
 use serde_json::Value;
 use std::fs;
 use std::io::Write;
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
+use std::time::Duration;
 
 // ── send_email ────────────────────────────────────────────────────────────────
 
@@ -277,16 +278,62 @@ fn imap_config() -> Result<(String, String, String, u16), String> {
 
 type ImapSession = imap::Session<native_tls::TlsStream<TcpStream>>;
 
+/// Seconds to wait for the IMAP TCP connection (H5, task 374). A
+/// `TcpStream::connect` with no timeout can hang indefinitely on a dead
+/// route; 10 s is enough for a healthy server and bounds a wedged one.
+const IMAP_CONNECT_TIMEOUT_SECS: u64 = 10;
+
+/// Resolve `host:port` and connect with a timeout, trying each resolved
+/// address in turn. H5 (task 374): a plain `TcpStream::connect` can hang
+/// indefinitely on a dead route; `connect_timeout` bounds it.
+fn tcp_connect_timeout(host: &str, port: u16, timeout: Duration) -> Result<TcpStream, String> {
+    let addrs: Vec<std::net::SocketAddr> = (host, port)
+        .to_socket_addrs()
+        .map(|iter| iter.collect())
+        .map_err(|e| format!("DNS resolve for {}:{} failed: {}", host, port, e))?;
+    let mut last_err: Option<std::io::Error> = None;
+    for addr in &addrs {
+        match TcpStream::connect_timeout(addr, timeout) {
+            Ok(tcp) => return Ok(tcp),
+            Err(e) => last_err = Some(e),
+        }
+    }
+    Err(format!(
+        "TCP connect to {}:{} failed: {}",
+        host,
+        port,
+        last_err
+            .map(|e| e.to_string())
+            .unwrap_or_else(|| "no address".to_string())
+    ))
+}
+
 fn imap_connect(host: &str, port: u16, user: &str, pass: &str) -> Result<ImapSession, String> {
     let tls = native_tls::TlsConnector::builder()
         .build()
         .map_err(|e| format!("TLS error: {}", e))?;
 
-    let tcp = TcpStream::connect((host, port))
-        .map_err(|e| format!("TCP connect to {}:{} failed: {}", host, port, e))?;
-
-    let tls_stream = tls.connect(host, tcp)
-        .map_err(|e| format!("TLS handshake to {} failed: {}", host, e))?;
+    // H3 (task 372) + H5 (task 374): retry the TCP connect + TLS handshake
+    // with the shared backoff. The handshake runs over the connected
+    // stream; a transient drop during either is retried. The login below
+    // is NOT retried: a failed login is almost always bad credentials, and
+    // retrying it could lock the account.
+    let policy = crate::io::retry::RetryPolicy::default();
+    let tls_stream = crate::io::retry::retry_with_backoff_sync(&policy, |attempt| {
+        match tcp_connect_timeout(host, port, Duration::from_secs(IMAP_CONNECT_TIMEOUT_SECS)) {
+            Ok(tcp) => match tls.connect(host, tcp) {
+                Ok(stream) => Ok(stream),
+                Err(e) => Err(crate::io::retry::RetryError::Retryable {
+                    source: format!("TLS handshake to {} failed: {}", host, e),
+                    delay: policy.backoff_delay(attempt),
+                }),
+            },
+            Err(msg) => Err(crate::io::retry::RetryError::Retryable {
+                source: msg,
+                delay: policy.backoff_delay(attempt),
+            }),
+        }
+    })?;
 
     let client = imap::Client::new(tls_stream);
 
@@ -381,5 +428,40 @@ mod tests {
     fn test_extract_header_missing() {
         let raw = "From: alice@example.com\r\n";
         assert_eq!(extract_header(raw, "X-Missing"), None);
+    }
+
+    // H5 (task 374): the IMAP TCP connect is bounded by a timeout — a
+    // connect to a non-responsive host must fail instead of hanging
+    // indefinitely. Note: this sandbox cannot blackhole a TCP SYN (its
+    // proxy accepts outbound public IPs instantly, and private IPs fail
+    // fast with EPERM), so a true blackhole test is not possible here; the
+    // timeout itself is std's `connect_timeout`, and the live blackhole
+    // behaviour is a drill for the R630. This test proves the helper
+    // fails promptly (not hangs) on a refused port, and the loopback test
+    // below proves a healthy connect still works.
+    #[test]
+    fn tcp_connect_timeout_fails_fast_on_refused_port() {
+        let listener =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("bind a loopback listener");
+        let port = listener.local_addr().expect("listener addr").port();
+        drop(listener); // close it so the port is refused
+        let start = std::time::Instant::now();
+        let out = tcp_connect_timeout("127.0.0.1", port, Duration::from_secs(5));
+        assert!(out.is_err(), "expected a refused connect to fail");
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "refused connect took {:?}, expected it fast",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn tcp_connect_timeout_reaches_a_listening_socket() {
+        // Sanity: the timeout helper does not break a healthy connect.
+        let listener =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("bind a loopback listener");
+        let port = listener.local_addr().expect("listener addr").port();
+        let out = tcp_connect_timeout("127.0.0.1", port, Duration::from_secs(5));
+        assert!(out.is_ok(), "expected a loopback connect to succeed: {:?}", out);
     }
 }

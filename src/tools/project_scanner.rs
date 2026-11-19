@@ -224,6 +224,16 @@ fn walk_local_directory(
 
 /// Real remote walk over SSH using ssh2 + SFTP.
 /// Only compiled when the "ssh" feature is enabled (see Cargo.toml).
+///
+/// H5 (task 374): the TCP connect is bounded with a timeout and the ssh2
+/// session itself gets `set_timeout`, so a stalled handshake or channel
+/// cannot hang the scan indefinitely.
+#[cfg(feature = "ssh")]
+const SSH_CONNECT_TIMEOUT_SECS: u64 = 10;
+/// ssh2 session timeout in milliseconds (covers handshake + channel ops).
+#[cfg(feature = "ssh")]
+const SSH_SESSION_TIMEOUT_MS: u32 = 30_000;
+
 #[cfg(feature = "ssh")]
 fn walk_ssh_directory(
     remote_path: &str,
@@ -235,16 +245,45 @@ fn walk_ssh_directory(
     exclude_globs: &Option<Vec<String>>,
 ) -> Result<(Vec<serde_json::Value>, usize, usize), String> {
     use ssh2::Session;
-    use std::net::TcpStream;
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
 
     let mut tree = Vec::new();
     let mut file_count = 0;
     let mut dir_count = 0;
 
-    // Connect
-    let tcp = TcpStream::connect(format!("{}:22", host))
-        .map_err(|e| format!("TCP connect to {}: {}", host, e))?;
+    // Connect (H5, task 374): bound the TCP connect with a timeout.
+    let tcp = {
+        let addrs: Vec<std::net::SocketAddr> = (host, 22u16)
+            .to_socket_addrs()
+            .map(|iter| iter.collect())
+            .map_err(|e| format!("DNS resolve for {} failed: {}", host, e))?;
+        let mut last_err: Option<std::io::Error> = None;
+        let mut tcp_opt: Option<TcpStream> = None;
+        for addr in &addrs {
+            match TcpStream::connect_timeout(addr, Duration::from_secs(SSH_CONNECT_TIMEOUT_SECS))
+            {
+                Ok(tcp) => {
+                    tcp_opt = Some(tcp);
+                    break;
+                }
+                Err(e) => last_err = Some(e),
+            }
+        }
+        tcp_opt.ok_or_else(|| {
+            format!(
+                "TCP connect to {}: {}",
+                host,
+                last_err
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "no address".to_string())
+            )
+        })?
+    };
     let mut sess = Session::new().map_err(|e| e.to_string())?;
+    // H5 (task 374): bound the session itself — without this, a stalled
+    // handshake or channel op can hang the scan indefinitely.
+    sess.set_timeout(SSH_SESSION_TIMEOUT_MS);
     sess.set_tcp_stream(tcp);
     sess.handshake().map_err(|e| e.to_string())?;
 
