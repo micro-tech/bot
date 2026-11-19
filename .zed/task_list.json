@@ -5293,6 +5293,62 @@
       "testStrategy": "Escape tests (no filesystem/network breakout), resource-limit tests, and a self-authored skill running inside the sandbox end to end."
     },
     {
+      "id": 369,
+      "title": "WebSocket /ws: Origin check on upgrade (review H1)",
+      "description": "Reject WebSocket upgrades whose Origin isn't this server. Browsers always send Origin on a WS upgrade, so a malicious web page can currently open wss://<host>:8443/ws from the victim's browser once the self-signed cert is accepted. Do NOT touch the `chat` arm's auth status - the ungated `chat` arm is John's decided product choice.",
+      "status": "done",
+      "results": "Done 2026-11-18 (branch ranger-helix-h1h2): ws_origin_allowed in src/io/web_server/mod.rs rejects non-same-origin upgrades with 403; absent Origin allowed for non-browser clients; chat arm untouched. Unit tests ws_origin_allowed_cases + live test ws_origin_check_rejects_cross_origin (cross-origin 403, same-origin connects) green in lib and bin. Full cargo +1.99 test: 1585 passed / 0 failed. Also fixed the ws_auth_test_state temp-path race (per-test tag) found by the full suite.",
+      "dependencies": [],
+      "priority": "high",
+      "details": "In src/io/web_server/mod.rs, ws_handler: extract the Origin header. If Origin is absent, allow (non-browser clients send none; the threat is browser-driven). If Origin is present, it must match the request Host (same host, same effective port, case-insensitive host); reject anything else (including 'null' and malformed values) with 403. Do not touch the `chat` arm's auth status. Add a unit-testable helper ws_origin_allowed(headers) and a live WS test: cross-origin upgrade rejected (403), same-origin and no-Origin upgrades accepted.",
+      "subtasks": [
+        {
+          "id": "369.1",
+          "status": "done",
+          "title": "Implement ws_origin_allowed + wire it into ws_handler (error checking: malformed Origin/Host, 'null' origin, port defaults)"
+        },
+        {
+          "id": "369.2",
+          "status": "done",
+          "title": "Cargo test coverage: unit tests for ws_origin_allowed plus a live WS test (cross-origin 403, same-origin/no-Origin accepted)"
+        },
+        {
+          "id": "369.3",
+          "status": "done",
+          "title": "Documentation: update the WS auth comment in mod.rs to record the Origin policy"
+        }
+      ],
+      "testStrategy": "Unit tests for ws_origin_allowed (same-origin, cross-origin, missing Origin, 'null', malformed) plus a live WS test proving a cross-origin upgrade gets 403 while same-origin and no-Origin upgrades connect; full cargo test green."
+    },
+    {
+      "id": 370,
+      "title": "Bundled UI: send WS auth message on connect (review H2)",
+      "description": "The bundled UI never sends {\"type\":\"auth\"} on WebSocket connect, so once [web] auth_token is set, config saves, routine edits and slash commands from the UI always fail - which pushes users to leave the token empty, making H1 worse. Have the UI send the auth message on connect using the token it already stashes for opsFetch.",
+      "status": "done",
+      "results": "Done 2026-11-18 (branch ranger-helix-h1h2): wsAuth() in src/io/web_server/static/index.html sends {\"type\":\"auth\",\"token\": opsToken} on WS connect and after a token is stashed via opsFetch; auth_status error clears a stale token so the next gated action re-prompts. No prompt on page load. Server side unchanged; ws_mutating_arms_require_auth still green. JS validated with node --check. Live drill (John, after merge): open the UI with a token set, confirm config_save/routine edit/slash_cmd work without re-prompting.",
+      "dependencies": [],
+      "priority": "high",
+      "details": "In src/io/web_server/static/index.html: add a wsAuth() helper that sends {\"type\":\"auth\",\"token\": opsToken} when the WS is open and a token is stashed (opsToken already lives in sessionStorage as helix_ops_token). Call it in ws.onopen (after the routines_list send) and in opsFetch after a new token is stashed from a 401 prompt, so the live socket picks the token up without waiting for a reconnect. Handle the server's auth_status reply in handleMessage: on error, clear the stale opsToken so the next gated action re-prompts instead of failing silently forever. Do not prompt for a token on page load - automatic paths must never pop a dialog (existing opsFetch prompt===false rule).",
+      "subtasks": [
+        {
+          "id": "370.1",
+          "status": "done",
+          "title": "Implement wsAuth() + call it in ws.onopen and in opsFetch after a token is stashed (error checking: only send when WS open and token non-empty)"
+        },
+        {
+          "id": "370.2",
+          "status": "done",
+          "title": "Cargo test coverage: server-side auth flow is covered by ws_mutating_arms_require_auth; verify the UI change by code inspection plus a live drill on the R630 (config_save works from the UI once a token is set)"
+        },
+        {
+          "id": "370.3",
+          "status": "done",
+          "title": "Documentation: comment the auth-on-connect flow in index.html (wsAuth, opsFetch re-auth, auth_status handling)"
+        }
+      ],
+      "testStrategy": "Existing ws_mutating_arms_require_auth test still green (server side unchanged); live drill on the R630: open the UI, set a token, confirm config_save/routine edit/slash_cmd work from the UI without re-prompting; full cargo test green."
+    },
+    {
       "id": 371,
       "title": "Warning-free bar: 3 unused-dep manifest warnings + 2 unused-import warnings in unix_socket_test",
       "description": "Nightly Quartermaster 2026-11-18 found `cargo build` (with a temporary config.toml copy masking known task 262) passing but NOT warning-free on PreRelese 2454ee3: 3x `cargo::unused_dependencies` manifest warnings \u2014 `pulldown-cmark` (Cargo.toml:71; only reference is a commented-out `use` in src/config/manifest.rs:3), `tower-http` (Cargo.toml:45, cors feature; no code reference \u2014 CORS was removed Oct 4), `tracing-subscriber` (Cargo.toml:41; no code reference). Plus 2x unused-import warnings in tests/unix_socket_test.rs (`tokio::net::UnixStream`; `AsyncBufReadExt`, `AsyncWriteExt`, `BufReader`). Surveyor 1 verified 2026-11-18 by re-running `cargo build` (3 manifest warnings reproduced) and `cargo check --test unix_socket_test` (2 import warnings reproduced). Renumbered from 369 to 371 on 2026-11-18 to avoid colliding with H1/H2 tasks 369/370 on branch ranger-helix-h1h2.",
