@@ -101,6 +101,25 @@ pub const STATIC_READ_TOOLS: &[&str] = &[
 /// enabled they are simply not advertised and the filter drops them.
 pub const GMAIL_READ_TOOLS: &[&str] = &["mcp__google__gmail_search", "mcp__google__gmail_read"];
 
+/// Wire read tools (mcp_wire, packet capture / pcap analysis /
+/// interfaces). Confirmed names in-repo: `mcp__wire__interfaces` is
+/// called directly by `tools::file_tools` (`create_network_map`,
+/// `own_lan_ips`), and the upstream tool names (`capture`,
+/// `analyze_pcap`, `interfaces`) are the task-332 `how: "mcp"`
+/// allowlist in `mcp_handler::read_tools_for`. All three are
+/// read-only: they observe traffic or files and modify no state.
+/// Included best-effort, like the Gmail tools: if the wire server is
+/// not configured they are simply not advertised and the filter drops
+/// them, so a read task still verifies and runs (without wire
+/// access). This is what lets the chat-command loop answer network
+/// questions at all — before this, a loop task had no network tool
+/// and could only refuse (task 375: the nightly network report).
+pub const WIRE_READ_TOOLS: &[&str] = &[
+    "mcp__wire__capture",
+    "mcp__wire__interfaces",
+    "mcp__wire__analyze_pcap",
+];
+
 /// Write tools per domain. `notes` is a KNOWN static tool. `gmail`
 /// names are best-effort (see module docs) — the verification guard
 /// refuses a `write:gmail` spawn when none of them is advertised.
@@ -123,6 +142,7 @@ pub fn allowlist_for(scope: &Scope) -> Vec<String> {
     let mut tools: Vec<String> = STATIC_READ_TOOLS
         .iter()
         .chain(GMAIL_READ_TOOLS.iter())
+        .chain(WIRE_READ_TOOLS.iter())
         .map(|s| s.to_string())
         .collect();
     if let Scope::Write(domain) = scope {
@@ -589,9 +609,51 @@ mod tests {
         ] {
             assert!(!allow.contains(&write.to_string()), "read must exclude {write}");
         }
-        for read in ["read_note", "read_email", "mcp__google__gmail_search", "mcp__google__gmail_read"] {
+        for read in [
+            "read_note",
+            "read_email",
+            "mcp__google__gmail_search",
+            "mcp__google__gmail_read",
+            "mcp__wire__capture",
+            "mcp__wire__interfaces",
+            "mcp__wire__analyze_pcap",
+        ] {
             assert!(allow.contains(&read.to_string()), "read must include {read}");
         }
+    }
+
+    #[test]
+    fn read_allowlist_wire_tools_are_read_only_and_verify() {
+        // Task 375: the loop's read scope must carry the wire tools,
+        // and the verification guard must accept a filtered set that
+        // contains them (otherwise the spawn is refused and the
+        // nightly network report can only fail).
+        for wire in [
+            "mcp__wire__capture",
+            "mcp__wire__interfaces",
+            "mcp__wire__analyze_pcap",
+        ] {
+            assert!(
+                allowlist_for(&Scope::Read).contains(&wire.to_string()),
+                "read must include {wire}"
+            );
+            // Wire tools are reads: no write scope may claim them.
+            assert!(
+                !write_tools_for("notes").contains(&wire),
+                "{wire} must not be a notes write tool"
+            );
+            assert!(
+                !write_tools_for("gmail").contains(&wire),
+                "{wire} must not be a gmail write tool"
+            );
+        }
+        // A filtered set with wire tools present verifies clean.
+        let mut filtered = allowlist_for(&Scope::Read);
+        assert!(verify_toolset(&filtered, &Scope::Read).is_ok());
+        // ... and a filtered set WITHOUT them still verifies (wire
+        // server unconfigured: best-effort, like Gmail).
+        filtered.retain(|n| !n.starts_with("mcp__wire__"));
+        assert!(verify_toolset(&filtered, &Scope::Read).is_ok());
     }
 
     #[test]

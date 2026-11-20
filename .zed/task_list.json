@@ -5512,7 +5512,8 @@
       "id": 375,
       "title": "Nightly network report: chat-command loop cannot access continuous-monitoring data",
       "description": "The nightly network report (Cobble jr cron helix-nightly-network-report, daily 05:00 EST, triggers Helix via the hub command room) cannot be produced. The trigger itself now works - scope read is accepted (verified 2026-11-19: Helix accepted task #327, 'task #327 accepted, running on desktop, budget 600s') - but Helix replies it does not have access to the continuous monitoring data (50-packet captures every 60 seconds on interface ens18): 'My current toolset does not include functions for accessing or analyzing real-time or archived network capture files.' Root cause: the chat-command loop's read toolset (STATIC_READ_TOOLS in src/chat_command/task_handler.rs) contains no wire/network tool - only read_log, read_note, list_notes, check_inbox, read_email, system_status, list_tools, get_beliefs, repo_glob, repo_read, repo_grep, scan_directory (+ Gmail MCP reads). The continuous monitor (sub-agent on the desktop backend, started via web UI 2026-11-17) does not persist its data where the loop's file tools can read it, and the wire MCP tools (mcp__wire__capture/interfaces/analyze_pcap, added to the ! allowlist by task 332 / PR #52) are not in STATIC_READ_TOOLS, so the loop's sub-agent never gets them. Until this lands, every 05:00 run fails the same way and no nightly report is produced.",
-      "status": "pending",
+      "status": "in_progress",
+      "results": "Built 2026-11-20 (branch ranger-helix-task375-build), sandbox verification only — live drill still owed. Approach (B) chosen (375.1): no continuous-monitor component exists in the source (no continuous/network_monitor code), so (A) has nothing to hook into; added WIRE_READ_TOOLS (mcp__wire__capture/interfaces/analyze_pcap) to the loop read allowlist in src/chat_command/task_handler.rs + docs/chat-command-loop.md. Full cargo +1.99 test green: 1607 passed / 0 failed / 13 ignored (lib 786, bin 761, installer 24, integration 35, doctests 1/0/1; baseline 1605 + 2 = the new test in lib + bin). check --all-targets exit 0, only the 2 known task-371 warnings. Known limit: (B) gives live observability, not 24h of history — no 24h archive exists; true history needs a scheduled capture logger, filed as task 376. Live drill (John, after merge): R630 pull/rebuild/restart, then a ! llm task (scope read) for the nightly network report via the hub command room; confirm Helix returns a real report, not an access refusal.",
       "dependencies": [],
       "priority": "high",
       "details": "Two fix approaches; the Ranger picks one or combines them. (A) Persisted summaries: have the continuous monitor write per-interval summaries to a file (e.g. under the Helix runtime logs dir or a notes file) that the loop's existing file tools (repo_read/read_log/repo_grep/scan_directory) can read; the report task then reads that file. This uses existing tools and needs no allowlist change. (B) Wire tools in the loop: add the wire MCP tools (mcp__wire__capture, mcp__wire__interfaces, mcp__wire__analyze_pcap) to STATIC_READ_TOOLS (and the verification guard) so the loop's sub-agent can run a capture / read capture data directly. Note: a fresh capture is a snapshot, not 24h of monitoring history - for the nightly report, (A) or a persisted-data read is the better fit; (B) alone does not give 24h of history. Before choosing, confirm the continuous monitor's current state: is the monitor sub-agent still running on the desktop backend, and where (if anywhere) does it persist data? That answer decides between (A) and (B). Out of scope: do NOT reintroduce write:chat - the loop only knows the notes and gmail write domains (src/chat_command/envelope.rs); the report comes back to the command room and Cobble jr relays it. A direct post to the general room needs a separate chat write domain + chat_send task. The envelope/scope fix is already done (cron now uses scope read, 2026-11-19) - this task is only about data access.",
@@ -5521,13 +5522,13 @@
         {
           "id": 375.1,
           "title": "Confirm the continuous monitor's state (still running? where does it persist data, if anywhere?) and pick approach (A) persisted summaries file, (B) wire tools in STATIC_READ_TOOLS, or a combination",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 375.2,
           "title": "Implement the chosen approach (monitor persistence and/or allowlist + verification guard changes)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             375.1
           ]
@@ -5535,9 +5536,45 @@
         {
           "id": 375.3,
           "title": "Verify: full cargo test green; live ! llm task (scope read) for the nightly network report returns a real report from monitoring data, not an access refusal",
-          "status": "pending",
+          "status": "in_progress",
           "dependencies": [
             375.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 376,
+      "title": "Nightly network report: no 24h monitoring history exists (scheduled capture logger)",
+      "description": "Task 375 gave the chat-command loop live wire tools (mcp__wire__capture/interfaces/analyze_pcap in the read allowlist), so the nightly network report can now be grounded in a live capture + interfaces instead of refused. But no 24h archive exists anywhere: the Nov 17 continuous monitor never persisted, and no code runs captures on a schedule and stores summaries. A report built after 375 is a live snapshot, not 24h of history. Build a scheduled capture logger so the nightly report can summarize the last 24h: a Helix routine (or equivalent scheduled job) that runs an mcp_wire capture periodically and appends a compact summary line (time, interface, packet/error/retransmission/drop counts, latency notes) to a runtime log file the loop's read_log can read; the report task then reads the last 24h of that log.",
+      "status": "pending",
+      "dependencies": [
+        375
+      ],
+      "priority": "medium",
+      "details": "Design first (376.1): where the log lives (runtime logs dir, so read_log can reach it — it already rejects dotdot/symlink escapes, so keep the file under logs/), cadence (hourly is plenty for a nightly verdict; every 60s like the old monitor is overkill for a file), retention/rotation (cap the file — a 24h window is ~24 lines at hourly cadence; do not let it grow unbounded), and line format (one compact line per capture: timestamp, interface, counts). Implementation (376.2): the scheduled job + the capture call + the append (direct exec via the existing mcp_wire capture path, not a new shell); keep it read-only (observe traffic, modify nothing) and fail-soft (a missed capture logs a warning, never breaks Helix). Out of scope: do NOT reintroduce write:chat; the report still comes back to the command room and Cobble jr relays it. This is an enhancement on top of 375, not a fix for a refusal — the report works as a snapshot without it.",
+      "testStrategy": "cargo test (repo toolchain) green; live drill on the R630 after pull/rebuild/restart: confirm the log file accumulates capture-summary lines over several hours, then send a ! llm task (scope read) for the nightly network report via the hub command room and confirm Helix returns a report summarising the last 24h from the log (not a single live capture).",
+      "subtasks": [
+        {
+          "id": 376.1,
+          "title": "Design the capture log: location under logs/, cadence, retention/rotation cap, and one-line-per-capture format",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 376.2,
+          "title": "Implement the scheduled capture job + append (mcp_wire capture path, fail-soft, read-only)",
+          "status": "pending",
+          "dependencies": [
+            376.1
+          ]
+        },
+        {
+          "id": 376.3,
+          "title": "Verify: full cargo test green; live drill shows the log accumulating and the report summarising 24h from it",
+          "status": "pending",
+          "dependencies": [
+            376.2
           ]
         }
       ]

@@ -326,7 +326,13 @@ form (`read` / `write:<domain>`).
 `check_inbox`, `read_email`, `system_status`, `list_tools`,
 `get_beliefs`, `repo_glob`, `repo_read`, `repo_grep`,
 `scan_directory`, plus Gmail read tools
-`mcp__google__gmail_search`, `mcp__google__gmail_read`.
+`mcp__google__gmail_search`, `mcp__google__gmail_read`, plus wire
+read tools `mcp__wire__capture`, `mcp__wire__interfaces`,
+`mcp__wire__analyze_pcap` (task 375: without them the loop had no
+network tool at all and the nightly network report could only be
+refused; all three are read-only — they observe traffic or files
+and modify no state — and are best-effort like the Gmail tools: if
+the wire server is not configured they are simply not advertised).
 
 **Write tools per domain:** `notes` → `write_note`; `gmail` →
 `mcp__google__gmail_modify`, `mcp__google__gmail_label`,
