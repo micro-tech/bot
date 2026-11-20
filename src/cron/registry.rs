@@ -283,6 +283,26 @@ fn default_routines() -> Vec<Routine> {
             task: String::new(),
             backend: default_routine_backend(),
         },
+        // Task 376: hourly network capture log — the 24h archive for
+        // the nightly network report. Fires every hour; the CPU runs
+        // an mcp_wire capture in-process and appends one summary line
+        // to <runtime>/logs/network_capture.log. Empty agent_role/task:
+        // handled in-process by the CPU, no LLM is ever spawned just
+        // to poll (same shape as support-mail-watch). Ships ENABLED —
+        // the tick is read-only and fail-soft, so there is nothing to
+        // misconfigure. The load_or_seed merge carries it to
+        // deployments seeded by an older binary.
+        Routine {
+            id: "network-capture-log".to_string(),
+            name: "Network capture log (hourly)".to_string(),
+            schedule: "every 1h".to_string(),
+            enabled: true,
+            last_run_ms: None,
+            next_run_ms: None,
+            agent_role: String::new(),
+            task: String::new(),
+            backend: default_routine_backend(),
+        },
         // Task 281 (self-improving loop, Phase 1): one nightly cycle.
         // Ships DISABLED — John enables it when Phase 0's ledger has a
         // gap-free week (gate 280). Empty agent_role/task: handled by
@@ -822,6 +842,51 @@ mod registry_tests {
         assert!(!w.enabled, "chat-command loop ships disabled (fail-closed)");
         assert_eq!(w.schedule, "every 1m");
         assert!(!w.has_agent_job(), "watch must not spawn an LLM to poll");
+    }
+
+    #[test]
+    fn seeded_network_capture_log_exists_enabled() {
+        // Task 376: the hourly capture-log tick is seeded, ENABLED,
+        // every 1h, with NO agent payload (in-process handler, no LLM
+        // for polling). Read-only and fail-soft, so there is nothing
+        // to misconfigure.
+        let routines = default_routines();
+        let w = routines
+            .iter()
+            .find(|r| r.id == "network-capture-log")
+            .expect("network-capture-log seed");
+        assert!(w.enabled, "capture log ships enabled");
+        assert_eq!(w.schedule, "every 1h");
+        assert!(!w.has_agent_job(), "logger must not spawn an LLM to poll");
+    }
+
+    #[test]
+    fn network_capture_log_merges_into_preexisting_file() {
+        // Task 376: an existing routines file seeded by an older binary
+        // gains the capture-log seed on load; existing entries keep
+        // their settings (including a disabled choice).
+        let path = tmp_path("merge_network_capture_log.json");
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(
+            &path,
+            r#"[{"id":"nightly_memory_consolidation","name":"N","schedule":"daily 02:00","enabled":false}]"#,
+        )
+        .unwrap();
+        let reg = RoutineRegistry::load_or_seed(path.clone());
+        let w = reg
+            .list()
+            .iter()
+            .find(|r| r.id == "network-capture-log")
+            .expect("new default merged in");
+        assert!(w.enabled);
+        assert_eq!(w.schedule, "every 1h");
+        let n = reg
+            .list()
+            .iter()
+            .find(|r| r.id == "nightly_memory_consolidation")
+            .unwrap();
+        assert!(!n.enabled, "existing disabled choice untouched");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
