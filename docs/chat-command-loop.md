@@ -351,7 +351,7 @@ tool list is a deploy-time follow-up, not a silent grant.
 
 ## 7. Known v1 limits
 
-- **Queue + running state are PERSISTED (task 377, M21).** The queue
+- **Queue + running state are PERSISTED (task 380, M21).** The queue
   file `<runtime>/chat_command/queue.json` is saved on every
   mutation and reloaded once at startup; a task that was running
   when Helix died comes back queued at the front of its backend and
@@ -403,7 +403,7 @@ clear endpoint clears this same file.)
 | `ASUS relay not enabled/configured` | Phase 2 not enabled or incompletely configured (all of `asus_enabled`, `asus_host`, `asus_user`, `asus_key_path` are required). Zero ssh attempts were made. |
 | Reply is `[1/2]`, `[2/2]`, … | Long output chunked (§3). Strip the `[n/m] ` prefix from each chunk and concatenate to reassemble. |
 | `[TIMEOUT after Ns — process killed]` | The command (or task) exceeded its budget; the process was killed. Raise `time` (max 3600 s) or split the work. |
-| Task accepted but no report arrives | The run is still going, OR Helix restarted (the queue is persisted since task 377, so the task resumes and reports — check the error log for the `chat-command:` lines if no `resumed after restart` notice arrived), OR the backend errored (check the error log for the `chat-command:` lines). |
+| Task accepted but no report arrives | The run is still going, OR Helix restarted (the queue is persisted since task 380, so the task resumes and reports — check the error log for the `chat-command:` lines if no `resumed after restart` notice arrived), OR the backend errored (check the error log for the `chat-command:` lines). |
 | Task refused: `no write tool for domain 'gmail' available` | google-mcp advertises no Gmail write tool under the expected names (§6) — confirm the real tool names at deploy time. |
 | `!tail` / `!cat` on a big file | Don't cat whole files — the output cap is 128 KiB per stream. Tail the file (or the error log) instead. |
 

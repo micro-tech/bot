@@ -5580,69 +5580,69 @@
       ]
     },
     {
-      "id": 377,
+      "id": 380,
       "title": "Chat-command queue survives a restart (M21: persist queue + running tasks)",
       "description": "The chat-command loop's per-backend FIFO queue and running-task state are in-memory only (src/chat_command/task_handler.rs HandlerState). The file's own header documents it: a Helix restart drops queued/running tasks without a report and the sender must re-send. Persist the queue to disk under the runtime dir and reload it once at startup, so queued tasks survive a restart and resume instead of vanishing; a task that was running when Helix died comes back queued at the front of its backend (never silently marked done, never re-run without a report).",
       "status": "in_progress",
       "dependencies": [],
       "priority": "medium",
-      "details": "377.1 DESIGN (recorded 2026-11-20): File = <runtime>/chat_command/queue.json (next to state.json). Format = versioned JSON {version, running, queues} holding the HandlerState verbatim. HandlerState.running now stores the FULL QueuedTask (not just its hub id) so a restart can re-queue a running task with scope, budget, and text intact. Save on every mutation (submit, advance, resume) so a crash can only lose the mutation in flight, never the whole queue; the runtime dir is threaded explicitly through try_spawn/run_llm_task/advance_queue/drain_pending (never a process global — tick tests each use a fresh tmpdir). Load once per process from the tick (after tools resolve, so resume announcements can post); running tasks demote to the FRONT of their backend queue, queued tasks follow in FIFO order, deduped by hub id; running is cleared. Resume starts the front task of each non-empty backend and announces 'task #N resumed after restart'. Fail-soft: missing/corrupt file starts empty with a warning, never a startup failure; a failed save logs a warning and never rejects an accepted task. 377.2 IMPLEMENTED 2026-11-20 (branch ranger-helix-m21persist-build): serde derives on Scope/LlmBackend/QueuedTask/HandlerState; running refactor (HashMap<Backend, QueuedTask>); QueueFile + queue_path/save_queue_to/load_queue_from/merge_restored/save_queue/load_queue/pop_next_to_start/resume_queued/restore_queue_once in task_handler.rs; tick hook in mod.rs (restore after tools resolve, drain_pending gains runtime_dir); module-doc v1 limitation updated; docs/chat-command-loop.md queue section updated. Tests: 4 new queue unit tests (save/load round-trip with running demoted to front, missing/corrupt fail-soft, dedup by hub id, pop_next_to_start) + 1 tick test (persisted queue restored and front task resumed). 377.3 live drill is John's R630 step: queue a task, restart Helix, confirm it resumes and reports (not dropped, not double-run).",
+      "details": "380.1 DESIGN (recorded 2026-11-20): File = <runtime>/chat_command/queue.json (next to state.json). Format = versioned JSON {version, running, queues} holding the HandlerState verbatim. HandlerState.running now stores the FULL QueuedTask (not just its hub id) so a restart can re-queue a running task with scope, budget, and text intact. Save on every mutation (submit, advance, resume) so a crash can only lose the mutation in flight, never the whole queue; the runtime dir is threaded explicitly through try_spawn/run_llm_task/advance_queue/drain_pending (never a process global — tick tests each use a fresh tmpdir). Load once per process from the tick (after tools resolve, so resume announcements can post); running tasks demote to the FRONT of their backend queue, queued tasks follow in FIFO order, deduped by hub id; running is cleared. Resume starts the front task of each non-empty backend and announces 'task #N resumed after restart'. Fail-soft: missing/corrupt file starts empty with a warning, never a startup failure; a failed save logs a warning and never rejects an accepted task. 380.2 IMPLEMENTED 2026-11-20 (branch ranger-helix-m21persist-build): serde derives on Scope/LlmBackend/QueuedTask/HandlerState; running refactor (HashMap<Backend, QueuedTask>); QueueFile + queue_path/save_queue_to/load_queue_from/merge_restored/save_queue/load_queue/pop_next_to_start/resume_queued/restore_queue_once in task_handler.rs; tick hook in mod.rs (restore after tools resolve, drain_pending gains runtime_dir); module-doc v1 limitation updated; docs/chat-command-loop.md queue section updated. Tests: 4 new queue unit tests (save/load round-trip with running demoted to front, missing/corrupt fail-soft, dedup by hub id, pop_next_to_start) + 1 tick test (persisted queue restored and front task resumed). 380.3 live drill is John's R630 step: queue a task, restart Helix, confirm it resumes and reports (not dropped, not double-run).",
       "testStrategy": "cargo test (repo toolchain) green; live drill on the R630 after pull/rebuild/restart: queue an LLM task, restart Helix, confirm the task resumes and posts its report (not dropped, not run twice); confirm a second queued task still runs after the resumed one completes.",
       "subtasks": [
         {
-          "id": 377.1,
+          "id": 380.1,
           "title": "Design the queue persistence: file location/format, running-task demotion, resume, fail-soft rules",
           "status": "done",
           "dependencies": []
         },
         {
-          "id": 377.2,
+          "id": 380.2,
           "title": "Implement queue save/load + startup restore + resume (fail-soft, explicit runtime dir)",
           "status": "done",
           "dependencies": [
-            377.1
+            380.1
           ]
         },
         {
-          "id": 377.3,
+          "id": 380.3,
           "title": "Verify: full cargo test green; live drill shows a queued task resuming after a Helix restart",
           "status": "in_progress",
           "dependencies": [
-            377.2
+            380.2
           ]
         }
       ]
     },
     {
-      "id": 378,
+      "id": 381,
       "title": "Sub-agent registry survives a restart (persist registry to disk)",
       "description": "The sub-agent registry (src/agents/subagent_registry.rs) is a process-global in-memory HashMap with no persist/save/load, so a Helix restart empties it and the web UI sub-agent list shows nothing. Persist the registry to disk under the runtime dir and reload it once at startup, so the UI shows past sub-agents after a reboot. Keep the existing in-memory live view and the subagent_event bus publish contract unchanged.",
       "status": "in_progress",
       "dependencies": [],
       "priority": "medium",
-      "details": "378.1 DESIGN (recorded 2026-11-20): File = <runtime>/subagent_registry.json (top level of the runtime dir), a JSON array of SubagentRecord (serde, status snake_case matching the UI contract). Saved on every register/finish (best-effort, after the lock is released); loaded once at startup from main.rs (after set_runtime_dir). Records that were Working when Helix died are marked Failed on load with finished_at_ms set to now (their process is gone, so the work did not complete — never shown as Working forever, never silently dropped). Finished records keep their status. Pruned on load with the same cap as the in-memory prune (last 10 finished; Working never pruned). No bus events on load (restored history, not new spawns). The runtime dir follows the established set_runtime_dir OnceLock pattern (self_improve/persona/support_watch) with a Mutex test override, because the register/finish call sites in subagent_tool.rs have no runtime dir to thread. Fail-soft: missing/corrupt file starts empty with a warning; a failed save logs a warning and never breaks a spawn or finish. 378.2 IMPLEMENTED 2026-11-20 (branch ranger-helix-m21persist-build): serde derives on SubagentStatus/SubagentRecord; set_runtime_dir + test override + registry_path + save_registry + load_registry + RegistryLoad in subagent_registry.rs; save calls at the end of register/finish; main.rs hook (set_runtime_dir + load_registry with logging). Tests: 4 new registry tests (save/load round-trip with Working marked Failed, missing/corrupt fail-soft, load prunes to last 10 finished, save is a no-op without a runtime dir). 378.3 live drill is John's R630 step: run a sub-agent task, restart Helix, confirm the UI registry still shows the past sub-agent (finished ones with their status; an interrupted one as Failed, not Working).",
+      "details": "381.1 DESIGN (recorded 2026-11-20): File = <runtime>/subagent_registry.json (top level of the runtime dir), a JSON array of SubagentRecord (serde, status snake_case matching the UI contract). Saved on every register/finish (best-effort, after the lock is released); loaded once at startup from main.rs (after set_runtime_dir). Records that were Working when Helix died are marked Failed on load with finished_at_ms set to now (their process is gone, so the work did not complete — never shown as Working forever, never silently dropped). Finished records keep their status. Pruned on load with the same cap as the in-memory prune (last 10 finished; Working never pruned). No bus events on load (restored history, not new spawns). The runtime dir follows the established set_runtime_dir OnceLock pattern (self_improve/persona/support_watch) with a Mutex test override, because the register/finish call sites in subagent_tool.rs have no runtime dir to thread. Fail-soft: missing/corrupt file starts empty with a warning; a failed save logs a warning and never breaks a spawn or finish. 381.2 IMPLEMENTED 2026-11-20 (branch ranger-helix-m21persist-build): serde derives on SubagentStatus/SubagentRecord; set_runtime_dir + test override + registry_path + save_registry + load_registry + RegistryLoad in subagent_registry.rs; save calls at the end of register/finish; main.rs hook (set_runtime_dir + load_registry with logging). Tests: 4 new registry tests (save/load round-trip with Working marked Failed, missing/corrupt fail-soft, load prunes to last 10 finished, save is a no-op without a runtime dir). 381.3 live drill is John's R630 step: run a sub-agent task, restart Helix, confirm the UI registry still shows the past sub-agent (finished ones with their status; an interrupted one as Failed, not Working).",
       "testStrategy": "cargo test (repo toolchain) green; live drill on the R630 after pull/rebuild/restart: run a sub-agent task, restart Helix, confirm the web UI sub-agent list still shows the past sub-agent after the restart.",
       "subtasks": [
         {
-          "id": 378.1,
+          "id": 381.1,
           "title": "Design the registry persistence: file location/format, Working-on-load rule, prune-on-load, fail-soft rules",
           "status": "done",
           "dependencies": []
         },
         {
-          "id": 378.2,
+          "id": 381.2,
           "title": "Implement registry save/load + startup load in main.rs (fail-soft, set_runtime_dir pattern)",
           "status": "done",
           "dependencies": [
-            378.1
+            381.1
           ]
         },
         {
-          "id": 378.3,
+          "id": 381.3,
           "title": "Verify: full cargo test green; live drill shows past sub-agents in the UI after a Helix restart",
           "status": "in_progress",
           "dependencies": [
-            378.2
+            381.2
           ]
         }
       ]
