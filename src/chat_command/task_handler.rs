@@ -45,9 +45,14 @@
 //!   is a deploy-time follow-up, not a silent grant.
 //!
 //! Known v1 limitations (documented, not hidden):
-//! - Queue + running state are IN-MEMORY. A Helix restart drops
-//!   queued/running tasks without a report; the sender must re-send
-//!   if no report arrives. Persisting the queue is a follow-up.
+//! - Queue + running state are PERSISTED (M21): the queue file
+//!   `<runtime_dir>/chat_command/queue.json` is saved on every
+//!   mutation and reloaded once at startup; a task that was running
+//!   when Helix died comes back queued at the front of its backend
+//!   (never silently done, never re-run without a report — the
+//!   resume re-spawns it and it reports normally). A corrupt or
+//!   missing queue file starts empty with a warning, never a
+//!   startup failure.
 //! - Write-task reports state the scope limit but do NOT enumerate
 //!   the writes made — `dispatch_spawn`'s report carries no tool-call
 //!   trace. Enumerating writes needs tracing from the spawn
@@ -66,8 +71,9 @@
 use super::envelope::{LlmBackend, Scope};
 use super::reply;
 use super::{ChatCommandConfig, ResolvedChatTools};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 /// Default LLM time budget in seconds (spec §3: llm 300).
@@ -235,7 +241,8 @@ pub fn verify_toolset(filtered: &[String], scope: &Scope) -> Result<(), String> 
 
 /// One accepted LLM task. `hub_id` is the task's hub message id —
 /// the report cites it, so the sender can correlate task → report.
-#[derive(Debug, Clone)]
+/// Serializable: the queue file (M21) stores these verbatim.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueuedTask {
     pub hub_id: i64,
     pub sender: String,
@@ -245,10 +252,15 @@ pub struct QueuedTask {
     pub scope: Scope,
 }
 
-/// Per-backend running task (hub id) + FIFO queue.
-#[derive(Debug, Default)]
+/// Per-backend running task + FIFO queue. `running` holds the FULL
+/// task (not just its hub id) so a restart can re-queue it with its
+/// scope, budget, and text intact — a hub id alone could not
+/// reconstruct the task.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct HandlerState {
-    pub running: HashMap<LlmBackend, i64>,
+    #[serde(default)]
+    pub running: HashMap<LlmBackend, QueuedTask>,
+    #[serde(default)]
     pub queues: HashMap<LlmBackend, VecDeque<QueuedTask>>,
 }
 
@@ -265,7 +277,8 @@ pub enum SubmitDecision {
 /// Submit a task to the state machine. Idle backend → running;
 /// busy backend → FIFO queue (position reported to the sender).
 pub fn submit_task(state: &mut HandlerState, task: QueuedTask) -> SubmitDecision {
-    if let Some(&running_id) = state.running.get(&task.backend) {
+    if let Some(running) = state.running.get(&task.backend) {
+        let running_id = running.hub_id;
         let queue = state.queues.entry(task.backend).or_default();
         queue.push_back(task);
         SubmitDecision::Queued {
@@ -273,7 +286,7 @@ pub fn submit_task(state: &mut HandlerState, task: QueuedTask) -> SubmitDecision
             running_id,
         }
     } else {
-        state.running.insert(task.backend, task.hub_id);
+        state.running.insert(task.backend, task);
         SubmitDecision::RunNow
     }
 }
@@ -287,12 +300,12 @@ pub fn complete_task(
     backend: LlmBackend,
     hub_id: i64,
 ) -> Option<QueuedTask> {
-    if state.running.get(&backend) != Some(&hub_id) {
+    if state.running.get(&backend).map(|t| t.hub_id) != Some(hub_id) {
         return None;
     }
     state.running.remove(&backend);
     let next = state.queues.get_mut(&backend)?.pop_front()?;
-    state.running.insert(backend, next.hub_id);
+    state.running.insert(backend, next.clone());
     Some(next)
 }
 
@@ -318,6 +331,241 @@ pub fn reset_for_tests() {
     }
     if let Ok(mut p) = pending_spawns().lock() {
         p.clear();
+    }
+}
+
+// ── Queue persistence (M21) ─────────────────────────────────────────
+// The queue file lives next to the cursor state:
+// `<runtime_dir>/chat_command/queue.json`. Saved on every mutation
+// (submit, advance, resume) so a crash can only lose the mutation
+// in flight, never the whole queue. Loaded once per process by the
+// tick; a corrupt or missing file starts empty with a warning.
+// The runtime dir is threaded explicitly (never a process global):
+// the tick tests each use a fresh tmpdir, and a global would pin
+// saves to whichever test ran first.
+
+/// Persisted queue file format version.
+pub const QUEUE_FILE_VERSION: u32 = 1;
+
+/// The queue file: a version tag plus the handler state verbatim.
+/// `running` is stored in full (not just hub ids) so a restart can
+/// re-queue a running task with its scope, budget, and text intact.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueFile {
+    pub version: u32,
+    #[serde(flatten)]
+    pub state: HandlerState,
+}
+
+/// How a queue load went. Missing and corrupt are distinguished for
+/// logging, but the caller treats both the same way: start empty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueLoad {
+    /// No queue file yet (first run, or nothing was ever queued).
+    Missing,
+    /// File exists but does not parse.
+    Corrupt,
+    /// Parsed queue.
+    Loaded,
+}
+
+pub fn queue_path(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join("chat_command").join("queue.json")
+}
+
+/// Serialize a state to the queue file (pure: takes the state, so
+/// tests can round-trip without touching the process global).
+pub fn save_queue_to(runtime_dir: &Path, state: &HandlerState) -> std::io::Result<()> {
+    let path = queue_path(runtime_dir);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let file = QueueFile {
+        version: QUEUE_FILE_VERSION,
+        state: state.clone(),
+    };
+    std::fs::write(path, serde_json::to_string_pretty(&file)?)
+}
+
+/// Read + parse the queue file. Missing → default + `Missing`;
+/// unparseable → default + `Corrupt`; otherwise the file + `Loaded`.
+pub fn load_queue_from(runtime_dir: &Path) -> (QueueFile, QueueLoad) {
+    let empty = || QueueFile {
+        version: QUEUE_FILE_VERSION,
+        state: HandlerState::default(),
+    };
+    match std::fs::read_to_string(queue_path(runtime_dir)) {
+        Err(_) => (empty(), QueueLoad::Missing),
+        Ok(s) => match serde_json::from_str::<QueueFile>(&s) {
+            Ok(file) => (file, QueueLoad::Loaded),
+            Err(_) => (empty(), QueueLoad::Corrupt),
+        },
+    }
+}
+
+/// Merge a loaded queue file into a state (startup-only: the state
+/// must be empty — the tick loads once, before any submit). A task
+/// that was RUNNING when Helix died goes to the FRONT of its
+/// backend's queue (it never completed, so it must run again —
+/// never silently marked done, and no report is invented for work
+/// that did not run); the persisted queued tasks follow in FIFO
+/// order. `running` is cleared: nothing is actually running after
+/// a restart. Dedups by hub id, so a file that lists the same task
+/// twice can never run it twice. Returns (restored, demoted).
+pub fn merge_restored(state: &mut HandlerState, file: &QueueFile) -> (usize, usize) {
+    let mut restored = 0usize;
+    let mut demoted = 0usize;
+    let mut merged: HashMap<LlmBackend, VecDeque<QueuedTask>> = HashMap::new();
+    let mut backends: Vec<LlmBackend> = file.state.running.keys().copied().collect();
+    for b in file.state.queues.keys() {
+        if !backends.contains(b) {
+            backends.push(*b);
+        }
+    }
+    for backend in backends {
+        let mut seen: std::collections::HashSet<i64> = std::collections::HashSet::new();
+        let mut q: VecDeque<QueuedTask> = VecDeque::new();
+        if let Some(rt) = file.state.running.get(&backend) {
+            if seen.insert(rt.hub_id) {
+                q.push_back(rt.clone());
+                demoted += 1;
+                restored += 1;
+            }
+        }
+        if let Some(queued) = file.state.queues.get(&backend) {
+            for t in queued {
+                if seen.insert(t.hub_id) {
+                    q.push_back(t.clone());
+                    restored += 1;
+                }
+            }
+        }
+        if !q.is_empty() {
+            merged.insert(backend, q);
+        }
+    }
+    state.running.clear();
+    state.queues = merged;
+    (restored, demoted)
+}
+
+/// Save the process-global handler state to the runtime dir.
+/// Best-effort: the caller logs a warning on Err — a failed save
+/// must never reject or drop an accepted task.
+pub fn save_queue(runtime_dir: &Path) -> std::io::Result<()> {
+    match handler_state().lock() {
+        Ok(state) => save_queue_to(runtime_dir, &state),
+        Err(_) => Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "handler state poisoned",
+        )),
+    }
+}
+
+/// Load the persisted queue into the process-global state (startup
+/// only). Returns (kind, restored, demoted).
+pub fn load_queue(runtime_dir: &Path) -> (QueueLoad, usize, usize) {
+    let (file, kind) = load_queue_from(runtime_dir);
+    if kind != QueueLoad::Loaded {
+        return (kind, 0, 0);
+    }
+    let (restored, demoted) = match handler_state().lock() {
+        Ok(mut state) => merge_restored(&mut state, &file),
+        Err(_) => (0, 0),
+    };
+    (kind, restored, demoted)
+}
+
+/// Pop the front task of each idle backend and mark it running.
+/// Pure state transition; the caller spawns + announces.
+pub fn pop_next_to_start(state: &mut HandlerState) -> Vec<QueuedTask> {
+    let mut started = Vec::new();
+    for backend in [LlmBackend::Server, LlmBackend::Desktop, LlmBackend::Gemini] {
+        if state.running.contains_key(&backend) {
+            continue;
+        }
+        if let Some(q) = state.queues.get_mut(&backend) {
+            if let Some(task) = q.pop_front() {
+                state.running.insert(backend, task.clone());
+                started.push(task);
+            }
+        }
+    }
+    started
+}
+
+/// Resume queued tasks after a restart: start the front task of each
+/// backend that has a queue, announce the resume, and persist the
+/// new running state. A task whose spawn is deferred (no runtime)
+/// goes to `pending_spawns`, like a fresh RunNow submit — the tick's
+/// `drain_pending` retries it.
+pub fn resume_queued(tools: &ResolvedChatTools, cfg: &ChatCommandConfig, runtime_dir: &Path) {
+    let started = match handler_state().lock() {
+        Ok(mut state) => pop_next_to_start(&mut state),
+        Err(_) => Vec::new(),
+    };
+    if started.is_empty() {
+        return;
+    }
+    if let Err(e) = save_queue(runtime_dir) {
+        log::warn!("chat-command: failed to persist resumed queue: {e}");
+    }
+    for task in started {
+        crate::utils::log_to_file(&format!(
+            "chat-command: task resumed after restart hub_id={} backend={}",
+            task.hub_id,
+            task.backend.display()
+        ));
+        post_body(
+            tools,
+            &cfg.room,
+            cfg.chunk_bytes,
+            &format!(
+                "task #{} resumed after restart on {}",
+                task.hub_id,
+                task.backend.display()
+            ),
+        );
+        if !try_spawn(tools, &cfg.room, cfg.chunk_bytes, &task, runtime_dir) {
+            if let Ok(mut pending) = pending_spawns().lock() {
+                pending.push(task);
+            }
+        }
+    }
+}
+
+static QUEUE_RESTORED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Test reset for the restore-once flag (the flag is process-global;
+/// tick tests each use a fresh tmpdir and must be able to restore).
+#[cfg(test)]
+pub fn reset_restore_for_tests() {
+    QUEUE_RESTORED.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Load the persisted queue once per process and resume it. Called
+/// from the tick (after tools resolve, so resume announcements can
+/// be posted). A tick that runs before tools are available never
+/// reaches this call, so the flag stays unset and a later tick
+/// retries the restore.
+pub fn restore_queue_once(runtime_dir: &Path, tools: &ResolvedChatTools, cfg: &ChatCommandConfig) {
+    if QUEUE_RESTORED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    let (kind, restored, demoted) = load_queue(runtime_dir);
+    match kind {
+        QueueLoad::Missing => log::debug!("chat-command: no persisted queue yet"),
+        QueueLoad::Corrupt => {
+            log::warn!("chat-command: persisted queue corrupt, starting empty")
+        }
+        QueueLoad::Loaded => {
+            log::info!(
+                "chat-command: restored {restored} queued tasks ({demoted} were running at shutdown)"
+            );
+            if restored > 0 {
+                resume_queued(tools, cfg, runtime_dir);
+            }
+        }
     }
 }
 
@@ -393,7 +641,7 @@ pub fn submit_llm_task(
     };
     match decision {
         SubmitDecision::RunNow => {
-            if !try_spawn(tools, &cfg.room, cfg.chunk_bytes, &queued) {
+            if !try_spawn(tools, &cfg.room, cfg.chunk_bytes, &queued, runtime_dir) {
                 // No runtime (sync tests, or an exotic sync context):
                 // the task is accepted + running, and the spawn is
                 // retried by `drain_pending` on a later tick.
@@ -434,19 +682,33 @@ pub fn submit_llm_task(
             );
         }
     }
+    // Persist the new state (accepted task, running or queued). A
+    // failed save must not reject the task — it is already accepted
+    // and running/queued; the worst case is the pre-M21 behaviour
+    // (a crash before the next successful save loses it).
+    if let Err(e) = save_queue(runtime_dir) {
+        log::warn!("chat-command: failed to persist queue after submit: {e}");
+    }
 }
 
 /// Try to spawn a detached runner for a task. Returns false when no
 /// tokio runtime is current (caller queues it for `drain_pending`).
-fn try_spawn(tools: &ResolvedChatTools, room: &str, chunk_bytes: usize, task: &QueuedTask) -> bool {
+fn try_spawn(
+    tools: &ResolvedChatTools,
+    room: &str,
+    chunk_bytes: usize,
+    task: &QueuedTask,
+    runtime_dir: &Path,
+) -> bool {
     let Ok(handle) = tokio::runtime::Handle::try_current() else {
         return false;
     };
     let tools = tools.clone();
     let room = room.to_string();
     let task = task.clone();
+    let runtime_dir = runtime_dir.to_path_buf();
     handle.spawn(async move {
-        run_llm_task(tools, room, chunk_bytes, task).await;
+        run_llm_task(tools, room, chunk_bytes, task, &runtime_dir).await;
     });
     true
 }
@@ -454,7 +716,7 @@ fn try_spawn(tools: &ResolvedChatTools, room: &str, chunk_bytes: usize, task: &Q
 /// Retry spawns that were deferred for lack of a runtime. Called at
 /// the end of each tick (after the message loop). In production the
 /// submit already spawned, so this is normally a no-op.
-pub fn drain_pending(tools: &ResolvedChatTools, cfg: &ChatCommandConfig) {
+pub fn drain_pending(tools: &ResolvedChatTools, cfg: &ChatCommandConfig, runtime_dir: &Path) {
     let pending: Vec<QueuedTask> = match pending_spawns().lock() {
         Ok(mut p) => std::mem::take(&mut *p),
         Err(_) => return,
@@ -464,7 +726,7 @@ pub fn drain_pending(tools: &ResolvedChatTools, cfg: &ChatCommandConfig) {
     }
     let mut still_pending = Vec::new();
     for task in pending {
-        if !try_spawn(tools, &cfg.room, cfg.chunk_bytes, &task) {
+        if !try_spawn(tools, &cfg.room, cfg.chunk_bytes, &task, runtime_dir) {
             still_pending.push(task);
         }
     }
@@ -509,7 +771,13 @@ fn scope_note(scope: &Scope) -> String {
 /// `!` (headers start with `task #...`), and the sender gate
 /// (helix excluded) means even a chunk starting with `!` could never
 /// retrigger.
-async fn run_llm_task(tools: ResolvedChatTools, room: String, chunk_bytes: usize, task: QueuedTask) {
+async fn run_llm_task(
+    tools: ResolvedChatTools,
+    room: String,
+    chunk_bytes: usize,
+    task: QueuedTask,
+    runtime_dir: &Path,
+) {
     let role = role_for(&task.scope);
     // Verify BEFORE spawning: a missing/wrong role file must refuse,
     // never silently run with the full toolset.
@@ -526,7 +794,14 @@ async fn run_llm_task(tools: ResolvedChatTools, room: String, chunk_bytes: usize
             chunk_bytes,
             &format!("task #{} rejected: {e}", task.hub_id),
         );
-        advance_queue(&tools, &room, chunk_bytes, task.backend, task.hub_id);
+        advance_queue(
+            &tools,
+            &room,
+            chunk_bytes,
+            task.backend,
+            task.hub_id,
+            runtime_dir,
+        );
         return;
     }
     let spec = crate::tools::subagent_tool::SpawnSpec {
@@ -552,7 +827,14 @@ async fn run_llm_task(tools: ResolvedChatTools, room: String, chunk_bytes: usize
         task.hub_id,
         task.backend.display()
     ));
-    advance_queue(&tools, &room, chunk_bytes, task.backend, task.hub_id);
+    advance_queue(
+        &tools,
+        &room,
+        chunk_bytes,
+        task.backend,
+        task.hub_id,
+        runtime_dir,
+    );
 }
 
 /// Complete one backend's running task and, if a task was queued
@@ -563,11 +845,19 @@ fn advance_queue(
     chunk_bytes: usize,
     backend: LlmBackend,
     hub_id: i64,
+    runtime_dir: &Path,
 ) {
     let next = match handler_state().lock() {
         Ok(mut state) => complete_task(&mut state, backend, hub_id),
         Err(_) => None,
     };
+    // Persist the new state (running task gone, next promoted) — a
+    // crash before this save would re-queue the completed task and
+    // run it twice, so the save is part of the advance, not an
+    // afterthought.
+    if let Err(e) = save_queue(runtime_dir) {
+        log::warn!("chat-command: failed to persist queue after advance: {e}");
+    }
     let Some(next) = next else { return };
     crate::utils::log_to_file(&format!(
         "chat-command: task started hub_id={} backend={} (from queue)",
@@ -580,7 +870,7 @@ fn advance_queue(
         chunk_bytes,
         &format!("task #{} started on {}", next.hub_id, backend.display()),
     );
-    if !try_spawn(tools, room, chunk_bytes, &next) {
+    if !try_spawn(tools, room, chunk_bytes, &next, runtime_dir) {
         if let Ok(mut pending) = pending_spawns().lock() {
             pending.push(next);
         }
@@ -755,7 +1045,10 @@ mod tests {
         // Stale completion touches nothing.
         assert_eq!(submit_task(&mut state, mk(5, LlmBackend::Server)), SubmitDecision::RunNow);
         assert!(complete_task(&mut state, LlmBackend::Server, 999).is_none());
-        assert_eq!(state.running.get(&LlmBackend::Server), Some(&5));
+        assert_eq!(
+            state.running.get(&LlmBackend::Server).map(|t| t.hub_id),
+            Some(5)
+        );
     }
 
     #[test]
@@ -786,5 +1079,184 @@ mod tests {
             tool_names_from_definitions(&defs),
             vec!["read_note".to_string(), "mcp__google__gmail_search".to_string()]
         );
+    }
+
+    // ── M21 queue persistence ────────────────────────────────────
+
+    fn qtmp(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "helix-chat-queue-{tag}-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn qt(id: i64, backend: LlmBackend) -> QueuedTask {
+        QueuedTask {
+            hub_id: id,
+            sender: "cobble-jr".to_string(),
+            backend,
+            task: format!("task {id}"),
+            time_secs: 300,
+            scope: Scope::Read,
+        }
+    }
+
+    #[test]
+    fn queue_save_load_round_trip_restores_order_running_demoted_to_front() {
+        // GIVEN a state with a running task + queued tasks on two backends:
+        let mut state = HandlerState::default();
+        assert_eq!(
+            submit_task(&mut state, qt(1, LlmBackend::Server)),
+            SubmitDecision::RunNow
+        );
+        assert_eq!(
+            submit_task(&mut state, qt(2, LlmBackend::Server)),
+            SubmitDecision::Queued {
+                position: 1,
+                running_id: 1
+            }
+        );
+        assert_eq!(
+            submit_task(&mut state, qt(3, LlmBackend::Server)),
+            SubmitDecision::Queued {
+                position: 2,
+                running_id: 1
+            }
+        );
+        assert_eq!(
+            submit_task(&mut state, qt(4, LlmBackend::Desktop)),
+            SubmitDecision::RunNow
+        );
+
+        // WHEN saved to disk and loaded into a fresh state,
+        // THEN the running tasks are demoted to the FRONT of their backend
+        // queue (they never completed — never silently done), queued
+        // order is preserved, and nothing is marked running:
+        let dir = qtmp("roundtrip");
+        save_queue_to(&dir, &state).unwrap();
+        let (file, kind) = load_queue_from(&dir);
+        assert_eq!(kind, QueueLoad::Loaded);
+        let mut back = HandlerState::default();
+        let (restored, demoted) = merge_restored(&mut back, &file);
+        assert_eq!((restored, demoted), (4, 2));
+        assert!(back.running.is_empty(), "nothing runs after a restart");
+        let server: Vec<i64> = back.queues[&LlmBackend::Server]
+            .iter()
+            .map(|t| t.hub_id)
+            .collect();
+        assert_eq!(
+            server,
+            vec![1, 2, 3],
+            "running task 1 goes first, then FIFO"
+        );
+        let desktop: Vec<i64> = back.queues[&LlmBackend::Desktop]
+            .iter()
+            .map(|t| t.hub_id)
+            .collect();
+        assert_eq!(desktop, vec![4]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn queue_load_missing_and_corrupt_are_fail_soft() {
+        // Missing file: no state, no crash.
+        let dir = qtmp("missing");
+        let (file, kind) = load_queue_from(&dir);
+        assert_eq!(kind, QueueLoad::Missing);
+        let mut back = HandlerState::default();
+        assert_eq!(merge_restored(&mut back, &file), (0, 0));
+        assert!(back.queues.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Corrupt file: reported, not a crash, empty state.
+        let dir = qtmp("corrupt");
+        let path = queue_path(&dir);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "{not json").unwrap();
+        let (file, kind) = load_queue_from(&dir);
+        assert_eq!(kind, QueueLoad::Corrupt);
+        let mut back = HandlerState::default();
+        assert_eq!(merge_restored(&mut back, &file), (0, 0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn queue_merge_dedups_by_hub_id() {
+        // A file that lists the same hub id as both running and queued
+        // must restore it exactly once (never run a task twice).
+        let file = QueueFile {
+            version: QUEUE_FILE_VERSION,
+            state: HandlerState {
+                running: HashMap::from([(LlmBackend::Server, qt(1, LlmBackend::Server))]),
+                queues: HashMap::from([(
+                    LlmBackend::Server,
+                    VecDeque::from([qt(1, LlmBackend::Server), qt(2, LlmBackend::Server)]),
+                )]),
+            },
+        };
+        let mut back = HandlerState::default();
+        let (restored, demoted) = merge_restored(&mut back, &file);
+        assert_eq!((restored, demoted), (2, 1));
+        let server: Vec<i64> = back.queues[&LlmBackend::Server]
+            .iter()
+            .map(|t| t.hub_id)
+            .collect();
+        assert_eq!(server, vec![1, 2]);
+    }
+
+    #[test]
+    fn queue_pop_next_to_start_marks_running_per_idle_backend() {
+        // GIVEN queues on two backends and a third idle:
+        let mut state = HandlerState::default();
+        assert_eq!(
+            submit_task(&mut state, qt(1, LlmBackend::Server)),
+            SubmitDecision::RunNow
+        );
+        assert_eq!(
+            submit_task(&mut state, qt(2, LlmBackend::Server)),
+            SubmitDecision::Queued {
+                position: 1,
+                running_id: 1
+            }
+        );
+        assert_eq!(
+            submit_task(&mut state, qt(3, LlmBackend::Desktop)),
+            SubmitDecision::RunNow
+        );
+        // Simulate a restart: running demoted to the queue front.
+        let file = QueueFile {
+            version: QUEUE_FILE_VERSION,
+            state: HandlerState {
+                running: std::mem::take(&mut state.running),
+                queues: std::mem::take(&mut state.queues),
+            },
+        };
+        let mut back = HandlerState::default();
+        merge_restored(&mut back, &file);
+
+        // WHEN popping the next task per backend,
+        // THEN the front of each non-empty queue starts, the rest wait:
+        let started = pop_next_to_start(&mut back);
+        let ids: Vec<i64> = started.iter().map(|t| t.hub_id).collect();
+        assert_eq!(ids, vec![1, 3], "front of server + desktop start");
+        assert_eq!(
+            back.running.get(&LlmBackend::Server).map(|t| t.hub_id),
+            Some(1)
+        );
+        assert_eq!(
+            back.running.get(&LlmBackend::Desktop).map(|t| t.hub_id),
+            Some(3)
+        );
+        assert!(back.running.get(&LlmBackend::Gemini).is_none());
+        let server: Vec<i64> = back.queues[&LlmBackend::Server]
+            .iter()
+            .map(|t| t.hub_id)
+            .collect();
+        assert_eq!(server, vec![2], "task 2 still queued behind 1");
     }
 }

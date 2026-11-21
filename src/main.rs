@@ -762,6 +762,21 @@ async fn run_helix() {
     // the kill-switch stop file read this global; the CPU handler uses
     // its own runtime_dir, which is the same directory in production).
     crate::self_improve::set_runtime_dir(rt_dir.clone());
+    // Chat sub-agent persistence (M21 + registry): the sub-agent
+    // registry file resolves under the runtime dir too. Loaded once
+    // at startup so the web UI shows past sub-agents after a reboot;
+    // a missing or corrupt file starts empty with a warning, never
+    // a startup failure.
+    crate::agents::subagent_registry::set_runtime_dir(rt_dir.clone());
+    match crate::agents::subagent_registry::load_registry() {
+        (crate::agents::subagent_registry::RegistryLoad::Loaded, n) => {
+            println!("subagent_registry: restored {n} past sub-agents");
+        }
+        (crate::agents::subagent_registry::RegistryLoad::Corrupt, _) => {
+            eprintln!("subagent_registry: persisted registry corrupt, starting empty");
+        }
+        _ => {}
+    }
     // Task 233: initial self-authoring — if agent.md is missing and the
     // operator opted in, Helix drafts its own persona in the background.
     // Fire-and-forget: the draft lands as .pending, never live, and a
