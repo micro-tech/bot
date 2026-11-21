@@ -62,13 +62,29 @@ pub struct CaptureSummary {
     pub out_of_order: usize,
 }
 
+/// Parse only the FIRST JSON value in `text`, ignoring any trailing
+/// document. mcp_wire's `tool_ok_json` emits the same value twice
+/// (structuredContent + a text block with the same JSON), and Helix's
+/// `result_to_string` concatenates both, so an MCP tool output can
+/// carry two JSON documents back-to-back. Strict `from_str` rejects
+/// that ("trailing characters"); a first-value parse takes the leading
+/// document and ignores the rest (task 382).
+fn parse_first_json(text: &str) -> Result<serde_json::Value, serde_json::Error> {
+    let mut values = serde_json::Deserializer::from_str(text).into_iter::<serde_json::Value>();
+    match values.next() {
+        Some(v) => v,
+        // Empty input: no first value at all.
+        None => Err(serde::de::Error::custom("EOF while parsing a value")),
+    }
+}
+
 /// Reduce an `mcp__wire__capture` JSON output to a `CaptureSummary`.
 /// `captured` falls back to the packets array length when the field is
 /// absent. Returns Err when the output is not JSON or carries no
 /// interface and no packets at all.
 pub fn summarize_capture(capture_json: &str) -> Result<CaptureSummary, String> {
-    let v: serde_json::Value = serde_json::from_str(capture_json)
-        .map_err(|e| format!("capture output is not JSON: {e}"))?;
+    let v: serde_json::Value =
+        parse_first_json(capture_json).map_err(|e| format!("capture output is not JSON: {e}"))?;
     let interface = v
         .get("interface")
         .and_then(|i| i.as_str())
@@ -132,7 +148,7 @@ fn is_lan_ipv4(addr: &str) -> bool {
 /// address, preferring one with a LAN-range IPv4. `None` when no
 /// interface qualifies (the caller logs a warning and skips the tick).
 pub fn pick_primary_interface(interfaces_json: &str) -> Option<String> {
-    let v: serde_json::Value = serde_json::from_str(interfaces_json).ok()?;
+    let v: serde_json::Value = parse_first_json(interfaces_json).ok()?;
     let ifaces = v.get("interfaces")?.as_array()?;
     let mut fallback: Option<String> = None;
     for iface in ifaces {
@@ -344,6 +360,34 @@ mod tests {
     }
 
     #[test]
+    fn summarize_capture_ignores_trailing_doubled_json() {
+        // GIVEN the doubled output mcp_wire actually emits: the pretty
+        // structuredContent JSON followed by the identical compact text
+        // block, joined with "\n" by result_to_string (task 382):
+        let single = capture_json(
+            r#"[
+            {"number":1,"info":"443 → 12345 [SYN]"},
+            {"number":2,"info":"443 → 12345 [TCP Retransmission] 443 → 12345 [PSH, ACK]"}
+            ]"#,
+        );
+        let v: serde_json::Value = serde_json::from_str(&single).unwrap();
+        let doubled = format!(
+            "{}\n{}",
+            serde_json::to_string_pretty(&v).unwrap(),
+            serde_json::to_string(&v).unwrap()
+        );
+        // WHEN reduced:
+        let s = summarize_capture(&doubled).expect("doubled capture output");
+        // THEN the first document is used and the trailing copy ignored:
+        assert_eq!(s.interface, "ens18");
+        assert_eq!(s.captured, 3);
+        assert_eq!(s.retransmissions, 1);
+        assert_eq!(s.resets, 0);
+        assert_eq!(s.dup_acks, 0);
+        assert_eq!(s.out_of_order, 0);
+    }
+
+    #[test]
     fn pick_primary_interface_prefers_lan_over_tunnel() {
         // GIVEN lo, a tailscale tunnel (100.x, up) and the LAN (192.168.x, up):
         let json = r#"{"interfaces":[
@@ -374,6 +418,27 @@ mod tests {
         ]}"#;
         assert_eq!(pick_primary_interface(json), None);
         assert_eq!(pick_primary_interface("not json"), None);
+    }
+
+    #[test]
+    fn pick_primary_interface_ignores_trailing_doubled_json() {
+        // GIVEN the doubled output mcp_wire actually emits: the pretty
+        // structuredContent JSON followed by the identical compact text
+        // block, joined with "\n" by result_to_string (task 382):
+        let single = r#"{"interfaces":[
+            {"name":"lo","operstate":"up","addresses":[{"family":"inet","address":"127.0.0.1"}]},
+            {"name":"tailscale0","operstate":"up","addresses":[{"family":"inet","address":"100.84.56.110"}]},
+            {"name":"ens18","operstate":"up","addresses":[{"family":"inet","address":"192.168.1.168"}]}
+        ]}"#;
+        let v: serde_json::Value = serde_json::from_str(single).unwrap();
+        let doubled = format!(
+            "{}\n{}",
+            serde_json::to_string_pretty(&v).unwrap(),
+            serde_json::to_string(&v).unwrap()
+        );
+        // WHEN picking:
+        // THEN the first document is used and ens18 wins:
+        assert_eq!(pick_primary_interface(&doubled).as_deref(), Some("ens18"));
     }
 
     #[test]
