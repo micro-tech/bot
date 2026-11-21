@@ -132,15 +132,123 @@ impl TestRunner for RealRunner {
     }
 }
 
+/// Env vars a model-authored eval cargo run may see (H10).
+/// Everything else — including GEMINI_API_KEY — is dropped by
+/// `env_clear()`. Only vars present in this process's env are
+/// passed through; absent ones are not invented.
+const EVAL_ENV_ALLOWLIST: [&str; 3] = ["PATH", "CARGO_HOME", "RUSTUP_HOME"];
+
+/// Hard timeout for a single evaluator cargo invocation (H10).
+/// A fresh worktree's first build takes minutes, so the cap is
+/// generous — but a hung cargo must not stall the loop forever.
+/// 30 minutes fits inside the default 60-minute cycle budget
+/// (`max_cycle_minutes`), leaving room for the second cargo run.
+/// The timeout kills the direct cargo child only; orphaned
+/// grandchildren are H9's scope (process-group kill).
+const EVAL_CARGO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// Strip an eval command down to the H10 allowlist: clear the
+/// inherited environment, then pass through only PATH/CARGO_HOME/
+/// RUSTUP_HOME when present in this process's env. Call before
+/// spawning any cargo the loop runs for a model-authored proposal.
+fn harden_eval_command(cmd: &mut std::process::Command) {
+    cmd.env_clear();
+    for key in EVAL_ENV_ALLOWLIST {
+        if let Ok(val) = std::env::var(key) {
+            cmd.env(key, val);
+        }
+    }
+}
+
+/// Run a command, capturing stdout/stderr, with a hard timeout (H10).
+/// Spawns with piped output, drains both pipes on reader threads
+/// (so a large output can never deadlock on a full pipe buffer),
+/// polls `try_wait`, and on deadline kills the child, reaps it, and
+/// returns a `TimedOut` error. The child is the direct process
+/// only (see EVAL_CARGO_TIMEOUT note re H9). The reader drains use
+/// a bounded wait so orphaned grandchildren holding the pipes open
+/// cannot hang the caller either.
+fn run_command_with_timeout(
+    mut cmd: std::process::Command,
+    timeout: std::time::Duration,
+) -> std::io::Result<std::process::Output> {
+    use std::io::Read;
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+    let (tx_out, rx_out) = std::sync::mpsc::channel();
+    let (tx_err, rx_err) = std::sync::mpsc::channel();
+    if let Some(mut pipe) = stdout_pipe {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = pipe.read_to_end(&mut buf);
+            let _ = tx_out.send(buf);
+        });
+    } else {
+        let _ = tx_out.send(Vec::new());
+    }
+    if let Some(mut pipe) = stderr_pipe {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = pipe.read_to_end(&mut buf);
+            let _ = tx_err.send(buf);
+        });
+    } else {
+        let _ = tx_err.send(Vec::new());
+    }
+    // Bounded drain: orphaned grandchildren can hold the pipes
+    // open after the child dies; never wait forever for them.
+    let drain = |rx: std::sync::mpsc::Receiver<Vec<u8>>| -> Vec<u8> {
+        rx.recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap_or_default()
+    };
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait()? {
+            Some(status) => {
+                let stdout = drain(rx_out);
+                let stderr = drain(rx_err);
+                return Ok(std::process::Output {
+                    status,
+                    stdout,
+                    stderr,
+                });
+            }
+            None => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    let _ = drain(rx_out);
+                    let _ = drain(rx_err);
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        format!("command timed out after {timeout:?} (killed)"),
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        }
+    }
+}
+
 fn run_cargo_parsed(mut cmd: std::process::Command, label: &str) -> Vec<TestResult> {
-    let out = match cmd.output() {
+    // H10: the eval cargo run gets a clean env and a hard timeout.
+    harden_eval_command(&mut cmd);
+    let out = match run_command_with_timeout(cmd, EVAL_CARGO_TIMEOUT) {
         Ok(o) => o,
         Err(e) => {
+            let detail = if e.kind() == std::io::ErrorKind::TimedOut {
+                format!("cargo timed out after {EVAL_CARGO_TIMEOUT:?} (killed)")
+            } else {
+                format!("cargo spawn failed: {e}")
+            };
             return vec![TestResult {
                 name: label.to_string(),
                 passed: false,
-                detail: format!("cargo spawn failed: {e}"),
-            }]
+                detail,
+            }];
         }
     };
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -231,21 +339,33 @@ pub fn slugify_signature(signature: &str) -> String {
     }
 }
 
+/// Split a diff path into segments on both `/` and `\` (M27).
+/// On Windows `\` is a separator, so a segment check that only
+/// splits on `/` misses `..\secret` and `.git\config`. On Linux
+/// `\` is a literal filename character, so treating it as a
+/// separator here is fail-closed: a file literally named `..\x`
+/// is rejected, and no legitimate proposal names one.
+pub(crate) fn path_segments(path: &str) -> impl Iterator<Item = &str> {
+    path.split(|c| c == '/' || c == '\\')
+}
+
 /// Validate a diff path: relative, no `..` segments, no absolute path,
 /// and never inside a `.git` directory (a diff writing into the
 /// worktree's `.git` could corrupt or replace the repository itself).
+/// Segments split on both `/` and `\` (M27), so the Windows
+/// spellings `..\secret` and `.git\config` are rejected too.
 /// Returns the resolved path under the worktree root.
 fn resolve_diff_path(worktree: &Path, path: &str) -> Result<PathBuf, String> {
     if path.is_empty() || Path::new(path).is_absolute() {
         return Err(format!("rejected diff path: {path}"));
     }
-    if path.split('/').any(|seg| seg == "..") {
+    if path_segments(path).any(|seg| seg == "..") {
         return Err(format!("rejected diff path escaping worktree: {path}"));
     }
     // Task 331 (C2): a diff must never touch `.git` — at the root
     // (`.git/config`) or nested (`sub/.git/config`). No legitimate
     // source file lives inside a `.git` directory.
-    if path.split('/').any(|seg| seg == ".git") {
+    if path_segments(path).any(|seg| seg == ".git") {
         return Err(format!("rejected diff path inside .git: {path}"));
     }
     Ok(worktree.join(path))
@@ -679,6 +799,143 @@ mod tests {
             resolve_diff_path(wt, "src/a.rs").unwrap(),
             wt.join("src/a.rs")
         );
+    }
+
+    #[test]
+    fn harden_eval_command_keeps_only_allowlisted_vars() {
+        // H10: after hardening, the only explicitly-set env vars
+        // are the allowlisted ones — a secret set on the command
+        // before hardening is gone (env_clear dropped it).
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.env("GEMINI_API_KEY", "fake-secret-for-test");
+        cmd.env("SOME_RANDOM_VAR", "x");
+        harden_eval_command(&mut cmd);
+        let keys: Vec<String> = cmd
+            .get_envs()
+            .map(|(k, _)| k.to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            !keys.iter().any(|k| k == "GEMINI_API_KEY"),
+            "hardened command must not carry GEMINI_API_KEY, got {keys:?}"
+        );
+        assert!(
+            !keys.iter().any(|k| k == "SOME_RANDOM_VAR"),
+            "hardened command must not carry unrelated vars, got {keys:?}"
+        );
+        for key in &keys {
+            assert!(
+                EVAL_ENV_ALLOWLIST.contains(&key.as_str()),
+                "hardened command carries non-allowlisted var {key}"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn eval_cargo_env_is_allowlisted() {
+        // H10 (behavioral): a hardened command run through the
+        // eval runner sees ONLY the allowlisted env — a fake
+        // secret set on the command never reaches the child.
+        let mut cmd = std::process::Command::new("env");
+        cmd.env("GEMINI_API_KEY", "fake-secret-for-test");
+        harden_eval_command(&mut cmd);
+        let out = run_command_with_timeout(cmd, std::time::Duration::from_secs(10))
+            .expect("env must run");
+        assert!(out.status.success());
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            !text.contains("fake-secret-for-test"),
+            "child env must not contain the fake secret:\n{text}"
+        );
+        assert!(
+            !text.contains("GEMINI_API_KEY"),
+            "child env must not contain GEMINI_API_KEY:\n{text}"
+        );
+        let mut saw_path = false;
+        for line in text.lines() {
+            let key = line.split('=').next().unwrap_or("");
+            assert!(
+                EVAL_ENV_ALLOWLIST.contains(&key),
+                "child env carries non-allowlisted var {key}:\n{text}"
+            );
+            if key == "PATH" {
+                saw_path = true;
+            }
+        }
+        assert!(saw_path, "child env must carry PATH:\n{text}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn eval_cargo_timeout_kills_hung_command() {
+        // H10: a command that never exits is killed at the
+        // deadline — the runner returns a timeout error promptly
+        // instead of hanging with the child.
+        let cmd = std::process::Command::new("sleep");
+        let mut cmd = cmd;
+        cmd.arg("30");
+        let start = std::time::Instant::now();
+        let err = run_command_with_timeout(cmd, std::time::Duration::from_secs(1))
+            .expect_err("sleep 30 with a 1s timeout must time out");
+        assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "timeout must return promptly, took {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn eval_cargo_fast_command_returns_output() {
+        // H10: the timeout runner's happy path — a fast command
+        // returns its captured output unchanged.
+        let mut cmd = std::process::Command::new("echo");
+        cmd.arg("hello");
+        let out = run_command_with_timeout(cmd, std::time::Duration::from_secs(10))
+            .expect("echo must run");
+        assert!(out.status.success());
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "hello");
+    }
+
+    #[test]
+    fn diff_path_adversarial_spellings() {
+        // M27: adversarial table for resolve_diff_path (C2). The
+        // backslash spellings are the Windows bypass: on Windows
+        // `\` is a separator, so `..\secret` and `.git\config`
+        // escape / enter .git unless the check splits on `\` too.
+        // A redundant separator or a dot segment is not a bypass
+        // and stays allowed; a lexical `..` that resolves inside
+        // the tree is still rejected, fail-closed.
+        let wt = Path::new("/tmp/helix-eval-wt");
+        let rejected = [
+            "..\\secret",
+            "src\\..\\..\\secret",
+            ".git\\config",
+            "sub\\.git\\hooks\\pre-commit",
+            "src/../src/security.rs",
+            "..",
+            "../secret",
+        ];
+        for path in rejected {
+            assert!(
+                resolve_diff_path(wt, path).is_err(),
+                "adversarial path {path} must be rejected"
+            );
+        }
+        let allowed = [
+            "src\\a.rs",
+            "./src/a.rs",
+            "src//a.rs",
+            "src/a.rs",
+            ".gitignore",
+        ];
+        for path in allowed {
+            assert!(
+                resolve_diff_path(wt, path).is_ok(),
+                "benign path {path} must be allowed"
+            );
+        }
     }
 
     #[test]

@@ -29,6 +29,19 @@
 //! - `src/cron/registry.rs` and `src/cpu/mod.rs` routine dispatch —
 //!   exact path match (the loop's own handler lives in `cpu/mod.rs`;
 //!   loop self-modification MUST be human-reviewed).
+//! - Loop gate (H11): `src/self_improve/` (the loop's own
+//!   evaluator/audit), `tests/` (the evals it is graded on),
+//!   `agents/`, `build.rs`, `Cargo.toml`, `.cargo/`, `.github/` —
+//!   any touch needs human review, so the loop cannot edit its own
+//!   gate or the tests that grade it.
+//!
+//! Paths are normalised before matching (H11): both `/` and `\`
+//! separators, `.`/empty segments dropped, `..` resolved
+//! lexically, lowercased on Windows only. `./src/security.rs`,
+//! `src//cpu/mod.rs`, and `src\tools\shell_tool.rs` all match the
+//! exact list — the raw spelling can no longer bypass the check.
+//! A path that still escapes the repo after normalisation
+//! (leading `..`) is flagged as an escaping path, fail-closed.
 //!
 //! The evaluator (287) does NOT call this; the Phase 3 gate (290)
 //! composes eval + audit, and audit runs first (a dirty diff never
@@ -178,8 +191,44 @@ fn has_credential_identifier(content: &str) -> bool {
         .any(|word| WORDS.contains(&word))
 }
 
+/// Normalise a diff path for the sensitive-path check (H11).
+/// Splits on both `/` and `\` (Windows separators), drops `.` and
+/// empty segments, and resolves `..` lexically (popping the previous
+/// segment). Lowercases on Windows only — paths are case-sensitive
+/// on Linux, so lowercasing there would over-match. A leading `..`
+/// that would escape the repo is kept, so the path still reads as
+/// escaping (fail-closed: the escaping rule below flags it).
+/// `./src/security.rs`, `src//cpu/mod.rs`,
+/// `src\tools\shell_tool.rs`, and `src/../src/security.rs` all
+/// normalise to their canonical form, so the exact-path check can
+/// no longer be bypassed by spelling.
+fn normalize_audit_path(path: &str) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    for seg in path.split(|c| c == '/' || c == '\\') {
+        match seg {
+            "" | "." => {} // collapse empty / dot segments
+            ".." => {
+                if matches!(out.last(), Some(s) if *s != "..") {
+                    out.pop();
+                } else {
+                    out.push("..");
+                }
+            }
+            s => out.push(s),
+        }
+    }
+    let joined = out.join("/");
+    if cfg!(windows) {
+        joined.to_lowercase()
+    } else {
+        joined
+    }
+}
+
 /// Sensitive-path reason for one diff file, or `None` when clean.
-/// Exact D4 list; see module docs for the matching rules.
+/// The path is normalised first (H11), so the D4 exact list and
+/// the loop-gate prefixes cannot be bypassed by spelling; see
+/// module docs for the matching rules.
 pub fn sensitive_path_hit(path: &str, content: &str) -> Option<String> {
     const EXACT_PATHS: [&str; 6] = [
         "src/security.rs",
@@ -189,20 +238,42 @@ pub fn sensitive_path_hit(path: &str, content: &str) -> Option<String> {
         "src/cron/registry.rs",
         "src/cpu/mod.rs",
     ];
-    if EXACT_PATHS.contains(&path) {
+    // H11: match on the normalised path — the raw spelling is only
+    // ever used in the reason string (so John sees what was tried).
+    let normalized = normalize_audit_path(path);
+    // A path that still escapes the repo after normalisation is
+    // fail-closed: it never reaches the evaluator's path check clean.
+    if normalized == ".." || normalized.starts_with("../") {
+        return Some(format!("sensitive-path:escaping-path:{path}"));
+    }
+    if EXACT_PATHS.contains(&normalized.as_str()) {
         return Some(format!("sensitive-path:{path}"));
     }
-    if path == "src/io/web_server/mod.rs" {
+    if normalized == "src/io/web_server/mod.rs" {
         return Some("sensitive-path:web-auth-surface".to_string());
     }
-    if path.starts_with("src/support_watch/")
-        && (path.contains("draft")
-            || path.contains("send")
+    // H11: the loop's own gate and the evals it is graded on.
+    // Any touch needs human review — the loop must not be able to
+    // edit its own evaluator/audit or the tests that grade it, so
+    // self-modification always routes to John (D4 philosophy).
+    if normalized == "build.rs"
+        || normalized == "Cargo.toml"
+        || normalized.starts_with("src/self_improve/")
+        || normalized.starts_with("tests/")
+        || normalized.starts_with("agents/")
+        || normalized.starts_with(".cargo/")
+        || normalized.starts_with(".github/")
+    {
+        return Some(format!("sensitive-path:loop-gate:{path}"));
+    }
+    if normalized.starts_with("src/support_watch/")
+        && (normalized.contains("draft")
+            || normalized.contains("send")
             || content.contains("auto_send"))
     {
         return Some(format!("sensitive-path:support-auto-send:{path}"));
     }
-    let lower_path = path.to_lowercase();
+    let lower_path = normalized.to_lowercase();
     if lower_path.contains("token") || lower_path.contains("secret") || lower_path.contains("auth") {
         return Some(format!("sensitive-path:credential-path:{path}"));
     }
@@ -327,6 +398,111 @@ mod tests {
                 "diff {} must list a sensitive reason",
                 file.path
             );
+        }
+    }
+
+    #[test]
+    fn audit_normalisation_catches_bypass_spellings() {
+        // H11 / M27: the review's bypass spellings must all flag
+        // needs-human-review — each is the same sensitive file under
+        // a different spelling (leading ./, doubled //, backslash
+        // separators, lexical .., dot segments, trailing slash).
+        let cases: Vec<DiffFile> = vec![
+            diff("./src/security.rs", "pub fn check() {}\n"),
+            diff("src//cpu/mod.rs", "pub fn tick() {}\n"),
+            diff("src\\tools\\shell_tool.rs", "pub fn run() {}\n"),
+            diff("src/../src/security.rs", "pub fn check() {}\n"),
+            diff("src/./security.rs", "pub fn check() {}\n"),
+            diff(".\\src\\security.rs", "pub fn check() {}\n"),
+            diff("src/security.rs/", "pub fn check() {}\n"),
+        ];
+        for file in &cases {
+            let report = audit_diff(std::slice::from_ref(file));
+            assert_eq!(
+                audit_outcome(&report),
+                AuditOutcome::NeedsHumanReview,
+                "bypass spelling {} must flag needs-human-review",
+                file.path
+            );
+            assert!(
+                !report.sensitive_paths.is_empty(),
+                "bypass spelling {} must list a sensitive reason",
+                file.path
+            );
+        }
+    }
+
+    #[test]
+    fn loop_gate_paths_are_flagged() {
+        // H11: the loop's own gate and the evals it is graded on.
+        // Any touch needs human review — the loop must not be able
+        // to edit its own evaluator/audit or the tests that grade it.
+        let cases: Vec<DiffFile> = vec![
+            diff("src/self_improve/evaluator.rs", "pub fn x() {}\n"),
+            diff("src/self_improve/audit.rs", "pub fn x() {}\n"),
+            diff("tests/evals.rs", "pub fn x() {}\n"),
+            diff("agents/foo.md", "note\n"),
+            diff("build.rs", "fn main() {}\n"),
+            diff("Cargo.toml", "[package]\n"),
+            diff(".cargo/config.toml", "[build]\n"),
+            diff(".github/workflows/ci.yml", "jobs:\n"),
+        ];
+        for file in &cases {
+            let report = audit_diff(std::slice::from_ref(file));
+            assert_eq!(
+                audit_outcome(&report),
+                AuditOutcome::NeedsHumanReview,
+                "loop-gate path {} must flag needs-human-review",
+                file.path
+            );
+        }
+    }
+
+    #[test]
+    fn loop_gate_prefix_match_is_exact() {
+        // H11: the protected-prefix match must not over-reach —
+        // similarly-named but different paths stay clean.
+        let cases: Vec<DiffFile> = vec![
+            diff("src/self_improve_notes.rs", "pub fn x() {}\n"),
+            diff("tests2/foo.rs", "pub fn x() {}\n"),
+            diff("Cargo.toml.bak", "[package]\n"),
+            diff("build.rs.bak", "fn main() {}\n"),
+        ];
+        for file in &cases {
+            let report = audit_diff(std::slice::from_ref(file));
+            assert!(
+                report.is_clean(),
+                "lookalike path {} must stay clean",
+                file.path
+            );
+        }
+    }
+
+    #[test]
+    fn normalize_audit_path_cases() {
+        // H11: the normalisation itself — separators, dot/empty
+        // segments, lexical .., and (Windows only) lowercasing.
+        assert_eq!(normalize_audit_path("./src/security.rs"), "src/security.rs");
+        assert_eq!(normalize_audit_path("src//cpu/mod.rs"), "src/cpu/mod.rs");
+        assert_eq!(
+            normalize_audit_path("src\\tools\\shell_tool.rs"),
+            "src/tools/shell_tool.rs"
+        );
+        assert_eq!(
+            normalize_audit_path("src/../src/security.rs"),
+            "src/security.rs"
+        );
+        assert_eq!(normalize_audit_path("src/security.rs/"), "src/security.rs");
+        assert_eq!(normalize_audit_path("src/a.rs"), "src/a.rs");
+        // A leading .. that would escape is kept (fail-closed).
+        assert_eq!(
+            normalize_audit_path("../src/security.rs"),
+            "../src/security.rs"
+        );
+        if cfg!(windows) {
+            assert_eq!(normalize_audit_path("SRC/SECURITY.RS"), "src/security.rs");
+        } else {
+            assert_eq!(normalize_audit_path("SRC/SECURITY.RS"), "SRC/SECURITY.RS");
         }
     }
 

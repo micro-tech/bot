@@ -38,7 +38,7 @@
 //! merge tap. Drafting needs Phase 2 to evaluate, Phase 3 to deliver,
 //! and the loop actually running (dep 363).
 
-use crate::self_improve::evaluator::DiffFile;
+use crate::self_improve::evaluator::{DiffFile, path_segments};
 use crate::self_improve::worker::{ProposalRecord, upsert_proposal};
 use std::path::{Path, PathBuf};
 
@@ -106,15 +106,16 @@ pub fn draft_prompt(proposal: &ProposalRecord) -> String {
 
 /// Validate a draft path with the same rules as the evaluator's
 /// `resolve_diff_path`: relative, no `..` segments, no absolute path,
-/// never inside a `.git` directory.
+/// never inside a `.git` directory. Segments split on both `/` and
+/// `\` (M27), so the Windows spellings are rejected too.
 pub fn validate_draft_path(path: &str) -> Result<(), String> {
     if path.is_empty() || Path::new(path).is_absolute() {
         return Err(format!("rejected draft path: {path}"));
     }
-    if path.split('/').any(|seg| seg == "..") {
+    if path_segments(path).any(|seg| seg == "..") {
         return Err(format!("rejected draft path escaping repo: {path}"));
     }
-    if path.split('/').any(|seg| seg == ".git") {
+    if path_segments(path).any(|seg| seg == ".git") {
         return Err(format!("rejected draft path inside .git: {path}"));
     }
     Ok(())
@@ -304,6 +305,12 @@ mod tests {
         assert!(parse_draft_response("--- file: /tmp/evil.txt ---\nx\n").is_err());
         assert!(parse_draft_response("--- file: .git/config ---\nx\n").is_err());
         assert!(parse_draft_response("--- file: sub/.git/hooks/x ---\nx\n").is_err());
+        // M27: backslash spellings are the Windows bypass — `\` is
+        // a separator there, so `..\evil` and `.git\config` must
+        // be rejected too.
+        assert!(parse_draft_response("--- file: ..\\evil.txt ---\nx\n").is_err());
+        assert!(parse_draft_response("--- file: .git\\config ---\nx\n").is_err());
+        assert!(parse_draft_response("--- file: sub\\.git\\hooks\\x ---\nx\n").is_err());
         // A normal file and .gitignore are fine.
         assert!(parse_draft_response("--- file: src/a.rs ---\nx\n").is_ok());
         assert!(parse_draft_response("--- file: .gitignore ---\nx\n").is_ok());
