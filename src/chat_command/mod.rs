@@ -705,6 +705,11 @@ pub fn tick_with(runtime_dir: &Path, ssh_bin: &str) {
             return;
         }
     };
+    // M21: restore the persisted queue once per process and resume
+    // it (queued tasks survive a restart). Runs after tools resolve
+    // so resume announcements can be posted; a tick that runs before
+    // tools are available never reaches here, so a later tick retries.
+    task_handler::restore_queue_once(runtime_dir, &tools, &cfg);
     // Cursor: fresh/corrupt/room-changed states seed to the room's
     // latest id (never replay). A failed seed ends the tick; the
     // next minute retries.
@@ -788,7 +793,7 @@ pub fn tick_with(runtime_dir: &Path, ssh_bin: &str) {
     }
     // Retry any LLM spawns deferred for lack of a runtime (normally
     // a no-op: the submit already spawned).
-    task_handler::drain_pending(&tools, &cfg);
+    task_handler::drain_pending(&tools, &cfg, runtime_dir);
 }
 
 #[cfg(test)]
@@ -1406,6 +1411,67 @@ mod tests {
         assert!(bodies[1].contains("server is busy running task #1"), "{}", bodies[1]);
         assert!(bodies[1].contains("position 1"), "{}", bodies[1]);
         task_handler::reset_for_tests();
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tick_restores_persisted_queue_and_resumes_front_task() {
+        // M21: a queue file left by a previous process (running task 6
+        // + queued task 7) must be restored by the tick and the front
+        // task resumed — not dropped, not re-run without a report.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        task_handler::reset_for_tests();
+        task_handler::reset_restore_for_tests();
+        let dir = tmpdir("json-llm-restore");
+        write_config(&dir, BASE_CONFIG);
+        // Seed a queue file: task 6 was running, task 7 queued behind it.
+        let mut state = task_handler::HandlerState::default();
+        let mk = |id: i64| task_handler::QueuedTask {
+            hub_id: id,
+            sender: "cobble-jr".to_string(),
+            backend: super::envelope::LlmBackend::Server,
+            task: format!("task {id}"),
+            time_secs: 300,
+            scope: super::envelope::Scope::Read,
+        };
+        assert_eq!(
+            task_handler::submit_task(&mut state, mk(6)),
+            task_handler::SubmitDecision::RunNow
+        );
+        assert_eq!(
+            task_handler::submit_task(&mut state, mk(7)),
+            task_handler::SubmitDecision::Queued { position: 1, running_id: 6 }
+        );
+        task_handler::save_queue_to(&dir, &state).unwrap();
+        task_handler::reset_for_tests();
+        // No new messages: the tick's only work is the restore.
+        install_stubs(r#"[]"#, r#"[{"name": "command", "last_id": 0}]"#);
+        tick(&dir);
+        let bodies = send_bodies();
+        assert_eq!(bodies.len(), 1, "{bodies:?}");
+        assert!(
+            bodies[0].contains("task #6 resumed after restart on server"),
+            "{}",
+            bodies[0]
+        );
+        // The re-saved queue shows 6 running and 7 still queued behind it.
+        let (file, kind) = task_handler::load_queue_from(&dir);
+        assert_eq!(kind, task_handler::QueueLoad::Loaded);
+        assert_eq!(
+            file.state
+                .running
+                .get(&super::envelope::LlmBackend::Server)
+                .map(|t| t.hub_id),
+            Some(6)
+        );
+        let queued: Vec<i64> = file.state.queues[&super::envelope::LlmBackend::Server]
+            .iter()
+            .map(|t| t.hub_id)
+            .collect();
+        assert_eq!(queued, vec![7]);
+        task_handler::reset_for_tests();
+        task_handler::reset_restore_for_tests();
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }

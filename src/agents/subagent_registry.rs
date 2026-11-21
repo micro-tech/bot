@@ -6,12 +6,16 @@
 //! per-backend activity, and receives `subagent_event` bus messages on every
 //! spawn/finish (same publish contract as the task-219 `tool_call` event).
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock, RwLock};
 
-/// Lifecycle states for one sub-agent entry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Lifecycle states for one sub-agent entry. Serialized snake_case
+/// (matching `as_str()`) so the persisted file reads like the UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SubagentStatus {
     Working,
     Done,
@@ -30,8 +34,10 @@ impl SubagentStatus {
     }
 }
 
-/// One row in the UI's sub-agent list.
-#[derive(Debug, Clone)]
+/// One row in the UI's sub-agent list. Serializable: the registry
+/// file stores these verbatim so the UI shows past sub-agents after
+/// a restart.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubagentRecord {
     pub id: String,
     pub backend: String,
@@ -70,6 +76,115 @@ const MAX_FINISHED_KEPT: usize = 10;
 fn registry() -> &'static Arc<RwLock<HashMap<String, SubagentRecord>>> {
     static REGISTRY: OnceLock<Arc<RwLock<HashMap<String, SubagentRecord>>>> = OnceLock::new();
     REGISTRY.get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
+}
+
+// ── Persistence (restart survival) ──────────────────────────────────
+// The registry file lives at `<runtime_dir>/subagent_registry.json`
+// (top level of the runtime dir). Saved on every register/finish,
+// loaded once at startup by main.rs. Best-effort throughout: a
+// missing or corrupt file starts empty with a warning, and a failed
+// save never breaks the spawn/finish path. The runtime dir follows
+// the established `set_runtime_dir` pattern (self_improve, persona,
+// support_watch): a process-global OnceLock set at startup, with a
+// Mutex test override so unit tests can point it at a tmpdir.
+
+/// How a registry load went. Missing and corrupt are distinguished
+/// for logging, but the caller treats both the same way: start empty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistryLoad {
+    /// No registry file yet (first run).
+    Missing,
+    /// File exists but does not parse.
+    Corrupt,
+    /// Parsed registry.
+    Loaded,
+}
+
+static RUNTIME_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Set at startup from main.rs (next to `self_improve::set_runtime_dir`).
+pub fn set_runtime_dir(dir: PathBuf) {
+    let _ = RUNTIME_DIR.set(dir);
+}
+
+static TEST_RUNTIME_DIR: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+/// Test override for the runtime dir (unit tests point it at a
+/// tmpdir). Pass `None` to clear it. Tests must hold the registry
+/// `tlock` while the override is set, like the other registry tests.
+#[cfg(test)]
+pub fn set_runtime_dir_for_tests(dir: Option<PathBuf>) {
+    *TEST_RUNTIME_DIR.lock().unwrap() = dir;
+}
+
+fn runtime_dir() -> Option<PathBuf> {
+    if let Some(d) = TEST_RUNTIME_DIR.lock().unwrap().clone() {
+        return Some(d);
+    }
+    RUNTIME_DIR.get().cloned()
+}
+
+/// Path of the persisted registry file, if a runtime dir is known.
+pub fn registry_path() -> Option<PathBuf> {
+    runtime_dir().map(|d| d.join("subagent_registry.json"))
+}
+
+/// Save the current snapshot to disk. Best-effort: no runtime dir
+/// set → silent no-op; a write failure is logged and swallowed, so
+/// a bad disk never breaks a spawn or a finish.
+pub fn save_registry() {
+    let Some(path) = registry_path() else {
+        return;
+    };
+    let records = snapshot();
+    match serde_json::to_string_pretty(&records) {
+        Ok(s) => {
+            if let Err(e) = std::fs::write(&path, s) {
+                log::warn!("subagent_registry: failed to persist registry: {e}");
+            }
+        }
+        Err(e) => log::warn!("subagent_registry: failed to serialize registry: {e}"),
+    }
+}
+
+/// Load the persisted registry into the process-global map (startup
+/// only). Records that were Working when Helix died are marked
+/// Failed with `finished_at_ms` set to now: their process is gone,
+/// so the work did not complete — showing them as Working forever
+/// would be a lie, and silently dropping them would hide the
+/// interruption. Finished records keep their status. Pruned on load
+/// with the same cap as the in-memory prune, so a stale file cannot
+/// grow the list without bound. No bus events are published on load
+/// (these are restored history, not new spawns). Returns (kind,
+/// records loaded).
+pub fn load_registry() -> (RegistryLoad, usize) {
+    let Some(path) = registry_path() else {
+        return (RegistryLoad::Missing, 0);
+    };
+    let text = match std::fs::read_to_string(&path) {
+        Err(_) => return (RegistryLoad::Missing, 0),
+        Ok(t) => t,
+    };
+    let mut records: Vec<SubagentRecord> = match serde_json::from_str(&text) {
+        Ok(r) => r,
+        Err(_) => return (RegistryLoad::Corrupt, 0),
+    };
+    let now = crate::utils::now_ms();
+    let loaded = records.len();
+    for r in records.iter_mut() {
+        if r.status == SubagentStatus::Working {
+            r.status = SubagentStatus::Failed;
+            r.finished_at_ms = Some(now);
+        }
+    }
+    {
+        let mut map = registry().write().unwrap();
+        for r in records {
+            map.entry(r.id.clone()).or_insert(r);
+        }
+        prune_locked(&mut map);
+    }
+    (RegistryLoad::Loaded, loaded)
 }
 
 // ── Change listener ───────────────────────────────────────────────────────────
@@ -156,6 +271,9 @@ pub fn register(record: SubagentRecord) {
     // deadlock the moment the web server is listening.
     publish_event("spawned", &payload);
     notify_status_changed();
+    // Persist (best-effort, after the lock is released): a restart
+    // must not lose the spawn.
+    save_registry();
 }
 
 /// Mark a sub-agent finished. Unknown ids are ignored (defensive: a finish
@@ -178,6 +296,8 @@ pub fn finish(id: &str, status: SubagentStatus) {
         publish_event("finished", &p);
         notify_status_changed();
     }
+    // Persist (best-effort): a restart must not lose the finish.
+    save_registry();
 }
 
 /// Current entries, oldest first. The UI re-renders from this wholesale —
@@ -329,6 +449,148 @@ mod tests {
         assert_eq!(j["status"], "working");
         assert_eq!(j["task_summary"].as_str().unwrap().chars().count(), 120);
         assert!(j["finished_at_ms"].is_null());
+        reset_for_tests();
+    }
+
+    // ── Registry persistence (restart survival) ──────────────────
+
+    fn rtmp(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "helix-subagent-registry-{tag}-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn save_load_round_trip_restores_records_working_marked_failed() {
+        let _t = tlock();
+        // GIVEN two sub-agents (one finished Done, one still Working):
+        reset_for_tests();
+        let dir = rtmp("roundtrip");
+        set_runtime_dir_for_tests(Some(dir.clone()));
+        register(rec("test-reg-persist-a"));
+        register(rec("test-reg-persist-b"));
+        finish("test-reg-persist-b", SubagentStatus::Done);
+        // The register/finish calls auto-save to the test dir; an
+        // explicit save covers the same path once more.
+        save_registry();
+
+        // WHEN the process "restarts" (map cleared) and loads,
+        // THEN both records come back — the finished one still Done,
+        // and the one that was Working is Failed: its process died,
+        // so the work did not complete (never shown as Working
+        // forever, never silently done).
+        reset_for_tests();
+        let (kind, loaded) = load_registry();
+        assert_eq!(kind, RegistryLoad::Loaded);
+        assert!(loaded >= 2, "loaded={loaded}");
+        let mine: Vec<_> = snapshot()
+            .into_iter()
+            .filter(|r| r.id.starts_with("test-reg-persist-"))
+            .collect();
+        assert_eq!(mine.len(), 2, "both records restored");
+        let a = mine.iter().find(|r| r.id == "test-reg-persist-a").unwrap();
+        assert_eq!(a.status, SubagentStatus::Failed, "interrupted by restart");
+        assert!(a.finished_at_ms.is_some());
+        let b = mine.iter().find(|r| r.id == "test-reg-persist-b").unwrap();
+        assert_eq!(b.status, SubagentStatus::Done);
+        set_runtime_dir_for_tests(None);
+        reset_for_tests();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_missing_and_corrupt_are_fail_soft() {
+        let _t = tlock();
+        // Missing file: no records, no crash.
+        reset_for_tests();
+        let dir = rtmp("missing");
+        set_runtime_dir_for_tests(Some(dir.clone()));
+        let (kind, loaded) = load_registry();
+        assert_eq!(kind, RegistryLoad::Missing);
+        assert_eq!(loaded, 0);
+        assert!(snapshot().is_empty());
+        set_runtime_dir_for_tests(None);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Corrupt file: reported, not a crash, empty registry.
+        reset_for_tests();
+        let dir = rtmp("corrupt");
+        set_runtime_dir_for_tests(Some(dir.clone()));
+        let path = registry_path().unwrap();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "{not json").unwrap();
+        let (kind, loaded) = load_registry();
+        assert_eq!(kind, RegistryLoad::Corrupt);
+        assert_eq!(loaded, 0);
+        assert!(snapshot().is_empty());
+        set_runtime_dir_for_tests(None);
+        reset_for_tests();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_prunes_to_last_10_finished() {
+        let _t = tlock();
+        // GIVEN a file with 14 finished records (written directly,
+        // so no auto-save from other tests can interfere):
+        reset_for_tests();
+        let dir = rtmp("prune");
+        set_runtime_dir_for_tests(Some(dir.clone()));
+        let mut records: Vec<SubagentRecord> = Vec::new();
+        for i in 0..14 {
+            let mut r = rec(&format!("test-reg-persist-p{i}"));
+            r.status = SubagentStatus::Done;
+            r.finished_at_ms = Some(1000 + i as u64);
+            records.push(r);
+        }
+        let path = registry_path().unwrap();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, serde_json::to_string_pretty(&records).unwrap()).unwrap();
+
+        // WHEN loaded, THEN only the 10 newest finished survive
+        // (same cap as the in-memory prune):
+        let (kind, loaded) = load_registry();
+        assert_eq!(kind, RegistryLoad::Loaded);
+        assert_eq!(loaded, 14, "all 14 parsed");
+        let mine: Vec<_> = snapshot()
+            .into_iter()
+            .filter(|r| r.id.starts_with("test-reg-persist-p"))
+            .collect();
+        assert_eq!(mine.len(), 10, "only the last 10 finished are kept");
+        let ids: Vec<&str> = mine.iter().map(|r| r.id.as_str()).collect();
+        for old in [
+            "test-reg-persist-p0",
+            "test-reg-persist-p1",
+            "test-reg-persist-p2",
+            "test-reg-persist-p3",
+        ] {
+            assert!(!ids.contains(&old), "{old} should have been pruned");
+        }
+        assert!(ids.contains(&"test-reg-persist-p13"), "newest must survive");
+        set_runtime_dir_for_tests(None);
+        reset_for_tests();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_is_noop_without_runtime_dir() {
+        let _t = tlock();
+        // With no runtime dir set (the default in unit tests), the
+        // registry still works and the save is a silent no-op.
+        reset_for_tests();
+        set_runtime_dir_for_tests(None);
+        register(rec("test-reg-persist-noop"));
+        finish("test-reg-persist-noop", SubagentStatus::Done);
+        save_registry(); // must not panic or fail
+        assert_eq!(registry_path(), None);
+        let snap = snapshot();
+        assert!(snap.iter().any(|r| r.id == "test-reg-persist-noop"));
         reset_for_tests();
     }
 }

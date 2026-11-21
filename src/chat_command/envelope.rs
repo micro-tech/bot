@@ -60,6 +60,7 @@
 //!   this cap — the existing command path has its own output cap.
 
 use super::Target;
+use serde::{Deserialize, Serialize};
 
 /// Hub message cap: structured envelopes over this many bytes are
 /// rejected (spec §2). Checked only after `how` is confirmed valid,
@@ -86,7 +87,8 @@ pub const KNOWN_WRITE_DOMAINS: &[&str] = &["notes", "gmail"];
 /// identical either way — rejecting the spec's own example would be
 /// worse than normalizing it. `display()` normalizes to the §3 table
 /// form (`read` / `write:<domain>`) for reports.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Scope {
     /// Report only — no write tools of any kind.
     Read,
@@ -151,7 +153,8 @@ pub fn parse_scope(s: &str) -> Result<Scope, String> {
 /// `spawn_backend` is the name `dispatch_spawn` understands (the
 /// existing task-217.1 mapping: server → the LAN ollama box,
 /// desktop → the local ollama box, gemini → Gemini).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LlmBackend {
     Server,
     Desktop,
