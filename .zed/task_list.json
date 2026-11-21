@@ -5682,6 +5682,42 @@
           ]
         }
       ]
+    },
+    {
+      "id": 382,
+      "title": "Task 376 follow-up: capture logger fails on doubled JSON from wire tools (no usable network interface found)",
+      "description": "Every hourly network-capture-log tick since 2026-11-21 02:13 fails with 'no usable network interface found (need one up, non-loopback, with IPv4)' and logs/network_capture.log is never created. Root cause (verified in source + live): mcp_wire tool_ok_json returns BOTH structuredContent AND a text block with the same JSON; Helix result_to_string concatenates both, so the routine receives two JSON documents back-to-back; pick_primary_interface / summarize_capture use strict serde_json::from_str, which fails on the second document (trailing characters) and returns None. The interfaces data itself is fine (ens18 up, 192.168.1.168, confirmed live via the hub). The 5 nightly-review error lines (2026-11-21 06:30) are all this one failure at 02:13/03:13/04:14/05:15/06:15. Fix: parse just the first JSON value out of the tool output in network_capture.rs (or dedupe in result_to_string). Also note (separate, do NOT fix here): the self-improve fixer reverted twice because its cargo test --lib run times out after 60s while the full suite takes minutes — the fixer can never validate a fix needing the full lib suite; file that as its own task.",
+      "status": "done",
+      "dependencies": [
+        376
+      ],
+      "priority": "high",
+      "details": "382.1 SPEC/REPRO: seam is pick_primary_interface (src/network_capture.rs:134, serde_json::from_str at :135) + summarize_capture (:69, from_str at :70) + run_capture_cycle (:250, calls pick_primary_interface at :261). Reproduce with the doubled output: structuredContent pretty-printed JSON followed by the same JSON as a text block (this is what mcp_wire tool_ok_json at ~/workspace/mcp-wire/src/lib.rs:129-132 emits, and what Helix src/mcp_client/manager.rs result_to_string at :177-202 concatenates). Existing tests use a single clean JSON document, which is why they pass. 382.2 IMPLEMENT: parse only the first JSON value from the tool output (e.g. serde_json::Deserializer::from_str(...).into_iter().next() or an equivalent first-value parse) in pick_primary_interface and summarize_capture so a trailing second document is ignored; prefer fixing at the network_capture.rs parse site (narrowest blast radius) over changing result_to_string (shared by all MCP callers). 382.3 VERIFY: regression test feeding the doubled output (pretty JSON + identical compact JSON) to pick_primary_interface and summarize_capture — must return ens18 / a valid summary; the same test must FAIL on the unhardened code (red before green). Full cargo test green (repo toolchain, stable 1.100.0; lib + bin must both compile). Update CHANGELOG.md. Live drill (382.4, John's R630, after merge): wait one hourly tick and confirm logs/network_capture.log exists and grows; then confirm the 24h-summary report path. RESULT (2026-11-21, Ranger): DONE. Fix = parse_first_json helper (streaming Deserializer, first value only) in src/network_capture.rs, used by both parse sites; result_to_string untouched. Regression tests pick_primary_interface_ignores_trailing_doubled_json + summarize_capture_ignores_trailing_doubled_json confirmed RED first (trailing characters / None vs Some(ens18)), green after. Full cargo test (stable 1.100.0) green: lib 821/0/6, bin helix 796/0/6, bin installer 24/0/0, integration 35, doctests 1/0/1; total 1677/0/13. True pre-change baseline on 7e9fee0 is 1673 (brief's 1655 predates the M21 merge); delta exactly +4. rustfmt --check clean on network_capture.rs. Only the 2 known task-371 warnings. Installer bin needed the two gitignored task-262 stubs in the worktree (config.toml + .grok stub) for the full run. Fixer 60s-timeout issue NOT touched (separate follow-up). Live drill 382.4 is John's after merge.",
+      "testStrategy": "cargo test (repo toolchain, stable 1.100.0) green, lib + bin; the doubled-JSON regression test must fail on the unhardened code and pass after. Live drill 382.4 on the R630 after merge: hourly tick writes logs/network_capture.log.",
+      "subtasks": [
+        {
+          "id": 382.1,
+          "title": "Spec/repro: doubled-JSON input fails pick_primary_interface + summarize_capture (red test)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 382.2,
+          "title": "Implement: parse first JSON value only in network_capture.rs (pick_primary_interface + summarize_capture)",
+          "status": "done",
+          "dependencies": [
+            382.1
+          ]
+        },
+        {
+          "id": 382.3,
+          "title": "Verify: regression test green, full cargo test green (lib + bin), CHANGELOG.md updated",
+          "status": "done",
+          "dependencies": [
+            382.2
+          ]
+        }
+      ]
     }
   ]
 }
