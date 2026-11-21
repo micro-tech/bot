@@ -5547,24 +5547,24 @@
       "id": 376,
       "title": "Nightly network report: no 24h monitoring history exists (scheduled capture logger)",
       "description": "Task 375 gave the chat-command loop live wire tools (mcp__wire__capture/interfaces/analyze_pcap in the read allowlist), so the nightly network report can now be grounded in a live capture + interfaces instead of refused. But no 24h archive exists anywhere: the Nov 17 continuous monitor never persisted, and no code runs captures on a schedule and stores summaries. A report built after 375 is a live snapshot, not 24h of history. Build a scheduled capture logger so the nightly report can summarize the last 24h: a Helix routine (or equivalent scheduled job) that runs an mcp_wire capture periodically and appends a compact summary line (time, interface, packet/error/retransmission/drop counts, latency notes) to a runtime log file the loop's read_log can read; the report task then reads the last 24h of that log.",
-      "status": "pending",
+      "status": "in_progress",
       "dependencies": [
         375
       ],
       "priority": "medium",
-      "details": "Design first (376.1): where the log lives (runtime logs dir, so read_log can reach it — it already rejects dotdot/symlink escapes, so keep the file under logs/), cadence (hourly is plenty for a nightly verdict; every 60s like the old monitor is overkill for a file), retention/rotation (cap the file — a 24h window is ~24 lines at hourly cadence; do not let it grow unbounded), and line format (one compact line per capture: timestamp, interface, counts). Implementation (376.2): the scheduled job + the capture call + the append (direct exec via the existing mcp_wire capture path, not a new shell); keep it read-only (observe traffic, modify nothing) and fail-soft (a missed capture logs a warning, never breaks Helix). Out of scope: do NOT reintroduce write:chat; the report still comes back to the command room and Cobble jr relays it. This is an enhancement on top of 375, not a fix for a refusal — the report works as a snapshot without it.",
+      "details": "Design first (376.1): where the log lives (runtime logs dir, so read_log can reach it — it already rejects dotdot/symlink escapes, so keep the file under logs/), cadence (hourly is plenty for a nightly verdict; every 60s like the old monitor is overkill for a file), retention/rotation (cap the file — a 24h window is ~24 lines at hourly cadence; do not let it grow unbounded), and line format (one compact line per capture: timestamp, interface, counts). Implementation (376.2): the scheduled job + the capture call + the append (direct exec via the existing mcp_wire capture path, not a new shell); keep it read-only (observe traffic, modify nothing) and fail-soft (a missed capture logs a warning, never breaks Helix). Out of scope: do NOT reintroduce write:chat; the report still comes back to the command room and Cobble jr relays it. This is an enhancement on top of 375, not a fix for a refusal — the report works as a snapshot without it. 376.1 DESIGN (recorded 2026-11-20): Log = <runtime>/logs/network_capture.log (under logs/ so read_log can read it as logs/network_capture.log; read_log serves only logs/, rejects dotdot/symlink escapes, and returns at most the last 2000 chars). Cadence = hourly via seeded cron routine 'network-capture-log' (schedule 'every 1h', enabled by default); legacy in-process handler (empty task, like support-mail-watch/chat-command-watch) — no LLM is spawned to poll; the cron load_or_seed merge carries the seed to older deployments. Capture = per tick call mcp__wire__interfaces, pick the primary interface (first non-loopback, operstate up, IPv4 address, preferring a LAN-range IPv4 192.168/10/172.16-31), then call mcp__wire__capture {interface, count 50, duration_secs 10} (10s sample); both calls via existing mcp_client::try_execute on a blocking thread with a 60s timeout — no new shell, no new subprocess. Summary = parse the capture JSON; pkts = captured count; count packet info-column substrings: retr = 'Retransmission', rst = '[RST', dupack = 'Dup ACK', ooo = 'Out-Of-Order'. True interface error/drop counters are NOT available from the wire tools (interfaces returns no statistics) — the line records only what a live capture can observe and does not fabricate error/drop numbers. Line format (one compact line, ~60 chars, whitespace-split parseable): '2026-11-21T05:00:00 ens18 pkts=14 retr=0 rst=0 dupack=0 ooo=0' (local ISO timestamp, no spaces). Retention = cap 48 lines (48h at hourly cadence); on append, drop oldest lines and keep the last 48; file stays ~3KB so read_log's 2000-char tail covers ~33 lines (>24h). Fail-soft = any failure (MCP disabled, no wire server, no usable interface, capture timeout/error, unparseable JSON, append failure) logs a warning to the error log and returns; a missed capture appends nothing (archive holds only real samples; gaps in timestamps are visible to the report). 376.2 IMPLEMENTED 2026-11-20 (branch ranger-helix-task376-build): new src/network_capture.rs (summarize_capture, pick_primary_interface with LAN preference, format_capture_line, append_capture_line capped at 48, run_capture_cycle via mcp_client::try_execute on a blocking thread with timeouts); Cpu::routine_network_capture_log + dispatch arm in handle_routine_run; seeded routine network-capture-log (every 1h, enabled) in cron/registry.rs with load_or_seed merge; mod declared in both src/lib.rs and src/main.rs (bin has its own mod list — the full suite caught the missing bin declaration); docs/chat-command-loop.md §7 + CHANGELOG Added section. Full cargo +1.99 test green: 1637 passed / 0 failed / 13 ignored (lib 801/0/6, bin helix 776/0/6, installer 24/0/0, integration 35, doctests 1/0/1). 376.3 live drill is John's R630 step (log accumulates over several hours, then a ! llm report task summarises the last 24h from the log).",
       "testStrategy": "cargo test (repo toolchain) green; live drill on the R630 after pull/rebuild/restart: confirm the log file accumulates capture-summary lines over several hours, then send a ! llm task (scope read) for the nightly network report via the hub command room and confirm Helix returns a report summarising the last 24h from the log (not a single live capture).",
       "subtasks": [
         {
           "id": 376.1,
           "title": "Design the capture log: location under logs/, cadence, retention/rotation cap, and one-line-per-capture format",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 376.2,
           "title": "Implement the scheduled capture job + append (mcp_wire capture path, fail-soft, read-only)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             376.1
           ]
@@ -5572,7 +5572,7 @@
         {
           "id": 376.3,
           "title": "Verify: full cargo test green; live drill shows the log accumulating and the report summarising 24h from it",
-          "status": "pending",
+          "status": "in_progress",
           "dependencies": [
             376.2
           ]

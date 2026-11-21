@@ -456,6 +456,10 @@ where
             // in-process tick, no LLM spawned for polling (same shape
             // as support-mail-watch).
             "chat-command-watch" => self.routine_chat_command_watch().await,
+            // Task 376: hourly network capture log — in-process tick,
+            // no LLM spawned for polling (same shape as
+            // support-mail-watch).
+            "network-capture-log" => self.routine_network_capture_log().await,
             // Task 281 (self-improving loop): one loop cycle — metrics
             // first, then (phase >= 1) exactly one worker. Never routes
             // through maybe_nightly_fix or its paths.
@@ -511,6 +515,17 @@ where
     /// the routine.
     async fn routine_chat_command_watch(&mut self) {
         crate::chat_command::tick(&self.runtime_dir.clone());
+    }
+
+    /// Task 376: one hourly network-capture log tick. Runs the capture
+    /// cycle (interfaces → capture → append) in-process — no LLM is
+    /// spawned to poll. Fail-soft: any failure logs a warning and the
+    /// tick ends; a missed capture appends nothing.
+    async fn routine_network_capture_log(&mut self) {
+        match crate::network_capture::run_capture_cycle(&self.runtime_dir).await {
+            Ok(line) => log_to_file(&format!("network-capture-log: {line}")),
+            Err(e) => log_to_file(&format!("network-capture-log: tick failed: {e}")),
+        }
     }
 
     /// Task 281 (self-improving loop, Phase 1): one loop cycle.
@@ -2386,6 +2401,77 @@ mod nightly_tests {
             .flatten()
             .collect();
         assert!(!backups.is_empty(), "a manifest backup must be written");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Task 376: hourly network capture log is a live routine ────────
+
+    #[tokio::test]
+    async fn network_capture_log_routine_appends_line() {
+        // GIVEN a Cpu with stubbed wire MCP tools (interfaces + capture):
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let (mut cpu, dir) = test_cpu();
+        crate::mcp_client::stub_try_execute_for_tests(
+            "mcp__wire__interfaces",
+            r#"{"interfaces":[
+                {"name":"lo","operstate":"up","addresses":[{"family":"inet","address":"127.0.0.1"}]},
+                {"name":"ens18","operstate":"up","addresses":[{"family":"inet","address":"192.168.1.168"}]}
+            ]}"#,
+        );
+        crate::mcp_client::stub_try_execute_for_tests(
+            "mcp__wire__capture",
+            r#"{"interface":"ens18","filter":"","requested_count":50,"duration_secs":10,"captured":3,"packets":[
+                {"number":1,"info":"443 → 12345 [SYN]"},
+                {"number":2,"info":"443 → 12345 [TCP Retransmission]"},
+                {"number":3,"info":"443 → 12345 [RST, ACK]"}
+            ]}"#,
+        );
+        // WHEN the seeded hourly routine fires:
+        cpu.handle_routine_run("network-capture-log", "Network capture log (hourly)")
+            .await;
+        // THEN one summary line lands in the capture log, with the right
+        // counts, and the wire tools were called with the picked interface:
+        let log = dir.join("logs").join("network_capture.log");
+        let content = std::fs::read_to_string(&log).expect("capture log must exist");
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 1, "one tick appends one line: {content}");
+        assert!(lines[0].contains("ens18"), "line names the interface: {}", lines[0]);
+        assert!(lines[0].contains("pkts=3"), "line carries the packet count: {}", lines[0]);
+        assert!(lines[0].contains("retr=1"), "line counts the retransmission: {}", lines[0]);
+        assert!(lines[0].contains("rst=1"), "line counts the RST: {}", lines[0]);
+        let calls = crate::mcp_client::take_try_execute_calls_for_tests();
+        assert!(
+            calls.iter().any(|(n, _)| n == "mcp__wire__interfaces"),
+            "interfaces must be called to pick the interface"
+        );
+        let capture_call = calls
+            .iter()
+            .find(|(n, _)| n == "mcp__wire__capture")
+            .expect("capture must be called");
+        assert_eq!(
+            capture_call.1.get("interface").and_then(|i| i.as_str()),
+            Some("ens18"),
+            "capture runs on the picked interface"
+        );
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn network_capture_log_routine_fails_soft_without_mcp() {
+        // GIVEN a Cpu with no MCP tools stubbed (wire unavailable):
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let (mut cpu, dir) = test_cpu();
+        // WHEN the routine fires:
+        cpu.handle_routine_run("network-capture-log", "Network capture log (hourly)")
+            .await;
+        // THEN nothing is appended and nothing panics: a missed capture
+        // is a warning, never a break.
+        assert!(
+            !dir.join("logs").join("network_capture.log").exists(),
+            "no MCP means no capture line"
+        );
+        crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
 

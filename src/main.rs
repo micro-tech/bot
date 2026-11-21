@@ -33,6 +33,7 @@ mod cron;
 mod chat_history;
 mod support_watch;
 mod chat_command; // task 295: chat-hub command loop (read-only diagnostics)
+mod network_capture; // task 376: hourly network capture log (24h archive)
 mod voice;
 mod self_improve;
 

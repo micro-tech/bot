@@ -366,6 +366,19 @@ tool list is a deploy-time follow-up, not a silent grant.
   system-status/log tools only. A task that needs the R630 hostname
   (or similar) may go unanswered; this follow-up is not filed.
 - **Gmail write tool names are best-effort** (see §6).
+- **Network capture log (task 376).** A seeded hourly routine
+  (`network-capture-log`, `every 1h`) runs an mcp_wire capture and
+  appends one summary line to `<runtime>/logs/network_capture.log`
+  (readable by the loop as `logs/network_capture.log` via `read_log`).
+  One line per capture: `2026-11-21T05:00:00 ens18 pkts=14 retr=0
+  rst=0 dupack=0 ooo=0` (local ISO timestamp, interface, packets,
+  retransmissions, RSTs, duplicate ACKs, out-of-order segments — all
+  counted from the packet Info column). The file is capped at 48 lines
+  (48h); a missed capture logs a warning and appends nothing, so the
+  archive holds only real samples. True interface error/drop counters
+  are not available from the wire tools, so the log does not fabricate
+  them. The nightly network report reads the last 24h from this log
+  instead of relying on a single live capture.
 
 ## 8. Audit log and troubleshooting
 
