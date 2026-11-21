@@ -5578,6 +5578,110 @@
           ]
         }
       ]
+    },
+    {
+      "id": 377,
+      "title": "Helix review H10: model-authored tests run with full privileges, no timeout (evaluator sandboxing)",
+      "description": "The self-improve evaluator spawns cargo test in the worktree inheriting the full environment (including GEMINI_API_KEY), with network access and no timeout; a proposal can add build.rs or .cargo/config.toml. More urgent now that the eval arm is wired (task 325), so model-authored code can actually reach this path in production. Fix: env_clear() + allowlist (PATH, CARGO_HOME, RUSTUP_HOME), a hard timeout with kill. Out of scope: the full task-368 WASM/process sandbox (a separate design task, stays pending); process-group kill is H9's scope.",
+      "status": "in_progress",
+      "dependencies": [],
+      "priority": "high",
+      "details": "377.1 SPEC: seam is run_cargo_parsed / the cargo spawn in src/self_improve/evaluator.rs. Env = env_clear() + allowlist PATH, CARGO_HOME, RUSTUP_HOME (only vars present in the parent env are passed through; absent ones are not invented). Timeout = 30 minutes per cargo invocation, generous for a cold-build first eval but inside the default 60-minute cycle budget (max_cycle_minutes), leaving room for the second cargo run; kills the direct cargo child only (orphaned grandchildren are H9's scope). 377.2 IMPLEMENTED 2026-11-21 (branch ranger-helix-h10h11-build): new EVAL_ENV_ALLOWLIST + EVAL_CARGO_TIMEOUT constants, harden_eval_command (env_clear + allowlist), run_command_with_timeout (piped output drained on reader threads so a large output can never deadlock on a full pipe buffer, try_wait polling, kill + reap on deadline, bounded 5s drain so orphaned grandchildren holding the pipes cannot hang the caller); run_cargo_parsed now hardens the command and runs it through the timeout helper, returning a single failing TestResult (detail 'cargo timed out after 30m (killed)') on timeout. Tests: harden_eval_command_keeps_only_allowlisted_vars (unit, via get_envs), eval_cargo_env_is_allowlisted (behavioral, Unix: runs env through the hardened runner, asserts no fake secret and only allowlisted keys), eval_cargo_timeout_kills_hung_command (Unix: sleep 30 with a 1s timeout returns TimedOut in ~1s), eval_cargo_fast_command_returns_output (Unix: echo hello). Full suite green: 1655 passed / 0 failed / 13 ignored (lib 810/0/6, bin helix 785/0/6, installer 24/0/0, integration 35, doctests 1/0/1; baseline 1637 + 18 = 9 new tests x 2 targets). 377.3 live drill is John's R630 step after merge (confirm a hung eval cargo run is killed at the timeout and the eval fails closed rather than stalling the loop).",
+      "testStrategy": "cargo test (repo toolchain) green; live drill on the R630 after pull/rebuild/restart: confirm an eval cargo run that hangs is killed at the 30-minute timeout and the proposal fails closed (no promotion, no stalled loop), and that a normal eval still passes with only the allowlisted env.",
+      "subtasks": [
+        {
+          "id": 377.1,
+          "title": "Spec: env allowlist (PATH, CARGO_HOME, RUSTUP_HOME) + hard timeout with kill for the eval cargo spawn",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 377.2,
+          "title": "Implement: harden_eval_command + run_command_with_timeout, wire into run_cargo_parsed",
+          "status": "done",
+          "dependencies": [
+            377.1
+          ]
+        },
+        {
+          "id": 377.3,
+          "title": "Verify: full cargo test green; live drill shows a hung eval is killed at the timeout and fails closed",
+          "status": "in_progress",
+          "dependencies": [
+            377.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 378,
+      "title": "Helix review H11: audit sensitive-path check trivially bypassed (path normalisation)",
+      "description": "EXACT_PATHS.contains(&path) compares raw strings, so ./src/security.rs, src//cpu/mod.rs, src\\tools\\shell_tool.rs all bypass the check. The loop can currently edit its own gate and the evals it is graded on. Fix: normalise paths (components, / separators, lowercase on Windows) before the check. Protect src/self_improve/, tests/, agents/, build.rs, Cargo.toml, .cargo/, .github/.",
+      "status": "in_progress",
+      "dependencies": [],
+      "priority": "high",
+      "details": "378.1 SPEC: seam is sensitive_path_hit / audit_diff in src/self_improve/audit.rs. Normalisation = split on both / and backslash, drop . and empty segments, resolve .. lexically (pop the previous segment), lowercase on Windows only (paths are case-sensitive on Linux). A leading .. that would escape is kept so the path still reads as escaping (fail-closed: the escaping rule flags it). Protected paths (any touch needs human review, D4 philosophy — the loop must not edit its own gate or the tests that grade it): src/self_improve/, tests/, agents/, build.rs, Cargo.toml, .cargo/, .github/. 378.2 IMPLEMENTED 2026-11-21 (branch ranger-helix-h10h11-build): new normalize_audit_path + the escaping-path fail-closed rule + the loop-gate prefix/exact checks in sensitive_path_hit (matching on the normalised path; the raw spelling is only ever used in the reason string so John sees what was tried); module docs updated with the new list and the normalisation rules. Consequence: any proposal touching src/self_improve/ now routes to human review (same as src/cpu/mod.rs and src/cron/registry.rs already did) — the loop cannot self-modify without John's review. Tests: audit_normalisation_catches_bypass_spellings (7 bypass spellings), loop_gate_paths_are_flagged (8 protected paths), loop_gate_prefix_match_is_exact (4 lookalikes stay clean), normalize_audit_path_cases (unit, incl. Windows-lowercase branch). Full suite green: 1655 passed / 0 failed / 13 ignored (lib 810/0/6, bin helix 785/0/6, installer 24/0/0, integration 35, doctests 1/0/1; baseline 1637 + 18). 378.3 live drill is John's R630 step after merge (confirm a proposal touching a loop-gate path is flagged needs-human-review at the Phase 3 gate and no PR opens).",
+      "testStrategy": "cargo test (repo toolchain) green; live drill on the R630 after pull/rebuild/restart: confirm a proposal touching a loop-gate path (e.g. src/self_improve/) is flagged needs-human-review at the Phase 3 gate and no PR opens, while a normal proposal still evaluates.",
+      "subtasks": [
+        {
+          "id": 378.1,
+          "title": "Spec: path normalisation rules + loop-gate protected paths for the audit",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 378.2,
+          "title": "Implement: normalize_audit_path + loop-gate checks in sensitive_path_hit, update module docs",
+          "status": "done",
+          "dependencies": [
+            378.1
+          ]
+        },
+        {
+          "id": 378.3,
+          "title": "Verify: full cargo test green; live drill shows a loop-gate touch flagged needs-human-review, no PR opens",
+          "status": "in_progress",
+          "dependencies": [
+            378.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 379,
+      "title": "M27: adversarial table tests for resolve_diff_path and the audit normalisation",
+      "description": "Cheap, high-value table tests for resolve_diff_path and the audit normalisation (directly covers Critical C2 and High H11). Add negative tests proving the bypass paths now fail. Covers: backslash spellings for resolve_diff_path (Windows bypass: ..\\secret, .git\\config) + validate_draft_path (defense in depth), and the audit bypass spellings + loop-gate paths (H11).",
+      "status": "done",
+      "dependencies": [
+        378
+      ],
+      "priority": "high",
+      "details": "379.1 SPEC: seam is resolve_diff_path (src/self_improve/evaluator.rs) + validate_draft_path (src/self_improve/draft.rs) + sensitive_path_hit (src/self_improve/audit.rs). Adversarial cases: backslash .. and .git (Windows separator bypass), lexical .. resolving inside the tree (fail-closed reject), redundant separators / dot segments (allowed). 379.2 IMPLEMENTED 2026-11-21 (branch ranger-helix-h10h11-build): new shared path_segments helper (splits on both / and backslash; on Linux treating backslash as a separator is fail-closed — a file literally named ..\\x is rejected and no legitimate proposal names one) used by both resolve_diff_path and validate_draft_path (draft.rs imports it from evaluator.rs); new diff_path_adversarial_spellings test (7 rejected + 5 allowed) and backslash cases added to parse_rejects_unsafe_paths; the H11 audit tests (379.2 also covers the audit side, filed under 378.2) prove the bypass spellings now flag. 379.3 VERIFIED by the full suite: 1655 passed / 0 failed / 13 ignored (lib 810/0/6, bin helix 785/0/6, installer 24/0/0, integration 35, doctests 1/0/1; baseline 1637 + 18 = 9 new tests x 2 targets). No separate live drill — the tests are unit-level and the H10/H11 live drills (377.3, 378.3) cover the production behaviour.",
+      "testStrategy": "cargo test (repo toolchain) green; the adversarial tables must fail on the unhardened code (verified red before the fix) and pass after. No separate live drill — covered by the H10/H11 live drills.",
+      "subtasks": [
+        {
+          "id": 379.1,
+          "title": "Spec: adversarial table for resolve_diff_path + audit normalisation (C2 + H11 bypasses)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 379.2,
+          "title": "Implement: path_segments hardening + adversarial table tests (evaluator, draft, audit)",
+          "status": "done",
+          "dependencies": [
+            379.1
+          ]
+        },
+        {
+          "id": 379.3,
+          "title": "Verify: full cargo test green; adversarial tables fail on unhardened code, pass after",
+          "status": "done",
+          "dependencies": [
+            379.2
+          ]
+        }
+      ]
     }
   ]
 }
