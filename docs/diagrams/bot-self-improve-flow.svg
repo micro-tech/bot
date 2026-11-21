@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg viewBox="0 0 960 570" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bot-self-improve-flow-title bot-self-improve-flow-desc" id="bot-self-improve-flow-root">
         <title id="bot-self-improve-flow-title">Helix — self-improve loop</title>
-        <desc id="bot-self-improve-flow-desc">Flowchart of the Helix self-improving loop (src/self_improve): a daily cron routine checks kill switches, collects health counts only, and on a failing signal dispatches one read-only loop-worker subagent; the per-cycle drafting arm (loop-drafter role, same 8 read-only tools) turns the oldest intaked proposal into whole-file diffs, the proposal passes a budgets gate, then the per-cycle evaluation arm evaluates the oldest stored 'proposed' record in a disposable worktree (skipping records with no diff files), and the Phase 3 delivery arm pushes the promoted branch (Git::push_branch, origin only, self-improve/&lt;slug&gt;) into the PR queue, where John merges. The review gate (task 366) is a read-only checklist — unit tests, bounded subset, approved eval set, secrets audit, then John's read and merge tap, the human checks always PendingHuman. Self-authored skills (SkillRegistry) and OKF context drafts are proposals only; no real sandbox exists yet. GET /self_improve/status (token-gated) shows the loop snapshot; the restart signal counts only restarts since the last cycle (boot marker written at startup).</desc>
+        <desc id="bot-self-improve-flow-desc">Flowchart of the Helix self-improving loop (src/self_improve): a daily cron routine checks kill switches, collects health counts only, and on a failing signal dispatches one read-only loop-worker subagent; the per-cycle drafting arm (loop-drafter role, same 8 read-only tools) turns the oldest intaked proposal into whole-file diffs, the proposal passes a budgets gate, then the per-cycle evaluation arm evaluates the oldest stored 'proposed' record in a disposable worktree (skipping records with no diff files) — eval cargo runs are env-cleared with a 30-minute hard timeout and kill, and the audit normalises diff paths and guards the loop-gate paths — and the Phase 3 delivery arm pushes the promoted branch (Git::push_branch, origin only, self-improve/&lt;slug&gt;) into the PR queue, where John merges. The review gate (task 366) is a read-only checklist — unit tests, bounded subset, approved eval set, secrets audit, then John's read and merge tap, the human checks always PendingHuman. Self-authored skills (SkillRegistry) and OKF context drafts are proposals only; no real sandbox exists yet. GET /self_improve/status (token-gated) shows the loop snapshot; the restart signal counts only restarts since the last cycle (boot marker written at startup).</desc>
         <defs>
       <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
       #bot-self-improve-flow-root { --color-paper:   #f5f5f5;
@@ -44,7 +44,7 @@
         <!-- READY: Budgets gate -> Evaluate -->
         <line x1="260" y1="222" x2="240" y2="222" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#bot-self-improve-flow-arrow)"/>
         <!-- DELIVER: Evaluate -> PR queue -->
-        <line x1="140" y1="254" x2="140" y2="340" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#bot-self-improve-flow-arrow)"/>
+        <line x1="140" y1="270" x2="140" y2="340" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#bot-self-improve-flow-arrow)"/>
 
         <!-- Arrow labels -->
         <rect x="230" y="62" width="40" height="14" rx="2" fill="#f5f5f5"/>
@@ -128,12 +128,13 @@
         <text x="360" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">caps · cooldowns · dedupe</text>
 
         <!-- Node: Evaluate -->
-        <rect x="40" y="190" width="200" height="64" rx="6" fill="#f5f5f5"/>
-        <rect x="40" y="190" width="200" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="40" y="190" width="200" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="40" y="190" width="200" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
         <rect x="48" y="198" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
         <text x="62" y="207" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EVAL</text>
         <text x="140" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Evaluate (per-cycle)</text>
         <text x="140" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">oldest 'proposed' · worktree</text>
+        <text x="140" y="258" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">env-cleared · 30-min kill · audit</text>
 
         <!-- Node: PR queue (delivery arm folded in) -->
         <rect x="40" y="340" width="200" height="64" rx="6" fill="#f5f5f5"/>
