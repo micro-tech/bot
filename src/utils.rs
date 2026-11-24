@@ -247,6 +247,25 @@ mod heartbeat_utils_tests {
     use super::*;
     use std::time::{Duration, SystemTime};
 
+    /// H12 (task 386): guard the helper every slicing fix in this task
+    /// relies on — it must never split a UTF-8 char, unlike `&s[..n]`.
+    #[test]
+    fn truncate_str_never_splits_a_char() {
+        // Short strings pass through untouched:
+        assert_eq!(truncate_str("hi", 10), "hi");
+        assert_eq!(truncate_str("•—🖥️", 100), "•—🖥️");
+        // Byte 500 of 300 bullets is mid-char: backs off to 498:
+        let bullets = "•".repeat(300);
+        assert_eq!(truncate_str(&bullets, 500).len(), 498);
+        // Byte 80 of the emoji args string is mid-emoji: backs off to 79:
+        let args = serde_json::json!({ "text": "🖥️".repeat(50) }).to_string();
+        assert_eq!(truncate_str(&args, 80).len(), 79);
+        // Exact-boundary cut keeps the full width:
+        assert_eq!(truncate_str("—".repeat(40).as_str(), 120).len(), 120);
+        // Zero max yields empty, never panics:
+        assert_eq!(truncate_str("🖥️", 0), "");
+    }
+
     #[test]
     fn heartbeat_md_round_trips() {
         // GIVEN a formatted beat file body:

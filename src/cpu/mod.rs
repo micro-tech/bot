@@ -1524,7 +1524,8 @@ where
         log_to_file(&format!(
             "CPU received message from='{}' type='{}'",
             msg.from,
-            &msg.data[..msg.data.len().min(80)]
+            // H12 (task 386): `&msg.data[..80]` panics on non-ASCII data.
+            crate::utils::truncate_str(&msg.data, 80)
         ));
         let payload: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
         if let Some(msg_type) = payload["type"].as_str() {
@@ -1556,7 +1557,9 @@ where
                         self.route_llm_request(prompt.clone(), correlation_id);
                         log_to_file(&format!(
                             "CPU routed chat_request via Context Engine: {}",
-                            &prompt[..prompt.len().min(80)]
+                            // H12 (task 386): `&prompt[..80]` panics on
+                            // non-ASCII prompts.
+                            crate::utils::truncate_str(&prompt, 80)
                         ));
                     }
                 }
@@ -1571,7 +1574,9 @@ where
                             serde_json::Value::String(format!(
                                 "{}: {}",
                                 llm,
-                                &reply[..reply.len().min(500)]
+                                // H12 (task 386): `&reply[..500]` panics on
+                                // non-ASCII model output (`•`, `—`, emoji).
+                                crate::utils::truncate_str(&reply, 500)
                             )),
                         );
                     }
@@ -2135,6 +2140,85 @@ mod heartbeat_tests {
             crate::config::reasoning::ReasoningConfig::default(),
         )
         .expect("test Cpu construction must succeed")
+    }
+
+    /// H12 (task 386): `handle_bus_message` logged
+    /// `&msg.data[..msg.data.len().min(80)]` on a byte index, which panics
+    /// when byte 80 lands inside a multi-byte char. A panic here kills the
+    /// bus worker, so the CPU stops processing messages.
+    #[tokio::test]
+    async fn handle_bus_message_never_panics_on_non_ascii_data() {
+        // GIVEN a 150-byte message of 3-byte bullets (byte 80 is the
+        // middle byte of bullet #27):
+        let data = "•".repeat(50);
+        assert_eq!(data.len(), 150);
+        assert!(!data.is_char_boundary(80));
+        let mut cpu = test_cpu("");
+        // WHEN the CPU handles it (not JSON: no branch runs, only the
+        // preview log line touches the data):
+        cpu.handle_bus_message(Message {
+            to: "cpu".to_string(),
+            from: "test".to_string(),
+            data,
+            timestamp: crate::utils::now_ms(),
+        });
+        // THEN it returns instead of panicking.
+    }
+
+    /// H12 (task 386): the `chat_request` branch logged
+    /// `&prompt[..prompt.len().min(80)]` on a byte index. The prompt is
+    /// model/user-controlled and can hold emoji.
+    #[tokio::test]
+    async fn handle_bus_message_chat_request_never_panics_on_non_ascii_prompt() {
+        // GIVEN a chat_request whose prompt byte 80 is inside a bullet
+        // (79 ASCII chars, then bullets), while byte 80 of the whole
+        // message is ASCII so only the prompt slice is exercised:
+        let prompt = format!("{}{}", "x".repeat(79), "•".repeat(30));
+        assert!(!prompt.is_char_boundary(80));
+        let data = serde_json::json!({
+            "type": "chat_request",
+            "prompt": prompt,
+            "correlation_id": 0,
+        })
+        .to_string();
+        assert!(data.is_char_boundary(80));
+        let mut cpu = test_cpu("");
+        // WHEN the CPU handles it:
+        cpu.handle_bus_message(Message {
+            to: "cpu".to_string(),
+            from: "test".to_string(),
+            data,
+            timestamp: crate::utils::now_ms(),
+        });
+        // THEN it returns instead of panicking.
+    }
+
+    /// H12 (task 386): the `ollama_response` branch stored
+    /// `&reply[..reply.len().min(500)]` on a byte index. Replies are
+    /// model output and routinely contain `•`, `—`, and emoji.
+    #[tokio::test]
+    async fn handle_bus_message_llm_output_never_panics_on_non_ascii_reply() {
+        // GIVEN an ollama_response whose reply byte 500 is inside a bullet
+        // (499 ASCII chars, then a bullet), while byte 80 of the whole
+        // message is ASCII so only the reply slice is exercised:
+        let reply = format!("{}{}", "y".repeat(499), "•");
+        assert!(!reply.is_char_boundary(500));
+        let data = serde_json::json!({
+            "type": "ollama_response",
+            "msg": reply,
+            "llm": "helix",
+        })
+        .to_string();
+        assert!(data.is_char_boundary(80));
+        let mut cpu = test_cpu("");
+        // WHEN the CPU handles it:
+        cpu.handle_bus_message(Message {
+            to: "cpu".to_string(),
+            from: "test".to_string(),
+            data,
+            timestamp: crate::utils::now_ms(),
+        });
+        // THEN it returns instead of panicking.
     }
 
     #[tokio::test]

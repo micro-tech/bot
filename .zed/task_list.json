@@ -5718,6 +5718,40 @@
           ]
         }
       ]
+    },
+    {
+      "id": 386,
+      "title": "Helix review H12: byte-index string slicing panics on non-ASCII",
+      "description": "Five byte-index slices (&s[..N]) panic whenever the cut byte lands inside a multi-byte UTF-8 char: truncate_for_display (src/acp/agent.rs, &s[..500]), tool_call_title (src/acp/server.rs, &args[..80]), Gemini listener prompt preview (src/io/llm_gemini/mod.rs, &prompt[..120]), and three handle_bus_message log lines (src/cpu/mod.rs, &msg.data[..80], &prompt[..80], &reply[..500]). system_status output and model replies routinely contain •, —, and emoji. A panic in the A2A worker leaves the task stuck in Working forever; in the Gemini listener it kills the listener for good. Fix: use the existing crate::utils::truncate_str everywhere. Also audit for other &s[..N] patterns on user/model-controlled strings.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "386.1 SPEC/REPRO: the five sites slice on byte indexes; a non-ASCII string whose cut byte is mid-char panics. Reproduce with bullets/emoji: 300 bullets (900 bytes, byte 500 mid-char), emoji args (byte 80 inside 🖥️), chat_request prompt (79 ASCII + bullets, byte 80 mid-char), ollama_response reply (499 ASCII + bullet, byte 500 mid-char). 386.2 IMPLEMENT: all six live sites (five spec sites + the same pattern in src/io/ollama/keepalive.rs:144, &body[..200]) now use crate::utils::truncate_str; Gemini preview extracted as a named prompt_preview helper for testability. Audit: reply.rs cuts from char_indices (safe), extract_json_object/shell_security/ssh/handler/reflection_planner_adapter slice at ASCII-find offsets (safe), executor.rs/shell_tool.rs/voice/client.rs slice byte buffers (safe) — no further live sites. 386.3 VERIFY: 7 new tests, all confirmed RED first (each panicking exactly at its slicing line: agent.rs:263, server.rs:243, cpu/mod.rs:1527/:1559/:1574), green after. Full cargo test (stable 1.100.0) green: lib 828/0/6, bin helix 803/0/6, bin installer 24/0/0, integration 35, doctests 1/0/1; total 1691/0/13 (baseline 1677 + 14). New/edited lines rustfmt-clean. Only the 2 known task-371 warnings. Installer bin needed the two gitignored task-262 stubs in the worktree. RESULT (2026-11-23, Ranger): DONE. Branch ranger-helix-h12 pushed; no PR opened (Cobble jr opens it).",
+      "testStrategy": "cargo test (repo toolchain, stable 1.100.0) green, lib + bin; the five site regression tests must fail on the unhardened code and pass after.",
+      "subtasks": [
+        {
+          "id": 386.1,
+          "title": "Spec/repro: non-ASCII input panics at the five slicing sites (red tests)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 386.2,
+          "title": "Implement: crate::utils::truncate_str at all six sites + audit for other &s[..N] patterns",
+          "status": "done",
+          "dependencies": [
+            386.1
+          ]
+        },
+        {
+          "id": 386.3,
+          "title": "Verify: regression tests green, full cargo test green (lib + bin), CHANGELOG.md updated",
+          "status": "done",
+          "dependencies": [
+            386.2
+          ]
+        }
+      ]
     }
   ]
 }

@@ -260,7 +260,10 @@ fn truncate_for_display(s: &str) -> String {
     if s.len() <= MAX {
         s.to_string()
     } else {
-        format!("{}… [truncated]", &s[..MAX])
+        // H12 (task 386): `&s[..MAX]` panics when byte 500 lands inside a
+        // multi-byte char (e.g. `•` in system_status output). truncate_str
+        // backs off to the previous char boundary instead.
+        format!("{}… [truncated]", crate::utils::truncate_str(s, MAX))
     }
 }
 
@@ -279,6 +282,24 @@ mod tests {
         crate::mcp_client::override_config_for_tests(crate::config::mcp::McpConfig::default());
         crate::tools::invalidate_tool_definitions();
         guard
+    }
+
+    /// H12 (task 386): `truncate_for_display` sliced `&s[..500]` on a byte
+    /// index, which panics when byte 500 lands inside a multi-byte char
+    /// (e.g. a `•` from `system_status` output). Must truncate cleanly.
+    #[test]
+    fn truncate_for_display_never_panics_on_non_ascii() {
+        // GIVEN a 900-byte string of 3-byte bullets: byte 500 is the
+        // middle byte of bullet #167, so `&s[..500]` panics:
+        let s = "•".repeat(300);
+        assert_eq!(s.len(), 900);
+        assert!(!s.is_char_boundary(500));
+        // WHEN we truncate it for display:
+        let out = truncate_for_display(&s);
+        // THEN it truncates cleanly on a char boundary:
+        assert!(out.ends_with("[truncated]"));
+        assert!(out.len() <= 500 + "[truncated]".len() + 4);
+        assert!(out.starts_with("•"));
     }
 
     #[test]
