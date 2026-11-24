@@ -5718,6 +5718,40 @@
           ]
         }
       ]
+    },
+    {
+      "id": 387,
+      "title": "H18: No CI - add GitHub Actions workflow (fmt + clippy + test + task-list JSON check)",
+      "description": "Triple review H18 (Claude HC2 + Grok): the repo has no .github/workflows/ or any other pipeline (verified absent at 8f440e0 and at a98ea3f), which is how a broken build shipped while task 313 was marked done. Fix: add a GitHub Actions matrix (windows-latest + ubuntu-latest) running cargo fmt --check, cargo clippy --all-targets -- -D warnings, cargo test --all-targets, and a JSON-validity check on .zed/task_list.json. Trigger on pushes to PreRelese and master and on pull requests targeting either branch. Task-262 caveat: a fresh checkout lacks config.toml + .grok/docs/system_manifest_root.md (include_str! in src/bin/installer.rs:275-276), so the workflow must create the two gitignored stubs in the job before building, never commit them.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "387.1 SPEC: workflow file .github/workflows/ci.yml, matrix ubuntu-latest + windows-latest, toolchain pinned to stable 1.100.0 (repo has no rust-toolchain.toml; Cargo.toml rust-version is 1.99.0), standard actions only (actions/checkout@v4, dtolnay/rust-toolchain@stable). Triggers: push to PreRelese/master, PRs targeting PreRelese/master. Four steps in order: cargo fmt --all -- --check; cargo clippy --all-targets -- -D warnings; cargo test --all-targets; python -m json.tool .zed/task_list.json. Stub step (shell bash, runs on both OSes): cp example.config.toml config.toml + printf the 409-byte LOCAL COMPILE STUB to .grok/docs/system_manifest_root.md (verified byte-identical to the bot-repo checkout copy); both paths gitignored, never committed. No secrets needed or embedded. 387.2 VERIFY (local, stable 1.100.0, CARGO_TARGET_DIR unset, branch ranger-helix-h18 @ a98ea3f + this change): JSON check PASS; cargo test --all-targets PASS exit 0, 1676 passed / 0 failed / 12 ignored (lib 821/0/6, bin helix 796/0/6, bin installer 24/0/0, integration 35; the 1 doctest from task 382's 1677/13 total is excluded by --all-targets by design). cargo fmt --all -- --check FAILS on pre-existing repo-wide dirt: 153 files, ~24,300 lines of diff - the tree has never been fmt-clean; NOT reformatted here (bare cargo fmt in this repo is out of scope). cargo clippy --all-targets -- -D warnings FAILS on pre-existing clippy debt: first blocked on 2 collapsible_if lints in build.rs (fixed here, rustfmt-clean, let-chain form), then lib fails with 167 errors (lib-test 229): 78x collapsible_if, 30x doc-list indentation, 27x MutexGuard-held-across-await (H6/H7 territory), plus assorted others - a dedicated clippy-cleanup pass is needed; NOT fixed here beyond the build.rs pair. Also fixed here: removed the 2 unused imports in tests/unix_socket_test.rs (clears the import half of task 371; its 3 unused-dep manifest warnings are untouched, task 371 stays pending). unix_socket_test re-run green (1 passed, 0 warnings). RESULT (2026-11-23/24, Ranger): workflow added and YAML-validated; test + JSON steps green locally; fmt + clippy steps will report RED on first CI run until the fmt-cleanup and clippy-cleanup follow-ups land - that is the honest signal, not a faked green. Branch ranger-helix-h18 pushed; no PR opened (Cobble jr opens it).",
+      "testStrategy": "YAML parses (python yaml.safe_load); local firsthand runs of all four workflow steps on the branch (stable 1.100.0, CARGO_TARGET_DIR unset); CI run on the PR after merge reports test + JSON green, fmt + clippy red until cleanup follow-ups land.",
+      "subtasks": [
+        {
+          "id": 387.1,
+          "title": "Write .github/workflows/ci.yml (matrix, 4 checks, task-262 stubs in-job) + validate YAML",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 387.2,
+          "title": "Verify locally: fmt + clippy + cargo test --all-targets + task-list JSON check, firsthand",
+          "status": "done",
+          "dependencies": [
+            387.1
+          ]
+        },
+        {
+          "id": 387.3,
+          "title": "Update CHANGELOG.md, mark task 387 done, push branch ranger-helix-h18 (no PR)",
+          "status": "done",
+          "dependencies": [
+            387.2
+          ]
+        }
+      ]
     }
   ]
 }
