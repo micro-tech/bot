@@ -5718,6 +5718,176 @@
           ]
         }
       ]
+    },
+    {
+      "id": 383,
+      "title": "H6: Blocking work inside the Tokio runtime (starves runtime on 4-core box)",
+      "description": "Blocking work runs inside the Tokio runtime: blocking mpsc::recv() in tokio::spawn (src/main.rs:384, :528, :617, :662); tools::execute called from async fns (src/io/ollama/mod.rs:818, src/io/llm_gemini/mod.rs:455, src/cpu/mod.rs:504); web handlers support_send / slash_cmd; src/memory/vector.rs embedding (up to 30 s) from consolidate_memory_inner (src/cpu/mod.rs:818). Four listeners currently pin four worker threads for good, which can starve the runtime on a 4-core box. Fix: tokio::task::spawn_blocking + tokio::time::timeout, or move the bus to tokio::sync::mpsc. Source: Helix triple-review comparison 2026-11-11, H6 (Claude only).",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "383.1 SPEC: seams are the four blocking recv() sites in src/main.rs (:384, :528, :617, :662), the tools::execute call sites in async fns (src/io/ollama/mod.rs:818, src/io/llm_gemini/mod.rs:455, src/cpu/mod.rs:504), the support_send / slash_cmd web handlers, and the embedding call from consolidate_memory_inner (src/cpu/mod.rs:818, src/memory/vector.rs). Reproduce by showing a blocking call holding a runtime worker (a test that spawns a blocking op on a runtime and shows a second task delayed/starved, or a targeted review of the four sites). 383.2 IMPLEMENT: move blocking work to tokio::task::spawn_blocking with a tokio::time::timeout, or move the bus to tokio::sync::mpsc; keep behaviour identical (no dropped messages, no changed handler semantics). 383.3 VERIFY: regression test fails on unhardened code and passes after; full cargo test green (stable 1.100.0, lib + bin); CHANGELOG.md updated.",
+      "testStrategy": "cargo test (stable 1.100.0) green, lib + bin; regression test must fail on unhardened code and pass after.",
+      "subtasks": [
+        {
+          "id": 383.1,
+          "title": "Spec: identify blocking sites and reproduce runtime starvation (red test)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 383.2,
+          "title": "Implement: spawn_blocking + timeout (or tokio mpsc) for blocking work",
+          "status": "pending",
+          "dependencies": [
+            383.1
+          ]
+        },
+        {
+          "id": 383.3,
+          "title": "Verify: regression test green, full cargo test green (lib + bin), CHANGELOG.md updated",
+          "status": "pending",
+          "dependencies": [
+            383.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 384,
+      "title": "H8: Shell denylist bypass via command chaining (; && || | & newlines)",
+      "description": "src/tools/shell_security.rs:96-123: check_shell_argv0 only analyses one word; validate_shell_command never splits on ';', '&&', '||', '|', '&', or newlines. 'echo; rm -fr /' and 'curl x|/bin/bash' currently pass the denylist. Fix: split into segments and run argv0 analysis on each; normalise flag order; add Windows destructive-command patterns (rd /s /q, del /s, format c:, Remove-Item -Force -Recurse). Source: Helix triple-review comparison 2026-11-11, H8 (Claude only).",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "384.1 SPEC: seam is check_shell_argv0 / validate_shell_command in src/tools/shell_security.rs:96-123. Reproduce with 'echo; rm -fr /' and 'curl x|/bin/bash' — both must currently PASS validation (red test asserts they are rejected). 384.2 IMPLEMENT: split the command into segments on ;, &&, ||, |, &, newlines and run argv0 analysis on each segment; normalise flag order; add Windows destructive patterns (rd /s /q, del /s, format c:, Remove-Item -Force -Recurse). 384.3 VERIFY: regression tests fail on unhardened code and pass after (including chained and piped payloads); full cargo test green (stable 1.100.0, lib + bin); CHANGELOG.md updated.",
+      "testStrategy": "cargo test (stable 1.100.0) green, lib + bin; chained/piped payload regression tests must fail on unhardened code and pass after.",
+      "subtasks": [
+        {
+          "id": 384.1,
+          "title": "Spec/repro: chained payloads pass validation today (red test)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 384.2,
+          "title": "Implement: per-segment argv0 analysis + Windows destructive patterns",
+          "status": "pending",
+          "dependencies": [
+            384.1
+          ]
+        },
+        {
+          "id": 384.3,
+          "title": "Verify: regression tests green, full cargo test green (lib + bin), CHANGELOG.md updated",
+          "status": "pending",
+          "dependencies": [
+            384.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 385,
+      "title": "H9: Background children escape the shell timeout (pipe stays open forever)",
+      "description": "src/tools/shell_tool.rs:268-289 and src/chat_command/executor.rs:172-195: a background child keeps the stdout pipe open, so 'sleep 99999 &' blocks out_handle.join() forever — the shell timeout never fires. Fix: kill the process group after reaping (a Job Object on Windows) and join the drain threads with a deadline. Source: Helix triple-review comparison 2026-11-11, H9 (Claude only).",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "385.1 SPEC: seams are src/tools/shell_tool.rs:268-289 and src/chat_command/executor.rs:172-195. Reproduce with 'sleep 99999 &' (or equivalent background child holding the pipe) — the call must currently hang past its timeout (red test with a bounded wait asserting return). 385.2 IMPLEMENT: kill the process group after reaping (Job Object on Windows) and join the drain threads with a deadline so a background child cannot hold the pipe open past the timeout. 385.3 VERIFY: regression test fails on unhardened code (hangs) and passes after (returns within deadline); full cargo test green (stable 1.100.0, lib + bin); CHANGELOG.md updated.",
+      "testStrategy": "cargo test (stable 1.100.0) green, lib + bin; background-child regression test must hang/fail on unhardened code and return within deadline after.",
+      "subtasks": [
+        {
+          "id": 385.1,
+          "title": "Spec/repro: background child holds pipe past timeout (red test)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 385.2,
+          "title": "Implement: kill process group after reap + join drain threads with deadline",
+          "status": "pending",
+          "dependencies": [
+            385.1
+          ]
+        },
+        {
+          "id": 385.3,
+          "title": "Verify: regression test green, full cargo test green (lib + bin), CHANGELOG.md updated",
+          "status": "pending",
+          "dependencies": [
+            385.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 386,
+      "title": "H12: Byte-index string slicing panics on non-ASCII (kills listeners / stuck tasks)",
+      "description": "Byte-index slicing panics on non-ASCII: src/acp/agent.rs:263 (&s[..MAX]); src/acp/server.rs:243 (&args[..80]); src/io/llm_gemini/mod.rs:94; src/cpu/mod.rs:1352, :1384, :1399. system_status output contains non-ASCII (bullet, em-dash, emoji); a panic in the A2A worker leaves the task stuck in Working forever, and in the Gemini listener it kills the listener for good. Fix: use the existing crate::utils::truncate_str everywhere. Source: Helix triple-review comparison 2026-11-11, H12 (Claude only).",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "386.1 SPEC: seams are src/acp/agent.rs:263, src/acp/server.rs:243, src/io/llm_gemini/mod.rs:94, src/cpu/mod.rs:1352, :1384, :1399. Reproduce by slicing a non-ASCII string at a byte index that splits a multi-byte char (e.g. a string with bullet/em-dash/emoji) — must currently panic (red test). 386.2 IMPLEMENT: replace byte-index slicing with crate::utils::truncate_str at every site; audit for other &s[..N] patterns on user/model-controlled strings. 386.3 VERIFY: regression tests fail on unhardened code (panic) and pass after; full cargo test green (stable 1.100.0, lib + bin); CHANGELOG.md updated.",
+      "testStrategy": "cargo test (stable 1.100.0) green, lib + bin; non-ASCII truncation regression tests must panic on unhardened code and pass after.",
+      "subtasks": [
+        {
+          "id": 386.1,
+          "title": "Spec/repro: non-ASCII slice panics at the five sites (red test)",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 386.2,
+          "title": "Implement: truncate_str at every byte-slice site",
+          "status": "pending",
+          "dependencies": [
+            386.1
+          ]
+        },
+        {
+          "id": 386.3,
+          "title": "Verify: regression tests green, full cargo test green (lib + bin), CHANGELOG.md updated",
+          "status": "pending",
+          "dependencies": [
+            386.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 387,
+      "title": "H18: No CI — add GitHub Actions (highest-leverage process fix)",
+      "description": "No CI exists (no .github/workflows/ or any other pipeline, verified absent). The broken build went unnoticed through a commit marked done because nothing checks the tree. Fix: add a GitHub Actions matrix (windows-latest + ubuntu-latest) running cargo fmt --check, cargo clippy --all-targets -- -D warnings, cargo test --all-targets, and a JSON-validity check on .zed/task_list.json. Source: Helix triple-review comparison 2026-11-11, H18 (Claude + Grok). Caveat: the task-262 installer-bin caveat applies in CI too — a fresh checkout lacks config.toml + .grok/docs/system_manifest_root.md, so the workflow must create the two gitignored stubs (or skip the installer bin target) or CI will fail on the pre-existing include_str! issue. Do not invent or embed secrets; if CI needs any, note them in the task instead.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "387.1 SPEC: confirm no .github/workflows exists at origin/PreRelese a98ea3f; define the matrix (windows-latest + ubuntu-latest) and the four checks (fmt --check, clippy --all-targets -- -D warnings, test --all-targets, task_list.json JSON-validity). Decide the task-262 stub handling for CI (create the two gitignored stubs in the workflow, or scope the installer bin out). 387.2 IMPLEMENT: add .github/workflows/ci.yml (or equivalent) with the matrix and checks; keep it minimal and green on a PR. 387.3 VERIFY: workflow file parses (YAML-valid); the checks it runs pass locally on the branch (cargo fmt --check, clippy, test, JSON validity); note any secrets CI would need (none expected). CHANGELOG.md updated.",
+      "testStrategy": "Workflow YAML valid; the four checks (fmt, clippy, test, JSON validity) pass locally on the branch; no secrets embedded.",
+      "subtasks": [
+        {
+          "id": 387.1,
+          "title": "Spec: define CI matrix + checks + task-262 stub handling",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 387.2,
+          "title": "Implement: .github/workflows/ci.yml with matrix + four checks",
+          "status": "pending",
+          "dependencies": [
+            387.1
+          ]
+        },
+        {
+          "id": 387.3,
+          "title": "Verify: YAML valid, checks pass locally, CHANGELOG.md updated",
+          "status": "pending",
+          "dependencies": [
+            387.2
+          ]
+        }
+      ]
     }
   ]
 }
