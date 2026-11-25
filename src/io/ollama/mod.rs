@@ -963,7 +963,17 @@ pub mod tools {
                 for tool in tool_calls {
                     let name = tool["function"]["name"].as_str().unwrap_or("");
                     let args = tool["function"]["arguments"].clone();
-                    let tool_result = crate::tools::execute(name, &args);
+                    // H6 (task 383): dynamic (model-chosen) tool names can be
+                    // `spawn_subagent` / `browser` / `mcp__*`, which need a
+                    // worker context via their own `block_in_place`, so
+                    // `spawn_blocking` would panic — `block_in_place` is the
+                    // sanctioned mechanism and lets the runtime grow a
+                    // replacement worker.
+                    let name_owned = name.to_string();
+                    let args_owned = args.clone();
+                    let tool_result = tokio::task::block_in_place(|| {
+                        crate::tools::execute(&name_owned, &args_owned)
+                    });
 
                     // Basic error detection for tool failures
                     if tool_result.starts_with("Error") || tool_result.starts_with("Unknown tool") {

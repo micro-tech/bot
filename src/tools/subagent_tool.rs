@@ -862,7 +862,7 @@ mod tests {
         let _tl = super::test_env_lock();
         // GIVEN a global bus with a web_interface subscriber and the test stub armed:
         let bus = std::sync::Arc::new(crate::bus::Bus::new());
-        let rx = bus.subscribe("web_interface");
+        let mut rx = bus.subscribe("web_interface");
         let _ = crate::bus::set_global_bus(bus.clone());
         crate::agents::subagent_registry::reset_for_tests();
         // SAFETY: single-threaded test env manipulation; stub only affects this process.
@@ -882,20 +882,22 @@ mod tests {
         assert!(out.contains("subagent-test-stub"), "got: {}", out);
 
         // AND spawned+finished subagent_events arrived in order on the bus.
-        // (recv_timeout: publish hands off to the bus router thread, so
-        // delivery is not synchronous with the publish call.)
+        // (H6/task 383: the bus is now tokio::sync::mpsc, so recv() is
+        // awaited with a timeout instead of the old blocking recv_timeout.
+        // Publish hands off to the bus router thread, so delivery is not
+        // synchronous with the publish call.)
         let mut events = Vec::new();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while events.len() < 2 && std::time::Instant::now() < deadline {
-            match rx.recv_timeout(std::time::Duration::from_millis(200)) {
-                Ok(msg) => {
+            match tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await {
+                Ok(Some(msg)) => {
                     let v: serde_json::Value =
                         serde_json::from_str(&msg.data).unwrap_or_default();
                     if v["type"] == "subagent_event" {
                         events.push(v["event"].as_str().unwrap_or("").to_string());
                     }
                 }
-                Err(_) => {}
+                _ => {}
             }
         }
         assert_eq!(

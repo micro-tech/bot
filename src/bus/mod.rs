@@ -8,7 +8,7 @@ use chrono::Local;
 use log::error;
 use serde::Serialize;
 use serde_json::Value;
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
@@ -24,10 +24,15 @@ pub struct Message {
 /// Bus system to route messages between components.
 pub struct Bus {
     sender: Sender<Message>,
-    subscribers: Arc<Mutex<Vec<(String, Sender<Message>)>>>, // List of subscribers (component name, channel sender)
+    subscribers: Arc<Mutex<Vec<(String, tokio::sync::mpsc::UnboundedSender<Message>)>>>, // List of subscribers (component name, channel sender)
 }
 
-pub type BusHandle = std::sync::mpsc::Receiver<Message>;
+// H6 (task 383): subscribers are now tokio::sync::mpsc receivers. The old
+// std::sync::mpsc receivers blocked a Tokio worker forever on recv(), so
+// four idle listeners could pin every worker on a 4-core box and starve
+// the runtime. The router's inbound channel stays std mpsc (it lives on a
+// plain thread::spawn router, not a runtime worker).
+pub type BusHandle = tokio::sync::mpsc::UnboundedReceiver<Message>;
 
 // ── Process-global bus handle (task 230) ──────────────────────────────────────
 // The sub-agent registry lives in the tools layer and has no bus handle of its
@@ -50,7 +55,10 @@ impl Bus {
     /// Creates a new bus instance with router thread.
     pub fn new() -> Self {
         let (sender, receiver) = channel::<Message>();
-        let subscribers = Arc::new(Mutex::new(Vec::<(String, Sender<Message>)>::new()));
+        let subscribers = Arc::new(Mutex::new(Vec::<(
+            String,
+            tokio::sync::mpsc::UnboundedSender<Message>,
+        )>::new()));
         let subs_clone = Arc::clone(&subscribers);
         thread::spawn(move || {
             println!("[Bus] Router thread started");
@@ -83,8 +91,8 @@ impl Bus {
     }
 
     /// Allows a component to subscribe to messages destined for it.
-    pub fn subscribe(&self, component_name: &str) -> Receiver<Message> {
-        let (tx, rx) = channel();
+    pub fn subscribe(&self, component_name: &str) -> tokio::sync::mpsc::UnboundedReceiver<Message> {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         self.subscribers
             .lock()
             .unwrap()
@@ -154,5 +162,47 @@ impl BusInterface for Bus {
             Ok(()) => crate::hy_evo::node::NodeResult::None,
             Err(e) => crate::hy_evo::node::NodeResult::Error(e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// H6 (task 383): bus listeners used to block a Tokio worker forever on
+    /// std `recv()`. Four listeners pinned four workers on a 4-core box and
+    /// starved the runtime. The bus is now `tokio::sync::mpsc`, so an idle
+    /// listener yields its worker: even a 1-worker runtime makes progress.
+    #[tokio::test]
+    async fn idle_bus_listeners_do_not_starve_runtime() {
+        let bus = Bus::new();
+        let mut rx = bus.subscribe("test_harness");
+        // Idle listener: waits for a message that never comes.
+        let listener = tokio::spawn(async move { while let Some(_msg) = rx.recv().await {} });
+        // On a 1-worker (current-thread) runtime this completes only if the
+        // listener yields its worker while idle — a blocking recv would wedge it.
+        let done = tokio::time::timeout(Duration::from_secs(5), async {
+            tokio::task::yield_now().await;
+            42
+        })
+        .await;
+        assert_eq!(done, Ok(42), "runtime starved by idle bus listener");
+        listener.abort();
+
+        // Delivery still works on the async channel.
+        let bus2 = Bus::new();
+        let mut rx2 = bus2.subscribe("web_interface");
+        bus2
+            .publish(Message {
+                to: "web_interface".into(),
+                from: "test".into(),
+                data: "hello".into(),
+                timestamp: 0,
+            })
+            .unwrap();
+        let got = tokio::time::timeout(Duration::from_secs(5), rx2.recv()).await;
+        assert!(got.is_ok(), "published message must arrive");
+        assert_eq!(got.unwrap().expect("channel open").data, "hello");
     }
 }

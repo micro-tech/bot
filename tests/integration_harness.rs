@@ -47,18 +47,17 @@ impl TestContext {
         println!("[Harness] Bootstrapping test environment...");
 
         // Spawn a simple message counter on the bus.
-        // NOTE: the bus uses blocking std::sync::mpsc channels, and these
-        // tests run on tokio's current_thread runtime, so a blocking recv()
-        // inside tokio::spawn would wedge the executor's only thread.
-        // spawn_blocking keeps the blocking recv off the async executor.
-        // The subscription is taken BEFORE spawning so the blocking thread
-        // holds only the Receiver: when the TestContext (and its Bus) is
-        // dropped, the subscription Sender dies, recv() returns Err, and the
-        // thread exits instead of keeping the Bus alive forever via Arc.
-        let rx = self.bus.subscribe("test_harness");
+        // NOTE (H6/task 383): the bus is now tokio::sync::mpsc, so the
+        // counter recv().await's inside tokio::spawn — no blocking recv on
+        // a runtime worker, and no spawn_blocking bridge is needed anymore.
+        // The subscription is taken BEFORE spawning so the async task holds
+        // only the Receiver: when the TestContext (and its Bus) is dropped,
+        // the subscription Sender dies, recv() returns None, and the task
+        // exits instead of keeping the Bus alive forever via Arc.
+        let mut rx = self.bus.subscribe("test_harness");
         let metrics_clone = self.metrics.clone();
-        let handle = tokio::task::spawn_blocking(move || {
-            while let Ok(msg) = rx.recv() {
+        let handle = tokio::spawn(async move {
+            while let Some(msg) = rx.recv().await {
                 let mut m = metrics_clone.lock().unwrap();
                 m.messages_received += 1;
                 if msg.data.contains("error") {

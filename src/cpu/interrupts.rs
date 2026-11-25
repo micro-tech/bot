@@ -7,7 +7,7 @@ use std::time::Instant;
 pub struct Interrupts;
 
 impl Interrupts {
-    pub async fn poll_next_event(bus: &crate::bus::BusHandle) -> Option<CpuEvent> {
+    pub async fn poll_next_event(bus: &mut crate::bus::BusHandle) -> Option<CpuEvent> {
         debug!("Starting to poll next event from bus...");  // Added logging
         log_to_file("Starting to poll next event from bus...");
         
