@@ -219,6 +219,38 @@ fn kill_tree(_pid: u32) {
     // No process groups off Unix; the caller falls back to child.kill().
 }
 
+/// Grace period for the drain threads to finish after the child is
+/// reaped. A well-behaved child closes its pipes on exit, so EOF is
+/// immediate; the grace only bounds the pathological case (H9): a
+/// background child that escaped the process-group kill (e.g. via
+/// `setsid`) keeps a pipe open forever, and an unbounded `join()`
+/// would hang the caller past the timeout.
+const DRAIN_JOIN_GRACE: Duration = Duration::from_secs(2);
+
+/// Join a drain thread, giving up after [`DRAIN_JOIN_GRACE`].
+/// Returns `(bytes, truncated, abandoned)`. When the thread is still
+/// blocked on a pipe held open by an escaped background child, the
+/// join is abandoned and empty output is returned — the thread is
+/// detached (its `JoinHandle` is dropped) and stays blocked on read
+/// until the escaped child exits, then finishes harmlessly. The
+/// caller must surface `abandoned` so missing output is visible.
+/// Same bounded-drain shape as the evaluator's `recv_timeout`
+/// (task 377, H10); partial output already read into the thread's
+/// local buffer is dropped on abandon, matching that precedent.
+fn join_drain(handle: std::thread::JoinHandle<(Vec<u8>, bool)>) -> (Vec<u8>, bool, bool) {
+    let start = Instant::now();
+    loop {
+        if handle.is_finished() {
+            let (bytes, truncated) = handle.join().unwrap_or_default();
+            return (bytes, truncated, false);
+        }
+        if start.elapsed() >= DRAIN_JOIN_GRACE {
+            return (Vec::new(), false, true);
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 /// Run `command` via `/bin/sh -c` in `workdir`, waiting up to `timeout`.
 /// The child gets its own process group so a timeout kills the whole tree.
 /// stdin is /dev/null (no TTY — interactive prompts fail fast).
@@ -285,8 +317,8 @@ fn spawn_and_wait(
         }
     }
 
-    let (stdout_bytes, stdout_truncated) = out_handle.join().unwrap_or_default();
-    let (stderr_bytes, stderr_truncated) = err_handle.join().unwrap_or_default();
+    let (stdout_bytes, stdout_truncated, stdout_abandoned) = join_drain(out_handle);
+    let (stderr_bytes, stderr_truncated, stderr_abandoned) = join_drain(err_handle);
     let stdout = String::from_utf8_lossy(&stdout_bytes);
     let stderr = String::from_utf8_lossy(&stderr_bytes);
 
@@ -335,6 +367,11 @@ fn spawn_and_wait(
             "\n[notice: output truncated at {} bytes per stream]\n",
             cap
         ));
+    }
+    if stdout_abandoned || stderr_abandoned {
+        report.push_str(
+            "\n[notice: a background child still holds the output pipes; output may be incomplete]\n",
+        );
     }
     Ok(report)
 }
@@ -455,6 +492,56 @@ mod tests {
                 "kill took too long: {:?}",
                 elapsed
             );
+        }
+
+        #[test]
+        fn spawn_background_child_cannot_hold_pipe_open_forever() {
+            // H9: `sleep 30 &` — sh exits at once, but the orphaned
+            // sleep inherits stdout, so the drain thread never sees
+            // EOF and the unbounded join() hangs forever. The call
+            // must return within the timeout + drain grace, not hang
+            // until the sleep dies on its own.
+            let cfg = ShellConfig {
+                enabled: true,
+                ..ShellConfig::default()
+            };
+            let workdir = resolve_workdir(&cfg, None).unwrap();
+            let start = Instant::now();
+            let out = spawn_and_wait("sleep 30 &", &workdir, Duration::from_secs(2), 1024)
+                .expect("spawn works");
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "background child held the pipe open past the deadline: {:?}",
+                start.elapsed()
+            );
+            assert!(out.contains("[exit: code 0]"), "got: {}", out);
+        }
+
+        #[test]
+        fn spawn_setsid_child_escaping_group_kill_cannot_hold_pipe_open() {
+            // H9, timeout path: `setsid` puts the background child in
+            // a new session, so the process-group SIGKILL cannot
+            // reach it — the pipe stays open past the timeout and the
+            // unbounded join() hangs forever.
+            let cfg = ShellConfig {
+                enabled: true,
+                ..ShellConfig::default()
+            };
+            let workdir = resolve_workdir(&cfg, None).unwrap();
+            let start = Instant::now();
+            let out = spawn_and_wait(
+                "setsid sleep 30 & sleep 30",
+                &workdir,
+                Duration::from_secs(2),
+                1024,
+            )
+            .expect("spawn works");
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "setsid child held the pipe open past the deadline: {:?}",
+                start.elapsed()
+            );
+            assert!(out.contains("TIMEOUT"), "got: {}", out);
         }
 
         #[test]

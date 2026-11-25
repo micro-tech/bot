@@ -123,6 +123,37 @@ fn kill_tree(pid: u32) {
     }
 }
 
+/// Grace period for the drain threads to finish after the child is
+/// reaped. A well-behaved child closes its pipes on exit, so EOF is
+/// immediate; the grace only bounds the pathological case (H9): a
+/// background child that escaped the process-group kill (e.g. via
+/// `setsid`) keeps a pipe open forever, and an unbounded `join()`
+/// would hang the caller past the timeout.
+const DRAIN_JOIN_GRACE: Duration = Duration::from_secs(2);
+
+/// Join a drain thread, giving up after [`DRAIN_JOIN_GRACE`].
+/// Returns `(bytes, truncated, abandoned)`. When the thread is still
+/// blocked on a pipe held open by an escaped background child, the
+/// join is abandoned and empty output is returned — the thread is
+/// detached (its `JoinHandle` is dropped) and stays blocked on read
+/// until the escaped child exits, then finishes harmlessly. Same
+/// bounded-drain shape as the evaluator's `recv_timeout` (task 377,
+/// H10); partial output already read into the thread's local buffer
+/// is dropped on abandon, matching that precedent.
+fn join_drain(handle: std::thread::JoinHandle<(Vec<u8>, bool)>) -> (Vec<u8>, bool, bool) {
+    let start = Instant::now();
+    loop {
+        if handle.is_finished() {
+            let (bytes, truncated) = handle.join().unwrap_or_default();
+            return (bytes, truncated, false);
+        }
+        if start.elapsed() >= DRAIN_JOIN_GRACE {
+            return (Vec::new(), false, true);
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 /// Run argv directly (NO shell) with a wall-clock timeout and a
 /// per-stream output cap. stdin is /dev/null (no TTY — interactive
 /// prompts fail fast). On timeout the process (group) is killed and
@@ -191,8 +222,16 @@ pub fn run_command_with_timeout(
         }
     }
 
-    let (stdout_bytes, stdout_truncated) = out_handle.join().unwrap_or_default();
-    let (stderr_bytes, stderr_truncated) = err_handle.join().unwrap_or_default();
+    // Bounded join (H9): a background child that escaped the group
+    // kill (e.g. via `setsid`) holds a pipe open past the timeout,
+    // and an unbounded join() would hang the caller forever. An
+    // abandoned drain means the stream's output is incomplete, so
+    // it folds into the truncation flags — the reply renders
+    // `[truncated]`, the same signal as a cap cut. No struct change.
+    let (stdout_bytes, stdout_truncated, stdout_abandoned) = join_drain(out_handle);
+    let (stderr_bytes, stderr_truncated, stderr_abandoned) = join_drain(err_handle);
+    let stdout_truncated = stdout_truncated || stdout_abandoned;
+    let stderr_truncated = stderr_truncated || stderr_abandoned;
     Ok(ExecutionOutcome {
         stdout: String::from_utf8_lossy(&stdout_bytes).into_owned(),
         stderr: String::from_utf8_lossy(&stderr_bytes).into_owned(),
@@ -331,6 +370,50 @@ mod tests {
         assert!(
             start.elapsed() < Duration::from_secs(10),
             "timeout must bound the run, took {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn run_setsid_child_cannot_hold_pipe_open_forever() {
+        // H9: `setsid` forks and its parent exits at once, but the
+        // orphaned sleep (new session, escapes the group kill)
+        // inherits stdout, so the drain thread never sees EOF and the
+        // unbounded join() hangs forever. Must return within the
+        // drain grace, with the setsid parent's exit code 0.
+        let start = Instant::now();
+        let out = run_command_with_timeout(
+            &argv(&["setsid", "sleep", "30"]),
+            Duration::from_secs(10),
+            4096,
+        )
+        .expect("setsid must spawn");
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "setsid child held the pipe open past the deadline: {:?}",
+            start.elapsed()
+        );
+        assert!(!out.timed_out);
+        assert_eq!(out.exit_code, Some(0));
+    }
+
+    #[test]
+    fn run_timeout_with_setsid_grandchild_cannot_hold_pipe_open() {
+        // H9, timeout path: the direct child (sh) sleeps while a
+        // setsid'd grandchild escapes the group kill and holds the
+        // pipe open past the timeout.
+        let start = Instant::now();
+        let argv = vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "setsid sleep 30 & sleep 30".to_string(),
+        ];
+        let out =
+            run_command_with_timeout(&argv, Duration::from_secs(2), 4096).expect("sh must spawn");
+        assert!(out.timed_out, "30s sleep must time out at 2s");
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "setsid grandchild held the pipe open past the deadline: {:?}",
             start.elapsed()
         );
     }
