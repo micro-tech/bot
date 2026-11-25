@@ -5355,7 +5355,7 @@
       "status": "pending",
       "dependencies": [],
       "priority": "low",
-      "details": "Verified zero-reference (Surveyor 1, 2026-11-18): grep over src/, tests/, build.rs and Cargo.toml finds `pulldown-cmark` only at Cargo.toml:71 and the commented-out `use` in src/config/manifest.rs:3; `tower-http` only at Cargo.toml:45; `tracing-subscriber` only at Cargo.toml:41. No benches/ dir exists; examples/ holds only project_scanner_config.toml (not Rust); build.rs references none of the three. No [features] entry pulls any of them, and the only `cors` mentions left are comments stating CORS was removed (src/io/web_server/mod.rs:483, :2192; src/voice/mod.rs:7). The `tracing` crate itself is used widely (tracing::{info, warn, debug} across src/) and STAYS \u2014 only `tracing-subscriber` goes. `tracing-subscriber` is not re-exported by `tracing`, and removing a direct dep leaves any transitive copy intact, so no other crate is affected.\n\nFix: (1) delete the three dep lines from Cargo.toml; delete the stale commented-out `// use pulldown_cmark::Parser;` line in src/config/manifest.rs:3 so nothing references the removed crate; run `cargo check` so Cargo.lock drops them and commit the lockfile change. (2) In tests/unix_socket_test.rs delete the two unused imports (lines 5-6). The test body is a placeholder (asserts on a string literal, no socket code \u2014 the real socket test was never written), so the imports are simply dead; do not expand the placeholder test here, that is separate work.\n\nRuled out: NOT a build or test failure \u2014 lib 773 passed / 0 failed / 6 ignored, bin helix 748 / 0 / 6, integration 35 / 0, doctests 1 / 0 / 1, all green; PR #63 (diagrams only) changed no code, so these warnings pre-date this run's HEAD and are not a regression. Do NOT fix task 262 here \u2014 the installer include_str! failure is a separate, already-filed issue; this task only covers the warnings. (Task 262 workaround for verification: temporary config.toml copy, removed afterwards \u2014 same as the Quartermaster run.)",
+      "details": "Verified zero-reference (Surveyor 1, 2026-11-18): grep over src/, tests/, build.rs and Cargo.toml finds `pulldown-cmark` only at Cargo.toml:71 and the commented-out `use` in src/config/manifest.rs:3; `tower-http` only at Cargo.toml:45; `tracing-subscriber` only at Cargo.toml:41. No benches/ dir exists; examples/ holds only project_scanner_config.toml (not Rust); build.rs references none of the three. No [features] entry pulls any of them, and the only `cors` mentions left are comments stating CORS was removed (src/io/web_server/mod.rs:483, :2192; src/voice/mod.rs:7). The `tracing` crate itself is used widely (tracing::{info, warn, debug} across src/) and STAYS \u2014 only `tracing-subscriber` goes. `tracing-subscriber` is not re-exported by `tracing`, and removing a direct dep leaves any transitive copy intact, so no other crate is affected.\n\nFix: (1) delete the three dep lines from Cargo.toml; delete the stale commented-out `// use pulldown_cmark::Parser;` line in src/config/manifest.rs:3 so nothing references the removed crate; run `cargo check` so Cargo.lock drops them and commit the lockfile change. (2) In tests/unix_socket_test.rs delete the two unused imports (lines 5-6). The test body is a placeholder (asserts on a string literal, no socket code \u2014 the real socket test was never written), so the imports are simply dead; do not expand the placeholder test here, that is separate work.\n\nRuled out: NOT a build or test failure \u2014 lib 773 passed / 0 failed / 6 ignored, bin helix 748 / 0 / 6, integration 35 / 0, doctests 1 / 0 / 1, all green; PR #63 (diagrams only) changed no code, so these warnings pre-date this run's HEAD and are not a regression. Do NOT fix task 262 here \u2014 the installer include_str! failure is a separate, already-filed issue; this task only covers the warnings. (Task 262 workaround for verification: temporary config.toml copy, removed afterwards \u2014 same as the Quartermaster run.) (Update 2026-11-25, Quartermaster: H18 / PR #76 removed the 2 unused imports from tests/unix_socket_test.rs, so only the 3 unused-dependency manifest warnings remain; the import half of this task is done.)",
       "testStrategy": "`cargo check --lib --test unix_socket_test` emits 0 warnings; `cargo build` (with temporary config.toml copy per task 262, removed after) emits 0 warnings including 0 unused-dependency manifest warnings; `cargo test --lib --bin helix` stays green; `git diff Cargo.lock` shows only the three removed crates.",
       "subtasks": [
         {
@@ -5786,6 +5786,48 @@
           ]
         }
       ]
+    },
+    {
+      "dependencies": [],
+      "description": "The CI workflow added by H18 (task 387, PR #76, .github/workflows/ci.yml) runs `cargo fmt --all -- --check` as its first real step, but the bot tree has never been fmt-clean (AGENTS.md: even build.rs fails fmt --check). Every CI run since the workflow landed fails at that step in 23-39s, before clippy or tests ever run, including the final full-tree run on current PreRelese HEAD 497cea8 (Gmail: '[micro-tech/bot] Run failed: CI - PreRelese (497cea8)', both ubuntu-latest and windows-latest, 2 annotations each). CI therefore gives no signal at all right now: clippy -D warnings and cargo test never execute. Fix: either format the whole tree (1802 diffs across the workspace - a huge noisy diff, see AGENTS.md cargo-fmt warning) or relax/scope the fmt step (changed-files-only, or non-blocking) until the tree is formatted - Surveyor to decide and cost both options. Whichever way, the acceptance bar is a green CI run on PreRelese, not just a green local fmt.",
+      "details": "388.1 DIAGNOSED 2026-11-25 (Quartermaster nightly run): Gmail search from:notifications@github.com after:2026/11/23 returned 8 'Run failed: CI' mails, all for micro-tech/bot, all H18-era runs: PR runs for H18 (24fdd1c), toolchain pin (a170d51), H8 (6101aa2), H6 (313d850) and PreRelese runs ba28cb2, 34d5435, d25b77c, 497cea8. Every one failed in 23-39s on both runners. Local repro loop: `cargo fmt --all -- --check` on PreRelese 497cea8 exits 1 with 1802 'Diff in' hunks (build.rs:36, src/bin/../browser_install.rs, chat_mcp_install.rs, ...). Ruled out: toolchain install (dtolnay/rust-toolchain@stable 1.100.0 is a standard action and the same step pattern fails identically on all 8 runs incl. PR branches), the task-262 stubs step (cp + printf, trivial), and test/clippy failures (they never run - the failure time is far too short for any compile). Not yet confirmed from the GitHub run log itself (no Actions log tool in the GitHub MCP; gh CLI not logged in) - Surveyor step 1 is to open the 497cea8 run on github.com and confirm the failing step is 'Check formatting'. Also note: grok-cli has no CI workflow, so no CI signal exists there at all. 388.2 SPEC/REPRO: red-capable loop is `cargo fmt --all -- --check` (exit 1, 1802 diffs) plus the CI step order in .github/workflows/ci.yml (fmt -> clippy -D warnings -> cargo test --all-targets -> task-list JSON check). 388.3 FIX + VERIFY: implement the chosen option, then verify locally by running the CI steps in order and confirm a green CI run on PreRelese after merge (John merges; the run itself is the proof).",
+      "id": 388,
+      "priority": "high",
+      "status": "pending",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": 388.1,
+          "status": "pending",
+          "title": "Confirm failing step from the GitHub run log for PreRelese 497cea8 (expect: Check formatting)"
+        },
+        {
+          "dependencies": [
+            388.1
+          ],
+          "id": 388.2,
+          "status": "pending",
+          "title": "Decide fix: whole-tree cargo fmt vs scoped/non-blocking fmt step; cost both options"
+        },
+        {
+          "dependencies": [
+            388.2
+          ],
+          "id": 388.3,
+          "status": "pending",
+          "title": "Implement the fix; run CI steps in order locally (fmt, clippy -D warnings, test, JSON check)"
+        },
+        {
+          "dependencies": [
+            388.3
+          ],
+          "id": 388.4,
+          "status": "pending",
+          "title": "Verify: green CI run on PreRelese after merge; update CHANGELOG.md"
+        }
+      ],
+      "testStrategy": "Red loop first: `cargo fmt --all -- --check` must exit 1 on the unmodified tree (1802 diffs) and the chosen fix must make the CI step order pass locally (fmt step as-shipped-or-amended, then `cargo clippy --all-targets -- -D warnings`, then `cargo test --all-targets`, then `python -m json.tool .zed/task_list.json`). Final proof is a green GitHub Actions CI run on PreRelese after merge.",
+      "title": "H18 CI red on PreRelese: fmt --check step fails on pre-existing unformatted tree (1802 diffs)"
     }
   ]
 }
