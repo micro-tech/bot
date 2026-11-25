@@ -5720,35 +5720,35 @@
       ]
     },
     {
-      "id": 386,
-      "title": "Helix review H12: byte-index string slicing panics on non-ASCII",
-      "description": "Five byte-index slices (&s[..N]) panic whenever the cut byte lands inside a multi-byte UTF-8 char: truncate_for_display (src/acp/agent.rs, &s[..500]), tool_call_title (src/acp/server.rs, &args[..80]), Gemini listener prompt preview (src/io/llm_gemini/mod.rs, &prompt[..120]), and three handle_bus_message log lines (src/cpu/mod.rs, &msg.data[..80], &prompt[..80], &reply[..500]). system_status output and model replies routinely contain •, —, and emoji. A panic in the A2A worker leaves the task stuck in Working forever; in the Gemini listener it kills the listener for good. Fix: use the existing crate::utils::truncate_str everywhere. Also audit for other &s[..N] patterns on user/model-controlled strings.",
+      "id": 385,
+      "title": "H9: Background children escape the shell timeout (pipe stays open forever)",
+      "description": "spawn_and_wait (src/tools/shell_tool.rs:268-289) and run_command_with_timeout (src/chat_command/executor.rs:172-195) already put the child in its own process group and SIGKILL the group on timeout, but the drain threads are joined with an unbounded join(). A background child keeps the stdout pipe open, so `sleep 99999 &` (sh exits at once, orphaned sleep inherits stdout) blocks out_handle.join() forever and the shell timeout never fires; a setsid'd child escapes the group kill too, so the timeout path hangs the same way. Fix: kill the process group after reaping (a Job Object on Windows) and join the drain threads with a deadline so a background child cannot hold the pipe open past the timeout.",
       "status": "done",
       "dependencies": [],
       "priority": "high",
-      "details": "386.1 SPEC/REPRO: the five sites slice on byte indexes; a non-ASCII string whose cut byte is mid-char panics. Reproduce with bullets/emoji: 300 bullets (900 bytes, byte 500 mid-char), emoji args (byte 80 inside 🖥️), chat_request prompt (79 ASCII + bullets, byte 80 mid-char), ollama_response reply (499 ASCII + bullet, byte 500 mid-char). 386.2 IMPLEMENT: all six live sites (five spec sites + the same pattern in src/io/ollama/keepalive.rs:144, &body[..200]) now use crate::utils::truncate_str; Gemini preview extracted as a named prompt_preview helper for testability. Audit: reply.rs cuts from char_indices (safe), extract_json_object/shell_security/ssh/handler/reflection_planner_adapter slice at ASCII-find offsets (safe), executor.rs/shell_tool.rs/voice/client.rs slice byte buffers (safe) — no further live sites. 386.3 VERIFY: 7 new tests, all confirmed RED first (each panicking exactly at its slicing line: agent.rs:263, server.rs:243, cpu/mod.rs:1527/:1559/:1574), green after. Full cargo test (stable 1.100.0) green: lib 828/0/6, bin helix 803/0/6, bin installer 24/0/0, integration 35, doctests 1/0/1; total 1691/0/13 (baseline 1677 + 14). New/edited lines rustfmt-clean. Only the 2 known task-371 warnings. Installer bin needed the two gitignored task-262 stubs in the worktree. RESULT (2026-11-23, Ranger): DONE. Branch ranger-helix-h12 pushed; no PR opened (Cobble jr opens it).",
-      "testStrategy": "cargo test (repo toolchain, stable 1.100.0) green, lib + bin; the five site regression tests must fail on the unhardened code and pass after.",
+      "details": "385.1 SPEC/REPRO: seams are spawn_and_wait (src/tools/shell_tool.rs, unbounded join at :288-289) + run_command_with_timeout (src/chat_command/executor.rs, unbounded join at :194-195). The group kill already existed (setpgid pre_exec + killpg); the hole is the join, on BOTH paths: plain (sh exits immediately, no timeout fires) and timeout (setsid escapes the kill). Repro: `sleep 30 &` and `setsid sleep 30 & sleep 30` with a 2s timeout. On unhardened code all 4 regression tests fail (call blocks ~30s until the orphaned sleep dies on its own, past the 10s bound). 385.2 IMPLEMENTED 2026-11-24 (branch ranger-helix-h9): new join_drain helper in both files (DRAIN_JOIN_GRACE 2s, is_finished() poll every 10ms, detach the JoinHandle on expiry); run_shell surfaces abandonment with a [notice: a background child still holds the output pipes] line; the chat-command path folds abandonment into the existing truncation flags so the reply renders [truncated]; no ExecutionOutcome struct change. Windows Job Object out of scope; non-Unix child.kill() fallback unchanged. Known limit (same as the H10 evaluator precedent): bytes already read into the abandoned thread's local buffer are dropped, so an abandoned stream comes back empty rather than partial. 385.3 VERIFY: 4 new regression tests (2 per path: plain background child + timeout-path setsid escape) confirmed FAILING on unhardened code first (30.01s) and passing after (6.03s). Full cargo test green on stable 1.100.0: lib 825/0/6, bin helix 800/0/6, bin installer 24/0/0, integration 35, doctests 1/0/1; total 1685/0/13 (baseline 1677 + 8 = 4 new tests x 2 targets). rustfmt --check on both touched files shows only pre-existing diffs; no new warnings (only the 2 known task-371 unused-import warnings in unix_socket_test). Installer bin needed the two gitignored task-262 stubs in the worktree (config.toml + .grok stub) for the full run. Live drill 385.3 is John's after merge: run `sleep 60 &` via run_shell with a short timeout and confirm it returns with the pipe-hold notice instead of hanging.",
+      "testStrategy": "cargo test (repo toolchain, stable 1.100.0) green, lib + bin; the 4 pipe-hold regression tests must fail on the unhardened code and pass after. Live drill 385.3 on the R630 after merge: run `sleep 60 &` through run_shell with a short timeout and confirm it returns with the pipe-hold notice instead of hanging.",
       "subtasks": [
         {
-          "id": 386.1,
-          "title": "Spec/repro: non-ASCII input panics at the five slicing sites (red tests)",
+          "id": 385.1,
+          "title": "Spec/repro: unbounded drain join hangs on background child holding the pipe (red tests)",
           "status": "done",
           "dependencies": []
         },
         {
-          "id": 386.2,
-          "title": "Implement: crate::utils::truncate_str at all six sites + audit for other &s[..N] patterns",
+          "id": 385.2,
+          "title": "Implement: deadline-bounded join_drain in shell_tool.rs + executor.rs, surface abandonment",
           "status": "done",
           "dependencies": [
-            386.1
+            385.1
           ]
         },
         {
-          "id": 386.3,
+          "id": 385.3,
           "title": "Verify: regression tests green, full cargo test green (lib + bin), CHANGELOG.md updated",
           "status": "done",
           "dependencies": [
-            386.2
+            385.2
           ]
         }
       ]
