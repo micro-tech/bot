@@ -846,6 +846,7 @@ mod tests {
     // NOTE: multi_thread flavor — tool_definitions() bridges into the MCP
     // runtime via block_in_place, which panics on a current-thread runtime.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[allow(clippy::await_holding_lock)]
     async fn gemini_tool_loop_emits_spawn_subagent_call() {
         // Task 221.4: headless drill — the Gemini path must emit a
         // spawn_subagent tool call and publish the tool_call bus message the
@@ -946,6 +947,7 @@ mod tests {
     // NOTE: multi_thread flavor — tool_definitions() bridges into the MCP
     // runtime via block_in_place, which panics on a current-thread runtime.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[allow(clippy::await_holding_lock)]
     async fn gemini_tool_loop_transient_503_does_not_replay_tool_calls() {
         // H4 (task 373): a transient failure in round 2 must retry only
         // round 2's HTTP call — round 1's tool must NOT be re-executed.

@@ -2981,6 +2981,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn support_status_and_drafts_are_public() {
         use tower::ServiceExt;
         let _g = support_route_env("helix-support-route-public");
@@ -3031,6 +3032,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_status_requires_token_and_reports_snapshot() {
         use tower::ServiceExt;
         let _g = crate::tools::subagent_tool::test_env_lock();
@@ -3104,6 +3106,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn support_mutations_require_token() {
         use tower::ServiceExt;
         let _g = support_route_env("helix-support-route-auth");
@@ -3144,6 +3147,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn support_approve_send_flow_via_routes() {
         use tower::ServiceExt;
         let _g = support_route_env("helix-support-route-flow");
@@ -3184,6 +3188,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn support_send_unapproved_is_bad_request() {
         use tower::ServiceExt;
         let _g = support_route_env("helix-support-route-noauto");
@@ -4176,8 +4181,7 @@ mod tests {
         use futures_util::StreamExt;
         while let Ok(Some(Ok(_))) =
             tokio::time::timeout(std::time::Duration::from_millis(300), ws.next()).await
-        {
-        }
+        {}
     }
 
     /// Send one JSON message on the socket.

@@ -838,6 +838,7 @@ mod tests {
     /// before approval. Then approve + send: the send tool must fire exactly
     /// once, carrying the approved text.
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn mock_end_to_end_support_loop() {
         let _g = crate::tools::subagent_tool::test_env_lock();
         let dir = std::env::temp_dir().join("helix-support-e2e-mock");

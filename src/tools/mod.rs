@@ -1045,8 +1045,7 @@ mod tests {
         // - Code has cfg(feature = "ssh") guards
         // - Default build (no feature) still compiles and the tools are usable for local scans
         #[cfg(feature = "ssh")]
-        {
-        }
+        {}
         #[cfg(not(feature = "ssh"))]
         {
             // This is the common case on Windows without Perl + full OpenSSL build

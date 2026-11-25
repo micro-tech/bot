@@ -22,7 +22,7 @@ use log::{debug, warn};
 /// - Section present but the wrong shape -> `warn!` + defaults. The
 ///   operator's settings were ignored; that must be loud.
 ///
- /// `extract` pulls the section out of the parsed document, so nested
+/// `extract` pulls the section out of the parsed document, so nested
 /// sections (`[helix.okf]`) work too.
 pub(crate) fn load_section<T>(
     toml_str: &str,

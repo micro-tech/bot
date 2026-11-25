@@ -325,6 +325,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn run_prompt_produces_final_answer() {
         let _lock = hermetic_mcp_disabled();
         // GIVEN an agent and a session:
@@ -341,6 +342,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn run_prompt_unknown_session_still_runs() {
         let _lock = hermetic_mcp_disabled();
         // GIVEN an agent with no such session:

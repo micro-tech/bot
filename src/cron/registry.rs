@@ -736,6 +736,7 @@ mod registry_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn cron_agent_job_end_to_end_via_stub() {
         // Task 218.3 (headless): an every-2m routine carrying an agent payload
         // fires, the payload reaches the shared dispatch helper, and a

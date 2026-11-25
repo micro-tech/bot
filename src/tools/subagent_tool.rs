@@ -755,6 +755,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn dispatch_spawn_uses_stub_and_shared_helper() {
         let _tl = super::test_env_lock();
         // Task 216: the cron job-pump calls dispatch_spawn directly — verify the
@@ -782,6 +783,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn fallback_skips_unreachable_ollama() {
         // Task 217.3: dead Ollama boxes fall through to the next ladder rung.
         let _tl = super::test_env_lock();
@@ -809,6 +811,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn fallback_fails_cleanly_when_everything_is_down() {
         // Task 217.3: dead Ollama + tripped spend cap -> honest error, no panic.
         let _tl = super::test_env_lock();
@@ -885,6 +888,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn stubbed_dispatch_emits_spawned_then_finished_bus_events() {
         let _tl = super::test_env_lock();
         // GIVEN a global bus with a web_interface subscriber and the test stub armed:

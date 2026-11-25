@@ -554,6 +554,7 @@ fn dispatch_structured(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_and_reply(
     tools: &ResolvedChatTools,
     cfg: &ChatCommandConfig,

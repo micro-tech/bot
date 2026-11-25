@@ -153,12 +153,7 @@ fn parse_tools_key(fm_lines: &[&str]) -> Option<Vec<String>> {
                 while let Some(next) = iter.peek() {
                     let nt = next.trim();
                     if let Some(item) = nt.strip_prefix("- ") {
-                        names.push(
-                            item.trim()
-                                .trim_matches('"')
-                                .trim_matches('\'')
-                                .to_string(),
-                        );
+                        names.push(item.trim().trim_matches('"').trim_matches('\'').to_string());
                         iter.next();
                     } else {
                         break;

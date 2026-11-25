@@ -164,6 +164,7 @@ pub fn scan_project(
 }
 
 /// Walks a local (or mounted) directory. Respects include/exclude globs at a basic level.
+#[allow(clippy::too_many_arguments)]
 fn walk_local_directory(
     base_path: &str,
     max_depth: usize,

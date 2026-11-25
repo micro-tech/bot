@@ -1961,7 +1961,7 @@ pub struct ErrorFindings {
 /// - it carries an error marker: `[ERROR]`, `ERROR:`, `Error`, `Failed`,
 ///   `failed`, or `HALTED`.
 ///
- /// The marker match is case-sensitive on purpose: routine chatter uses
+/// The marker match is case-sensitive on purpose: routine chatter uses
 /// lowercase "error" ("error-log review: N error lines", "or error
 /// occurred"), and the review's own summary line must never count itself.
 /// Lines without a parseable timestamp are not counted: every current
@@ -1982,7 +1982,7 @@ pub struct ErrorFindings {
 ///   counts (e.g. `watchdog tripped`, `Tool failed: ...`), mirroring the
 ///   acp/agent.rs rule that only `Tool failed:` is a genuine halt error.
 ///
- /// Because `findings.recent` is built from counted lines only, these
+/// Because `findings.recent` is built from counted lines only, these
 /// exclusions also keep non-actionable lines out of `maybe_nightly_fix`
 /// input (task 293.3) with no separate fixer change.
 /// Task 312: two more shapes are routine/audit chatter, not errors,
@@ -1997,7 +1997,7 @@ pub struct ErrorFindings {
 ///   events; the echoed command/reason/task text can contain marker
 ///   words, e.g. a `grep Error ...` command or a `spawn failed` note).
 ///
- /// Genuine errors that merely MENTION a routine or a chat command still
+/// Genuine errors that merely MENTION a routine or a chat command still
 /// count: the exclusion is by line prefix, not by substring.
 const ERROR_LOG_RECENT_WINDOW_MINUTES: i64 = 24 * 60;
 const ERROR_MARKERS: [&str; 6] = ["[ERROR]", "ERROR:", "Error", "Failed", "failed", "HALTED"];
@@ -2512,6 +2512,7 @@ mod nightly_tests {
     // ── Task 295: chat-command routine arm ─────────────────────────────
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn chat_command_watch_dispatch_quiet_skips_without_tools() {
         // GIVEN a Cpu with no [chat_command] config and no chat tools
         // advertised, WHEN the chat-command-watch routine fires, THEN
@@ -2570,6 +2571,7 @@ mod nightly_tests {
     // ── Task 376: hourly network capture log is a live routine ────────
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn network_capture_log_routine_appends_line() {
         // GIVEN a Cpu with stubbed wire MCP tools (interfaces + capture):
         let _lock = crate::tools::subagent_tool::test_env_lock();
@@ -2637,6 +2639,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn network_capture_log_routine_fails_soft_without_mcp() {
         // GIVEN a Cpu with no MCP tools stubbed (wire unavailable):
         let _lock = crate::tools::subagent_tool::test_env_lock();
@@ -2683,6 +2686,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_phase_zero_collects_and_proposes_nothing() {
         // GIVEN phase 0 + all kill switches clear, WHEN the arm fires,
         // THEN one ledger entry is written and NO worker is dispatched
@@ -2704,6 +2708,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_kill_switch_aborts_before_dispatch() {
         // GIVEN the routine disabled in routines.json (kill #3),
         // WHEN the arm fires, THEN nothing is collected and nobody is
@@ -2727,6 +2732,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_phase_one_dispatches_one_worker_on_signal() {
         // GIVEN phase 1 + a failing signal (a restart marker in the
         // runtime logs), WHEN the arm fires, THEN one ledger entry is
@@ -2758,6 +2764,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_config_disabled_aborts_before_any_work() {
         // GIVEN config enabled=false (kill #1) with the routine enabled,
         // WHEN the arm fires, THEN nothing is collected and nobody is
@@ -2780,6 +2787,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_stop_file_aborts_before_any_work() {
         // GIVEN a stop file present (kill #2) with config + routine
         // enabled, WHEN the arm fires, THEN nothing is collected and
@@ -2798,6 +2806,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_stop_file_mid_cycle_aborts_next_and_reenable_resumes() {
         // GIVEN a running loop (phase 1 + restart signal), WHEN a stop
         // file appears between cycles, THEN the next cycle aborts

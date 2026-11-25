@@ -299,6 +299,7 @@ impl PrBackend for QueueBackend {
 /// only queued AFTER the push succeeds, so the queue consumer never
 /// opens a PR for a branch that isn't on origin. The temp worktree
 /// used for the push is removed either way.
+#[allow(clippy::too_many_arguments)]
 pub fn deliver_promoted_proposal(
     backend: &mut dyn PrBackend,
     repo: &Path,
@@ -391,6 +392,7 @@ pub fn deliver_oldest_promoted_proposal(
 /// and (for the D1-disabled case) the `pr-opening-disabled` line is
 /// logged — the proposal stays as it was, never dropped. On open, the
 /// backend is called once and the record becomes `queued`.
+#[allow(clippy::too_many_arguments)]
 pub fn request_pr_open(
     backend: &mut dyn PrBackend,
     rt_dir: &Path,

@@ -364,6 +364,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn draft_reply_with_stubbed_subagent_stages_draft() {
         // Task 258.4: no Gemini API key needed — the sub-agent dispatch is stubbed.
         let _g = with_env("helix-drafter-test-stub");

@@ -446,6 +446,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn message_send_creates_and_completes_task() {
         let _lock = hermetic_mcp_disabled();
         let state = test_state();
@@ -472,6 +473,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn cancel_terminal_task_is_noop() {
         let _lock = hermetic_mcp_disabled();
         let state = test_state();

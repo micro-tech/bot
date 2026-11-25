@@ -41,7 +41,15 @@ impl TestContext {
             metrics: Arc::new(std::sync::Mutex::new(TestMetrics::default())),
         }
     }
+}
 
+impl Default for TestContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TestContext {
     /// Bootstrap core modules (bus already created).
     pub async fn bootstrap(&mut self) -> anyhow::Result<()> {
         println!("[Harness] Bootstrapping test environment...");

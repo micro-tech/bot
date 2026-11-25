@@ -864,6 +864,7 @@ pub mod tools {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn call_ollama_tools(
         client: &Client,
         base_url: &str,
