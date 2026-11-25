@@ -141,7 +141,9 @@ pub async fn preload_model(base_url: &str, model: &str) -> Result<(), String> {
                     attempt,
                     MAX_RETRIES,
                     status,
-                    &body[..body.len().min(200)]
+                    // H12 (task 386): `&body[..200]` panics when byte 200
+                    // lands inside a multi-byte char in the error body.
+                    crate::utils::truncate_str(&body, 200)
                 );
             }
 
