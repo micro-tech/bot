@@ -5720,6 +5720,40 @@
       ]
     },
     {
+      "id": 384,
+      "title": "H8: Shell denylist bypass via ;/&&/| command chaining",
+      "description": "The shell tool's denylist can be bypassed by chaining a blocked command after an allowed one (e.g. `allowed; blocked` or `allowed && blocked`). Root cause: check_shell_argv0 (src/tools/shell_security.rs) only analysed the FIRST command's argv[0], and the substring denylist does not cover the generalised cases (rm -rf $HOME, dd of=/dev/<anything>). So `echo ok; rm -rf $HOME` passed both layers. Fix: split the command into segments at unquoted ;/&&/||/|/&/newline (quoting honoured) and run the argv[0] analysis on EVERY segment; the substring layer stays whole-string.",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "details": "384.1 SPEC/REPRO: seams are validate_shell_command / check_shell_argv0 (src/tools/shell_security.rs), called from run_shell (src/tools/shell_tool.rs:100). The argv[0] layer tokenized the whole command and only checked words[0] (after sudo/env wrappers); the substring layer has no patterns for `rm -rf $HOME` or `dd of=/dev/<anything>`. Repro (all passed validation on unhardened code): `echo ok; rm -rf $HOME`, `echo ok && rm -rf ${HOME}`, `ls && dd if=/dev/zero of=/dev/vda`, `echo hi | dd of=/dev/vda`, `echo ok\\nrm -rf $HOME`. 384.2 IMPLEMENTED 2026-11-25 (branch ranger-helix-h8, rebased onto origin/PreRelese ba28cb2 first): new split_command_segments() splits at unquoted `;`, `&`, `|`, newline, respecting single quotes, double quotes, and backslash escapes (quotes kept in segments so shell_word_split sees exact text); `&&`/`||`/`;;` yield empty segments, harmless. validate_shell_command now runs check_shell_argv0 on every segment; substring layer unchanged. 3 new tests (chained-denied-segments, benign-chaining-and-quoted-denied-text, splitter unit test). Known limits (out of scope, noted for follow-up): command substitution $(...) and backticks are NOT unpacked (pre-existing documented limit); subshell-wrapped denied commands `(rm -rf $HOME)` and `time`-prefixed commands are adjacent bypass classes. 384.3 VERIFY: new chaining test confirmed FAILING on unhardened code first (`echo ok; rm -rf $HOME` passed validation) and passing after. Full cargo test green on stable 1.100.0: lib 835/0/6, bin helix 810/0/6, bin installer 24/0/0, integration 35, doctests 1/0/1; total 1705/0/13 (baseline 1699/0/13 at ba28cb2 + 6 = 3 new tests x 2 targets). rustfmt --check on the touched file shows only the pre-existing diff at line 198; no new warnings. Installer bin needed the two gitignored task-262 stubs in the worktree. Disk quota (EDQUOT) tripped mid-build; freed ~84G by deleting target/ dirs of already-merged worktrees (h9/h12/h18/h3h4h5/h10h11/task375/task376/task376-jsonfix/m21persist). Live drill 384.3 is John's after merge: run `echo ok; rm -rf $HOME` via run_shell and confirm it is refused with the security-policy message instead of executing.",
+      "testStrategy": "cargo test (repo toolchain, stable 1.100.0) green, lib + bin; the chaining regression test must fail on the unhardened code and pass after. Live drill 384.3 on the R630 after merge: run `echo ok; rm -rf $HOME` through run_shell and confirm it is refused with the security-policy message.",
+      "subtasks": [
+        {
+          "id": 384.1,
+          "title": "Spec/repro: argv[0] layer only checks the first command; chaining bypasses it (red tests)",
+          "status": "done",
+          "dependencies": []
+        },
+        {
+          "id": 384.2,
+          "title": "Implement: split_command_segments + per-segment argv[0] analysis in shell_security.rs",
+          "status": "done",
+          "dependencies": [
+            384.1
+          ]
+        },
+        {
+          "id": 384.3,
+          "title": "Verify: regression tests green, full cargo test green (lib + bin), CHANGELOG.md updated",
+          "status": "done",
+          "dependencies": [
+            384.2
+          ]
+        }
+      ]
+    },
+    {
       "id": 385,
       "title": "H9: Background children escape the shell timeout (pipe stays open forever)",
       "description": "spawn_and_wait (src/tools/shell_tool.rs:268-289) and run_command_with_timeout (src/chat_command/executor.rs:172-195) already put the child in its own process group and SIGKILL the group on timeout, but the drain threads are joined with an unbounded join(). A background child keeps the stdout pipe open, so `sleep 99999 &` (sh exits at once, orphaned sleep inherits stdout) blocks out_handle.join() forever and the shell timeout never fires; a setsid'd child escapes the group kill too, so the timeout path hangs the same way. Fix: kill the process group after reaping (a Job Object on Windows) and join the drain threads with a deadline so a background child cannot hold the pipe open past the timeout.",
