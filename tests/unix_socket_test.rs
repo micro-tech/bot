@@ -2,9 +2,6 @@
 // Only runs on Unix platforms
 #[cfg(all(test, unix))]
 mod tests {
-    use tokio::net::UnixStream;
-    use tokio::io::{AsyncWriteExt, AsyncBufReadExt, BufReader};
-
     #[tokio::test]
     async fn test_socket_json_lines() {
         // This would normally connect to a running socket server

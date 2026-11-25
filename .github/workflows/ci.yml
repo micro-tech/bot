@@ -1,0 +1,67 @@
+# CI for Helix (task 387 / H18 — triple review: no CI).
+#
+# The checks that would have caught the broken build that shipped while
+# task 313 was marked done. Runs on pushes to PreRelese and master (the
+# release path) and on pull requests targeting either branch.
+#
+# Task 262 caveat: a fresh checkout lacks config.toml and
+# .grok/docs/system_manifest_root.md, both baked into the installer bin via
+# include_str! (src/bin/installer.rs:275-276), so the installer target
+# cannot compile without them. The stubs step below creates both from
+# tracked/known content before building. Both paths are gitignored
+# (.gitignore: .grok/, config.toml), so the stubs are never committed.
+# No secrets are needed: every check here runs against the tree as-is.
+
+name: CI
+
+on:
+  push:
+    branches: [PreRelese, master]
+  pull_request:
+    branches: [PreRelese, master]
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust 1.100.0
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.100.0
+          components: rustfmt, clippy
+
+      - name: Create task-262 compile stubs (gitignored, never committed)
+        shell: bash
+        run: |
+          cp example.config.toml config.toml
+          mkdir -p .grok/docs
+          printf '%s\n' \
+            '# System Manifest (LOCAL COMPILE STUB — NOT FOR SHIPMENT)' \
+            '' \
+            'This file exists only so the installer bin compiles outside John'"'"'s dev' \
+            'machine. The real `.grok/docs/system_manifest_root.md` is gitignored and' \
+            'lives on the dev machine; `include_str!` in src/bin/installer.rs bakes' \
+            'whichever copy is present into the binary at compile time. Do not commit' \
+            'this stub — .grok/ is gitignored for exactly this reason.' \
+            > .grok/docs/system_manifest_root.md
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (warnings deny)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --all-targets
+
+      - name: Validate task list JSON
+        shell: bash
+        run: python -m json.tool .zed/task_list.json > /dev/null

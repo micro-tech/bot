@@ -40,18 +40,18 @@ fn check_diagram_freshness() {
         .and_then(|m| m.modified())
         .ok();
 
-    if let (Some(src_time), Some(diag_time)) = (src_newest, diagram_mtime) {
-        if src_time > diag_time {
-            println!(
-                "cargo:warning=src/ has been modified more recently than .grok/diagrams/hybrid_project_map.mmd"
-            );
-            println!(
-                "cargo:warning=Consider regenerating the hybrid mermaid diagrams if major modules were added/removed."
-            );
-            println!(
-                "cargo:warning=See .grok/diagrams/ for current diagrams and regeneration guidance."
-            );
-        }
+    if let (Some(src_time), Some(diag_time)) = (src_newest, diagram_mtime)
+        && src_time > diag_time
+    {
+        println!(
+            "cargo:warning=src/ has been modified more recently than .grok/diagrams/hybrid_project_map.mmd"
+        );
+        println!(
+            "cargo:warning=Consider regenerating the hybrid mermaid diagrams if major modules were added/removed."
+        );
+        println!(
+            "cargo:warning=See .grok/diagrams/ for current diagrams and regeneration guidance."
+        );
     }
 }
 
@@ -66,10 +66,10 @@ fn find_newest_mtime(dir: &Path) -> Option<SystemTime> {
                 if let Some(sub_newest) = find_newest_mtime(&path) {
                     newest = Some(newest.map_or(sub_newest, |t| t.max(sub_newest)));
                 }
-            } else if let Ok(metadata) = fs::metadata(&path) {
-                if let Ok(mtime) = metadata.modified() {
-                    newest = Some(newest.map_or(mtime, |t| t.max(mtime)));
-                }
+            } else if let Ok(metadata) = fs::metadata(&path)
+                && let Ok(mtime) = metadata.modified()
+            {
+                newest = Some(newest.map_or(mtime, |t| t.max(mtime)));
             }
         }
     }
