@@ -5720,35 +5720,35 @@
       ]
     },
     {
-      "id": 383,
-      "title": "H6: Blocking work inside the Tokio runtime (starves runtime on 4-core box)",
-      "description": "src/bus/mod.rs is std::sync::mpsc; 4 listener tasks (6 with 3 Ollama backends) do blocking rx.recv() inside tokio::spawn and can pin every worker forever on a 4-core box. The WS forwarder works around it with a std::thread bridge. tools::execute from async fns cannot use spawn_blocking generically (spawn_subagent / browser / mcp__* need a worker context via block_in_place). The nightly fix loop calls tools::execute from async code. Fix: migrate the bus to tokio::sync::mpsc, recv().await in the listeners, delete the WS bridge thread, block_in_place at the model-driven tool loops, spawn_blocking for the fixed nightly-fix toolset.",
+      "id": 384,
+      "title": "H8: Shell denylist bypass via ;/&&/| command chaining",
+      "description": "The shell tool's denylist can be bypassed by chaining a blocked command after an allowed one (e.g. `allowed; blocked` or `allowed && blocked`). Root cause: check_shell_argv0 (src/tools/shell_security.rs) only analysed the FIRST command's argv[0], and the substring denylist does not cover the generalised cases (rm -rf $HOME, dd of=/dev/<anything>). So `echo ok; rm -rf $HOME` passed both layers. Fix: split the command into segments at unquoted ;/&&/||/|/&/newline (quoting honoured) and run the argv[0] analysis on EVERY segment; the substring layer stays whole-string.",
       "status": "done",
       "dependencies": [],
       "priority": "high",
-      "details": "383.1 SPEC/RECON: recon at ba28cb2 confirmed the plan sites (main.rs listeners 411/558/629+674/716, web_server bridge 910-956, ollama tool loop 966, gemini tool loop 529, cpu attempt_nightly_fix 1160+). Red-first scratch test (2-worker runtime, 2 blocking listeners) HUNG the runtime - killed by timeout at 120s; even the 200ms sleep never fired. Starvation proven, stronger than the expected timeout failure. 383.2 IMPLEMENTED 2026-11-25 (branch ranger-helix-h6): bus migrated to tokio::sync::mpsc::unbounded_channel (router inbound stays std mpsc on its thread::spawn router); 4 listeners use recv().await; WS bridge thread deleted, forwarder subscribes directly; block_in_place at the ollama + gemini tool loops; nightly fix uses spawn_blocking via a nightly_shell helper for the 4 hardcoded run_shell calls (find / cargo test / rm / mv). CORRECTION to the plan: the ReAct loop call (cpu:1234) is NOT run_shell-only - its tool is model-chosen from the allowed set repo_read / repo_grep / repo_glob / run_shell - all 4 are sync tools that never touch a Tokio runtime, so it is wrapped in spawn_blocking with the tool moved in. Knock-ons: interrupts.rs poll_next_event takes &mut BusHandle, llm_gemini tests use mut rx, io.rs uses UnboundedReceiver + try_recv (incl. its test), subagent_tool test uses timeout + recv().await, integration_harness uses tokio::spawn. Left alone with reasons: embedding vector.rs (degraded backoff bounds it; moving the join needs relocating VectorMemory ownership), skill_request (dead code, zero callers), support_send / slash_cmd (long pole already block_in_place in the MCP bridge), bus/handler.rs + io_test.rs (dead files, not compiled). 383.3 VERIFY: RESULT (2026-11-25, Ranger): DONE. New regression test idle_bus_listeners_do_not_starve_runtime in src/bus/mod.rs (lib+bin). Full cargo test green on stable 1.100.0: lib 833/0/6, bin helix 808/0/6, bin installer 24/0/0, integration 35, doctests 1/0/1; total 1701/0/13 (baseline ba28cb2 1699/0/13, delta exactly +2). rustfmt --check on touched files: new lines clean (edition 2024); remaining diffs pre-existing (tree not fmt-clean). Only the 3 known task-371 unused-dep warnings (pulldown-cmark, tower-http, tracing-subscriber). Installer bin needed the two gitignored task-262 stubs. Disk quota: baseline build hit EDQUOT; freed ~81G by deleting target/ dirs of merged qm-work builds (h9/h12/h10h11/h3h4h5/m21/task375/task376) before re-running. Branch ranger-helix-h6 pushed to origin; no PR opened (John opens it).",
-      "testStrategy": "cargo test (repo toolchain, stable 1.100.0) green, lib + bin; the bus starvation regression test must fail (hang) on the unhardened code and pass after.",
+      "details": "384.1 SPEC/REPRO: seams are validate_shell_command / check_shell_argv0 (src/tools/shell_security.rs), called from run_shell (src/tools/shell_tool.rs:100). The argv[0] layer tokenized the whole command and only checked words[0] (after sudo/env wrappers); the substring layer has no patterns for `rm -rf $HOME` or `dd of=/dev/<anything>`. Repro (all passed validation on unhardened code): `echo ok; rm -rf $HOME`, `echo ok && rm -rf ${HOME}`, `ls && dd if=/dev/zero of=/dev/vda`, `echo hi | dd of=/dev/vda`, `echo ok\\nrm -rf $HOME`. 384.2 IMPLEMENTED 2026-11-25 (branch ranger-helix-h8, rebased onto origin/PreRelese ba28cb2 first): new split_command_segments() splits at unquoted `;`, `&`, `|`, newline, respecting single quotes, double quotes, and backslash escapes (quotes kept in segments so shell_word_split sees exact text); `&&`/`||`/`;;` yield empty segments, harmless. validate_shell_command now runs check_shell_argv0 on every segment; substring layer unchanged. 3 new tests (chained-denied-segments, benign-chaining-and-quoted-denied-text, splitter unit test). Known limits (out of scope, noted for follow-up): command substitution $(...) and backticks are NOT unpacked (pre-existing documented limit); subshell-wrapped denied commands `(rm -rf $HOME)` and `time`-prefixed commands are adjacent bypass classes. 384.3 VERIFY: new chaining test confirmed FAILING on unhardened code first (`echo ok; rm -rf $HOME` passed validation) and passing after. Full cargo test green on stable 1.100.0: lib 835/0/6, bin helix 810/0/6, bin installer 24/0/0, integration 35, doctests 1/0/1; total 1705/0/13 (baseline 1699/0/13 at ba28cb2 + 6 = 3 new tests x 2 targets). rustfmt --check on the touched file shows only the pre-existing diff at line 198; no new warnings. Installer bin needed the two gitignored task-262 stubs in the worktree. Disk quota (EDQUOT) tripped mid-build; freed ~84G by deleting target/ dirs of already-merged worktrees (h9/h12/h18/h3h4h5/h10h11/task375/task376/task376-jsonfix/m21persist). Live drill 384.3 is John's after merge: run `echo ok; rm -rf $HOME` via run_shell and confirm it is refused with the security-policy message instead of executing.",
+      "testStrategy": "cargo test (repo toolchain, stable 1.100.0) green, lib + bin; the chaining regression test must fail on the unhardened code and pass after. Live drill 384.3 on the R630 after merge: run `echo ok; rm -rf $HOME` through run_shell and confirm it is refused with the security-policy message.",
       "subtasks": [
         {
-          "id": 383.1,
-          "title": "Spec/repro: blocking bus listeners starve a small runtime (red test hangs)",
+          "id": 384.1,
+          "title": "Spec/repro: argv[0] layer only checks the first command; chaining bypasses it (red tests)",
           "status": "done",
           "dependencies": []
         },
         {
-          "id": 383.2,
-          "title": "Implement: tokio bus + recv().await listeners + WS bridge removal + block_in_place tool loops + spawn_blocking nightly fix",
+          "id": 384.2,
+          "title": "Implement: split_command_segments + per-segment argv[0] analysis in shell_security.rs",
           "status": "done",
           "dependencies": [
-            383.1
+            384.1
           ]
         },
         {
-          "id": 383.3,
-          "title": "Verify: regression test green, full cargo test green (lib + bin), CHANGELOG.md updated",
+          "id": 384.3,
+          "title": "Verify: regression tests green, full cargo test green (lib + bin), CHANGELOG.md updated",
           "status": "done",
           "dependencies": [
-            383.2
+            384.2
           ]
         }
       ]
