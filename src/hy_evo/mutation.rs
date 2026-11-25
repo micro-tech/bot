@@ -159,7 +159,9 @@ pub fn mutate_node_params(genome: &mut WorkflowGenome) {
     metadata.last_modified = chrono::Utc::now().timestamp_millis() as u64;
 
     match node {
-        Node::Skill { args, .. } | Node::Llm { params: args, .. } | Node::Code { params: args, .. } => {
+        Node::Skill { args, .. }
+        | Node::Llm { params: args, .. }
+        | Node::Code { params: args, .. } => {
             args.insert(
                 "mutated".to_string(),
                 serde_json::json!(rng.random_range(0..1000u32)),

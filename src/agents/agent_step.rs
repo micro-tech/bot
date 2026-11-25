@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// Specification for an LLM call.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLMCallSpec {
-    pub backend: String,          // "ollama", "gemini", "grok", etc.
+    pub backend: String, // "ollama", "gemini", "grok", etc.
     pub prompt: String,
     pub correlation_id: u64,
 }
@@ -64,19 +64,26 @@ mod tests {
     fn test_terminal_states() {
         assert!(AgentStep::FinalAnswer("done".into()).is_terminal());
         assert!(AgentStep::Error("fail".into()).is_terminal());
-        assert!(!AgentStep::LLMCall(LLMCallSpec {
-            backend: "ollama".into(),
-            prompt: "hi".into(),
-            correlation_id: 1,
-        }).is_terminal());
+        assert!(
+            !AgentStep::LLMCall(LLMCallSpec {
+                backend: "ollama".into(),
+                prompt: "hi".into(),
+                correlation_id: 1,
+            })
+            .is_terminal()
+        );
     }
 
     #[test]
     fn test_labels() {
-        assert_eq!(AgentStep::ToolCall(ToolInvocation {
-            name: "search".into(),
-            args: serde_json::json!({}),
-            correlation_id: 42,
-        }).label(), "tool_call");
+        assert_eq!(
+            AgentStep::ToolCall(ToolInvocation {
+                name: "search".into(),
+                args: serde_json::json!({}),
+                correlation_id: 42,
+            })
+            .label(),
+            "tool_call"
+        );
     }
 }

@@ -133,10 +133,7 @@ pub fn has_chat_server(toml_text: &str) -> bool {
 /// True when the TOML text contains a live (non-commented) `[mcp]` header.
 /// A `[[mcp.servers]]` line alone does not count.
 pub fn has_mcp_header(toml_text: &str) -> bool {
-    toml_text
-        .lines()
-        .map(str::trim)
-        .any(|line| line == "[mcp]")
+    toml_text.lines().map(str::trim).any(|line| line == "[mcp]")
 }
 
 /// True when `line` is a `name = <value>` assignment for `value`, accepting
@@ -191,7 +188,11 @@ fn backup_existing(path: &Path) {
         .unwrap_or(0);
     let backup = PathBuf::from(format!("{}.bak-{}", path.display(), epoch));
     match fs::copy(path, &backup) {
-        Ok(_) => eprintln!("chat-mcp: backed up {} -> {}", path.display(), backup.display()),
+        Ok(_) => eprintln!(
+            "chat-mcp: backed up {} -> {}",
+            path.display(),
+            backup.display()
+        ),
         Err(e) => eprintln!(
             "chat-mcp: WARNING: could not back up {}: {} — proceeding with overwrite",
             path.display(),
@@ -267,13 +268,8 @@ pub fn resolve_source_dir(preferred: &Path, repo_url: &str) -> Result<PathBuf, S
         return Ok(preferred.to_path_buf());
     }
     if let Some(parent) = preferred.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            format!(
-                "chat-mcp: cannot create {}: {}",
-                parent.display(),
-                e
-            )
-        })?;
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("chat-mcp: cannot create {}: {}", parent.display(), e))?;
     }
     let status = Command::new("git")
         .args(["clone", repo_url, &preferred.to_string_lossy()])
@@ -332,13 +328,8 @@ pub fn build_and_install_binary(source_dir: &Path, bin_path: &Path) -> Result<()
         ));
     }
     if let Some(parent) = bin_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            format!(
-                "chat-mcp: cannot create {}: {}",
-                parent.display(),
-                e
-            )
-        })?;
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("chat-mcp: cannot create {}: {}", parent.display(), e))?;
     }
     fs::copy(&built, bin_path).map_err(|e| {
         format!(
@@ -351,13 +342,8 @@ pub fn build_and_install_binary(source_dir: &Path, bin_path: &Path) -> Result<()
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(bin_path, fs::Permissions::from_mode(0o755)).map_err(|e| {
-            format!(
-                "chat-mcp: cannot set 0755 on {}: {}",
-                bin_path.display(),
-                e
-            )
-        })?;
+        fs::set_permissions(bin_path, fs::Permissions::from_mode(0o755))
+            .map_err(|e| format!("chat-mcp: cannot set 0755 on {}: {}", bin_path.display(), e))?;
     }
     Ok(())
 }
@@ -409,8 +395,8 @@ pub fn install_chat_mcp(user: &str, primary_runtime_dir: &str) -> Result<Install
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// Serializes the tests that invoke `cargo build` so concurrent fixture
     /// builds never stack up (the box rule is 2 concurrent cargo builds max;
@@ -430,8 +416,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("target/test-tmp-chat-mcp");
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-tmp-chat-mcp");
         let dir = root.join(format!("{}-{}-{}-{}", tag, std::process::id(), nanos, n));
         fs::create_dir_all(&dir).expect("create test dir");
         dir
@@ -496,12 +481,17 @@ mod tests {
     #[test]
     fn block_ignores_commented_chat() {
         let bin = Path::new("/home/cobble/.local/bin/chat-mcp");
-        let commented = format!("{HELIX_WITH_GOOGLE}\n# [[mcp.servers]]\n# name = \"chat\"\n# command = \"/nowhere/chat-mcp\"\n");
+        let commented = format!(
+            "{HELIX_WITH_GOOGLE}\n# [[mcp.servers]]\n# name = \"chat\"\n# command = \"/nowhere/chat-mcp\"\n"
+        );
         assert!(!has_chat_server(&commented));
         let out = append_chat_server(&commented, bin).expect("must append");
         // Count live blocks, not substrings: the fixture's commented
         // `# name = "chat"` line still contains the substring.
-        assert_eq!(count_occurrences(&out, "[[mcp.servers]]\nname = \"chat\""), 1);
+        assert_eq!(
+            count_occurrences(&out, "[[mcp.servers]]\nname = \"chat\""),
+            1
+        );
     }
 
     #[test]
@@ -519,7 +509,10 @@ mod tests {
         let no_newline = HELIX_WITH_GOOGLE.trim_end();
         let out = append_chat_server(no_newline, bin).expect("must append");
         assert!(has_chat_server(&out));
-        assert!(!out.contains("google-mcp\"[[mcp.servers]]"), "blocks must not run together");
+        assert!(
+            !out.contains("google-mcp\"[[mcp.servers]]"),
+            "blocks must not run together"
+        );
     }
 
     #[test]
@@ -532,8 +525,8 @@ mod tests {
     fn config_created_with_perms_and_no_token() {
         let dir = unique_dir("config-fresh");
         let layout = layout_in(&dir, &dir.join("src"));
-        let outcome = ensure_chat_mcp_config(&layout.config_dir, &layout.config_path)
-            .expect("create config");
+        let outcome =
+            ensure_chat_mcp_config(&layout.config_dir, &layout.config_path).expect("create config");
         assert_eq!(outcome, ConfigOutcome::Created);
         let text = fs::read_to_string(&layout.config_path).expect("read config");
         assert!(text.contains("hub_url = \"https://chat.micro-tech.xyz\""));
@@ -545,7 +538,11 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = fs::metadata(&layout.config_path).expect("stat").permissions().mode() & 0o777;
+            let mode = fs::metadata(&layout.config_path)
+                .expect("stat")
+                .permissions()
+                .mode()
+                & 0o777;
             assert_eq!(mode, 0o600, "config must be owner-only");
         }
         cleanup(&dir);
@@ -560,7 +557,10 @@ mod tests {
         let outcome = ensure_chat_mcp_config(&layout.config_dir, &layout.config_path)
             .expect("preserve config");
         assert_eq!(outcome, ConfigOutcome::Preserved);
-        assert_eq!(fs::read_to_string(&layout.config_path).expect("read"), original);
+        assert_eq!(
+            fs::read_to_string(&layout.config_path).expect("read"),
+            original
+        );
         cleanup(&dir);
     }
 
@@ -624,8 +624,15 @@ mod tests {
         let second = install_chat_mcp_at(&layout).expect("second run");
         assert!(second.binary_installed);
         assert_eq!(second.config, ConfigOutcome::Preserved);
-        assert!(!second.block_appended, "re-run must not duplicate the block");
-        assert_eq!(count_baks(&dir), baks_after_first, "no-op run backs up nothing");
+        assert!(
+            !second.block_appended,
+            "re-run must not duplicate the block"
+        );
+        assert_eq!(
+            count_baks(&dir),
+            baks_after_first,
+            "no-op run backs up nothing"
+        );
         let helix = fs::read_to_string(&layout.helix_config_path).expect("read helix config");
         assert_eq!(count_occurrences(&helix, "name = \"chat\""), 1);
         cleanup(&dir);
@@ -663,7 +670,10 @@ mod tests {
         assert!(report.binary_installed);
         assert_eq!(report.config, ConfigOutcome::Preserved);
         assert!(report.block_appended);
-        assert_eq!(fs::read_to_string(&layout.config_path).expect("read"), original);
+        assert_eq!(
+            fs::read_to_string(&layout.config_path).expect("read"),
+            original
+        );
         cleanup(&dir);
     }
 
@@ -676,8 +686,14 @@ mod tests {
         let layout = layout_in(&dir, &src);
         let err = install_chat_mcp_at(&layout).expect_err("missing helix config must error");
         assert!(err.contains("Helix config"));
-        assert!(layout.bin_path.exists(), "binary stays installed on later failure");
-        assert!(layout.config_path.exists(), "chat config stays created on later failure");
+        assert!(
+            layout.bin_path.exists(),
+            "binary stays installed on later failure"
+        );
+        assert!(
+            layout.config_path.exists(),
+            "chat config stays created on later failure"
+        );
         cleanup(&dir);
     }
 }

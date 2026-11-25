@@ -24,8 +24,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use log::{info, warn};
-use russh::keys::ssh_key::{public::KeyData, HashAlg, PublicKey};
-use russh::server::{Auth, ChannelOpenHandle, Handler, Msg, PublicKeyOffer, Session, VerifiedPublicKey};
+use russh::keys::ssh_key::{HashAlg, PublicKey, public::KeyData};
+use russh::server::{
+    Auth, ChannelOpenHandle, Handler, Msg, PublicKeyOffer, Session, VerifiedPublicKey,
+};
 use russh::{Channel, ChannelId, ChannelOpenFailure};
 
 /// Cross-connection shared state for the SSH server.
@@ -119,7 +121,11 @@ impl Handler for HelixSshHandler {
         _user: &str,
         offer: PublicKeyOffer<'_>,
     ) -> Result<Auth, Self::Error> {
-        if self.shared.authorized_keys.contains(offer.public_key.key_data()) {
+        if self
+            .shared
+            .authorized_keys
+            .contains(offer.public_key.key_data())
+        {
             Ok(Auth::Accept)
         } else {
             Ok(Auth::Reject {
@@ -147,7 +153,11 @@ impl Handler for HelixSshHandler {
                 partial_success: false,
             });
         }
-        if self.shared.authorized_keys.contains(key.public_key.key_data()) {
+        if self
+            .shared
+            .authorized_keys
+            .contains(key.public_key.key_data())
+        {
             info!(
                 "[ssh] auth accepted: peer={} user='{}' fp={}",
                 self.peer_ip, user, fp
@@ -184,10 +194,7 @@ impl Handler for HelixSshHandler {
         }
         info!(
             "[ssh] channel open: peer={} user={:?} ({}/{})",
-            self.peer_ip,
-            self.authed_user,
-            open,
-            self.shared.max_sessions
+            self.peer_ip, self.authed_user, open, self.shared.max_sessions
         );
         reply.accept().await;
         Ok(())

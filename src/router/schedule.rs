@@ -1,11 +1,11 @@
 // router/schedule.rs - Full Time-of-Day & Schedule Logic (Task 129)
-use chrono::{DateTime, Timelike, Datelike, Utc, Weekday};
+use chrono::{DateTime, Datelike, Timelike, Utc, Weekday};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct ScheduleWindow {
-    pub start_hour: u32,      // 0-23
-    pub end_hour: u32,        // 0-23 (exclusive)
+    pub start_hour: u32,            // 0-23
+    pub end_hour: u32,              // 0-23 (exclusive)
     pub days: Option<Vec<Weekday>>, // None = every day
     pub profile: String,
 }
@@ -27,19 +27,28 @@ pub struct ScheduleConfig {
 impl ScheduleConfig {
     pub fn default() -> Self {
         let mut profiles = HashMap::new();
-        profiles.insert("default".into(), RoutingProfile {
-            name: "default".into(),
-            complexity_threshold: 0.7,
-            preferred_backends: vec!["gemini".into()],
-            fallback_chain: vec!["ollama".into(), "fallback".into()],
-        });
-        profiles.insert("night".into(), RoutingProfile {
-            name: "night".into(),
-            complexity_threshold: 0.4,
-            preferred_backends: vec!["ollama".into()],
-            fallback_chain: vec!["gemini".into()],
-        });
-        Self { windows: vec![], profiles }
+        profiles.insert(
+            "default".into(),
+            RoutingProfile {
+                name: "default".into(),
+                complexity_threshold: 0.7,
+                preferred_backends: vec!["gemini".into()],
+                fallback_chain: vec!["ollama".into(), "fallback".into()],
+            },
+        );
+        profiles.insert(
+            "night".into(),
+            RoutingProfile {
+                name: "night".into(),
+                complexity_threshold: 0.4,
+                preferred_backends: vec!["ollama".into()],
+                fallback_chain: vec!["gemini".into()],
+            },
+        );
+        Self {
+            windows: vec![],
+            profiles,
+        }
     }
 }
 
@@ -50,7 +59,9 @@ pub fn evaluate(timestamp: DateTime<Utc>, config: &ScheduleConfig) -> String {
 
     for window in &config.windows {
         let hour_match = hour >= window.start_hour && hour < window.end_hour;
-        let day_match = window.days.as_ref()
+        let day_match = window
+            .days
+            .as_ref()
             .map(|days| days.contains(&weekday))
             .unwrap_or(true);
 
@@ -64,7 +75,9 @@ pub fn evaluate(timestamp: DateTime<Utc>, config: &ScheduleConfig) -> String {
 /// Returns the full RoutingProfile for the active window
 pub fn active_profile(timestamp: DateTime<Utc>, config: &ScheduleConfig) -> RoutingProfile {
     let name = evaluate(timestamp, config);
-    config.profiles.get(&name)
+    config
+        .profiles
+        .get(&name)
         .cloned()
         .unwrap_or_else(|| config.profiles.get("default").cloned().unwrap())
 }

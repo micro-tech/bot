@@ -1,10 +1,10 @@
 //! Workflow Execution on CPU
 //!
 //! This module allows the CPU to load and execute HyEvo workflows.
+use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
 use crate::hy_evo::genome::WorkflowGenome;
 use crate::hy_evo::node::{Node, NodeResult};
 use crate::hy_evo::workflow::{Workflow, WorkflowContext};
-use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
 
 pub struct WorkflowExecutor;
 

@@ -13,8 +13,8 @@
 //! port scanning, no service probing, no config changes, no timers.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 /// One ARP neighbour: a recently-seen LAN device.
@@ -206,7 +206,11 @@ fn gateway_from_ip_route() -> Option<String> {
 /// dotted-quad IPv4 address.
 pub fn subnet_base(ip: &str) -> Option<String> {
     let parts: Vec<&str> = ip.split('.').collect();
-    if parts.len() != 4 || parts.iter().any(|p| p.is_empty() || p.parse::<u8>().is_err()) {
+    if parts.len() != 4
+        || parts
+            .iter()
+            .any(|p| p.is_empty() || p.parse::<u8>().is_err())
+    {
         return None;
     }
     Some(format!("{}.{}.{}", parts[0], parts[1], parts[2]))
@@ -245,14 +249,16 @@ pub fn ping_sweep_ips<F: Fn(&str) -> bool + Sync>(ips: &[String], probe: F) -> V
     let workers = SWEEP_WORKERS.min(ips.len());
     std::thread::scope(|s| {
         for _ in 0..workers {
-            s.spawn(|| loop {
-                let i = next.fetch_add(1, Ordering::SeqCst);
-                if i >= ips.len() {
-                    break;
-                }
-                let ip = &ips[i];
-                if probe(ip) || probe(ip) {
-                    live.lock().unwrap().push(ip.clone());
+            s.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, Ordering::SeqCst);
+                    if i >= ips.len() {
+                        break;
+                    }
+                    let ip = &ips[i];
+                    if probe(ip) || probe(ip) {
+                        live.lock().unwrap().push(ip.clone());
+                    }
                 }
             });
         }
@@ -359,14 +365,16 @@ pub fn resolve_hostnames(ips: &[String]) -> HashMap<String, Option<String>> {
     let workers = 16usize.min(ips.len());
     std::thread::scope(|s| {
         for _ in 0..workers {
-            s.spawn(|| loop {
-                let i = next.fetch_add(1, Ordering::SeqCst);
-                if i >= ips.len() {
-                    break;
+            s.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, Ordering::SeqCst);
+                    if i >= ips.len() {
+                        break;
+                    }
+                    let ip = &ips[i];
+                    let name = resolve_hostname(ip);
+                    out.lock().unwrap().insert(ip.clone(), name);
                 }
-                let ip = &ips[i];
-                let name = resolve_hostname(ip);
-                out.lock().unwrap().insert(ip.clone(), name);
             });
         }
     });
@@ -435,7 +443,9 @@ pub fn aggregate_hosts(
                 continue;
             }
         }
-        let h = by_ip.entry(c.ip.to_string()).or_insert_with(|| new_host(c.ip));
+        let h = by_ip
+            .entry(c.ip.to_string())
+            .or_insert_with(|| new_host(c.ip));
         if h.hostname.is_none() {
             h.hostname = Some(c.name.to_string());
         }
@@ -489,7 +499,11 @@ mod tests {
     #[test]
     fn arp_parses_and_skips_incomplete_and_loopback() {
         let entries = parse_proc_net_arp(ARP_FIXTURE);
-        assert_eq!(entries.len(), 2, "incomplete-MAC and lo rows must be skipped");
+        assert_eq!(
+            entries.len(),
+            2,
+            "incomplete-MAC and lo rows must be skipped"
+        );
         assert_eq!(entries[0].ip, "192.168.1.1");
         assert_eq!(entries[0].mac, "aa:bb:cc:dd:ee:01");
         assert_eq!(entries[0].interface, "ens18");
@@ -503,10 +517,11 @@ mod tests {
         // Smoke test against the real /proc files in this environment:
         // must not panic, and any entries returned must be well-formed.
         let d = discover();
-        assert!(d
-            .arp_entries
-            .iter()
-            .all(|e| !e.ip.is_empty() && !e.mac.is_empty() && !e.interface.is_empty()));
+        assert!(
+            d.arp_entries
+                .iter()
+                .all(|e| !e.ip.is_empty() && !e.mac.is_empty() && !e.interface.is_empty())
+        );
     }
 
     #[test]
@@ -570,10 +585,7 @@ mod tests {
 
     #[test]
     fn reverse_dns_resolves_localhost() {
-        assert_eq!(
-            resolve_hostname("127.0.0.1").as_deref(),
-            Some("localhost")
-        );
+        assert_eq!(resolve_hostname("127.0.0.1").as_deref(), Some("localhost"));
     }
 
     #[test]

@@ -153,10 +153,7 @@ async fn ssh_exec_authorized_key_works_and_policy_blocks() {
         .stdin(Stdio::null())
         .output()
         .expect("ssh run");
-    assert!(
-        !out.status.success(),
-        "wrong key must not authenticate"
-    );
+    assert!(!out.status.success(), "wrong key must not authenticate");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("Permission denied") || stderr.contains("denied"),

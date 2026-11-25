@@ -14,8 +14,6 @@
 pub mod manager;
 pub mod naming;
 
-
-
 use std::sync::OnceLock;
 
 use log::{debug, warn};
@@ -58,7 +56,10 @@ fn load_config_from(path: &std::path::Path) -> McpConfig {
             // Task 265: a missing/unreadable config file used to silently
             // disable MCP. Say so — an operator who wrote [mcp] enabled
             // must not wonder why no MCP tools appear.
-            warn!("mcp: cannot read config file {}, MCP disabled: {e}", path.display());
+            warn!(
+                "mcp: cannot read config file {}, MCP disabled: {e}",
+                path.display()
+            );
             McpConfig::default()
         }
     }
@@ -200,9 +201,7 @@ fn manager() -> Option<std::sync::Arc<TokioMutex<McpManager>>> {
     }
     Some(
         MCP_MANAGER
-            .get_or_init(|| {
-                std::sync::Arc::new(TokioMutex::new(McpManager::new(config().clone())))
-            })
+            .get_or_init(|| std::sync::Arc::new(TokioMutex::new(McpManager::new(config().clone()))))
             .clone(),
     )
 }
@@ -296,10 +295,7 @@ mod tests {
     fn try_execute_returns_none_for_mcp_names_when_disabled() {
         let _lock = disabled_test_config();
         // Well-formed MCP name, but the client is disabled -> fall through.
-        assert_eq!(
-            try_execute("mcp__google__gmail_search", &Value::Null),
-            None
-        );
+        assert_eq!(try_execute("mcp__google__gmail_search", &Value::Null), None);
     }
 
     #[test]

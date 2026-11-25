@@ -160,7 +160,11 @@ mod tests {
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("helix-episodic-test-{}-{}", std::process::id(), name));
+        let p = std::env::temp_dir().join(format!(
+            "helix-episodic-test-{}-{}",
+            std::process::id(),
+            name
+        ));
         let _ = std::fs::remove_file(&p);
         p
     }

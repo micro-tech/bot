@@ -79,7 +79,10 @@ impl Bus {
                     // preview — bus data is untrusted content, so the
                     // eprintln! above (routing metadata only) is the
                     // whole report; no duplicate, no preview.
-                    eprintln!("[Bus] ⚠️ NO SUBSCRIBER for destination: '{}' (from='{}')", message.to, message.from);
+                    eprintln!(
+                        "[Bus] ⚠️ NO SUBSCRIBER for destination: '{}' (from='{}')",
+                        message.to, message.from
+                    );
                 }
             }
             println!("[Bus] Router thread exited");
@@ -133,10 +136,7 @@ impl Bus {
             message.data.len()
         );
 
-        crate::utils::append_log_line(
-            &std::path::PathBuf::from("logs/bus_log.md"),
-            &log_entry,
-        );
+        crate::utils::append_log_line(&std::path::PathBuf::from("logs/bus_log.md"), &log_entry);
     }
 }
 
@@ -193,14 +193,13 @@ mod tests {
         // Delivery still works on the async channel.
         let bus2 = Bus::new();
         let mut rx2 = bus2.subscribe("web_interface");
-        bus2
-            .publish(Message {
-                to: "web_interface".into(),
-                from: "test".into(),
-                data: "hello".into(),
-                timestamp: 0,
-            })
-            .unwrap();
+        bus2.publish(Message {
+            to: "web_interface".into(),
+            from: "test".into(),
+            data: "hello".into(),
+            timestamp: 0,
+        })
+        .unwrap();
         let got = tokio::time::timeout(Duration::from_secs(5), rx2.recv()).await;
         assert!(got.is_ok(), "published message must arrive");
         assert_eq!(got.unwrap().expect("channel open").data, "hello");

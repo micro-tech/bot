@@ -17,16 +17,15 @@ use agent_client_protocol::v1::schema::{
     ListSessionsRequest, ListSessionsResponse, NewSessionRequest, NewSessionResponse,
     PromptRequest, PromptResponse, SessionId, SessionNotification,
 };
-use agent_client_protocol::{
-    Agent, ByteStreams, Client, on_receive_dispatch, on_receive_notification,
-    on_receive_request,
-};
 use agent_client_protocol::v1::{ConnectionTo, Responder};
+use agent_client_protocol::{
+    Agent, ByteStreams, Client, on_receive_dispatch, on_receive_notification, on_receive_request,
+};
 use log::{debug, info, warn};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use super::agent::{HelixAcpAgent, ToolCallRecord};
-use super::protocol::{agent_message_chunk, tool_call_notification, HELIX_ACP_AGENT_NAME};
+use super::protocol::{HELIX_ACP_AGENT_NAME, agent_message_chunk, tool_call_notification};
 
 /// Extract plain text from a prompt's content blocks.
 fn prompt_text(req: &PromptRequest) -> String {
@@ -48,9 +47,7 @@ fn send_update(cx: &ConnectionTo<Client>, notif: SessionNotification) {
 }
 
 /// Run the ACP server on the given stdio handles until the client disconnects.
-pub async fn run_acp_stdio(
-    agent: HelixAcpAgent,
-) -> anyhow::Result<()> {
+pub async fn run_acp_stdio(agent: HelixAcpAgent) -> anyhow::Result<()> {
     let agent = Arc::new(agent);
     let initialized = Arc::new(AtomicBool::new(false));
 
@@ -119,9 +116,7 @@ pub async fn run_acp_stdio(
                 let agent = Arc::clone(&a_prompt);
                 async move {
                     let cx2 = cx.clone();
-                    cx.spawn(
-                        async move { handle_prompt(req, responder, cx2, agent).await },
-                    )?;
+                    cx.spawn(async move { handle_prompt(req, responder, cx2, agent).await })?;
                     Ok(())
                 }
             },
@@ -141,12 +136,12 @@ pub async fn run_acp_stdio(
                         .collect();
                     // ListSessionsResponse wraps session ids; build via JSON
                     // round-trip to stay robust to schema shape drift.
-                    let resp: ListSessionsResponse = serde_json::from_value(
-                        serde_json::json!({ "sessions": sessions }),
-                    )
-                    .unwrap_or_else(|_| {
-                        serde_json::from_value(serde_json::json!({})).expect("empty list resp")
-                    });
+                    let resp: ListSessionsResponse =
+                        serde_json::from_value(serde_json::json!({ "sessions": sessions }))
+                            .unwrap_or_else(|_| {
+                                serde_json::from_value(serde_json::json!({}))
+                                    .expect("empty list resp")
+                            });
                     responder.respond(resp)
                 }
             },
@@ -190,7 +185,9 @@ async fn handle_prompt(
     cx: ConnectionTo<Client>,
     agent: Arc<HelixAcpAgent>,
 ) -> Result<(), agent_client_protocol::Error> {
-    let err = |msg: String| agent_client_protocol::Error::new(agent_client_protocol::ErrorCode::INTERNAL_ERROR, msg);
+    let err = |msg: String| {
+        agent_client_protocol::Error::new(agent_client_protocol::ErrorCode::INTERNAL_ERROR, msg)
+    };
     let session_id = req.session_id.0.to_string();
     let text = prompt_text(&req);
     info!(

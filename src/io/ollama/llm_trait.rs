@@ -16,11 +16,7 @@ pub trait OllamaLlm: Send + Sync {
     async fn chat(&self, messages: &[Value]) -> anyhow::Result<String>;
 
     /// Chat completion with tools enabled (agentic mode).
-    async fn chat_with_tools(
-        &self,
-        messages: &[Value],
-        tools: Value,
-    ) -> anyhow::Result<String>;
+    async fn chat_with_tools(&self, messages: &[Value], tools: Value) -> anyhow::Result<String>;
 
     /// Return the model name this instance is configured with.
     fn model_name(&self) -> &str;

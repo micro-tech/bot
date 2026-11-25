@@ -134,8 +134,7 @@ pub fn collect_cycle(
 ) -> Result<LedgerEntry, String> {
     let path = ledger_path(rt_dir, cfg);
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("ledger dir create failed: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("ledger dir create failed: {e}"))?;
     }
     let qm_missing = inputs.qm_summary.is_none();
     let entry = LedgerEntry {
@@ -151,14 +150,14 @@ pub fn collect_cycle(
     };
     let mut existing = String::new();
     if path.exists() {
-        existing = std::fs::read_to_string(&path)
-            .map_err(|e| format!("ledger read failed: {e}"))?;
+        existing =
+            std::fs::read_to_string(&path).map_err(|e| format!("ledger read failed: {e}"))?;
         if !existing.is_empty() && !existing.ends_with('\n') {
             existing.push('\n');
         }
     }
-    let line = serde_json::to_string(&entry)
-        .map_err(|e| format!("ledger serialize failed: {e}"))?;
+    let line =
+        serde_json::to_string(&entry).map_err(|e| format!("ledger serialize failed: {e}"))?;
     let tmp = path.with_extension("jsonl.tmp");
     std::fs::write(&tmp, format!("{existing}{line}\n"))
         .map_err(|e| format!("ledger temp write failed: {e}"))?;
@@ -170,7 +169,10 @@ pub fn collect_cycle(
 /// (and counted in the returned gap count) rather than failing the
 /// whole read — the ledger must stay readable even if one cycle wrote
 /// junk. Returns (entries, corrupt_line_count).
-pub fn read_ledger(rt_dir: &Path, cfg: &crate::self_improve::SelfImproveConfig) -> (Vec<LedgerEntry>, usize) {
+pub fn read_ledger(
+    rt_dir: &Path,
+    cfg: &crate::self_improve::SelfImproveConfig,
+) -> (Vec<LedgerEntry>, usize) {
     let path = ledger_path(rt_dir, cfg);
     let Ok(data) = std::fs::read_to_string(&path) else {
         return (Vec::new(), 0);
@@ -200,11 +202,7 @@ pub fn latest_entry(
 /// One-line per-cycle log summary: counts only, metadata-only.
 /// Format: `self_improve: metrics ...` (task 279 uses this line).
 pub fn log_line(entry: &LedgerEntry) -> String {
-    let routine_failed: u64 = entry
-        .routine_outcomes
-        .values()
-        .map(|o| o.failed)
-        .sum();
+    let routine_failed: u64 = entry.routine_outcomes.values().map(|o| o.failed).sum();
     format!(
         "self_improve: metrics ts={} routines={} routine_failed={} errors={} restarts={} qm_missing={} proposals={}",
         entry.timestamp_ms,
@@ -248,12 +246,18 @@ mod tests {
         let mut routines = BTreeMap::new();
         routines.insert(
             "support-mail-watch".to_string(),
-            RoutineOutcome { fired: 60, failed: 0 },
+            RoutineOutcome {
+                fired: 60,
+                failed: 0,
+            },
         );
         let mut by_file = BTreeMap::new();
         by_file.insert(
             "logs/error_log.md".to_string(),
-            ErrorFileCounts { errors: 0, total_lines: 54231 },
+            ErrorFileCounts {
+                errors: 0,
+                total_lines: 54231,
+            },
         );
         CycleInputs {
             routine_outcomes: routines,
@@ -384,7 +388,10 @@ mod tests {
         inputs.error_total = 0;
         inputs.error_by_file.insert(
             "logs/error_log.md".to_string(),
-            ErrorFileCounts { errors: 0, total_lines: 322_685 },
+            ErrorFileCounts {
+                errors: 0,
+                total_lines: 322_685,
+            },
         );
         let entry = collect_cycle(&dir, &cfg, inputs, 1_000).unwrap();
         assert_eq!(entry.error_total, 0);
@@ -393,7 +400,10 @@ mod tests {
             322_685
         );
         let line = serde_json::to_string(&entry).unwrap();
-        assert!(!line.contains("routine_run"), "no log-line bodies in entries");
+        assert!(
+            !line.contains("routine_run"),
+            "no log-line bodies in entries"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -438,7 +448,13 @@ mod tests {
             timestamp_ms: 1_000,
             routine_outcomes: {
                 let mut m = BTreeMap::new();
-                m.insert("a".to_string(), RoutineOutcome { fired: 3, failed: 1 });
+                m.insert(
+                    "a".to_string(),
+                    RoutineOutcome {
+                        fired: 3,
+                        failed: 1,
+                    },
+                );
                 m
             },
             support_stats: serde_json::json!({}),

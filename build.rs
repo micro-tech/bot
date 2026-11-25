@@ -36,9 +36,7 @@ fn check_diagram_freshness() {
 
     // Get the modification time of the main hybrid diagram
     let main_diagram = diagrams_path.join("hybrid_project_map.mmd");
-    let diagram_mtime = fs::metadata(&main_diagram)
-        .and_then(|m| m.modified())
-        .ok();
+    let diagram_mtime = fs::metadata(&main_diagram).and_then(|m| m.modified()).ok();
 
     if let (Some(src_time), Some(diag_time)) = (src_newest, diagram_mtime)
         && src_time > diag_time

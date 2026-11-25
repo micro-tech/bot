@@ -119,10 +119,7 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
     // single-shot call — this is what lets the commander delegate.
     match call_gemini_tools(&client, &url, &api_key, &prompt, bus).await {
         Ok(response) => {
-            info!(
-                "Gemini replied -- {} chars",
-                response.len()
-            );
+            info!("Gemini replied -- {} chars", response.len());
 
             // Task 223: record the completed turn for conversation history.
             crate::chat_history::record_turn(&prompt, &response);
@@ -563,9 +560,7 @@ async fn call_gemini_tools(
 
             // Task 335/338: same artifact hook as the Ollama loop, so the
             // card renders whichever backend answered the turn.
-            crate::io::ollama::tools::publish_artifact_if_saved(
-                bus, "gemini", name, args, &result,
-            );
+            crate::io::ollama::tools::publish_artifact_if_saved(bus, "gemini", name, args, &result);
 
             response_parts.push(json!({
                 "functionResponse": {
@@ -599,9 +594,7 @@ fn map_reqwest_err(e: reqwest::Error) -> Box<dyn std::error::Error + Send + Sync
             || detail.contains("ssl")
         {
             format!("TLS/certificate error: {}", e).into()
-        } else if detail.contains("dns")
-            || detail.contains("resolve")
-            || detail.contains("lookup")
+        } else if detail.contains("dns") || detail.contains("resolve") || detail.contains("lookup")
         {
             format!("DNS resolution failed: {}", e).into()
         } else {
@@ -620,7 +613,10 @@ fn map_reqwest_err(e: reqwest::Error) -> Box<dyn std::error::Error + Send + Sync
 /// bus path. Single-shot (no tool loop) — the sub-agent gets one strong answer.
 /// Task 233: `system` carries the composed persona+job block when a role
 /// persona file exists; None keeps the legacy prompt-only behavior.
-pub(crate) async fn call_gemini_direct(prompt: &str, system: Option<&str>) -> Result<String, String> {
+pub(crate) async fn call_gemini_direct(
+    prompt: &str,
+    system: Option<&str>,
+) -> Result<String, String> {
     let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
     if api_key.is_empty() {
         return Err("GEMINI_API_KEY is not set — cannot run a sub-agent on Gemini.                     Set it in the environment or .env, or pick a local backend."
@@ -661,10 +657,7 @@ pub fn call_gemini_sync(prompt: &str) -> Result<String, Box<dyn std::error::Erro
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| GEMINI_MODEL_DEFAULT.to_string());
     // Task 330 (C1): key in the `x-goog-api-key` header, never in the URL.
-    let url = format!(
-        "{}/{}:generateContent",
-        GEMINI_URL_BASE, resolved_model
-    );
+    let url = format!("{}/{}:generateContent", GEMINI_URL_BASE, resolved_model);
     rt.block_on(call_gemini(&client, &url, &api_key, prompt, None))
         .map_err(|e| e.to_string().into())
 }
@@ -911,8 +904,8 @@ mod tests {
             "run a sub agent to plan a rust bot",
             &bus,
         )
-            .await
-            .expect("tool loop should complete");
+        .await
+        .expect("tool loop should complete");
         assert!(
             out.contains("Delegated"),
             "expected the model's final text, got: {}",
@@ -928,11 +921,19 @@ mod tests {
                 if v["type"] == "tool_call" && v["tool"] == "spawn_subagent" {
                     saw_spawn = true;
                     assert!(
-                        v["args"]["task"].as_str().unwrap_or("").contains("rust bot"),
+                        v["args"]["task"]
+                            .as_str()
+                            .unwrap_or("")
+                            .contains("rust bot"),
                         "args not forwarded: {}",
                         v["args"]
                     );
-                    assert!(v["result_preview"].as_str().unwrap_or("").contains("subagent-test-stub"));
+                    assert!(
+                        v["result_preview"]
+                            .as_str()
+                            .unwrap_or("")
+                            .contains("subagent-test-stub")
+                    );
                 }
             }
         }

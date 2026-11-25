@@ -1,5 +1,5 @@
 // router/fallback.rs - Full Fallback Engine & Degradation Logic (Task 134)
-use crate::router::{LLMBackend, RoutingContext, RouterConfig};
+use crate::router::{LLMBackend, RouterConfig, RoutingContext};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]

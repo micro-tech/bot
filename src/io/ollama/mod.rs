@@ -169,11 +169,12 @@ enum OllamaProbe {
     Unknown(String),
 }
 
-static PROBE_CACHE: OnceLock<std::sync::Mutex<std::collections::HashMap<String, (OllamaProbe, std::time::Instant)>>> =
-    OnceLock::new();
+static PROBE_CACHE: OnceLock<
+    std::sync::Mutex<std::collections::HashMap<String, (OllamaProbe, std::time::Instant)>>,
+> = OnceLock::new();
 
-fn probe_cache(
-) -> &'static std::sync::Mutex<std::collections::HashMap<String, (OllamaProbe, std::time::Instant)>> {
+fn probe_cache()
+-> &'static std::sync::Mutex<std::collections::HashMap<String, (OllamaProbe, std::time::Instant)>> {
     PROBE_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
@@ -189,7 +190,10 @@ async fn probe_ollama(base_url: &str) -> OllamaProbe {
     }
     let probe = probe_ollama_fresh(base_url).await;
     if let Ok(mut cache) = probe_cache().lock() {
-        cache.insert(base_url.to_string(), (probe.clone(), std::time::Instant::now()));
+        cache.insert(
+            base_url.to_string(),
+            (probe.clone(), std::time::Instant::now()),
+        );
     }
     probe
 }
@@ -485,13 +489,20 @@ pub async fn handle_ollama_message(
         let _ = bus_clone.publish(token_msg);
     });
 
-    match call_ollama(&client, base_url, model, &prompt, bus, &backend_tag, Some(on_token.clone())).await {
+    match call_ollama(
+        &client,
+        base_url,
+        model,
+        &prompt,
+        bus,
+        &backend_tag,
+        Some(on_token.clone()),
+    )
+    .await
+    {
         // SUCCESS — Ollama returned a valid response
         Ok(response) => {
-            info!(
-                "Ollama ✅  replied — {} chars",
-                response.len()
-            );
+            info!("Ollama ✅  replied — {} chars", response.len());
 
             // Task 223: record the completed turn for conversation history.
             crate::chat_history::record_turn(&prompt, &response);
@@ -513,14 +524,24 @@ pub async fn handle_ollama_message(
 
             // Publish to CPU (single source of truth for responses).
             // Task 265: server diagnostic → log::, not println!.
-            info!("[ollama_{}] ✅ SUCCESS from Ollama, publishing llm_response to 'cpu' ({} chars)", backend_name, response.len());
+            info!(
+                "[ollama_{}] ✅ SUCCESS from Ollama, publishing llm_response to 'cpu' ({} chars)",
+                backend_name,
+                response.len()
+            );
             if let Err(e) = bus.publish(response_msg.clone()) {
-                let error_msg = format!("Ollama {} failed to publish LLM response: {}", backend_name, e);
+                let error_msg = format!(
+                    "Ollama {} failed to publish LLM response: {}",
+                    backend_name, e
+                );
                 log_to_file(&error_msg);
                 error!("{}", error_msg);
             } else {
                 debug!("Ollama {} published LLM response to CPU", backend_name);
-                log_to_file(&format!("Ollama {} published LLM response to CPU", backend_name));
+                log_to_file(&format!(
+                    "Ollama {} published LLM response to CPU",
+                    backend_name
+                ));
             }
 
             // REMOVED: direct publish to web_interface to avoid duplicate replies.
@@ -578,7 +599,17 @@ async fn call_ollama(
     on_token: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let tool_defs = crate::tools::tool_definitions();
-    tools::call_ollama_tools(client, base_url, model, prompt, tool_defs, bus, backend_from, on_token).await
+    tools::call_ollama_tools(
+        client,
+        base_url,
+        model,
+        prompt,
+        tool_defs,
+        bus,
+        backend_from,
+        on_token,
+    )
+    .await
 }
 
 // ── Task 238: streaming NDJSON support ─────────────────────────────────────
@@ -732,7 +763,10 @@ pub mod tools {
         if messages.len() > MAX_HISTORY_MESSAGES {
             let keep = MAX_HISTORY_MESSAGES - 1;
             messages.drain(1..messages.len() - keep);
-            while messages.get(1).and_then(|m| m.get("role")).and_then(|r| r.as_str())
+            while messages
+                .get(1)
+                .and_then(|m| m.get("role"))
+                .and_then(|r| r.as_str())
                 == Some("tool")
             {
                 messages.remove(1);
@@ -884,14 +918,15 @@ pub mod tools {
                 async move {
                     match client.post(url).json(&body).send().await {
                         Err(e) => {
-                            let mapped: Box<dyn std::error::Error + Send + Sync> =
-                                if e.is_timeout() {
-                                    format!("request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, e).into()
-                                } else if e.is_connect() {
-                                    format!("connection error: {}", e).into()
-                                } else {
-                                    format!("HTTP error: {}", e).into()
-                                };
+                            let mapped: Box<dyn std::error::Error + Send + Sync> = if e.is_timeout()
+                            {
+                                format!("request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, e)
+                                    .into()
+                            } else if e.is_connect() {
+                                format!("connection error: {}", e).into()
+                            } else {
+                                format!("HTTP error: {}", e).into()
+                            };
                             if crate::io::retry::is_retryable_reqwest_error(&e) {
                                 Err(crate::io::retry::RetryError::Retryable {
                                     source: mapped,
@@ -906,8 +941,7 @@ pub mod tools {
                             if status.is_success() {
                                 Ok(resp)
                             } else if crate::io::retry::is_retryable_status(status) {
-                                let delay =
-                                    policy.delay_for_response(attempt, resp.headers());
+                                let delay = policy.delay_for_response(attempt, resp.headers());
                                 Err(crate::io::retry::RetryError::Retryable {
                                     source: format!("Ollama returned HTTP {}", status).into(),
                                     delay,
@@ -928,7 +962,7 @@ pub mod tools {
             // Task 238: streaming NDJSON vs buffered single-JSON.
             // Reborrow the callback each round (short-lived, no cross-iteration borrow).
             let parsed: Value = if stream {
-                    read_streaming_response(resp, on_token.clone()).await?
+                read_streaming_response(resp, on_token.clone()).await?
             } else {
                 resp.json().await.map_err(|e| {
                     let e: Box<dyn std::error::Error + Send + Sync> =
@@ -1335,10 +1369,7 @@ mod tests {
         });
         let client = probe_client();
         let start = std::time::Instant::now();
-        let result = client
-            .get(format!("http://{}/api/tags", addr))
-            .send()
-            .await;
+        let result = client.get(format!("http://{}/api/tags", addr)).send().await;
         let elapsed = start.elapsed();
         assert!(result.is_err(), "hung server must produce an error, got Ok");
         assert!(

@@ -60,7 +60,9 @@ impl HeuristicRegistry {
 
 pub struct TokenCountHeuristic;
 impl Heuristic for TokenCountHeuristic {
-    fn name(&self) -> &str { "token_count" }
+    fn name(&self) -> &str {
+        "token_count"
+    }
     fn score(&self, prompt: &str) -> f32 {
         (prompt.split_whitespace().count() as f32 / 4000.0).clamp(0.0, 1.0)
     }
@@ -68,7 +70,9 @@ impl Heuristic for TokenCountHeuristic {
 
 pub struct CodeDensityHeuristic;
 impl Heuristic for CodeDensityHeuristic {
-    fn name(&self) -> &str { "code_density" }
+    fn name(&self) -> &str {
+        "code_density"
+    }
     fn score(&self, prompt: &str) -> f32 {
         let code_blocks = prompt.matches("```").count() as f32 / 2.0;
         (code_blocks * 0.4).clamp(0.0, 1.0)
@@ -77,17 +81,32 @@ impl Heuristic for CodeDensityHeuristic {
 
 pub struct ReasoningKeywordsHeuristic;
 impl Heuristic for ReasoningKeywordsHeuristic {
-    fn name(&self) -> &str { "reasoning_keywords" }
+    fn name(&self) -> &str {
+        "reasoning_keywords"
+    }
     fn score(&self, prompt: &str) -> f32 {
-        let keywords = ["explain", "step-by-step", "prove", "why", "how", "analyze", "compare"];
-        let count = keywords.iter().filter(|&w| prompt.to_lowercase().contains(w)).count();
+        let keywords = [
+            "explain",
+            "step-by-step",
+            "prove",
+            "why",
+            "how",
+            "analyze",
+            "compare",
+        ];
+        let count = keywords
+            .iter()
+            .filter(|&w| prompt.to_lowercase().contains(w))
+            .count();
         (count as f32 / keywords.len() as f32).clamp(0.0, 1.0)
     }
 }
 
 pub struct MathSymbolsHeuristic;
 impl Heuristic for MathSymbolsHeuristic {
-    fn name(&self) -> &str { "math_symbols" }
+    fn name(&self) -> &str {
+        "math_symbols"
+    }
     fn score(&self, prompt: &str) -> f32 {
         let symbols = prompt.matches(|c: char| "+-*/=^√∫∑".contains(c)).count();
         (symbols as f32 / 25.0).clamp(0.0, 1.0)
@@ -96,7 +115,9 @@ impl Heuristic for MathSymbolsHeuristic {
 
 pub struct MultiStepHeuristic;
 impl Heuristic for MultiStepHeuristic {
-    fn name(&self) -> &str { "multi_step" }
+    fn name(&self) -> &str {
+        "multi_step"
+    }
     fn score(&self, prompt: &str) -> f32 {
         let lines = prompt.matches('\n').count();
         let numbered = prompt.matches(|c: char| c.is_ascii_digit()).count();
@@ -106,7 +127,9 @@ impl Heuristic for MultiStepHeuristic {
 
 pub struct StructuralDepthHeuristic;
 impl Heuristic for StructuralDepthHeuristic {
-    fn name(&self) -> &str { "structural_depth" }
+    fn name(&self) -> &str {
+        "structural_depth"
+    }
     fn score(&self, prompt: &str) -> f32 {
         let nested_lists = prompt.matches("  -").count() + prompt.matches("    ").count();
         (nested_lists as f32 / 15.0).clamp(0.0, 1.0)

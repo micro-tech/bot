@@ -1,11 +1,11 @@
 // router/health.rs - Full Backend Health Checking & Availability Layer (Task 131)
+use chrono::{DateTime, Utc};
+use log::{info, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::interval;
-use chrono::{DateTime, Utc};
-use log::{info, warn};
 
 #[derive(Debug, Clone)]
 pub struct HealthStatus {

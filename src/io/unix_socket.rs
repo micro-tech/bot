@@ -4,27 +4,27 @@
 // and other CLI enhancements.
 
 #[cfg(unix)]
-use crate::config::socket::SocketConfig;
-#[cfg(unix)]
 use crate::bus::{Bus, Message};
+#[cfg(unix)]
+use crate::config::socket::SocketConfig;
 #[cfg(unix)]
 use crate::utils::log_to_file;
 #[cfg(unix)]
-use tokio::net::UnixListener;
-#[cfg(unix)]
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-#[cfg(unix)]
-use std::path::Path;
+use serde_json::{Value, json};
 #[cfg(unix)]
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 #[cfg(unix)]
+use std::path::Path;
+#[cfg(unix)]
 use std::time::Instant;
 #[cfg(unix)]
-use serde_json::{json, Value};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[cfg(unix)]
-use tracing::{info, error, warn, debug};
+use tokio::net::UnixListener;
+#[cfg(unix)]
+use tracing::{debug, error, info, warn};
 
 #[cfg(unix)]
 pub struct UnixSocketServer {
@@ -48,7 +48,10 @@ impl UnixSocketServer {
 
         if path.exists() {
             if let Err(e) = fs::remove_file(path) {
-                log_to_file(&format!("Failed to remove existing socket {}: {}", self.config.path, e));
+                log_to_file(&format!(
+                    "Failed to remove existing socket {}: {}",
+                    self.config.path, e
+                ));
             }
         }
 
@@ -66,7 +69,10 @@ impl UnixSocketServer {
             perms.set_mode(self.config.mode);
             fs::set_permissions(path, perms)
         }) {
-            log_to_file(&format!("Failed to set socket permissions on {}: {}", self.config.path, e));
+            log_to_file(&format!(
+                "Failed to set socket permissions on {}: {}",
+                self.config.path, e
+            ));
         }
 
         info!("UNIX socket listening at {}", self.config.path);
@@ -195,7 +201,11 @@ fn route_command(cmd: &str, args: &Value, start_time: Instant) -> Value {
         "ask" => {
             let prompt = args.get("prompt").and_then(|v| v.as_str()).unwrap_or("");
             if prompt.is_empty() {
-                error_response("VALIDATION_ERROR", "Missing prompt", Some(json!({"field": "prompt"})))
+                error_response(
+                    "VALIDATION_ERROR",
+                    "Missing prompt",
+                    Some(json!({"field": "prompt"})),
+                )
             } else {
                 json!({"status": "ok", "action": "ask", "prompt": prompt})
             }
@@ -276,9 +286,14 @@ fn route_command(cmd: &str, args: &Value, start_time: Instant) -> Value {
             #[cfg(windows)]
             {
                 let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                let plugin_args: Vec<String> = args.get("args")
+                let plugin_args: Vec<String> = args
+                    .get("args")
                     .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 match crate::io::unix_cli::plugins::execute_plugin(name, &plugin_args) {
                     Ok(out) => return json!({"status": "ok", "output": out}),
@@ -301,18 +316,29 @@ fn route_command(cmd: &str, args: &Value, start_time: Instant) -> Value {
         "log-stream" => json!({"status": "ok", "action": "log_stream"}),
 
         // Unknown command -> structured error (91)
-        _ => error_response("UNKNOWN_COMMAND", &format!("Unknown command: {}", cmd), Some(json!({"cmd": cmd}))),
+        _ => error_response(
+            "UNKNOWN_COMMAND",
+            &format!("Unknown command: {}", cmd),
+            Some(json!({"cmd": cmd})),
+        ),
     }
 }
 
 #[cfg(unix)]
-async fn handle_client(mut stream: tokio::net::UnixStream, bus: Bus, start_time: Instant) -> anyhow::Result<()> {
+async fn handle_client(
+    mut stream: tokio::net::UnixStream,
+    bus: Bus,
+    start_time: Instant,
+) -> anyhow::Result<()> {
     let (reader, mut writer) = stream.split();
     let mut lines = BufReader::new(reader).lines();
 
     // Welcome banner
-    let welcome = json!({"type": "welcome", "msg": "Helix CLI connected. Type 'help' for commands."});
-    writer.write_all((welcome.to_string() + "\n").as_bytes()).await?;
+    let welcome =
+        json!({"type": "welcome", "msg": "Helix CLI connected. Type 'help' for commands."});
+    writer
+        .write_all((welcome.to_string() + "\n").as_bytes())
+        .await?;
 
     while let Some(line) = lines.next_line().await? {
         if line.trim().is_empty() {
@@ -342,7 +368,8 @@ async fn handle_client(mut stream: tokio::net::UnixStream, bus: Bus, start_time:
                         "type": "cli_command",
                         "cmd": cmd,
                         "args": args
-                    }).to_string(),
+                    })
+                    .to_string(),
                     timestamp: crate::utils::now_ms(),
                 };
                 let _ = bus.publish(bus_msg);
@@ -351,7 +378,11 @@ async fn handle_client(mut stream: tokio::net::UnixStream, bus: Bus, start_time:
             } else if let Some(prompt) = msg.get("prompt").and_then(|v| v.as_str()) {
                 json!({"status": "ok", "echo": prompt})
             } else {
-                error_response("INVALID_FORMAT", "Invalid command format. Use {\"cmd\": \"help\"}", None)
+                error_response(
+                    "INVALID_FORMAT",
+                    "Invalid command format. Use {\"cmd\": \"help\"}",
+                    None,
+                )
             }
         } else {
             // Plain text

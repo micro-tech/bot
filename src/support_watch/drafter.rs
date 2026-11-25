@@ -200,7 +200,10 @@ pub fn extract_draft_body(report: &str) -> Option<String> {
     {
         return None;
     }
-    let final_text = report.split_once("final:\n").map(|(_, f)| f).unwrap_or(report);
+    let final_text = report
+        .split_once("final:\n")
+        .map(|(_, f)| f)
+        .unwrap_or(report);
     if let Some((_, rest)) = final_text.split_once(DRAFT_BEGIN) {
         if let Some((body, _)) = rest.split_once(DRAFT_END) {
             let body = body.trim().to_string();
@@ -340,7 +343,10 @@ mod tests {
     #[test]
     fn extract_draft_body_prefers_markers() {
         let report = "Sub-agent complete\ntask_id: x\nbackend: gemini\nrole: y\nfinal:\nSome preamble\n---DRAFT-BEGIN---\nThe actual reply.\n---DRAFT-END---\ntrailing";
-        assert_eq!(extract_draft_body(report).as_deref(), Some("The actual reply."));
+        assert_eq!(
+            extract_draft_body(report).as_deref(),
+            Some("The actual reply.")
+        );
     }
 
     #[test]
@@ -350,7 +356,10 @@ mod tests {
             extract_draft_body(report).as_deref(),
             Some("Just the reply, no markers.")
         );
-        assert!(extract_draft_body("Sub-agent failed\ntask_id: x\nbackend: gemini\nerror: boom").is_none());
+        assert!(
+            extract_draft_body("Sub-agent failed\ntask_id: x\nbackend: gemini\nerror: boom")
+                .is_none()
+        );
         assert!(extract_draft_body("Error: spend gate").is_none());
     }
 
@@ -363,7 +372,11 @@ mod tests {
         unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
         assert_eq!(draft.status, drafts::DraftStatus::Pending);
         assert_eq!(draft.in_reply_to, "m1");
-        assert!(draft.body.contains("[stub]"), "unexpected body: {}", draft.body);
+        assert!(
+            draft.body.contains("[stub]"),
+            "unexpected body: {}",
+            draft.body
+        );
         crate::mcp_client::clear_test_overrides();
     }
 }

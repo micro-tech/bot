@@ -237,10 +237,9 @@ impl HelixAcpAgent {
             .as_deref()
             .is_some_and(|e| e.contains("failed"));
         if final_message.is_empty() {
-            final_message = final_state
-                .last_error
-                .clone()
-                .unwrap_or_else(|| "The agent completed without producing a final answer.".to_string());
+            final_message = final_state.last_error.clone().unwrap_or_else(|| {
+                "The agent completed without producing a final answer.".to_string()
+            });
             warn!("ACP turn produced no FinalAnswer; using fallback message");
         }
 

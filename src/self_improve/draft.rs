@@ -66,11 +66,9 @@ pub fn ensure_loop_drafter_persona(rt_dir: &Path) -> Result<PathBuf, String> {
         return Ok(path);
     }
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("persona dir create failed: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("persona dir create failed: {e}"))?;
     }
-    std::fs::write(&path, LOOP_DRAFTER_PERSONA)
-        .map_err(|e| format!("persona seed failed: {e}"))?;
+    std::fs::write(&path, LOOP_DRAFTER_PERSONA).map_err(|e| format!("persona seed failed: {e}"))?;
     Ok(path)
 }
 
@@ -131,12 +129,17 @@ pub fn parse_draft_response(text: &str) -> Result<Vec<DiffFile>, String> {
     let mut current_path: Option<String> = None;
     let mut current_lines: Vec<String> = Vec::new();
     for line in text.lines() {
-        if let Some(path) = line.trim().strip_prefix("--- file: ").and_then(|rest| {
-            rest.strip_suffix("---").map(|p| p.trim().to_string())
-        }) {
+        if let Some(path) = line
+            .trim()
+            .strip_prefix("--- file: ")
+            .and_then(|rest| rest.strip_suffix("---").map(|p| p.trim().to_string()))
+        {
             if let Some(prev) = current_path.take() {
                 validate_draft_path(&prev)?;
-                files.push(DiffFile { path: prev, content: current_lines.join("\n") });
+                files.push(DiffFile {
+                    path: prev,
+                    content: current_lines.join("\n"),
+                });
                 current_lines.clear();
             }
             if path.is_empty() {
@@ -153,7 +156,10 @@ pub fn parse_draft_response(text: &str) -> Result<Vec<DiffFile>, String> {
     }
     if let Some(prev) = current_path.take() {
         validate_draft_path(&prev)?;
-        files.push(DiffFile { path: prev, content: current_lines.join("\n") });
+        files.push(DiffFile {
+            path: prev,
+            content: current_lines.join("\n"),
+        });
     }
     if files.is_empty() {
         return Err("draft response contains no file blocks".to_string());
@@ -325,20 +331,33 @@ mod tests {
         let dir = tmpdir("helix-self-improve-draft-attach");
         let mut p = proposal("errors:logs/error_log.md");
         upsert_proposal(&dir, &p).unwrap();
-        let small = vec![DiffFile { path: "src/a.rs".to_string(), content: "x\n".to_string() }];
+        let small = vec![DiffFile {
+            path: "src/a.rs".to_string(),
+            content: "x\n".to_string(),
+        }];
         let count = attach_draft(&dir, &mut p, small, 500, 2_000).unwrap();
         assert_eq!(count, 1);
         assert_eq!(p.diff_files.len(), 1);
         let stored = crate::self_improve::worker::read_proposals(&dir).unwrap();
         assert_eq!(stored[0].diff_files.len(), 1);
         // Over-cap: rejected, record unchanged.
-        let big = (0..501).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
-        let over = vec![DiffFile { path: "src/a.rs".to_string(), content: big }];
+        let big = (0..501)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let over = vec![DiffFile {
+            path: "src/a.rs".to_string(),
+            content: big,
+        }];
         let r = attach_draft(&dir, &mut p, over, 500, 3_000);
         assert!(r.is_err());
         assert!(r.unwrap_err().contains("exceeds the 500-line cap"));
         let stored = crate::self_improve::worker::read_proposals(&dir).unwrap();
-        assert_eq!(stored[0].diff_files.len(), 1, "over-cap draft must not overwrite");
+        assert_eq!(
+            stored[0].diff_files.len(),
+            1,
+            "over-cap draft must not overwrite"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -365,20 +384,33 @@ mod tests {
             {"function": {"name": "spawn_subagent"}},
             {"function": {"name": "run_shell"}},
         ]);
-        let filtered = crate::self_improve::worker::filter_loop_tools(&defs, "loop-drafter").unwrap();
+        let filtered =
+            crate::self_improve::worker::filter_loop_tools(&defs, "loop-drafter").unwrap();
         let names: Vec<&str> = filtered
             .as_array()
             .unwrap()
             .iter()
-            .map(|d| d.get("function").unwrap().get("name").unwrap().as_str().unwrap())
+            .map(|d| {
+                d.get("function")
+                    .unwrap()
+                    .get("name")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+            })
             .collect();
         assert_eq!(names, vec!["repo_read", "read_log"]);
-        assert!(crate::self_improve::worker::filter_loop_tools(&serde_json::json!([]), "loop-drafter").is_err());
-        assert!(crate::self_improve::worker::filter_loop_tools(
-            &serde_json::json!([{"function": {"name": "spawn_subagent"}}]),
-            "loop-drafter"
-        )
-        .is_err());
+        assert!(
+            crate::self_improve::worker::filter_loop_tools(&serde_json::json!([]), "loop-drafter")
+                .is_err()
+        );
+        assert!(
+            crate::self_improve::worker::filter_loop_tools(
+                &serde_json::json!([{"function": {"name": "spawn_subagent"}}]),
+                "loop-drafter"
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -389,11 +421,18 @@ mod tests {
         let dir = tmpdir("helix-self-improve-draft-persona");
         let path = ensure_loop_drafter_persona(&dir).unwrap();
         assert!(path.exists());
-        assert!(std::fs::read_to_string(&path).unwrap().contains("loop drafter"));
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("loop drafter")
+        );
         std::fs::write(&path, "john's edited drafter persona").unwrap();
         let path2 = ensure_loop_drafter_persona(&dir).unwrap();
         assert_eq!(path, path2);
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "john's edited drafter persona");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "john's edited drafter persona"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

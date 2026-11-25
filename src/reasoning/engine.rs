@@ -5,12 +5,12 @@
 
 #![allow(dead_code)]
 
-use crate::reasoning::state::{ReasoningState, ReasoningPhase, Hypothesis, Plan, PlanStep};
 use crate::bus::Bus;
+use crate::reasoning::state::{Hypothesis, Plan, PlanStep, ReasoningPhase, ReasoningState};
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn, debug};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 /// Main reasoning engine
@@ -39,7 +39,9 @@ impl ReasoningEngine {
     /// Start the reasoning process
     pub async fn start(&self) -> Result<()> {
         let mut state = self.state.write().await;
-        state.transition(ReasoningPhase::ExpandOptions).map_err(|e| anyhow::anyhow!(e))?;
+        state
+            .transition(ReasoningPhase::ExpandOptions)
+            .map_err(|e| anyhow::anyhow!(e))?;
         info!(correlation_id = %state.correlation_id, goal = %state.goal, "Reasoning started");
 
         // Task 74: Emit observability event
@@ -70,7 +72,12 @@ impl ReasoningEngine {
     }
 
     /// Update belief for a hypothesis based on evidence
-    pub async fn update_belief(&self, hyp_id: Uuid, evidence: impl Into<String>, is_supporting: bool) {
+    pub async fn update_belief(
+        &self,
+        hyp_id: Uuid,
+        evidence: impl Into<String>,
+        is_supporting: bool,
+    ) {
         let mut state = self.state.write().await;
         let _evidence_str = evidence.into();
         if let Some(hyp) = state.hypotheses.iter_mut().find(|h| h.id == hyp_id) {
@@ -88,17 +95,20 @@ impl ReasoningEngine {
     /// Create a plan from current hypotheses
     pub async fn create_plan(&self) -> Result<Uuid> {
         let mut state = self.state.write().await;
-        state.transition(ReasoningPhase::CommitPlan).map_err(|e| anyhow::anyhow!(e))?;
+        state
+            .transition(ReasoningPhase::CommitPlan)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut plan = Plan::new(&state.goal);
         // Simple heuristic: pick highest-belief hypothesis and create steps
-        if let Some(best) = state.hypotheses.iter().max_by(|a, b| a.belief.partial_cmp(&b.belief).unwrap()) {
+        if let Some(best) = state
+            .hypotheses
+            .iter()
+            .max_by(|a, b| a.belief.partial_cmp(&b.belief).unwrap())
+        {
             plan.confidence = best.belief;
             // Create a placeholder step for the hypothesis
-            let step = PlanStep::new(
-                format!("Investigate: {}", best.description),
-                "llm",
-            );
+            let step = PlanStep::new(format!("Investigate: {}", best.description), "llm");
             plan.add_step(step);
         }
 
@@ -123,7 +133,9 @@ impl ReasoningEngine {
             return Err(anyhow::anyhow!("No plan to execute"));
         }
 
-        state.transition(ReasoningPhase::ExecuteStep).map_err(|e| anyhow::anyhow!(e))?;
+        state
+            .transition(ReasoningPhase::ExecuteStep)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let is_complete = {
             let plan = state.current_plan.as_ref().unwrap();
@@ -131,7 +143,9 @@ impl ReasoningEngine {
         };
 
         if is_complete {
-            state.transition(ReasoningPhase::Completed).map_err(|e| anyhow::anyhow!(e))?;
+            state
+                .transition(ReasoningPhase::Completed)
+                .map_err(|e| anyhow::anyhow!(e))?;
             info!(correlation_id = %state.correlation_id, "Plan completed");
             return Ok(false);
         }
@@ -164,12 +178,16 @@ impl ReasoningEngine {
                 cycles = state.correction_cycles,
                 "Max correction cycles reached, failing"
             );
-            state.transition(ReasoningPhase::Failed).map_err(|e| anyhow::anyhow!(e))?;
+            state
+                .transition(ReasoningPhase::Failed)
+                .map_err(|e| anyhow::anyhow!(e))?;
             return Err(anyhow::anyhow!("Max self-correction cycles exceeded"));
         }
 
         state.correction_cycles += 1;
-        state.transition(ReasoningPhase::SelfCorrect).map_err(|e| anyhow::anyhow!(e))?;
+        state
+            .transition(ReasoningPhase::SelfCorrect)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let reason_str = reason.into();
         info!(
@@ -180,11 +198,14 @@ impl ReasoningEngine {
         );
 
         // Use the SelfCorrectionLoop logger (was unused)
-        let correction_loop = crate::reasoning::self_correction::SelfCorrectionLoop::new(self.max_correction_cycles);
+        let correction_loop =
+            crate::reasoning::self_correction::SelfCorrectionLoop::new(self.max_correction_cycles);
         correction_loop.log_correction(&state.correlation_id, state.correction_cycles, &reason_str);
 
         // Transition back to revision
-        state.transition(ReasoningPhase::RevisePlan).map_err(|e| anyhow::anyhow!(e))?;
+        state
+            .transition(ReasoningPhase::RevisePlan)
+            .map_err(|e| anyhow::anyhow!(e))?;
         Ok(())
     }
 

@@ -344,14 +344,20 @@ mod tests {
         // THEN the snapshot shows it Working first and Done after:
         register(rec("test-reg-lifecycle-1"));
         let snap = snapshot();
-        let r = snap.iter().find(|r| r.id == "test-reg-lifecycle-1").unwrap();
+        let r = snap
+            .iter()
+            .find(|r| r.id == "test-reg-lifecycle-1")
+            .unwrap();
         assert_eq!(r.status, SubagentStatus::Working);
         assert_eq!(r.role_hint, "planner");
         assert!(r.finished_at_ms.is_none());
 
         finish("test-reg-lifecycle-1", SubagentStatus::Done);
         let snap = snapshot();
-        let r = snap.iter().find(|r| r.id == "test-reg-lifecycle-1").unwrap();
+        let r = snap
+            .iter()
+            .find(|r| r.id == "test-reg-lifecycle-1")
+            .unwrap();
         assert_eq!(r.status, SubagentStatus::Done);
         assert!(r.finished_at_ms.is_some());
 
@@ -391,10 +397,18 @@ mod tests {
         assert_eq!(finished.len(), 10, "only the last 10 finished are kept");
         // The 4 oldest finished (f0..f3) were evicted; f4..f13 remain:
         let ids: Vec<&str> = finished.iter().map(|r| r.id.as_str()).collect();
-        for old in ["test-reg-prune-f0", "test-reg-prune-f1", "test-reg-prune-f2", "test-reg-prune-f3"] {
+        for old in [
+            "test-reg-prune-f0",
+            "test-reg-prune-f1",
+            "test-reg-prune-f2",
+            "test-reg-prune-f3",
+        ] {
             assert!(!ids.contains(&old), "{} should have been pruned", old);
         }
-        assert!(ids.contains(&"test-reg-prune-f13"), "newest finished must survive");
+        assert!(
+            ids.contains(&"test-reg-prune-f13"),
+            "newest finished must survive"
+        );
         reset_for_tests();
     }
 

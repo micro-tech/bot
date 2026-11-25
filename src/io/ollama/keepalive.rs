@@ -313,7 +313,9 @@ mod tests {
 
     #[test]
     fn test_read_preload_flag_defaults_true_when_absent() {
-        unsafe { std::env::remove_var("OLLAMA_PRELOAD"); }
+        unsafe {
+            std::env::remove_var("OLLAMA_PRELOAD");
+        }
         assert!(
             read_preload_flag(),
             "Should default to true when OLLAMA_PRELOAD is not set"
@@ -322,57 +324,90 @@ mod tests {
 
     #[test]
     fn test_read_preload_flag_false() {
-        unsafe { std::env::set_var("OLLAMA_PRELOAD", "false"); }
+        unsafe {
+            std::env::set_var("OLLAMA_PRELOAD", "false");
+        }
         assert!(!read_preload_flag());
-        unsafe { std::env::remove_var("OLLAMA_PRELOAD"); }
+        unsafe {
+            std::env::remove_var("OLLAMA_PRELOAD");
+        }
     }
 
     #[test]
     fn test_read_preload_flag_false_uppercase() {
-        unsafe { std::env::set_var("OLLAMA_PRELOAD", "FALSE"); }
+        unsafe {
+            std::env::set_var("OLLAMA_PRELOAD", "FALSE");
+        }
         assert!(!read_preload_flag());
-        unsafe { std::env::remove_var("OLLAMA_PRELOAD"); }
+        unsafe {
+            std::env::remove_var("OLLAMA_PRELOAD");
+        }
     }
 
     #[test]
     fn test_read_preload_flag_true_explicit() {
-        unsafe { std::env::set_var("OLLAMA_PRELOAD", "true"); }
+        unsafe {
+            std::env::set_var("OLLAMA_PRELOAD", "true");
+        }
         assert!(read_preload_flag());
-        unsafe { std::env::remove_var("OLLAMA_PRELOAD"); }
+        unsafe {
+            std::env::remove_var("OLLAMA_PRELOAD");
+        }
     }
 
     #[test]
     fn test_read_preload_flag_garbage_defaults_true() {
-        unsafe { std::env::set_var("OLLAMA_PRELOAD", "yes_please"); }
-        assert!(read_preload_flag(), "Non-'false' values should be treated as true");
-        unsafe { std::env::remove_var("OLLAMA_PRELOAD"); }
+        unsafe {
+            std::env::set_var("OLLAMA_PRELOAD", "yes_please");
+        }
+        assert!(
+            read_preload_flag(),
+            "Non-'false' values should be treated as true"
+        );
+        unsafe {
+            std::env::remove_var("OLLAMA_PRELOAD");
+        }
     }
 
     #[test]
     fn test_read_keep_alive_secs_default_when_absent() {
-        unsafe { std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS"); }
+        unsafe {
+            std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS");
+        }
         assert_eq!(read_keep_alive_secs(), DEFAULT_KEEP_ALIVE_SECS);
     }
 
     #[test]
     fn test_read_keep_alive_secs_custom_value() {
-        unsafe { std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "120"); }
+        unsafe {
+            std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "120");
+        }
         assert_eq!(read_keep_alive_secs(), 120);
-        unsafe { std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS"); }
+        unsafe {
+            std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS");
+        }
     }
 
     #[test]
     fn test_read_keep_alive_secs_invalid_falls_back_to_default() {
-        unsafe { std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "not_a_number"); }
+        unsafe {
+            std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "not_a_number");
+        }
         assert_eq!(read_keep_alive_secs(), DEFAULT_KEEP_ALIVE_SECS);
-        unsafe { std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS"); }
+        unsafe {
+            std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS");
+        }
     }
 
     #[test]
     fn test_read_keep_alive_secs_zero_disables() {
-        unsafe { std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "0"); }
+        unsafe {
+            std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "0");
+        }
         assert_eq!(read_keep_alive_secs(), 0);
-        unsafe { std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS"); }
+        unsafe {
+            std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS");
+        }
     }
 
     // ── cold-load budget (2026-11-11) ─────────────────────────────────────

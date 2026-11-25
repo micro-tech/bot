@@ -54,7 +54,10 @@ fn load_config_from(path: &std::path::Path) -> BrowserConfig {
     match std::fs::read_to_string(path) {
         Ok(s) => BrowserConfig::load_from_toml(&s),
         Err(e) => {
-            debug!("browser: cannot read config file {}, browser disabled: {e}", path.display());
+            debug!(
+                "browser: cannot read config file {}, browser disabled: {e}",
+                path.display()
+            );
             BrowserConfig::default()
         }
     }
@@ -220,21 +223,18 @@ pub fn override_config_for_tests(cfg: BrowserConfig) {
 }
 
 #[cfg(test)]
-static TEST_SESSION_OVERRIDE: std::sync::Mutex<
-    Option<std::sync::Arc<TokioMutex<BrowserSession>>>,
-> = std::sync::Mutex::new(None);
+static TEST_SESSION_OVERRIDE: std::sync::Mutex<Option<std::sync::Arc<TokioMutex<BrowserSession>>>> =
+    std::sync::Mutex::new(None);
 
 #[cfg(test)]
-fn test_session_override() -> &'static std::sync::Mutex<
-    Option<std::sync::Arc<TokioMutex<BrowserSession>>>,
-> {
+fn test_session_override()
+-> &'static std::sync::Mutex<Option<std::sync::Arc<TokioMutex<BrowserSession>>>> {
     &TEST_SESSION_OVERRIDE
 }
 
 #[cfg(test)]
 pub fn override_session_for_tests(session: BrowserSession) {
-    *test_session_override().lock().unwrap() =
-        Some(std::sync::Arc::new(TokioMutex::new(session)));
+    *test_session_override().lock().unwrap() = Some(std::sync::Arc::new(TokioMutex::new(session)));
 }
 
 /// Clear all test overrides. Tests that install overrides must call this

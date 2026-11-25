@@ -132,7 +132,10 @@ fn resolve_under_root(root: &Path, name: &str) -> Result<PathBuf, String> {
 
 impl Git {
     pub fn new(repo: PathBuf, worktree_root: PathBuf) -> Self {
-        Self { repo, worktree_root }
+        Self {
+            repo,
+            worktree_root,
+        }
     }
 
     /// Validate an argv vector against the allowlist, BEFORE spawning.
@@ -398,11 +401,7 @@ impl Git {
     pub fn commit(&self, worktree: &Path, message: &str) -> Result<String, String> {
         let worktree = self.check_worktree(worktree)?;
         self.spawn(
-            &[
-                "commit".to_string(),
-                "-m".to_string(),
-                message.to_string(),
-            ],
+            &["commit".to_string(), "-m".to_string(), message.to_string()],
             &worktree,
         )
     }
@@ -508,8 +507,30 @@ mod tests {
         let repo = dir.join("repo");
         std::fs::create_dir_all(&repo).unwrap();
         git(&["init", "-b", "main"], &repo);
-        git(&["-c", "user.email=t@t", "-c", "user.name=t", "config", "user.email", "t@t"], &repo);
-        git(&["-c", "user.email=t@t", "-c", "user.name=t", "config", "user.name", "t"], &repo);
+        git(
+            &[
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "user.name=t",
+                "config",
+                "user.email",
+                "t@t",
+            ],
+            &repo,
+        );
+        git(
+            &[
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "user.name=t",
+                "config",
+                "user.name",
+                "t",
+            ],
+            &repo,
+        );
         std::fs::write(repo.join("a.txt"), "hello\n").unwrap();
         git(&["add", "a.txt"], &repo);
         git(&["commit", "-m", "init"], &repo);
@@ -541,7 +562,10 @@ mod tests {
         let log = git(&["log", "--oneline", "loop-test"], &repo);
         assert!(log.contains("loop test commit"));
         let main_log = git(&["log", "--oneline", "main"], &repo);
-        assert!(!main_log.contains("loop test commit"), "live branch untouched");
+        assert!(
+            !main_log.contains("loop test commit"),
+            "live branch untouched"
+        );
         assert!(branches(&repo).contains(&"loop-test".to_string()));
         // Cleanup order is load-bearing: git refuses branch -D while
         // the worktree still has it checked out.
@@ -565,8 +589,14 @@ mod tests {
         g.commit(&wt, "push test commit").unwrap();
         g.push_branch(&wt, "self-improve/test-push").unwrap();
         let ls = git(&["ls-remote", "--heads", remote.to_str().unwrap()], &repo);
-        assert!(ls.contains("refs/heads/self-improve/test-push"), "branch must land on origin: {ls}");
-        assert!(!ls.contains("refs/heads/main"), "main must not be pushed: {ls}");
+        assert!(
+            ls.contains("refs/heads/self-improve/test-push"),
+            "branch must land on origin: {ls}"
+        );
+        assert!(
+            !ls.contains("refs/heads/main"),
+            "main must not be pushed: {ls}"
+        );
         // Pushing a non-self-improve branch is rejected before spawn.
         assert!(g.push_branch(&wt, "main").is_err());
         assert!(g.push_branch(&wt, "PreRelese").is_err());
@@ -576,7 +606,10 @@ mod tests {
         g.remove_worktree("wt1").unwrap();
         let wt2 = g.attach_worktree("wt2", "self-improve/test-push").unwrap();
         assert!(wt2.join("b.txt").exists());
-        assert_eq!(std::fs::read_to_string(wt2.join("b.txt")).unwrap(), "push me\n");
+        assert_eq!(
+            std::fs::read_to_string(wt2.join("b.txt")).unwrap(),
+            "push me\n"
+        );
         g.remove_worktree("wt2").unwrap();
         g.delete_branch("self-improve/test-push").unwrap();
         let _ = std::fs::remove_dir_all(&dir);
@@ -588,7 +621,10 @@ mod tests {
         let (dir, repo, g) = fixture(name);
         let remote = dir.join("remote.git");
         git(&["init", "--bare", remote.to_str().unwrap()], &dir);
-        git(&["remote", "add", "origin", remote.to_str().unwrap()], &repo);
+        git(
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+            &repo,
+        );
         (dir, repo, remote, g)
     }
 
@@ -606,14 +642,48 @@ mod tests {
             vec!["push".into(), "origin".into(), "main".into()],
             // Task 364: only `push origin HEAD:refs/heads/self-improve/<slug>`
             // is allowed — every other push shape stays rejected.
-            vec!["push".into(), "origin".into(), "HEAD:refs/heads/master".into()],
-            vec!["push".into(), "origin".into(), "HEAD:refs/heads/PreRelese".into()],
-            vec!["push".into(), "origin".into(), "HEAD:refs/heads/other/branch".into()],
-            vec!["push".into(), "--force".into(), "origin".into(), "HEAD:refs/heads/self-improve/x".into()],
-            vec!["push".into(), "origin".into(), "HEAD:refs/heads/self-improve/x".into(), "--tags".into()],
-            vec!["push".into(), "upstream".into(), "HEAD:refs/heads/self-improve/x".into()],
-            vec!["push".into(), "origin".into(), "HEAD:refs/heads/self-improve/".into()],
-            vec!["push".into(), "origin".into(), "HEAD:refs/heads/self-improve/../evil".into()],
+            vec![
+                "push".into(),
+                "origin".into(),
+                "HEAD:refs/heads/master".into(),
+            ],
+            vec![
+                "push".into(),
+                "origin".into(),
+                "HEAD:refs/heads/PreRelese".into(),
+            ],
+            vec![
+                "push".into(),
+                "origin".into(),
+                "HEAD:refs/heads/other/branch".into(),
+            ],
+            vec![
+                "push".into(),
+                "--force".into(),
+                "origin".into(),
+                "HEAD:refs/heads/self-improve/x".into(),
+            ],
+            vec![
+                "push".into(),
+                "origin".into(),
+                "HEAD:refs/heads/self-improve/x".into(),
+                "--tags".into(),
+            ],
+            vec![
+                "push".into(),
+                "upstream".into(),
+                "HEAD:refs/heads/self-improve/x".into(),
+            ],
+            vec![
+                "push".into(),
+                "origin".into(),
+                "HEAD:refs/heads/self-improve/".into(),
+            ],
+            vec![
+                "push".into(),
+                "origin".into(),
+                "HEAD:refs/heads/self-improve/../evil".into(),
+            ],
             vec!["push".into(), "origin".into(), "self-improve/x".into()],
             vec!["merge".into(), "main".into()],
             vec!["checkout".into(), "main".into()],
@@ -628,7 +698,12 @@ mod tests {
             vec!["--work-tree=/tmp".into(), "status".into()],
             vec!["--upload-pack=touch".into(), "status".into()],
             vec!["commit".into(), "--amend".into(), "-m".into(), "x".into()],
-            vec!["commit".into(), "-m".into(), "x".into(), "--author=y".into()],
+            vec![
+                "commit".into(),
+                "-m".into(),
+                "x".into(),
+                "--author=y".into(),
+            ],
             vec!["branch".into(), "-d".into(), "loop-test".into()],
             vec!["branch".into(), "../evil".into()],
             vec!["worktree".into(), "remove".into(), "wt1".into()],
@@ -660,10 +735,7 @@ mod tests {
         // add with an absolute path outside the worktree.
         assert!(g.add_files(&wt, &["/tmp/evil.txt"]).is_err());
         // commit with a cwd outside the root (the live repo itself).
-        let r = g.run_raw(
-            &["commit".into(), "-m".into(), "evil".into()],
-            &repo,
-        );
+        let r = g.run_raw(&["commit".into(), "-m".into(), "evil".into()], &repo);
         assert!(r.is_err(), "commit cwd=repo must be rejected");
         // worktree add with an absolute path outside the root.
         assert!(g.add_worktree("/tmp/evil-wt", "evil-branch").is_err());
@@ -685,7 +757,9 @@ mod tests {
             std::env::set_var("GIT_DIR", "/nonexistent-git-dir");
             std::env::set_var("GIT_ASKPASS", "/bin/false");
         }
-        let r = g.add_files(&wt, &["a.txt"]).and_then(|_| g.commit(&wt, "env test"));
+        let r = g
+            .add_files(&wt, &["a.txt"])
+            .and_then(|_| g.commit(&wt, "env test"));
         unsafe {
             std::env::remove_var("GIT_DIR");
             std::env::remove_var("GIT_ASKPASS");

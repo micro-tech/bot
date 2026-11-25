@@ -131,7 +131,10 @@ impl BrowserConfig {
     /// built-in Google + localhost default when none are configured.
     pub fn effective_allowed_hosts(&self) -> Vec<String> {
         if self.allowed_hosts.is_empty() {
-            DEFAULT_ALLOWED_HOSTS.iter().map(|s| s.to_string()).collect()
+            DEFAULT_ALLOWED_HOSTS
+                .iter()
+                .map(|s| s.to_string())
+                .collect()
         } else {
             self.allowed_hosts.clone()
         }
@@ -169,8 +172,9 @@ impl BrowserConfig {
             return p;
         }
         match std::env::var("HOME") {
-            Ok(home) if !home.is_empty() => std::path::PathBuf::from(home)
-                .join(".config/google-mcp/token.json"),
+            Ok(home) if !home.is_empty() => {
+                std::path::PathBuf::from(home).join(".config/google-mcp/token.json")
+            }
             _ => std::path::PathBuf::from(".config/google-mcp/token.json"),
         }
     }

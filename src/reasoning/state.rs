@@ -59,14 +59,20 @@ impl Hypothesis {
         // Simple odds-ratio update
         let likelihood = if is_supporting { 0.8 } else { 0.2 };
         let prior_odds = self.belief / (1.0 - self.belief).max(0.001);
-        let likelihood_ratio = if is_supporting { likelihood / (1.0 - likelihood) } else { (1.0 - likelihood) / likelihood };
+        let likelihood_ratio = if is_supporting {
+            likelihood / (1.0 - likelihood)
+        } else {
+            (1.0 - likelihood) / likelihood
+        };
         let posterior_odds = prior_odds * likelihood_ratio;
         self.belief = posterior_odds / (1.0 + posterior_odds);
 
         if is_supporting {
-            self.supporting_evidence.push(format!("weight:{:.2}", evidence_weight));
+            self.supporting_evidence
+                .push(format!("weight:{:.2}", evidence_weight));
         } else {
-            self.contradicting_evidence.push(format!("weight:{:.2}", evidence_weight));
+            self.contradicting_evidence
+                .push(format!("weight:{:.2}", evidence_weight));
         }
     }
 }
@@ -208,7 +214,10 @@ impl ReasoningState {
             self.phase = new_phase;
             Ok(())
         } else {
-            Err(format!("Invalid transition from {:?} to {:?}", self.phase, new_phase))
+            Err(format!(
+                "Invalid transition from {:?} to {:?}",
+                self.phase, new_phase
+            ))
         }
     }
 

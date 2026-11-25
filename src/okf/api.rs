@@ -132,10 +132,16 @@ pub async fn okf_webhook(
     State(state): State<OkfState>,
     Json(payload): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let bundle_id = payload["bundle_id"].as_str().unwrap_or("unknown").to_string();
+    let bundle_id = payload["bundle_id"]
+        .as_str()
+        .unwrap_or("unknown")
+        .to_string();
     let action = payload["action"].as_str().unwrap_or("changed").to_string();
 
-    println!("[OKF Webhook] Received notification for bundle '{}' - action: {}", bundle_id, action);
+    println!(
+        "[OKF Webhook] Received notification for bundle '{}' - action: {}",
+        bundle_id, action
+    );
 
     // For now, if auto_reload is enabled, trigger a reload.
     // In a real implementation we would check etag/version first.
@@ -202,7 +208,8 @@ pub async fn okf_schema() -> impl IntoResponse {
         Err(_) => Json(json!({
             "error": "Schema file not found",
             "hint": "okf_bundle_schema.json should be present in the project root"
-        })).into_response()
+        }))
+        .into_response(),
     }
 }
 
@@ -348,11 +355,9 @@ pub async fn okf_traces(
                 Err(e) => Err(e),
             };
             match io_result {
-                Ok(_) => (
-                    StatusCode::ACCEPTED,
-                    Json(json!({"status": "accepted"})),
-                )
-                    .into_response(),
+                Ok(_) => {
+                    (StatusCode::ACCEPTED, Json(json!({"status": "accepted"}))).into_response()
+                }
                 Err(e) => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(json!({"error": e.to_string()})),
@@ -433,7 +438,11 @@ pub async fn okf_push_concept(
         metadata.insert(
             "tags".to_string(),
             serde_json::Value::Array(
-                concept.tags.into_iter().map(serde_json::Value::String).collect(),
+                concept
+                    .tags
+                    .into_iter()
+                    .map(serde_json::Value::String)
+                    .collect(),
             ),
         );
     }

@@ -1,20 +1,20 @@
 // router/telemetry.rs - Full System Load & Telemetry Integration (Task 130)
+use chrono::{DateTime, Utc};
+use log::info;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::interval;
-use chrono::{DateTime, Utc};
-use log::info;
 
 #[derive(Debug, Clone, Default)]
 pub struct TelemetrySnapshot {
-    pub gpu_util: f32,                    // 0-100
+    pub gpu_util: f32, // 0-100
     pub vram_used_mb: f32,
     pub vram_total_mb: f32,
-    pub cpu_load: f32,                    // 0-100
+    pub cpu_load: f32, // 0-100
     pub temp_c: f32,
-    pub rtt_ms: HashMap<String, f32>,     // endpoint -> latency
+    pub rtt_ms: HashMap<String, f32>, // endpoint -> latency
     pub timestamp: DateTime<Utc>,
 }
 

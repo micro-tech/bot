@@ -19,8 +19,8 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{
-        sse::{Event, Sse},
         IntoResponse, Json,
+        sse::{Event, Sse},
     },
 };
 use futures_util::stream::{self, Stream};
@@ -29,9 +29,9 @@ use serde_json::Value;
 
 use super::tasks::TaskStore;
 use super::types::{
-    normalize_method, now_rfc3339, param_task_id, AgentAuthentication, AgentCapabilities,
-    AgentCard, AgentSkill, Artifact, JsonRpcError, JsonRpcErrorBody, JsonRpcRequest, JsonRpcSuccess,
-    Message, Part, Task, TaskState, TextPart, A2A_PROTOCOL_VERSION,
+    A2A_PROTOCOL_VERSION, AgentAuthentication, AgentCapabilities, AgentCard, AgentSkill, Artifact,
+    JsonRpcError, JsonRpcErrorBody, JsonRpcRequest, JsonRpcSuccess, Message, Part, Task, TaskState,
+    TextPart, normalize_method, now_rfc3339, param_task_id,
 };
 use crate::acp::agent::HelixAcpAgent;
 
@@ -58,8 +58,7 @@ impl A2aState {
 pub async fn agent_card(State(state): State<A2aState>) -> impl IntoResponse {
     let card = AgentCard {
         name: "Helix".to_string(),
-        description: "Helix personal agent: chat, tools, and routines over A2A v1.0."
-            .to_string(),
+        description: "Helix personal agent: chat, tools, and routines over A2A v1.0.".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         protocol_version: A2A_PROTOCOL_VERSION.to_string(),
         url: format!("{}/a2a", state.base_url.trim_end_matches('/')),
@@ -83,8 +82,7 @@ pub async fn agent_card(State(state): State<A2aState>) -> impl IntoResponse {
             AgentSkill {
                 id: "tools".to_string(),
                 name: "Tools".to_string(),
-                description: "Run Helix tools: logs, notes, email, system status."
-                    .to_string(),
+                description: "Run Helix tools: logs, notes, email, system status.".to_string(),
                 tags: vec!["tools".to_string()],
             },
         ],
@@ -118,28 +116,32 @@ pub async fn a2a_jsonrpc(
         }
         "tasks/get" => {
             let Some(task_id) = param_task_id(&req.params) else {
-                return Json(serde_json::to_value(JsonRpcError::invalid_params(
-                    id,
-                    "tasks/get requires params.id",
-                ))
-                .unwrap())
+                return Json(
+                    serde_json::to_value(JsonRpcError::invalid_params(
+                        id,
+                        "tasks/get requires params.id",
+                    ))
+                    .unwrap(),
+                )
                 .into_response();
             };
             match state.store.get(&task_id) {
                 Some(task) => jsonrpc_ok(id, &task),
-                None => Json(
-                    serde_json::to_value(JsonRpcError::task_not_found(id, &task_id)).unwrap(),
-                )
-                .into_response(),
+                None => {
+                    Json(serde_json::to_value(JsonRpcError::task_not_found(id, &task_id)).unwrap())
+                        .into_response()
+                }
             }
         }
         "tasks/cancel" => {
             let Some(task_id) = param_task_id(&req.params) else {
-                return Json(serde_json::to_value(JsonRpcError::invalid_params(
-                    id,
-                    "tasks/cancel requires params.id",
-                ))
-                .unwrap())
+                return Json(
+                    serde_json::to_value(JsonRpcError::invalid_params(
+                        id,
+                        "tasks/cancel requires params.id",
+                    ))
+                    .unwrap(),
+                )
                 .into_response();
             };
             let Some(current) = state.store.get(&task_id) else {
@@ -149,38 +151,40 @@ pub async fn a2a_jsonrpc(
                 .into_response();
             };
             if current.status.state.is_terminal() {
-                return Json(serde_json::to_value(JsonRpcError::invalid_params(
-                    id,
-                    format!(
-                        "task {} is already in terminal state {:?}",
-                        task_id, current.status.state
-                    ),
-                ))
-                .unwrap())
+                return Json(
+                    serde_json::to_value(JsonRpcError::invalid_params(
+                        id,
+                        format!(
+                            "task {} is already in terminal state {:?}",
+                            task_id, current.status.state
+                        ),
+                    ))
+                    .unwrap(),
+                )
                 .into_response();
             }
             if !state.store.cancel(&task_id) {
-                return Json(serde_json::to_value(JsonRpcError::invalid_params(
-                    id,
-                    format!("could not cancel task {}", task_id),
-                ))
-                .unwrap())
+                return Json(
+                    serde_json::to_value(JsonRpcError::invalid_params(
+                        id,
+                        format!("could not cancel task {}", task_id),
+                    ))
+                    .unwrap(),
+                )
                 .into_response();
             }
             match state.store.get(&task_id) {
                 Some(task) => jsonrpc_ok(id, &task),
-                None => Json(
-                    serde_json::to_value(JsonRpcError::task_not_found(id, &task_id)).unwrap(),
-                )
-                .into_response(),
+                None => {
+                    Json(serde_json::to_value(JsonRpcError::task_not_found(id, &task_id)).unwrap())
+                        .into_response()
+                }
             }
         }
         // Helix extension (not in the A2A v1.0 spec): list known tasks.
         "tasks/list" => jsonrpc_ok(id, &state.store.list()),
-        _ => Json(
-            serde_json::to_value(JsonRpcError::method_not_found(id, &req.method)).unwrap(),
-        )
-        .into_response(),
+        _ => Json(serde_json::to_value(JsonRpcError::method_not_found(id, &req.method)).unwrap())
+            .into_response(),
     }
 }
 

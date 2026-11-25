@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use log::{error, info, warn};
 use russh::keys::PrivateKey;
-use russh::keys::ssh_key::{public::KeyData, Algorithm, LineEnding, PublicKey};
+use russh::keys::ssh_key::{Algorithm, LineEnding, PublicKey, public::KeyData};
 use russh::server::Config as RusshConfig;
 
 /// Infallible OS RNG for host-key generation, backed by `getrandom`.
@@ -125,13 +125,8 @@ pub fn load_authorized_keys(path: &Path) -> Result<HashSet<KeyData>, String> {
 /// on first start.
 pub fn load_or_generate_host_key(path: &Path) -> Result<PrivateKey, String> {
     if let Ok(content) = std::fs::read_to_string(path) {
-        return PrivateKey::from_openssh(content.trim()).map_err(|e| {
-            format!(
-                "cannot parse SSH host key '{}': {}",
-                path.display(),
-                e
-            )
-        });
+        return PrivateKey::from_openssh(content.trim())
+            .map_err(|e| format!("cannot parse SSH host key '{}': {}", path.display(), e));
     }
     // Generate.
     if let Some(parent) = path.parent() {
@@ -154,7 +149,10 @@ pub fn load_or_generate_host_key(path: &Path) -> Result<PrivateKey, String> {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
     }
-    info!("[ssh] generated new Ed25519 host key at '{}'", path.display());
+    info!(
+        "[ssh] generated new Ed25519 host key at '{}'",
+        path.display()
+    );
     Ok(key)
 }
 
@@ -195,7 +193,11 @@ pub async fn start_ssh_server(ssh_cfg: SshConfig, config_dir: PathBuf) -> Result
         return Err("SSH fail-closed: [shell] is not enabled".to_string());
     }
 
-    let ak_path = resolve_ssh_path(&config_dir, ssh_cfg.authorized_keys.as_deref(), AUTHORIZED_KEYS_NAME);
+    let ak_path = resolve_ssh_path(
+        &config_dir,
+        ssh_cfg.authorized_keys.as_deref(),
+        AUTHORIZED_KEYS_NAME,
+    );
     let keys = load_authorized_keys(&ak_path)?;
     info!(
         "[ssh] loaded {} authorized key(s) from '{}'",
@@ -271,8 +273,7 @@ mod tests {
 
     #[test]
     fn load_authorized_keys_fail_closed_on_missing() {
-        let err =
-            load_authorized_keys(Path::new("/nonexistent/authorized_keys")).unwrap_err();
+        let err = load_authorized_keys(Path::new("/nonexistent/authorized_keys")).unwrap_err();
         assert!(err.contains("fail-closed"), "got: {}", err);
     }
 

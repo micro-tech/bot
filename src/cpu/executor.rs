@@ -58,7 +58,10 @@ impl CpuExecutor {
                 debug!("Attempting to write memory for key: {}", key);
                 let result = self.memory.write(&key, value);
                 match result {
-                    NodeResult::None | NodeResult::Value(_) | NodeResult::Text(_) | NodeResult::Success => {
+                    NodeResult::None
+                    | NodeResult::Value(_)
+                    | NodeResult::Text(_)
+                    | NodeResult::Success => {
                         debug!("Successfully wrote memory for key: {}", key);
                         NodeResult::None
                     }
@@ -120,7 +123,10 @@ impl CpuExecutor {
                 debug!("Attempting to update belief for key: {}", key);
                 let result = self.memory.update_belief(&key, value);
                 match result {
-                    NodeResult::None | NodeResult::Value(_) | NodeResult::Text(_) | NodeResult::Success => {
+                    NodeResult::None
+                    | NodeResult::Value(_)
+                    | NodeResult::Text(_)
+                    | NodeResult::Success => {
                         debug!("Successfully updated belief for key: {}", key);
                         NodeResult::None
                     }

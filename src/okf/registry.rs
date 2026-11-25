@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 use std::fs;
 
-
 use serde::{Deserialize, Serialize};
 
 use crate::okf::manifest::{OkfBundleManifest, OkfKnowledgeEntry, OkfSchemaEntry, OkfToolEntry};
@@ -54,7 +53,8 @@ impl OkfRegistry {
         }
 
         for knowledge in &manifest.knowledge {
-            reg.knowledge.insert(knowledge.id.clone(), knowledge.clone());
+            reg.knowledge
+                .insert(knowledge.id.clone(), knowledge.clone());
         }
 
         for schema in &manifest.schemas {
@@ -75,7 +75,8 @@ impl OkfRegistry {
         }
 
         for knowledge in &manifest.knowledge {
-            self.knowledge.insert(knowledge.id.clone(), knowledge.clone());
+            self.knowledge
+                .insert(knowledge.id.clone(), knowledge.clone());
         }
 
         for schema in &manifest.schemas {
@@ -129,9 +130,9 @@ impl OkfRegistry {
 
     /// Write the registry to a file (e.g. okf_index.json).
     pub fn write_to_file(&self, path: &str) -> std::io::Result<()> {
-        let json = self.to_json_pretty().map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, e)
-        })?;
+        let json = self
+            .to_json_pretty()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         fs::write(path, json)
     }
 
@@ -169,7 +170,8 @@ mod tests {
     use crate::okf::manifest::OkfBundleManifest;
 
     fn sample_manifest() -> OkfBundleManifest {
-        OkfBundleManifest::from_json(r#"{
+        OkfBundleManifest::from_json(
+            r#"{
             "id": "test-bundle",
             "version": "1.2.0",
             "tools": [
@@ -179,7 +181,9 @@ mod tests {
             "knowledge": [
                 {"id": "guide-1", "title": "Getting Started"}
             ]
-        }"#).unwrap()
+        }"#,
+        )
+        .unwrap()
     }
 
     #[test]

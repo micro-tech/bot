@@ -10,10 +10,10 @@ use std::process::Command;
 // as the main binary's `mod` declarations) so it compiles and tests through
 // the lib even though this installer binary itself is blocked by task 262
 // on a fresh checkout (see the include_str! lines below).
-#[path = "../chat_mcp_install.rs"]
-mod chat_mcp_install;
 #[path = "../browser_install.rs"]
 mod browser_install;
+#[path = "../chat_mcp_install.rs"]
+mod chat_mcp_install;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -275,8 +275,18 @@ fn install() {
     const DEFAULT_CONFIG: &str = include_str!("../../config.toml");
     const DEFAULT_MANIFEST: &str = include_str!("../../.grok/docs/system_manifest_root.md");
 
-    deploy_tracked_file("config.toml", &source_dir, DEFAULT_CONFIG, &primary_runtime_dir);
-    deploy_tracked_file("system_manifest.md", &source_dir, DEFAULT_MANIFEST, &primary_runtime_dir);
+    deploy_tracked_file(
+        "config.toml",
+        &source_dir,
+        DEFAULT_CONFIG,
+        &primary_runtime_dir,
+    );
+    deploy_tracked_file(
+        "system_manifest.md",
+        &source_dir,
+        DEFAULT_MANIFEST,
+        &primary_runtime_dir,
+    );
 
     // ── .env — git-ignored, create template when absent ────────────────────
     let env_src = source_dir.join(".env");
@@ -298,7 +308,10 @@ fn install() {
             "# OLLAMA_KEEP_ALIVE_SECS=240\n",
         );
         safe_write_to_both(".env", template.as_bytes(), &primary_runtime_dir);
-        println!("  !! Edit {}/.env — add your real API keys before starting.", primary_runtime_dir);
+        println!(
+            "  !! Edit {}/.env — add your real API keys before starting.",
+            primary_runtime_dir
+        );
     }
 
     // ── TLS certificates — generate self-signed when absent ────────────────
@@ -634,7 +647,11 @@ fn verify_installation(primary_runtime_dir: &str) {
 
     // Tracked config files — required.
     for f in ["config.toml", "system_manifest.md"] {
-        check_path(&format!("{}/{}", primary_runtime_dir, f), true, &mut all_good);
+        check_path(
+            &format!("{}/{}", primary_runtime_dir, f),
+            true,
+            &mut all_good,
+        );
         check_path(&format!("/etc/helix/{}", f), true, &mut all_good);
     }
 

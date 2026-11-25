@@ -87,7 +87,10 @@ impl AgentState {
         crate::utils::log_to_file(&format!(
             "[AgentState] step={} action={}",
             self.step_count,
-            self.recent_steps.back().map(|s| s.label()).unwrap_or("unknown")
+            self.recent_steps
+                .back()
+                .map(|s| s.label())
+                .unwrap_or("unknown")
         ));
     }
 

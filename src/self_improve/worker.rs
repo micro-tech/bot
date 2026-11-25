@@ -58,7 +58,10 @@ pub const LOOP_WORKER_PERSONA: &str = include_str!("../../agents/loop-worker.md"
 /// Returns Err on a zero match — fail-closed, never the full toolset.
 /// `spawn_subagent` is excluded even if present in the input. `role`
 /// names the role in the error (loop-worker / loop-drafter).
-pub(crate) fn filter_loop_tools(defs: &serde_json::Value, role: &str) -> Result<serde_json::Value, String> {
+pub(crate) fn filter_loop_tools(
+    defs: &serde_json::Value,
+    role: &str,
+) -> Result<serde_json::Value, String> {
     let arr = defs.as_array().cloned().unwrap_or_default();
     let filtered: Vec<serde_json::Value> = arr
         .into_iter()
@@ -105,11 +108,9 @@ pub fn ensure_loop_worker_persona(rt_dir: &Path) -> Result<PathBuf, String> {
         return Ok(path);
     }
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("persona dir create failed: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("persona dir create failed: {e}"))?;
     }
-    std::fs::write(&path, LOOP_WORKER_PERSONA)
-        .map_err(|e| format!("persona seed failed: {e}"))?;
+    std::fs::write(&path, LOOP_WORKER_PERSONA).map_err(|e| format!("persona seed failed: {e}"))?;
     Ok(path)
 }
 
@@ -245,7 +246,10 @@ pub fn trace_index_from_ledger(
         .filter(|p| is_test_shaped(&p.trace))
         .map(|p| p.trace.clone())
         .collect();
-    TraceIndex { metric_keys, known_test_names }
+    TraceIndex {
+        metric_keys,
+        known_test_names,
+    }
 }
 
 /// A trace is test-shaped when it looks like a Rust test path:
@@ -259,12 +263,8 @@ pub fn is_test_shaped(trace: &str) -> bool {
     if !t.contains("::") {
         return false;
     }
-    t.split("::").all(|seg| {
-        !seg.is_empty()
-            && seg
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
-    })
+    t.split("::")
+        .all(|seg| !seg.is_empty() && seg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
 }
 
 /// R3 trace validation: empty/missing traces are rejected; a trace is
@@ -320,8 +320,7 @@ pub fn upsert_proposal(rt_dir: &Path, record: &ProposalRecord) -> Result<(), Str
     }
     let path = proposals_path(rt_dir);
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("proposals dir create failed: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("proposals dir create failed: {e}"))?;
     }
     let data = serde_json::to_string_pretty(&all)
         .map_err(|e| format!("proposals serialize failed: {e}"))?;
@@ -378,14 +377,13 @@ pub fn intake_proposal(
         eval_report_json: serde_json::Value::Null,
         diff_files: Vec::new(),
         eval_branch: String::new(),
-            notes: Vec::new(),
+        notes: Vec::new(),
     };
     let mut all = prior;
     all.push(record.clone());
     let path = proposals_path(rt_dir);
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("proposals dir create failed: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("proposals dir create failed: {e}"))?;
     }
     let data = serde_json::to_string_pretty(&all)
         .map_err(|e| format!("proposals serialize failed: {e}"))?;
@@ -482,8 +480,7 @@ mod tests {
         let out = filter_loop_worker_tools(&input).unwrap();
         let mut names = def_names(&out);
         names.sort();
-        let mut expected: Vec<String> =
-            LOOP_WORKER_TOOLS.iter().map(|s| s.to_string()).collect();
+        let mut expected: Vec<String> = LOOP_WORKER_TOOLS.iter().map(|s| s.to_string()).collect();
         expected.sort();
         assert_eq!(names, expected);
     }
@@ -521,7 +518,10 @@ mod tests {
         inputs.error_total = 3;
         inputs.error_by_file.insert(
             "logs/error_log.md".to_string(),
-            ErrorFileCounts { errors: 3, total_lines: 100 },
+            ErrorFileCounts {
+                errors: 3,
+                total_lines: 100,
+            },
         );
         collect_cycle(dir, &cfg, inputs, 1_000).unwrap();
     }
@@ -570,7 +570,9 @@ mod tests {
         // trace, THEN intake rejects it and stores nothing.
         let dir = tmpdir("helix-self-improve-intake-reject");
         seed_ledger_with_error(&dir);
-        assert!(intake_proposal(&dir, good_proposal("someone said the login is slow"), 2_000).is_err());
+        assert!(
+            intake_proposal(&dir, good_proposal("someone said the login is slow"), 2_000).is_err()
+        );
         assert!(intake_proposal(&dir, good_proposal(""), 2_000).is_err());
         assert!(intake_proposal(&dir, good_proposal("   "), 2_000).is_err());
         assert!(read_proposals(&dir).unwrap().is_empty());
@@ -597,10 +599,7 @@ mod tests {
         // content and the second leaves the edit untouched.
         let dir = tmpdir("helix-self-improve-persona-seed");
         let path = ensure_loop_worker_persona(&dir).unwrap();
-        assert_eq!(
-            std::fs::read_to_string(&path).unwrap(),
-            LOOP_WORKER_PERSONA
-        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), LOOP_WORKER_PERSONA);
         std::fs::write(&path, "---\ntools: [repo_read]\n---\nJohn's edit.\n").unwrap();
         let path2 = ensure_loop_worker_persona(&dir).unwrap();
         assert_eq!(path, path2);
@@ -625,9 +624,11 @@ mod tests {
             p.diff_description,
             "Filter to genuine recent errors: see src/cpu/mod.rs"
         );
-        assert!(parse_worker_report(
-            "problem_statement: x\ntrace: errors:logs/error_log.md\ndiff_description: y\n"
-        )
-        .is_err());
+        assert!(
+            parse_worker_report(
+                "problem_statement: x\ntrace: errors:logs/error_log.md\ndiff_description: y\n"
+            )
+            .is_err()
+        );
     }
 }

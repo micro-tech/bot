@@ -86,12 +86,7 @@ fn offered_tools(server: &str) -> Vec<String> {
     let prefix = crate::mcp_client::naming::tool_name(server, "");
     crate::mcp_client::tool_definitions()
         .iter()
-        .filter_map(|d| {
-            d.get("function")?
-                .get("name")?
-                .as_str()
-                .map(str::to_string)
-        })
+        .filter_map(|d| d.get("function")?.get("name")?.as_str().map(str::to_string))
         .filter(|n| n.starts_with(&prefix))
         .filter_map(|n| crate::mcp_client::naming::parse(&n).map(|(_, tool)| tool))
         .collect()
@@ -172,7 +167,11 @@ fn format_result(
     output: &str,
     max_output_bytes: usize,
 ) -> String {
-    let kind = if is_tool_error(output) { "failed" } else { "result" };
+    let kind = if is_tool_error(output) {
+        "failed"
+    } else {
+        "result"
+    };
     let mut body = format!("{}\n", report_header(hub_id, server, tool, kind));
     if output.is_empty() {
         body.push_str("(no output)\n");
@@ -192,9 +191,7 @@ fn format_result(
 /// Timeout report body: header line only (no partial results — the
 /// call's output is unavailable when the wait expires).
 fn format_timeout(hub_id: i64, server: &str, tool: &str, time_secs: u64) -> String {
-    format!(
-        "mcp call #{hub_id} timed out after {time_secs}s (server {server} tool {tool})\n"
-    )
+    format!("mcp call #{hub_id} timed out after {time_secs}s (server {server} tool {tool})\n")
 }
 
 /// Post one reply body (chunked, same room). Failures are logged by
@@ -202,7 +199,10 @@ fn format_timeout(hub_id: i64, server: &str, tool: &str, time_secs: u64) -> Stri
 fn post_body(tools: &ResolvedChatTools, cfg: &ChatCommandConfig, body: &str) {
     let chunks = reply::chunk_reply(body, cfg.chunk_bytes);
     if !reply::send_reply(tools, &cfg.room, &chunks) {
-        log::warn!("chat-command: mcp report send abandoned (room={})", cfg.room);
+        log::warn!(
+            "chat-command: mcp report send abandoned (room={})",
+            cfg.room
+        );
     }
 }
 
@@ -295,11 +295,7 @@ pub(super) fn run_mcp_call(
             audit(&format!(
                 "timeout hub_id={hub_id} server={server} tool={tool} after={time_secs}s"
             ));
-            post_body(
-                tools,
-                cfg,
-                &format_timeout(hub_id, server, tool, time_secs),
-            );
+            post_body(tools, cfg, &format_timeout(hub_id, server, tool, time_secs));
         }
     }
     super::Slot::Command
@@ -364,7 +360,10 @@ mod tests {
     #[test]
     fn result_report_header_and_capping() {
         let body = format_result(42, "google", "gmail_search", "hello\n", 7500);
-        assert!(body.starts_with("mcp call #42 result (server google tool gmail_search)\n"), "{body:?}");
+        assert!(
+            body.starts_with("mcp call #42 result (server google tool gmail_search)\n"),
+            "{body:?}"
+        );
         assert!(body.contains("hello\n"), "{body:?}");
         assert!(!body.starts_with('!'), "reports must never start with '!'");
         // Empty output.
@@ -372,12 +371,18 @@ mod tests {
         assert!(body.contains("(no output)\n"), "{body:?}");
         // Tool-error output gets a failed header.
         let body = format_result(7, "google", "gmail_search", "mcp: boom", 7500);
-        assert!(body.starts_with("mcp call #7 failed (server google tool gmail_search)\n"), "{body:?}");
+        assert!(
+            body.starts_with("mcp call #7 failed (server google tool gmail_search)\n"),
+            "{body:?}"
+        );
         // Cap: long output is truncated with a note, on a char boundary.
         let long = "x".repeat(100);
         let body = format_result(7, "google", "gmail_search", &long, 10);
         assert!(body.contains("[truncated]\n"), "{body:?}");
-        assert!(!body.contains(&"x".repeat(100)), "capped body must not contain the full output");
+        assert!(
+            !body.contains(&"x".repeat(100)),
+            "capped body must not contain the full output"
+        );
     }
 
     #[test]
@@ -392,10 +397,7 @@ mod tests {
 
     #[test]
     fn call_with_timeout_fast_call_completes() {
-        let outcome = call_with_timeout(
-            || Some("done".to_string()),
-            Duration::from_millis(500),
-        );
+        let outcome = call_with_timeout(|| Some("done".to_string()), Duration::from_millis(500));
         assert!(matches!(outcome, McpCallOutcome::Completed(Some(o)) if o == "done"));
         let outcome = call_with_timeout(|| None, Duration::from_millis(500));
         assert!(matches!(outcome, McpCallOutcome::Completed(None)));

@@ -227,11 +227,7 @@ impl BidiSeam {
         // Bind the browsing-context handle first: `navigate` returns a
         // future borrowing it, so it must outlive the `timeout` await.
         let browsing_context = self.bidi.browsing_context();
-        let nav = browsing_context.navigate(
-            context,
-            url,
-            Some(ReadinessState::Complete),
-        );
+        let nav = browsing_context.navigate(context, url, Some(ReadinessState::Complete));
         match tokio::time::timeout(timeout, nav).await {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => Err(format!("BiDi navigate failed: {e}")),
@@ -239,10 +235,16 @@ impl BidiSeam {
                 // The wait=complete call timed out; the load event may
                 // still arrive — give the event stream a short grace window
                 // before declaring failure.
-                if self.events.wait_for_load(since, Duration::from_secs(5)).await {
+                if self
+                    .events
+                    .wait_for_load(since, Duration::from_secs(5))
+                    .await
+                {
                     Ok(())
                 } else {
-                    Err(format!("BiDi navigate to {url} timed out after {timeout:?}"))
+                    Err(format!(
+                        "BiDi navigate to {url} timed out after {timeout:?}"
+                    ))
                 }
             }
         }
@@ -326,10 +328,7 @@ impl BidiSeam {
         context: thirtyfour::bidi::BrowsingContextId,
         actions: serde_json::Value,
     ) -> Result<(), String> {
-        let actions = actions
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
+        let actions = actions.as_array().cloned().unwrap_or_default();
         self.bidi
             .input()
             .perform_actions(context, actions)
@@ -415,12 +414,11 @@ mod tests {
         let events = NavEvents::default();
         let since = Instant::now();
         // A committed event is not a load event — must not satisfy the wait.
-        events.record(
-            NavEventKind::Committed,
-            "https://example.com/".to_string(),
-        );
+        events.record(NavEventKind::Committed, "https://example.com/".to_string());
         assert!(
-            !events.wait_for_load(since, Duration::from_millis(100)).await,
+            !events
+                .wait_for_load(since, Duration::from_millis(100))
+                .await,
             "wait_for_load must time out when only a commit arrived"
         );
     }
@@ -433,7 +431,9 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(5)).await;
         let since = Instant::now();
         assert!(
-            !events.wait_for_load(since, Duration::from_millis(100)).await,
+            !events
+                .wait_for_load(since, Duration::from_millis(100))
+                .await,
             "a load older than `since` must not satisfy the wait"
         );
     }

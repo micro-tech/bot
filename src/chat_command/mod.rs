@@ -78,12 +78,7 @@ pub fn resolve_chat_tools() -> Option<ResolvedChatTools> {
     let prefix = "mcp__chat__";
     let names: Vec<String> = crate::mcp_client::tool_definitions()
         .iter()
-        .filter_map(|d| {
-            d.get("function")?
-                .get("name")?
-                .as_str()
-                .map(str::to_string)
-        })
+        .filter_map(|d| d.get("function")?.get("name")?.as_str().map(str::to_string))
         .filter(|n| n.starts_with(prefix))
         .collect();
     if names.is_empty() {
@@ -93,11 +88,7 @@ pub fn resolve_chat_tools() -> Option<ResolvedChatTools> {
         names
             .iter()
             .find(|n| n.as_str() == exact)
-            .or_else(|| {
-                names
-                    .iter()
-                    .find(|n| n.to_lowercase().contains(contains))
-            })
+            .or_else(|| names.iter().find(|n| n.to_lowercase().contains(contains)))
             .cloned()
     };
     let read = pick("mcp__chat__chat_read", "read")?;
@@ -114,9 +105,10 @@ pub struct ChatMessage {
 }
 
 fn message_from_value(item: &serde_json::Value) -> Option<ChatMessage> {
-    let id = item
-        .get("id")
-        .and_then(|i| i.as_i64().or_else(|| i.as_str().and_then(|s| s.parse().ok())))?;
+    let id = item.get("id").and_then(|i| {
+        i.as_i64()
+            .or_else(|| i.as_str().and_then(|s| s.parse().ok()))
+    })?;
     Some(ChatMessage {
         id,
         sender: item
@@ -253,7 +245,9 @@ fn format_reply(
 ) -> String {
     let mut body = format!("{echo_prefix} {command_text}\n");
     if outcome.timed_out {
-        body.push_str(&format!("[TIMEOUT after {timeout_secs}s — process killed]\n"));
+        body.push_str(&format!(
+            "[TIMEOUT after {timeout_secs}s — process killed]\n"
+        ));
     }
     let mut output = outcome.stdout.clone();
     if !outcome.stderr.is_empty() {
@@ -363,7 +357,11 @@ fn process_message(
     // 4a. ASUS target.
     if target == Target::Asus {
         if !cfg.asus_configured() {
-            send_text(tools, cfg, &format!("asus$ {command_text}\nASUS relay not enabled/configured"));
+            send_text(
+                tools,
+                cfg,
+                &format!("asus$ {command_text}\nASUS relay not enabled/configured"),
+            );
             return Slot::Command;
         }
         let (host, user, key) = (
@@ -580,7 +578,11 @@ fn run_and_reply(
             crate::utils::log_to_file(&format!(
                 "chat-command: rejected sender={sender} target={target_name} cmd={command_text} reason={reason}"
             ));
-            send_text(tools, cfg, &format!("{echo_prefix} {command_text}\n{reason}"));
+            send_text(
+                tools,
+                cfg,
+                &format!("{echo_prefix} {command_text}\n{reason}"),
+            );
             return Slot::Command;
         }
     };
@@ -590,7 +592,11 @@ fn run_and_reply(
             crate::utils::log_to_file(&format!(
                 "chat-command: spawn failed sender={sender} target={target_name} cmd={command_text} err={e}"
             ));
-            send_text(tools, cfg, &format!("{echo_prefix} {command_text}\nspawn failed: {e}"));
+            send_text(
+                tools,
+                cfg,
+                &format!("{echo_prefix} {command_text}\nspawn failed: {e}"),
+            );
             return Slot::Command;
         }
     };
@@ -599,7 +605,11 @@ fn run_and_reply(
         outcome
             .exit_code
             .map(|c| c.to_string())
-            .unwrap_or_else(|| if outcome.timed_out { "timeout".to_string() } else { "signal".to_string() }),
+            .unwrap_or_else(|| if outcome.timed_out {
+                "timeout".to_string()
+            } else {
+                "signal".to_string()
+            }),
         outcome.duration_ms,
         outcome.stdout.len() + outcome.stderr.len()
     ));
@@ -644,12 +654,7 @@ fn read_page(tools: &ResolvedChatTools, room: &str, since: i64) -> Vec<ChatMessa
 fn seed_cursor(room: &str) -> Option<i64> {
     let rooms_tool = crate::mcp_client::tool_definitions()
         .iter()
-        .filter_map(|d| {
-            d.get("function")?
-                .get("name")?
-                .as_str()
-                .map(str::to_string)
-        })
+        .filter_map(|d| d.get("function")?.get("name")?.as_str().map(str::to_string))
         .find(|n| n == "mcp__chat__chat_rooms")?;
     let out = crate::mcp_client::try_execute(&rooms_tool, &serde_json::json!({}))?;
     match parse_rooms_latest(&out, room) {
@@ -747,8 +752,7 @@ pub fn tick_with(runtime_dir: &Path, ssh_bin: &str) {
     loop {
         let page = read_page(&tools, &cfg.room, cursor);
         let raw_len = page.len();
-        let mut messages: Vec<ChatMessage> =
-            page.into_iter().filter(|m| m.id > cursor).collect();
+        let mut messages: Vec<ChatMessage> = page.into_iter().filter(|m| m.id > cursor).collect();
         messages.sort_by_key(|m| m.id);
         if messages.is_empty() {
             break;
@@ -819,7 +823,11 @@ mod tests {
         crate::mcp_client::take_try_execute_calls_for_tests()
             .into_iter()
             .filter(|(name, _)| name == "mcp__chat__chat_send")
-            .filter_map(|(_, args)| args.get("body").and_then(|b| b.as_str()).map(str::to_string))
+            .filter_map(|(_, args)| {
+                args.get("body")
+                    .and_then(|b| b.as_str())
+                    .map(str::to_string)
+            })
             .collect()
     }
 
@@ -849,7 +857,10 @@ mod tests {
         crate::mcp_client::override_tool_definitions_for_tests(vec![
             serde_json::json!({"type":"function","function":{"name":"mcp__chat__chat_read"}}),
         ]);
-        assert!(resolve_chat_tools().is_none(), "send missing must fail closed");
+        assert!(
+            resolve_chat_tools().is_none(),
+            "send missing must fail closed"
+        );
         crate::mcp_client::override_tool_definitions_for_tests(vec![]);
         assert!(resolve_chat_tools().is_none());
         crate::mcp_client::clear_test_overrides();
@@ -885,12 +896,24 @@ mod tests {
     #[test]
     fn trigger_and_target_parsing() {
         assert_eq!(parse_trigger("hello"), Trigger::Ignored);
-        assert_eq!(parse_trigger("  !hostname  "), Trigger::Command("hostname".to_string()));
+        assert_eq!(
+            parse_trigger("  !hostname  "),
+            Trigger::Command("hostname".to_string())
+        );
         assert_eq!(parse_trigger("!"), Trigger::Empty);
         assert_eq!(parse_trigger("!   "), Trigger::Empty);
-        assert_eq!(split_target("hostname"), (Target::Local, "hostname".to_string()));
-        assert_eq!(split_target("asus: hostname"), (Target::Asus, "hostname".to_string()));
-        assert_eq!(split_target("Asus: hostname"), (Target::Local, "Asus: hostname".to_string()));
+        assert_eq!(
+            split_target("hostname"),
+            (Target::Local, "hostname".to_string())
+        );
+        assert_eq!(
+            split_target("asus: hostname"),
+            (Target::Asus, "hostname".to_string())
+        );
+        assert_eq!(
+            split_target("Asus: hostname"),
+            (Target::Local, "Asus: hostname".to_string())
+        );
     }
 
     // ── Task 308: [exit N] status line ─────────────────────────────
@@ -914,16 +937,31 @@ mod tests {
 
     #[test]
     fn format_reply_success_shows_exit_0() {
-        let body = format_reply("$", "uptime", &mk_outcome(" 12:00 up 1 day\n", Some(0), None), 10, 7500);
+        let body = format_reply(
+            "$",
+            "uptime",
+            &mk_outcome(" 12:00 up 1 day\n", Some(0), None),
+            10,
+            7500,
+        );
         assert!(body.starts_with("$ uptime\n"), "{body:?}");
         assert!(body.contains("[exit 0]\n"), "{body:?}");
-        assert!(body.ends_with("[exit 0]\n"), "exit line must be last: {body:?}");
+        assert!(
+            body.ends_with("[exit 0]\n"),
+            "exit line must be last: {body:?}"
+        );
     }
 
     #[test]
     fn format_reply_nonzero_shows_exit_1() {
         // grep with no match: empty output, exit 1.
-        let body = format_reply("$", "grep nope /etc/hostname", &mk_outcome("", Some(1), None), 10, 7500);
+        let body = format_reply(
+            "$",
+            "grep nope /etc/hostname",
+            &mk_outcome("", Some(1), None),
+            10,
+            7500,
+        );
         assert!(body.contains("(no output)\n"), "{body:?}");
         assert!(body.contains("[exit 1]\n"), "{body:?}");
         assert!(body.ends_with("[exit 1]\n"), "{body:?}");
@@ -949,14 +987,24 @@ mod tests {
         let chunks = reply::chunk_reply(&body, 7500);
         assert!(chunks.len() > 1, "20KB output must chunk: {}", chunks.len());
         let last = chunks.last().unwrap();
-        assert!(last.contains("[exit 0]"), "last chunk must carry the exit line: {last:?}");
+        assert!(
+            last.contains("[exit 0]"),
+            "last chunk must carry the exit line: {last:?}"
+        );
         for c in &chunks[..chunks.len() - 1] {
-            assert!(!c.contains("[exit "), "exit line must not leak into earlier chunks: {c:?}");
+            assert!(
+                !c.contains("[exit "),
+                "exit line must not leak into earlier chunks: {c:?}"
+            );
         }
         // Reassembly keeps the exit line at the very end.
         let joined: String = chunks
             .iter()
-            .map(|c| c.split_once("] ").map(|(_, rest)| rest).unwrap_or(c.as_str()))
+            .map(|c| {
+                c.split_once("] ")
+                    .map(|(_, rest)| rest)
+                    .unwrap_or(c.as_str())
+            })
             .collect();
         assert!(joined.ends_with("[exit 0]\n"), "{joined:?}");
     }
@@ -1001,7 +1049,11 @@ mod tests {
         // reports no exit code + signal 15, and the reply renders
         // [exit signal] (not the old "[exit: killed by signal 15]").
         let out = executor::run_command_with_timeout(
-            &["sh".to_string(), "-c".to_string(), "kill -TERM $$".to_string()],
+            &[
+                "sh".to_string(),
+                "-c".to_string(),
+                "kill -TERM $$".to_string(),
+            ],
             std::time::Duration::from_secs(10),
             4096,
         )
@@ -1027,7 +1079,11 @@ mod tests {
         let bodies = send_bodies();
         assert_eq!(bodies.len(), 1, "{bodies:?}");
         assert!(bodies[0].contains("$ hostname"), "{}", bodies[0]);
-        assert!(bodies[0].contains("[exit 0]"), "reply must carry the exit line: {}", bodies[0]);
+        assert!(
+            bodies[0].contains("[exit 0]"),
+            "reply must carry the exit line: {}",
+            bodies[0]
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1049,7 +1105,11 @@ mod tests {
         assert_eq!(bodies.len(), 1, "{bodies:?}");
         assert!(bodies[0].contains("asus$ hostname"), "{}", bodies[0]);
         assert!(bodies[0].contains("ASUS-HOSTNAME"), "{}", bodies[0]);
-        assert!(bodies[0].contains("[exit 0]"), "ASUS reply must carry the exit line: {}", bodies[0]);
+        assert!(
+            bodies[0].contains("[exit 0]"),
+            "ASUS reply must carry the exit line: {}",
+            bodies[0]
+        );
         unsafe { std::env::remove_var("ASUS_STUB_LOG") };
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
@@ -1084,7 +1144,11 @@ mod tests {
         let bodies = send_bodies();
         assert_eq!(bodies.len(), 2, "two commands → two replies: {bodies:?}");
         assert!(bodies[0].contains("$ whoami"), "echo first: {}", bodies[0]);
-        assert!(bodies[1].contains("$ hostname"), "echo second: {}", bodies[1]);
+        assert!(
+            bodies[1].contains("$ hostname"),
+            "echo second: {}",
+            bodies[1]
+        );
         let (state, _) = CommandState::load(&dir);
         assert_eq!(state.last_seen_id, Some(2));
         crate::mcp_client::clear_test_overrides();
@@ -1103,7 +1167,11 @@ mod tests {
         tick(&dir);
         assert!(send_bodies().is_empty(), "ignored messages must not reply");
         let (state, _) = CommandState::load(&dir);
-        assert_eq!(state.last_seen_id, Some(3), "cursor advances past ignored messages");
+        assert_eq!(
+            state.last_seen_id,
+            Some(3),
+            "cursor advances past ignored messages"
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1202,15 +1270,28 @@ mod tests {
         );
         tick(&dir);
         let bodies = send_bodies();
-        assert!(bodies.len() >= 2, "10-byte budget must chunk a whoami reply: {bodies:?}");
+        assert!(
+            bodies.len() >= 2,
+            "10-byte budget must chunk a whoami reply: {bodies:?}"
+        );
         for (i, b) in bodies.iter().enumerate() {
-            assert!(b.starts_with(&format!("[{}/{}] ", i + 1, bodies.len())), "{b:?}");
+            assert!(
+                b.starts_with(&format!("[{}/{}] ", i + 1, bodies.len())),
+                "{b:?}"
+            );
         }
         let joined: String = bodies
             .iter()
-            .map(|b| b.split_once("] ").map(|(_, rest)| rest).unwrap_or(b.as_str()))
+            .map(|b| {
+                b.split_once("] ")
+                    .map(|(_, rest)| rest)
+                    .unwrap_or(b.as_str())
+            })
             .collect();
-        assert!(joined.contains("$ whoami"), "reassembled reply keeps the echo: {joined:?}");
+        assert!(
+            joined.contains("$ whoami"),
+            "reassembled reply keeps the echo: {joined:?}"
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1310,10 +1391,7 @@ mod tests {
             r#"[{"name": "command", "last_id": 0}]"#,
         );
         tick_with(&dir, script.to_str().unwrap());
-        assert!(
-            !log.exists(),
-            "ASUS disabled must attempt zero ssh calls"
-        );
+        assert!(!log.exists(), "ASUS disabled must attempt zero ssh calls");
         let bodies = send_bodies();
         assert_eq!(bodies.len(), 1);
         assert!(bodies[0].contains("not enabled"), "{}", bodies[0]);
@@ -1408,7 +1486,11 @@ mod tests {
         assert_eq!(bodies.len(), 2, "{bodies:?}");
         assert!(bodies[0].contains("task #1 accepted"), "{}", bodies[0]);
         assert!(bodies[1].contains("task #2 queued"), "{}", bodies[1]);
-        assert!(bodies[1].contains("server is busy running task #1"), "{}", bodies[1]);
+        assert!(
+            bodies[1].contains("server is busy running task #1"),
+            "{}",
+            bodies[1]
+        );
         assert!(bodies[1].contains("position 1"), "{}", bodies[1]);
         task_handler::reset_for_tests();
         crate::mcp_client::clear_test_overrides();
@@ -1441,7 +1523,10 @@ mod tests {
         );
         assert_eq!(
             task_handler::submit_task(&mut state, mk(7)),
-            task_handler::SubmitDecision::Queued { position: 1, running_id: 6 }
+            task_handler::SubmitDecision::Queued {
+                position: 1,
+                running_id: 6
+            }
         );
         task_handler::save_queue_to(&dir, &state).unwrap();
         task_handler::reset_for_tests();
@@ -1489,10 +1574,22 @@ mod tests {
         tick(&dir);
         let bodies = send_bodies();
         assert_eq!(bodies.len(), 2, "{bodies:?}");
-        assert!(bodies[0].contains("rejected: llm task needs a task string"), "{}", bodies[0]);
-        assert!(bodies[1].contains("rejected: unknown backend 'mars'"), "{}", bodies[1]);
+        assert!(
+            bodies[0].contains("rejected: llm task needs a task string"),
+            "{}",
+            bodies[0]
+        );
+        assert!(
+            bodies[1].contains("rejected: unknown backend 'mars'"),
+            "{}",
+            bodies[1]
+        );
         let (state, _) = CommandState::load(&dir);
-        assert_eq!(state.last_seen_id, Some(3), "cursor advances past ignored helix message");
+        assert_eq!(
+            state.last_seen_id,
+            Some(3),
+            "cursor advances past ignored helix message"
+        );
         task_handler::reset_for_tests();
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
@@ -1536,7 +1633,11 @@ mod tests {
         tick(&dir);
         let bodies = send_bodies();
         assert_eq!(bodies.len(), 1, "{bodies:?}");
-        assert!(bodies[0].contains("rejected: message too large"), "{}", bodies[0]);
+        assert!(
+            bodies[0].contains("rejected: message too large"),
+            "{}",
+            bodies[0]
+        );
         task_handler::reset_for_tests();
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
@@ -1576,9 +1677,16 @@ mod tests {
         );
         tick(&dir);
         let bodies = send_bodies();
-        assert!(bodies.is_empty(), "ignored message must not reply: {bodies:?}");
+        assert!(
+            bodies.is_empty(),
+            "ignored message must not reply: {bodies:?}"
+        );
         let (state, _) = CommandState::load(&dir);
-        assert_eq!(state.last_seen_id, Some(1), "cursor advances past ignored message");
+        assert_eq!(
+            state.last_seen_id,
+            Some(1),
+            "cursor advances past ignored message"
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1598,13 +1706,20 @@ mod tests {
         );
         tick(&dir);
         let bodies = send_bodies();
-        assert!(bodies.is_empty(), "ignored message must not reply: {bodies:?}");
+        assert!(
+            bodies.is_empty(),
+            "ignored message must not reply: {bodies:?}"
+        );
         assert!(
             !dir.join("agents").join("chat-task-read.md").exists(),
             "ignored llm task must not submit (no role file)"
         );
         let (state, _) = CommandState::load(&dir);
-        assert_eq!(state.last_seen_id, Some(1), "cursor advances past ignored message");
+        assert_eq!(
+            state.last_seen_id,
+            Some(1),
+            "cursor advances past ignored message"
+        );
         task_handler::reset_for_tests();
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
@@ -1639,11 +1754,7 @@ mod tests {
     /// read/send/rooms stubs. `mcp_stub` is (tool name, canned
     /// output) for the one MCP tool the test expects to be called —
     /// pass None when no call is expected.
-    fn install_mcp_stubs(
-        read_output: &str,
-        rooms_output: &str,
-        mcp_stub: Option<(&str, &str)>,
-    ) {
+    fn install_mcp_stubs(read_output: &str, rooms_output: &str, mcp_stub: Option<(&str, &str)>) {
         use crate::config::mcp::{McpConfig, McpServerConfig};
         let cfg = McpConfig {
             enabled: true,
@@ -1693,7 +1804,9 @@ mod tests {
             .iter()
             .filter(|(name, _)| name == "mcp__chat__chat_send")
             .filter_map(|(_, args)| {
-                args.get("body").and_then(|b| b.as_str()).map(str::to_string)
+                args.get("body")
+                    .and_then(|b| b.as_str())
+                    .map(str::to_string)
             })
             .collect();
         let mcp = calls
@@ -1733,7 +1846,10 @@ mod tests {
             bodies[0]
         );
         assert!(bodies[0].contains("hello@example.com"), "{}", bodies[0]);
-        assert!(!bodies[0].starts_with('!'), "reports must never start with '!'");
+        assert!(
+            !bodies[0].starts_with('!'),
+            "reports must never start with '!'"
+        );
         assert_eq!(mcp.len(), 1, "exactly one MCP tool call: {mcp:?}");
         assert_eq!(mcp[0].0, "mcp__google__gmail_search");
         assert_eq!(
@@ -1791,8 +1907,15 @@ mod tests {
         tick(&dir);
         let (bodies, mcp) = drain_mcp_tick();
         assert_eq!(bodies.len(), 1, "{bodies:?}");
-        assert!(bodies[0].contains("rejected: mcp needs a to field"), "{}", bodies[0]);
-        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        assert!(
+            bodies[0].contains("rejected: mcp needs a to field"),
+            "{}",
+            bodies[0]
+        );
+        assert!(
+            mcp.is_empty(),
+            "rejected mcp must not call any tool: {mcp:?}"
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1810,8 +1933,15 @@ mod tests {
         tick(&dir);
         let (bodies, mcp) = drain_mcp_tick();
         assert_eq!(bodies.len(), 1, "{bodies:?}");
-        assert!(bodies[0].contains("rejected: unknown mcp server 'nope'"), "{}", bodies[0]);
-        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        assert!(
+            bodies[0].contains("rejected: unknown mcp server 'nope'"),
+            "{}",
+            bodies[0]
+        );
+        assert!(
+            mcp.is_empty(),
+            "rejected mcp must not call any tool: {mcp:?}"
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1835,7 +1965,10 @@ mod tests {
             "{}",
             bodies[0]
         );
-        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        assert!(
+            mcp.is_empty(),
+            "rejected mcp must not call any tool: {mcp:?}"
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1862,7 +1995,10 @@ mod tests {
             "{}",
             bodies[0]
         );
-        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        assert!(
+            mcp.is_empty(),
+            "rejected mcp must not call any tool: {mcp:?}"
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1887,7 +2023,10 @@ mod tests {
             "{}",
             bodies[0]
         );
-        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        assert!(
+            mcp.is_empty(),
+            "rejected mcp must not call any tool: {mcp:?}"
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1905,8 +2044,15 @@ mod tests {
         tick(&dir);
         let (bodies, mcp) = drain_mcp_tick();
         assert_eq!(bodies.len(), 1, "{bodies:?}");
-        assert!(bodies[0].contains("rejected: args must be a JSON object"), "{}", bodies[0]);
-        assert!(mcp.is_empty(), "rejected mcp must not call any tool: {mcp:?}");
+        assert!(
+            bodies[0].contains("rejected: args must be a JSON object"),
+            "{}",
+            bodies[0]
+        );
+        assert!(
+            mcp.is_empty(),
+            "rejected mcp must not call any tool: {mcp:?}"
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1926,10 +2072,20 @@ mod tests {
         );
         tick(&dir);
         let (bodies, mcp) = drain_mcp_tick();
-        assert!(bodies.is_empty(), "ignored message must not reply: {bodies:?}");
-        assert!(mcp.is_empty(), "ignored mcp must not call any tool: {mcp:?}");
+        assert!(
+            bodies.is_empty(),
+            "ignored message must not reply: {bodies:?}"
+        );
+        assert!(
+            mcp.is_empty(),
+            "ignored mcp must not call any tool: {mcp:?}"
+        );
         let (state, _) = CommandState::load(&dir);
-        assert_eq!(state.last_seen_id, Some(1), "cursor advances past ignored message");
+        assert_eq!(
+            state.last_seen_id,
+            Some(1),
+            "cursor advances past ignored message"
+        );
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);
     }

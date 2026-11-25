@@ -1,13 +1,13 @@
+pub mod acp;
+pub mod browser; // tasks 350+: [browser] mini-browser config
 pub mod manifest;
 pub mod mcp;
-pub mod browser; // tasks 350+: [browser] mini-browser config
-pub mod acp;
-pub mod shell;
-pub mod ssh;
 pub mod okf;
 pub mod project_scanner;
 pub mod reasoning;
+pub mod shell;
 pub mod socket;
+pub mod ssh;
 
 use log::{debug, warn};
 
@@ -36,7 +36,9 @@ where
         Err(_) => {
             // Task 265 (secrets): do NOT log the parse error — its Display
             // echoes the offending config line, which may hold a secret.
-            warn!("config: TOML unparseable, {label} falls back to defaults (fix the syntax error in the config file)");
+            warn!(
+                "config: TOML unparseable, {label} falls back to defaults (fix the syntax error in the config file)"
+            );
             return T::default();
         }
     };
@@ -50,7 +52,9 @@ where
             // Task 265 (secrets): do NOT log the shape error — serde
             // type-mismatch errors can echo the offending value, which
             // may be a secret (e.g. a string where a number was expected).
-            warn!("config: {label} has the wrong shape, falling back to defaults (fix the section in the config file)");
+            warn!(
+                "config: {label} has the wrong shape, falling back to defaults (fix the section in the config file)"
+            );
             T::default()
         }
     }

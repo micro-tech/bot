@@ -95,8 +95,7 @@ impl PlanNode {
     /// Count how many nodes are still pending or in-progress.
     pub fn open_count(&self) -> usize {
         let self_open = matches!(self.status, PlanStatus::Pending | PlanStatus::InProgress);
-        self_open as usize
-            + self.children.iter().map(|c| c.open_count()).sum::<usize>()
+        self_open as usize + self.children.iter().map(|c| c.open_count()).sum::<usize>()
     }
 
     /// Mark this node (and optionally children) as completed.

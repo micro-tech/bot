@@ -46,7 +46,7 @@
 //! `request_pr_open` remains the gate+queue primitive for callers
 //! that push by another (human) path.
 
-use crate::self_improve::audit::{AuditReport, audit_outcome, AuditOutcome};
+use crate::self_improve::audit::{AuditOutcome, AuditReport, audit_outcome};
 use crate::self_improve::evaluator::EvalReport;
 use crate::self_improve::worker::{ProposalRecord, upsert_proposal};
 use serde::{Deserialize, Serialize};
@@ -193,9 +193,16 @@ pub trait PrBackend {
 #[serde(tag = "action")]
 pub enum QueueEntry {
     #[serde(rename = "open")]
-    Open { payload: PrPayload, queued_at_ms: u64 },
+    Open {
+        payload: PrPayload,
+        queued_at_ms: u64,
+    },
     #[serde(rename = "close")]
-    Close { pull_number: u64, reason: String, queued_at_ms: u64 },
+    Close {
+        pull_number: u64,
+        reason: String,
+        queued_at_ms: u64,
+    },
 }
 
 /// Production backend: appends to `rt/self_improve/pr_queue.jsonl`
@@ -208,7 +215,9 @@ pub struct QueueBackend {
 
 impl QueueBackend {
     pub fn new(rt_dir: &Path) -> Self {
-        Self { path: rt_dir.join("self_improve").join("pr_queue.jsonl") }
+        Self {
+            path: rt_dir.join("self_improve").join("pr_queue.jsonl"),
+        }
     }
 
     pub fn path(&self) -> &Path {
@@ -217,8 +226,7 @@ impl QueueBackend {
 
     fn append(&mut self, entry: &QueueEntry) -> Result<String, String> {
         if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("queue dir create failed: {e}"))?;
+            std::fs::create_dir_all(parent).map_err(|e| format!("queue dir create failed: {e}"))?;
         }
         let mut existing = String::new();
         if self.path.exists() {
@@ -228,13 +236,12 @@ impl QueueBackend {
                 existing.push('\n');
             }
         }
-        let line = serde_json::to_string(entry)
-            .map_err(|e| format!("queue serialize failed: {e}"))?;
+        let line =
+            serde_json::to_string(entry).map_err(|e| format!("queue serialize failed: {e}"))?;
         let tmp = self.path.with_extension("jsonl.tmp");
         std::fs::write(&tmp, format!("{existing}{line}\n"))
             .map_err(|e| format!("queue temp write failed: {e}"))?;
-        std::fs::rename(&tmp, &self.path)
-            .map_err(|e| format!("queue rename failed: {e}"))?;
+        std::fs::rename(&tmp, &self.path).map_err(|e| format!("queue rename failed: {e}"))?;
         Ok(format!("queued:{}", existing.lines().count() + 1))
     }
 
@@ -304,9 +311,7 @@ pub fn deliver_promoted_proposal(
 ) -> Result<String, String> {
     let head_branch = proposal.eval_branch.clone();
     if head_branch.is_empty() {
-        return Err(
-            "no eval branch recorded on proposal (not promoted?)".to_string(),
-        );
+        return Err("no eval branch recorded on proposal (not promoted?)".to_string());
     }
     match phase3_gate(proposal, audit, cfg, target_branch, &head_branch) {
         GateDecision::Refuse(reason) => Err(format!("PR refused: {reason}")),
@@ -368,7 +373,14 @@ pub fn deliver_oldest_promoted_proposal(
     }
     let mut backend = QueueBackend::new(rt_dir);
     match deliver_promoted_proposal(
-        &mut backend, repo, rt_dir, &mut record, &audit, cfg, "PreRelese", now_ms,
+        &mut backend,
+        repo,
+        rt_dir,
+        &mut record,
+        &audit,
+        cfg,
+        "PreRelese",
+        now_ms,
     ) {
         Ok(id) => Ok(Some(id)),
         Err(e) => Ok(Some(format!("delivery-failed:{e}"))),
@@ -447,7 +459,10 @@ mod tests {
 
     impl RecordingBackend {
         fn new() -> Self {
-            Self { opened: Vec::new(), closed: Vec::new() }
+            Self {
+                opened: Vec::new(),
+                closed: Vec::new(),
+            }
         }
     }
 
@@ -478,7 +493,11 @@ mod tests {
                 passed: true,
                 detail: "ok".to_string(),
             }],
-            diff_stat: DiffStat { files_changed: 1, new_lines: 10, old_lines: 2 },
+            diff_stat: DiffStat {
+                files_changed: 1,
+                new_lines: 10,
+                old_lines: 2,
+            },
             runtime_ms: 1234,
         };
         ProposalRecord {
@@ -543,8 +562,14 @@ mod tests {
         );
         assert!(r.is_err());
         assert!(r.unwrap_err().contains("pr-opening-disabled"));
-        assert!(backend.opened.is_empty(), "zero backend calls when disabled");
-        assert_eq!(p.status, "evaluated", "proposal stays queued for a future open");
+        assert!(
+            backend.opened.is_empty(),
+            "zero backend calls when disabled"
+        );
+        assert_eq!(
+            p.status, "evaluated",
+            "proposal stays queued for a future open"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -575,7 +600,11 @@ mod tests {
         assert_eq!(payload.labels, vec!["self-improve".to_string()]);
         assert!(payload.body.contains("a::b"));
         assert!(payload.body.contains("eval1"));
-        assert!(payload.body.contains("1 file(s), 10 new lines, 2 old lines"));
+        assert!(
+            payload
+                .body
+                .contains("1 file(s), 10 new lines, 2 old lines")
+        );
         assert!(payload.body.contains("1 proposal(s) this week"));
         assert_eq!(p.status, "queued");
         let _ = std::fs::remove_dir_all(&dir);
@@ -588,7 +617,13 @@ mod tests {
         // never be a loop PR target.
         let p = green_proposal();
         assert!(build_pr_payload(&p, "master", "self-improve/test").is_err());
-        let gate = phase3_gate(&p, &clean_audit(), &cfg_open(), "master", "self-improve/test");
+        let gate = phase3_gate(
+            &p,
+            &clean_audit(),
+            &cfg_open(),
+            "master",
+            "self-improve/test",
+        );
         assert!(matches!(gate, GateDecision::Refuse(_)));
     }
 
@@ -603,7 +638,9 @@ mod tests {
         let mut backend = RecordingBackend::new();
         let mut p = green_proposal();
         let mut audit = AuditReport::default();
-        audit.sensitive_paths.push("sensitive-path:src/security.rs".to_string());
+        audit
+            .sensitive_paths
+            .push("sensitive-path:src/security.rs".to_string());
         let r = request_pr_open(
             &mut backend,
             &dir,
@@ -631,41 +668,75 @@ mod tests {
         // (a) promoted=false.
         let mut p = green_proposal();
         p.promoted = false;
-        assert!(request_pr_open(
-            &mut backend, &dir, &mut p, &clean_audit(), &cfg_open(),
-            "PreRelese", "self-improve/test", 2_000
-        )
-        .is_err());
+        assert!(
+            request_pr_open(
+                &mut backend,
+                &dir,
+                &mut p,
+                &clean_audit(),
+                &cfg_open(),
+                "PreRelese",
+                "self-improve/test",
+                2_000
+            )
+            .is_err()
+        );
         // (b) missing eval report.
         let mut p = green_proposal();
         p.eval_report_json = serde_json::Value::Null;
-        assert!(request_pr_open(
-            &mut backend, &dir, &mut p, &clean_audit(), &cfg_open(),
-            "PreRelese", "self-improve/test", 2_000
-        )
-        .is_err());
+        assert!(
+            request_pr_open(
+                &mut backend,
+                &dir,
+                &mut p,
+                &clean_audit(),
+                &cfg_open(),
+                "PreRelese",
+                "self-improve/test",
+                2_000
+            )
+            .is_err()
+        );
         // (c) secret-dirty audit.
         let mut p = green_proposal();
         let mut audit = AuditReport::default();
-        audit.secret_hits.push(crate::self_improve::audit::SecretHit {
-            file: "src/x.rs".to_string(),
-            line_count: 1,
-            pattern_class: "github-token".to_string(),
-        });
-        assert!(request_pr_open(
-            &mut backend, &dir, &mut p, &audit, &cfg_open(),
-            "PreRelese", "self-improve/test", 2_000
-        )
-        .is_err());
+        audit
+            .secret_hits
+            .push(crate::self_improve::audit::SecretHit {
+                file: "src/x.rs".to_string(),
+                line_count: 1,
+                pattern_class: "github-token".to_string(),
+            });
+        assert!(
+            request_pr_open(
+                &mut backend,
+                &dir,
+                &mut p,
+                &audit,
+                &cfg_open(),
+                "PreRelese",
+                "self-improve/test",
+                2_000
+            )
+            .is_err()
+        );
         // (d) D5 gate closed after eval.
         let mut p = green_proposal();
         let mut cfg = cfg_open();
         cfg.eval_set_approved = false;
-        assert!(request_pr_open(
-            &mut backend, &dir, &mut p, &clean_audit(), &cfg,
-            "PreRelese", "self-improve/test", 2_000
-        )
-        .is_err());
+        assert!(
+            request_pr_open(
+                &mut backend,
+                &dir,
+                &mut p,
+                &clean_audit(),
+                &cfg,
+                "PreRelese",
+                "self-improve/test",
+                2_000
+            )
+            .is_err()
+        );
         assert!(backend.opened.is_empty(), "no incomplete gate may open");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -692,7 +763,11 @@ mod tests {
         assert_eq!(backend.closed.len(), 1);
         assert_eq!(backend.closed[0].0, 42);
         assert_eq!(p.status, "withdrawn");
-        assert!(p.notes.iter().any(|n| n.contains("regression: nightly suite red")));
+        assert!(
+            p.notes
+                .iter()
+                .any(|n| n.contains("regression: nightly suite red"))
+        );
         // Persisted: the stored record is withdrawn with the note.
         let stored = crate::self_improve::worker::read_proposals(&dir).unwrap();
         assert_eq!(stored.len(), 1);
@@ -754,7 +829,10 @@ mod tests {
         git(&["commit", "-m", "init"], &repo);
         let remote = dir.join("remote.git");
         git(&["init", "--bare", remote.to_str().unwrap()], &dir);
-        git(&["remote", "add", "origin", remote.to_str().unwrap()], &repo);
+        git(
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+            &repo,
+        );
         (dir, repo, remote)
     }
 
@@ -808,7 +886,9 @@ mod tests {
         assert_eq!(p.status, "queued");
         let root = rt.join("self_improve/worktrees");
         assert_eq!(
-            std::fs::read_dir(&root).map(|rd| rd.flatten().count()).unwrap_or(0),
+            std::fs::read_dir(&root)
+                .map(|rd| rd.flatten().count())
+                .unwrap_or(0),
             0,
             "no temp push worktree may remain"
         );
@@ -820,8 +900,7 @@ mod tests {
         // GIVEN the same promoted proposal but pr_opening=false, WHEN
         // delivered, THEN nothing is pushed and nothing is queued —
         // the gate refuses before any git op.
-        let (dir, repo, remote) =
-            fixture_repo_with_remote("helix-self-improve-pr-deliver-closed");
+        let (dir, repo, remote) = fixture_repo_with_remote("helix-self-improve-pr-deliver-closed");
         let rt = dir.join("rt");
         std::fs::create_dir_all(&rt).unwrap();
         make_eval_branch(&repo, &rt, "self-improve/deliver-test");

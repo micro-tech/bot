@@ -12,9 +12,12 @@
 //! 7. POST /okf/bundles/{bundle}/concepts -> 201, then the concept is
 //!    retrievable via GET /okf/knowledge/{id}.
 
-use axum::{Router, routing::{get, post}};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use helix::config::okf::OkfConfig;
-use helix::okf::{api as okf_api, api::OkfState, OkfFetcher, OkfLibrarian};
+use helix::okf::{OkfFetcher, OkfLibrarian, api as okf_api, api::OkfState};
 
 fn ensure_crypto_provider() {
     static ONCE: std::sync::Once = std::sync::Once::new();
@@ -187,8 +190,7 @@ async fn v1_self_write_traces_and_concepts() {
     assert_eq!(resp.status(), 202);
 
     // THEN the JSONL line landed in the trace file:
-    let contents =
-        std::fs::read_to_string(&srv.trace_file).expect("trace file written");
+    let contents = std::fs::read_to_string(&srv.trace_file).expect("trace file written");
     assert!(contents.contains("\"trace_id\":\"t1\"") || contents.contains("\"trace_id\": \"t1\""));
 
     // WHEN a concept is pushed (grok-cli's path):

@@ -62,7 +62,10 @@ impl RuntimeTrace {
                 out.push_str(&format!("LLM Response: {}\n", r));
             }
             if let Some(name) = &step.tool_name {
-                out.push_str(&format!("Tool Call: {} (args={:?})\n", name, step.tool_args));
+                out.push_str(&format!(
+                    "Tool Call: {} (args={:?})\n",
+                    name, step.tool_args
+                ));
             }
             if let Some(res) = &step.tool_result {
                 out.push_str(&format!("Tool Result: {:?}\n", res));

@@ -14,8 +14,8 @@
 //! the 0-based attempt index so it can compute its own delay (backoff or
 //! `Retry-After`) for that attempt.
 
-use reqwest::header::HeaderMap;
 use reqwest::StatusCode;
+use reqwest::header::HeaderMap;
 use std::time::Duration;
 
 /// Maximum number of attempts for one operation (first try + retries).
@@ -138,10 +138,7 @@ pub fn is_retryable_reqwest_error(e: &reqwest::Error) -> bool {
 /// The closure should be `async move` and clone what it needs (a
 /// `reqwest::Client` is cheap to clone — Arc internally), so the returned
 /// future owns its data.
-pub async fn retry_with_backoff<T, E, F, Fut>(
-    policy: &RetryPolicy,
-    mut op: F,
-) -> Result<T, E>
+pub async fn retry_with_backoff<T, E, F, Fut>(policy: &RetryPolicy, mut op: F) -> Result<T, E>
 where
     F: FnMut(u32) -> Fut,
     Fut: std::future::Future<Output = Result<T, RetryError<E>>>,
@@ -166,10 +163,7 @@ where
 ///
 /// Same contract as [`retry_with_backoff`] but sleeps with
 /// `std::thread::sleep`. The closure runs on the calling thread.
-pub fn retry_with_backoff_sync<T, E, F>(
-    policy: &RetryPolicy,
-    mut op: F,
-) -> Result<T, E>
+pub fn retry_with_backoff_sync<T, E, F>(policy: &RetryPolicy, mut op: F) -> Result<T, E>
 where
     F: FnMut(u32) -> Result<T, RetryError<E>>,
 {
@@ -218,13 +212,21 @@ mod tests {
             let d = p.backoff_delay(attempt);
             let base = p.exponential_delay_ms(attempt);
             // Jitter adds 0..=25% of base, capped at max.
-            assert!(d.as_millis() as u64 >= base, "attempt {} below base", attempt);
+            assert!(
+                d.as_millis() as u64 >= base,
+                "attempt {} below base",
+                attempt
+            );
             assert!(
                 d.as_millis() as u64 <= base.saturating_add(base / 4).min(60_000),
                 "attempt {} above base+jitter",
                 attempt
             );
-            assert!(d <= Duration::from_millis(60_000), "attempt {} above cap", attempt);
+            assert!(
+                d <= Duration::from_millis(60_000),
+                "attempt {} above cap",
+                attempt
+            );
         }
     }
 
@@ -238,7 +240,10 @@ mod tests {
         assert_eq!(p.retry_after(&HeaderMap::new()), None);
         // Unparseable (HTTP-date form) -> None, caller falls back to backoff.
         let mut bad = HeaderMap::new();
-        bad.insert("retry-after", HeaderValue::from_static("Wed, 21 Oct 2026 07:28:00 GMT"));
+        bad.insert(
+            "retry-after",
+            HeaderValue::from_static("Wed, 21 Oct 2026 07:28:00 GMT"),
+        );
         assert_eq!(p.retry_after(&bad), None);
         // Huge value -> capped at 60s.
         let mut huge = HeaderMap::new();
@@ -261,7 +266,11 @@ mod tests {
         // differently): base 8000ms + 0..=25% jitter.
         let d = p.delay_for_response(2, &HeaderMap::new());
         assert!(d >= Duration::from_millis(8_000), "below base: {:?}", d);
-        assert!(d <= Duration::from_millis(10_000), "above base+jitter: {:?}", d);
+        assert!(
+            d <= Duration::from_millis(10_000),
+            "above base+jitter: {:?}",
+            d
+        );
     }
 
     #[test]

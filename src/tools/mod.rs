@@ -76,7 +76,9 @@ pub fn execute(name: &str, args: &Value) -> String {
         "repo_grep" => file_tools::repo_grep(args),
         "scan_directory" => file_tools::scan_directory(args),
         "generate_mermaid_project_map" => file_tools::generate_mermaid_project_map(args),
-        "generate_okf_project_map_knowledge" => file_tools::generate_okf_project_map_knowledge(args),
+        "generate_okf_project_map_knowledge" => {
+            file_tools::generate_okf_project_map_knowledge(args)
+        }
         "scan_projects" => project_scanner::scan_projects(args),
         "generate_project_map_from_scan" => project_scanner::generate_project_map_from_scan(args),
         // Mini-browser (tasks 350-355): one headless Firefox session, driven
@@ -150,7 +152,9 @@ pub fn list_okf_tools() -> String {
             lines.push(format!("  • {}", name));
         }
     }
-    lines.push("\nThese tools are discoverable by agents. Full remote dispatch coming soon.".to_string());
+    lines.push(
+        "\nThese tools are discoverable by agents. Full remote dispatch coming soon.".to_string(),
+    );
     lines.join("\n")
 }
 
@@ -659,8 +663,7 @@ fn definitions_cache() -> &'static RwLock<Option<Value>> {
 }
 
 #[cfg(test)]
-static BUILD_COUNT: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
+static BUILD_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// The actual schema assembly: statics + OKF librarian tools + MCP tools.
 /// Only runs on cache miss (or after invalidation).
@@ -699,10 +702,7 @@ fn build_tool_definitions() -> Value {
 /// (task 214): a sub-agent never sees `spawn_subagent`, which enforces the
 /// max-spawn-depth guardrail by construction.
 pub fn tool_definitions_excluding(exclude: &[&str]) -> Value {
-    let arr = tool_definitions()
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
+    let arr = tool_definitions().as_array().cloned().unwrap_or_default();
     let filtered: Vec<Value> = arr
         .into_iter()
         .filter(|d| {
@@ -889,7 +889,10 @@ mod tests {
                 .and_then(|n| n.as_str())
                 == Some("scan_projects")
         });
-        assert!(has_scan_projects, "scan_projects tool should always be advertised (even without ssh feature)");
+        assert!(
+            has_scan_projects,
+            "scan_projects tool should always be advertised (even without ssh feature)"
+        );
 
         let has_generate_map = arr.iter().any(|t| {
             t.get("function")
@@ -897,7 +900,10 @@ mod tests {
                 .and_then(|n| n.as_str())
                 == Some("generate_project_map_from_scan")
         });
-        assert!(has_generate_map, "generate_project_map_from_scan should be registered");
+        assert!(
+            has_generate_map,
+            "generate_project_map_from_scan should be registered"
+        );
     }
 
     #[test]
@@ -948,7 +954,8 @@ mod tests {
         // its description must tell the model when to use it (full /
         // whole-network map, starting at the router) vs the
         // interfaces-only create_network_map.
-        let full = find("create_full_network_map").expect("create_full_network_map must be registered");
+        let full =
+            find("create_full_network_map").expect("create_full_network_map must be registered");
         let full_desc = full["function"]["description"].as_str().unwrap_or("");
         assert!(
             full_desc.contains("FULL") && full_desc.contains("create_network_map"),
@@ -965,13 +972,20 @@ mod tests {
             "create_artifact",
             &json!({"kind": "text", "title": "Registry Probe", "content": "hello"}),
         );
-        assert!(result.starts_with("✅ Artifact saved: /artifacts/"), "got: {}", result);
+        assert!(
+            result.starts_with("✅ Artifact saved: /artifacts/"),
+            "got: {}",
+            result
+        );
         let rel = result
             .strip_prefix("✅ Artifact saved: ")
             .and_then(|r| r.split(" (").next())
             .unwrap_or("");
         let path = rel.trim_start_matches('/');
-        assert!(std::path::Path::new(path).exists(), "artifact file must exist");
+        assert!(
+            std::path::Path::new(path).exists(),
+            "artifact file must exist"
+        );
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_dir("artifacts");
     }
@@ -993,7 +1007,9 @@ mod tests {
         // The wrapper should give a clear error on bad input (today's implementation)
         let result = execute("generate_project_map_from_scan", &json!({}));
         assert!(
-            result.contains("could not parse") || result.contains("Run scan_projects first") || result.contains("Error"),
+            result.contains("could not parse")
+                || result.contains("Run scan_projects first")
+                || result.contains("Error"),
             "Should give helpful parse error. Got: {}",
             result
         );
@@ -1008,14 +1024,18 @@ mod tests {
 
         // Today's additions: scan_projects + generate_project_map_from_scan
         let has_scanner_tools = arr.iter().any(|t| {
-            let name = t.get("function")
+            let name = t
+                .get("function")
                 .and_then(|f| f.get("name"))
                 .and_then(|n| n.as_str())
                 .unwrap_or("");
             name == "scan_projects" || name == "generate_project_map_from_scan"
         });
 
-        assert!(has_scanner_tools, "Project scanner tools from today's work should be in definitions");
+        assert!(
+            has_scanner_tools,
+            "Project scanner tools from today's work should be in definitions"
+        );
     }
 
     #[test]
@@ -1052,13 +1072,24 @@ protocol = "local"
 max_depth = 1
 "#;
 
-        let result = execute("scan_projects", &json!({
-            "config_toml": config,
-            "project": "self"
-        }));
+        let result = execute(
+            "scan_projects",
+            &json!({
+                "config_toml": config,
+                "project": "self"
+            }),
+        );
 
-        assert!(result.contains("self") || result.contains("project_name"), "scan should succeed via execute(): {}", result);
+        assert!(
+            result.contains("self") || result.contains("project_name"),
+            "scan should succeed via execute(): {}",
+            result
+        );
         // Use a more precise check to avoid false positives from other text
-        assert!(!result.contains("\"error\""), "local scan result should not contain an error key. Got: {}", result);
+        assert!(
+            !result.contains("\"error\""),
+            "local scan result should not contain an error key. Got: {}",
+            result
+        );
     }
 }

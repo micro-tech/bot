@@ -24,7 +24,7 @@ pub use validator::{OkfValidator, ValidationResult};
 use crate::config::okf::OkfConfig;
 use std::sync::OnceLock;
 use tokio::sync::Mutex as TokioMutex;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 /// The main OKF Librarian.
 /// Holds config, current registry, and provides high-level operations.
@@ -92,7 +92,7 @@ pub fn get_okf_tool_description(name: &str) -> Option<String> {
 }
 
 /// Attempt to invoke a tool that was loaded from an OKF bundle.
-/// 
+///
 /// Currently returns rich metadata + simulated result.
 /// In future versions this will dispatch to the remote implementation
 /// using the `implementation` hint + OkfFetcher.
@@ -111,7 +111,11 @@ pub fn try_execute_okf_tool(name: &str, args: &serde_json::Value) -> Option<Stri
             name,
             tool_entry.description,
             guard.registry.bundle_id.as_deref().unwrap_or("unknown"),
-            guard.registry.bundle_version.as_deref().unwrap_or("unknown"),
+            guard
+                .registry
+                .bundle_version
+                .as_deref()
+                .unwrap_or("unknown"),
             args
         );
 
@@ -148,7 +152,10 @@ pub fn start_okf_poller() -> Option<tokio::task::JoinHandle<()>> {
         let debounce = Duration::from_secs(20);
         let mut last_reload_attempt = std::time::Instant::now() - debounce; // allow first run soon
 
-        println!("[OKF] Background poller started (interval: {:?})", poll_interval);
+        println!(
+            "[OKF] Background poller started (interval: {:?})",
+            poll_interval
+        );
 
         loop {
             sleep(poll_interval).await;
@@ -165,7 +172,10 @@ pub fn start_okf_poller() -> Option<tokio::task::JoinHandle<()>> {
                 continue;
             }
 
-            println!("[OKF 165 Poller] Polling remote OKF server for bundle updates (interval: {:?})...", poll_interval);
+            println!(
+                "[OKF 165 Poller] Polling remote OKF server for bundle updates (interval: {:?})...",
+                poll_interval
+            );
 
             match guard.hot_reload_from_remote().await {
                 Ok(validation) => {
@@ -180,8 +190,12 @@ pub fn start_okf_poller() -> Option<tokio::task::JoinHandle<()>> {
                             guard.registry.knowledge_count()
                         );
                     } else {
-                        guard.last_reload_error = Some(format!("Validation failed: {:?}", validation.errors));
-                        eprintln!("[OKF 165 Poller] Reload #{} validation failed: {:?}", guard.reload_count, validation.errors);
+                        guard.last_reload_error =
+                            Some(format!("Validation failed: {:?}", validation.errors));
+                        eprintln!(
+                            "[OKF 165 Poller] Reload #{} validation failed: {:?}",
+                            guard.reload_count, validation.errors
+                        );
                     }
                 }
                 Err(e) => {

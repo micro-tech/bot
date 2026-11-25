@@ -1,9 +1,7 @@
 // router/integration.rs - Full Integration & Testing (Task 135)
 use super::{
-    RoutingContext,
-    resolve_with_fallback, BackendSelection,
-    ConfigManager, OverrideStore,
-    HealthStore,
+    BackendSelection, ConfigManager, HealthStore, OverrideStore, RoutingContext,
+    resolve_with_fallback,
 };
 
 /// Main integration point for CPU pipeline
@@ -42,7 +40,7 @@ pub async fn decide_backend_with_full_context(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::router::{LLMBackend};
+    use crate::router::LLMBackend;
     use crate::router::user_override::{OverrideCommand, OverrideTier};
 
     #[test]
@@ -60,18 +58,23 @@ mod tests {
         };
 
         let backend = super::super::route(&ctx, &config);
-        assert!(matches!(backend, LLMBackend::LocalOllama | LLMBackend::Grok));
+        assert!(matches!(
+            backend,
+            LLMBackend::LocalOllama | LLMBackend::Grok
+        ));
     }
 
     #[tokio::test]
     async fn test_user_override_takes_precedence() {
         let mut overrides = OverrideStore::new();
-        overrides.apply(OverrideCommand {
-            user_id: "alice".into(),
-            backend: Some(LLMBackend::Grok),
-            tier: OverrideTier::OneShot,
-            ttl_seconds: None,
-        }).unwrap();
+        overrides
+            .apply(OverrideCommand {
+                user_id: "alice".into(),
+                backend: Some(LLMBackend::Grok),
+                tier: OverrideTier::OneShot,
+                ttl_seconds: None,
+            })
+            .unwrap();
 
         let selection = decide_backend_with_full_context(
             "simple question",
@@ -81,7 +84,8 @@ mod tests {
             &ConfigManager::new("config/router.toml"),
             &overrides,
             None,
-        ).await;
+        )
+        .await;
 
         assert_eq!(selection.chosen, LLMBackend::Grok);
         assert!(selection.reason.contains("override"));

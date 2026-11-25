@@ -292,7 +292,11 @@ impl VectorMemory {
             match serde_json::to_vec_pretty(&facts) {
                 Ok(bytes) => {
                     if let Err(e) = durable_write_json(path, &bytes) {
-                        log::error!("failed to persist vector facts to {}: {}", path.display(), e);
+                        log::error!(
+                            "failed to persist vector facts to {}: {}",
+                            path.display(),
+                            e
+                        );
                     }
                 }
                 Err(e) => log::error!("failed to serialize vector facts: {}", e),
@@ -364,8 +368,7 @@ mod tests {
     #[test]
     fn semantically_similar_facts_rank_above_unrelated_ones() {
         // GIVEN facts from two topics with a working embedder:
-        let mut mem =
-            VectorMemory::with_embedder(Box::new(two_topic_embedder()), None);
+        let mut mem = VectorMemory::with_embedder(Box::new(two_topic_embedder()), None);
         mem.add_fact("the dog barked loudly".to_string());
         mem.add_fact("rust ownership model".to_string());
 
@@ -409,10 +412,8 @@ mod tests {
         // WHEN facts are added through a disk-backed memory,
         // THEN dropping and reloading restores identical content and search works:
         {
-            let mut mem = VectorMemory::with_embedder(
-                Box::new(two_topic_embedder()),
-                Some(path.clone()),
-            );
+            let mut mem =
+                VectorMemory::with_embedder(Box::new(two_topic_embedder()), Some(path.clone()));
             mem.add_fact("the dog barked".to_string());
             mem.add_fact("rust ownership".to_string());
             assert!(path.exists(), "facts file must exist after add_fact");

@@ -319,13 +319,7 @@ pub fn slugify_signature(signature: &str) -> String {
     let mut slug: String = signature
         .to_lowercase()
         .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c
-            } else {
-                '-'
-            }
-        })
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
     while slug.contains("--") {
         slug = slug.replace("--", "-");
@@ -390,15 +384,20 @@ impl EvalLock {
                 .map(|age| age.as_secs() > 24 * 60 * 60)
                 .unwrap_or(false);
             if !stale {
-                return Err(
-                    "another evaluation is already running (max-1-worktree)".to_string(),
-                );
+                return Err("another evaluation is already running (max-1-worktree)".to_string());
             }
             eprintln!("self_improve: eval lock stale (>24h), replacing");
             let _ = std::fs::remove_file(&path);
         }
-        std::fs::write(&path, format!("pid={} start_ms={}", std::process::id(), crate::utils::now_ms()))
-            .map_err(|e| format!("eval lock create failed: {e}"))?;
+        std::fs::write(
+            &path,
+            format!(
+                "pid={} start_ms={}",
+                std::process::id(),
+                crate::utils::now_ms()
+            ),
+        )
+        .map_err(|e| format!("eval lock create failed: {e}"))?;
         Ok(Self { path })
     }
 }
@@ -461,10 +460,7 @@ pub fn evaluate_proposal(
     if diff_files.is_empty() {
         return Err("no diff files to evaluate".to_string());
     }
-    let new_lines: usize = diff_files
-        .iter()
-        .map(|f| f.content.lines().count())
-        .sum();
+    let new_lines: usize = diff_files.iter().map(|f| f.content.lines().count()).sum();
     if new_lines > cfg.max_diff_lines {
         return Err(format!(
             "diff of {new_lines} lines exceeds the {}-line cap (rejected pre-eval)",
@@ -534,8 +530,16 @@ pub fn evaluate_proposal(
         old_lines,
     };
     if let Err(e) = git
-        .add_files(&worktree, &paths.iter().map(|s| s.as_str()).collect::<Vec<_>>())
-        .and_then(|_| git.commit(&worktree, &format!("self-improve eval: {}", proposal.signature)))
+        .add_files(
+            &worktree,
+            &paths.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+        )
+        .and_then(|_| {
+            git.commit(
+                &worktree,
+                &format!("self-improve eval: {}", proposal.signature),
+            )
+        })
     {
         cleanup(&git, &wt_name, &branch, false);
         return Err(format!("eval commit failed: {e}"));
@@ -583,7 +587,11 @@ pub fn evaluate_proposal(
         diff_stat: stat,
         runtime_ms: started.elapsed().as_millis() as u64,
     };
-    proposal.status = if passed { "evaluated".to_string() } else { "eval-failed".to_string() };
+    proposal.status = if passed {
+        "evaluated".to_string()
+    } else {
+        "eval-failed".to_string()
+    };
     proposal.eval_passed = passed;
     proposal.promoted = promoted;
     proposal.promotion_reason = promotion_reason;
@@ -593,8 +601,7 @@ pub fn evaluate_proposal(
     if !promoted {
         proposal.eval_branch = String::new();
     }
-    proposal.eval_report_json =
-        serde_json::to_value(&report).unwrap_or(serde_json::Value::Null);
+    proposal.eval_report_json = serde_json::to_value(&report).unwrap_or(serde_json::Value::Null);
     proposal.updated_at = now_ms;
     upsert_proposal(rt_dir, proposal)?;
     // Task 364: a promoted branch survives for the Phase 3 push; the
@@ -671,8 +678,16 @@ mod tests {
     impl FakeRunner {
         fn passing() -> Self {
             Self {
-                subset: vec![TestResult { name: "a::b".to_string(), passed: true, detail: "ok".to_string() }],
-                eval_set: vec![TestResult { name: "eval1".to_string(), passed: true, detail: "ok".to_string() }],
+                subset: vec![TestResult {
+                    name: "a::b".to_string(),
+                    passed: true,
+                    detail: "ok".to_string(),
+                }],
+                eval_set: vec![TestResult {
+                    name: "eval1".to_string(),
+                    passed: true,
+                    detail: "ok".to_string(),
+                }],
                 eval_set_called: false,
                 subset_called: false,
                 work_dir: None,
@@ -681,7 +696,11 @@ mod tests {
 
         fn failing_subset() -> Self {
             Self {
-                subset: vec![TestResult { name: "a::b".to_string(), passed: false, detail: "FAILED".to_string() }],
+                subset: vec![TestResult {
+                    name: "a::b".to_string(),
+                    passed: false,
+                    detail: "FAILED".to_string(),
+                }],
                 eval_set: vec![],
                 eval_set_called: false,
                 subset_called: false,
@@ -781,7 +800,10 @@ mod tests {
         assert_eq!(module_filter_for_path("src/main.rs"), None);
         assert_eq!(module_filter_for_path("Cargo.toml"), None);
         assert_eq!(module_filter_for_path("docs/x.md"), None);
-        assert_eq!(module_filter_for_path("src/a/b/c.rs").as_deref(), Some("a::b::c"));
+        assert_eq!(
+            module_filter_for_path("src/a/b/c.rs").as_deref(),
+            Some("a::b::c")
+        );
     }
 
     #[test]
@@ -957,7 +979,10 @@ mod tests {
         assert!(report.passed);
         assert!(!report.promoted, "gate closed must never promote");
         assert_eq!(report.promotion_reason, "eval-set-not-approved");
-        assert!(!runner.eval_set_called, "gate closed must not run the eval set");
+        assert!(
+            !runner.eval_set_called,
+            "gate closed must not run the eval set"
+        );
         assert_eq!(report.diff_stat.files_changed, 1);
         assert_eq!(report.diff_stat.new_lines, 3);
         assert_eq!(report.diff_stat.old_lines, 2);
@@ -970,7 +995,10 @@ mod tests {
             .unwrap_or(0);
         assert_eq!(remaining, 0, "no worktree dir may remain");
         let branches = git(&["branch", "--format=%(refname:short)"], &repo);
-        assert!(!branches.contains("self-improve"), "eval branch must be deleted");
+        assert!(
+            !branches.contains("self-improve"),
+            "eval branch must be deleted"
+        );
         let stored = crate::self_improve::worker::read_proposals(&rt).unwrap();
         assert_eq!(stored.len(), 1);
         assert_eq!(stored[0].status, "evaluated");
@@ -999,7 +1027,9 @@ mod tests {
         assert_eq!(p.status, "eval-failed");
         let root = rt.join("self_improve/worktrees");
         assert_eq!(
-            std::fs::read_dir(&root).map(|rd| rd.flatten().count()).unwrap_or(0),
+            std::fs::read_dir(&root)
+                .map(|rd| rd.flatten().count())
+                .unwrap_or(0),
             0
         );
         let _ = std::fs::remove_dir_all(&dir);
@@ -1074,10 +1104,15 @@ mod tests {
         assert!(!p.eval_branch.is_empty());
         assert!(p.eval_branch.starts_with("self-improve/"));
         let branches = git(&["branch", "--format=%(refname:short)"], &repo);
-        assert!(branches.contains(&p.eval_branch), "promoted branch must survive: {branches}");
+        assert!(
+            branches.contains(&p.eval_branch),
+            "promoted branch must survive: {branches}"
+        );
         let root = rt.join("self_improve/worktrees");
         assert_eq!(
-            std::fs::read_dir(&root).map(|rd| rd.flatten().count()).unwrap_or(0),
+            std::fs::read_dir(&root)
+                .map(|rd| rd.flatten().count())
+                .unwrap_or(0),
             0,
             "worktree dir must still be removed"
         );
@@ -1116,14 +1151,26 @@ mod tests {
         let (dir, repo, rt) = fixture("helix-self-improve-eval-cap");
         let cfg = cfg_gate_closed();
         let mut p = proposal("errors:logs/error_log.md");
-        let big = (0..501).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
-        let diff = vec![DiffFile { path: "src/a.rs".to_string(), content: big }];
+        let big = (0..501)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let diff = vec![DiffFile {
+            path: "src/a.rs".to_string(),
+            content: big,
+        }];
         let mut runner = FakeRunner::passing();
         let r = evaluate_proposal(&repo, &rt, &cfg, &mut p, &diff, &mut runner, 5_000);
         assert!(r.is_err());
         assert!(r.unwrap_err().contains("exceeds the 500-line cap"));
-        assert!(!runner.subset_called, "no test may run for an over-cap diff");
-        assert!(!rt.join("self_improve/worktrees").exists(), "no worktree may be created");
+        assert!(
+            !runner.subset_called,
+            "no test may run for an over-cap diff"
+        );
+        assert!(
+            !rt.join("self_improve/worktrees").exists(),
+            "no worktree may be created"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1137,7 +1184,10 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join(".eval.lock"), "pid=1 start_ms=1").unwrap();
         let mut p = proposal("errors:logs/error_log.md");
-        let diff = vec![DiffFile { path: "src/a.rs".to_string(), content: "x\n".to_string() }];
+        let diff = vec![DiffFile {
+            path: "src/a.rs".to_string(),
+            content: "x\n".to_string(),
+        }];
         let mut runner = FakeRunner::passing();
         let r = evaluate_proposal(&repo, &rt, &cfg, &mut p, &diff, &mut runner, 5_000);
         assert!(r.is_err());
@@ -1165,8 +1215,7 @@ mod tests {
         assert!(!root.join("old-wt").exists());
         assert!(!root.join("new-wt").exists());
         std::fs::create_dir_all(root.join("fresh-wt")).unwrap();
-        let removed =
-            sweep_stale_worktrees(&root, crate::utils::now_ms(), 24 * 60 * 60 * 1000);
+        let removed = sweep_stale_worktrees(&root, crate::utils::now_ms(), 24 * 60 * 60 * 1000);
         assert!(removed.is_empty(), "a fresh dir must survive");
         assert!(root.join("fresh-wt").exists());
         let _ = std::fs::remove_dir_all(&dir);

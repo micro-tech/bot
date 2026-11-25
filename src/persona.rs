@@ -79,11 +79,7 @@ pub fn sanitize_role(role: &str) -> Option<String> {
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .collect();
-    if stem.is_empty() {
-        None
-    } else {
-        Some(stem)
-    }
+    if stem.is_empty() { None } else { Some(stem) }
 }
 
 /// Resolve the persona file path. `None` role -> `<rt>/agent.md`;
@@ -123,7 +119,11 @@ fn split_frontmatter(text: &str) -> (String, Option<Vec<String>>) {
         None => return (text.to_string(), None), // unterminated fence: not frontmatter
     };
     let tools = parse_tools_key(&fm_lines);
-    let body = text.get(body_start..).unwrap_or("").trim_start_matches('\n').to_string();
+    let body = text
+        .get(body_start..)
+        .unwrap_or("")
+        .trim_start_matches('\n')
+        .to_string();
     (body, tools)
 }
 
@@ -141,9 +141,7 @@ fn parse_tools_key(fm_lines: &[&str]) -> Option<Vec<String>> {
                 let inner = inner.split(']').next().unwrap_or("");
                 let names: Vec<String> = inner
                     .split(',')
-                    .map(|s| {
-                        s.trim().trim_matches('"').trim_matches('\'').to_string()
-                    })
+                    .map(|s| s.trim().trim_matches('"').trim_matches('\'').to_string())
                     .filter(|s| !s.is_empty())
                     .collect();
                 return Some(names);
@@ -156,7 +154,11 @@ fn parse_tools_key(fm_lines: &[&str]) -> Option<Vec<String>> {
                     let nt = next.trim();
                     if nt.starts_with("- ") {
                         names.push(
-                            nt[2..].trim().trim_matches('"').trim_matches('\'').to_string(),
+                            nt[2..]
+                                .trim()
+                                .trim_matches('"')
+                                .trim_matches('\'')
+                                .to_string(),
                         );
                         iter.next();
                     } else {
@@ -167,7 +169,11 @@ fn parse_tools_key(fm_lines: &[&str]) -> Option<Vec<String>> {
             } else {
                 // Single value: tools: web_search
                 let name = rest.trim_matches('"').trim_matches('\'').to_string();
-                return if name.is_empty() { Some(Vec::new()) } else { Some(vec![name]) };
+                return if name.is_empty() {
+                    Some(Vec::new())
+                } else {
+                    Some(vec![name])
+                };
             }
         }
     }
@@ -439,10 +445,7 @@ fn pending_path(live_path: &Path) -> PathBuf {
 pub fn list_pending() -> Vec<PathBuf> {
     let dir = persona_dir();
     let mut out = Vec::new();
-    for candidate in [
-        dir.join("agent.md.pending"),
-        dir.join("agents"),
-    ] {
+    for candidate in [dir.join("agent.md.pending"), dir.join("agents")] {
         if candidate.is_file() {
             out.push(candidate);
         } else if candidate.is_dir() {
@@ -504,11 +507,9 @@ pub async fn ensure_persona_file(role: Option<&str>) -> Result<PathBuf, String> 
         return Ok(live);
     }
     if !self_author_enabled() {
-        return Err(
-            "no persona file and self-authoring is disabled \
+        return Err("no persona file and self-authoring is disabled \
              ([helix.persona] self_author). Create the file by hand or enable self-authoring."
-                .to_string(),
-        );
+            .to_string());
     }
     if let Some(parent) = live.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -548,10 +549,7 @@ pub fn propose_lesson(role: &str, lesson: &str) -> Result<PathBuf, String> {
     let current = std::fs::read_to_string(&pending)
         .or_else(|_| std::fs::read_to_string(&live))
         .map_err(|e| e.to_string())?;
-    let entry = format!(
-        "\n\n## Lessons learned\n\n- {}",
-        lesson.trim()
-    );
+    let entry = format!("\n\n## Lessons learned\n\n- {}", lesson.trim());
     let mut revised = current;
     if !revised.contains("## Lessons learned") {
         revised.push_str(&entry);
@@ -578,7 +576,10 @@ pub fn propose_lesson(role: &str, lesson: &str) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 pub fn reset_revision_guards() {
-    revision_times().lock().unwrap_or_else(|e| e.into_inner()).clear();
+    revision_times()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clear();
     tripwire().lock().unwrap_or_else(|e| e.into_inner()).clear();
 }
 
@@ -586,7 +587,10 @@ pub fn reset_revision_guards() {
 /// Lets tests simulate the "limiter bypassed" burst the tripwire guards.
 #[cfg(test)]
 pub fn reset_rate_limiter_only() {
-    revision_times().lock().unwrap_or_else(|e| e.into_inner()).clear();
+    revision_times()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clear();
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -658,7 +662,11 @@ mod tests {
         );
         let p = load_persona(Some("stripper")).expect("should load");
         // THEN the injected body never mentions the allowlist:
-        assert!(!p.body.contains("web_search"), "body leaked allowlist: {}", p.body);
+        assert!(
+            !p.body.contains("web_search"),
+            "body leaked allowlist: {}",
+            p.body
+        );
         assert!(!p.body.contains("---"), "body leaked fence: {}", p.body);
         assert!(p.body.contains("Searches the web"), "body: {}", p.body);
         assert_eq!(
@@ -724,7 +732,10 @@ mod tests {
         assert!(sanitize_role("!!!").is_none());
         // AND normal roles pass through lowercased:
         assert_eq!(sanitize_role("Searcher"), Some("searcher".to_string()));
-        assert_eq!(sanitize_role("code-builder_2"), Some("code-builder_2".to_string()));
+        assert_eq!(
+            sanitize_role("code-builder_2"),
+            Some("code-builder_2".to_string())
+        );
     }
 
     #[test]
@@ -755,7 +766,10 @@ mod tests {
         let err = note_revision(&a).unwrap_err();
         // THEN the tripwire fires and self-authoring is off:
         assert!(err.contains("tripwire"), "got: {}", err);
-        assert!(!self_author_enabled(), "tripwire must disable self-authoring");
+        assert!(
+            !self_author_enabled(),
+            "tripwire must disable self-authoring"
+        );
         set_self_author_enabled(false);
     }
 
@@ -820,12 +834,19 @@ mod tests {
             .unwrap()
             .iter()
             .filter_map(|d| {
-                d.get("function")?.get("name")?.as_str().map(|s| s.to_string())
+                d.get("function")?
+                    .get("name")?
+                    .as_str()
+                    .map(|s| s.to_string())
             })
             .collect();
         // THEN the bogus name is ignored, the real one survives:
         assert!(!names.iter().any(|n| n == "not_a_real_tool_xyz"));
-        assert!(names.iter().any(|n| n == "read_email"), "visible: {:?}", names);
+        assert!(
+            names.iter().any(|n| n == "read_email"),
+            "visible: {:?}",
+            names
+        );
     }
 
     #[test]
@@ -868,7 +889,10 @@ mod tests {
             .unwrap()
             .iter()
             .filter_map(|d| {
-                d.get("function")?.get("name")?.as_str().map(|s| s.to_string())
+                d.get("function")?
+                    .get("name")?
+                    .as_str()
+                    .map(|s| s.to_string())
             })
             .collect();
         // THEN the depth guard holds absolutely:
@@ -914,7 +938,10 @@ mod tests {
             .unwrap()
             .iter()
             .filter_map(|d| {
-                d.get("function")?.get("name")?.as_str().map(|s| s.to_string())
+                d.get("function")?
+                    .get("name")?
+                    .as_str()
+                    .map(|s| s.to_string())
             })
             .collect();
         let blob = names.join(" ");
@@ -1002,7 +1029,10 @@ mod tests {
         assert!(pending.is_file());
         // AND applying it makes it live:
         let live_path = persona_path(Some("stubrole")).unwrap();
-        assert!(!live_path.is_file(), "live file must not exist before approval");
+        assert!(
+            !live_path.is_file(),
+            "live file must not exist before approval"
+        );
         apply_pending_persona(&live_path).expect("apply should work");
         assert!(load_persona(Some("stubrole")).is_some());
     }

@@ -21,7 +21,8 @@ impl BayesianReasoner {
         let evidence_prob: f64 = likelihoods
             .iter()
             .map(|(hyp, lik)| *lik * self.hypotheses.get(hyp).copied().unwrap_or(0.0))
-            .sum::<f64>() / self.total_prior.max(1e-10);
+            .sum::<f64>()
+            / self.total_prior.max(1e-10);
 
         let mut posteriors = HashMap::new();
         for hyp in self.hypotheses.keys() {
@@ -40,7 +41,10 @@ impl BayesianReasoner {
     }
 
     pub fn top_belief(&self) -> (String, f64) {
-        self.hypotheses.iter().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).map_or(("".to_string(), 0.0), |(k, v)| (k.clone(), *v))
+        self.hypotheses
+            .iter()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .map_or(("".to_string(), 0.0), |(k, v)| (k.clone(), *v))
     }
 }
 
@@ -77,7 +81,10 @@ impl NaiveBayesMultinomial {
 
         let total = data.len() as f64;
         for class in &self.classes {
-            self.class_priors.insert(class.clone(), *class_counts.get(class).unwrap_or(&0) as f64 / total);
+            self.class_priors.insert(
+                class.clone(),
+                *class_counts.get(class).unwrap_or(&0) as f64 / total,
+            );
         }
 
         for (features, label) in data {
@@ -86,7 +93,9 @@ impl NaiveBayesMultinomial {
                 self.vocab.push(word.clone());
                 self.vocab.sort_unstable();
                 self.vocab.dedup();
-                *self.class_word_counts.entry(label.clone())
+                *self
+                    .class_word_counts
+                    .entry(label.clone())
                     .or_insert_with(HashMap::new)
                     .entry(word.clone())
                     .or_insert(0) += 1;
@@ -101,7 +110,10 @@ impl NaiveBayesMultinomial {
             let class_total = self.class_totals[class] as f64;
             let vocab_size = self.vocab.len() as f64;
             for word in features {
-                let count = self.class_word_counts[class].get(word).copied().unwrap_or(0) as f64;
+                let count = self.class_word_counts[class]
+                    .get(word)
+                    .copied()
+                    .unwrap_or(0) as f64;
                 let smoothed = (count + self.alpha) / (class_total + vocab_size * self.alpha);
                 log_prob += smoothed.ln();
             }

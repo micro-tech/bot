@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::hy_evo::node::NodeResult;
 
 /// Memory subsystem interface
-/// 
+///
 /// Suggestions for implementations:
 /// - Add logging at the start and end of methods (e.g., using log::info! for entry/exit).
 /// - Handle errors explicitly in implementations, logging any failures before returning Err.
@@ -17,7 +17,7 @@ pub trait MemoryInterface: Send + Sync {
 }
 
 /// Skills subsystem interface
-/// 
+///
 /// Suggestions for implementations:
 /// - Use logging to record skill calls, including parameters, for debugging.
 /// - In async methods, log errors if the call fails.
@@ -28,7 +28,7 @@ pub trait SkillInterface: Sync + Send {
 }
 
 /// LLM subsystem interface (Ollama, Groq, etc.)
-/// 
+///
 /// Suggestions for implementations:
 /// - Log prompts and responses to track LLM interactions.
 /// - Add error logging for network or API failures.
@@ -41,7 +41,7 @@ pub trait LlmInterface: Sync + Send {
 }
 
 /// Bus subsystem interface
-/// 
+///
 /// Suggestions for implementations:
 /// - Log messages being published, including destinations and data.
 /// - Handle and log any publishing errors, such as connection issues.

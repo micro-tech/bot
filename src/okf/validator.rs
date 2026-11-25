@@ -50,7 +50,9 @@ pub struct OkfValidator {
 
 impl OkfValidator {
     pub fn new() -> Self {
-        Self { strict_version: false }
+        Self {
+            strict_version: false,
+        }
     }
 
     pub fn with_strict_version(mut self, strict: bool) -> Self {
@@ -72,7 +74,10 @@ impl OkfValidator {
 
         // Version format check
         if !self.is_valid_version(&manifest.version) {
-            let msg = format!("Invalid version format: '{}'. Expected semver-like (e.g. 1.2.3)", manifest.version);
+            let msg = format!(
+                "Invalid version format: '{}'. Expected semver-like (e.g. 1.2.3)",
+                manifest.version
+            );
             if self.strict_version {
                 result.add_error(&msg);
             } else {
@@ -98,9 +103,17 @@ impl OkfValidator {
         // Knowledge validation
         let mut seen_knowledge = std::collections::HashSet::new();
         let allowed_content_types = [
-            "", "markdown", "json", "text", "yaml",
-            "mermaid", "diagram", "file-tree", "directory-snapshot",
-            "file-change-log", "project-map"
+            "",
+            "markdown",
+            "json",
+            "text",
+            "yaml",
+            "mermaid",
+            "diagram",
+            "file-tree",
+            "directory-snapshot",
+            "file-change-log",
+            "project-map",
         ];
 
         for (i, k) in manifest.knowledge.iter().enumerate() {
@@ -110,7 +123,9 @@ impl OkfValidator {
                 result.add_error(&format!("Duplicate knowledge id: '{}'", k.id));
             }
 
-            if !k.content_type.is_empty() && !allowed_content_types.contains(&k.content_type.as_str()) {
+            if !k.content_type.is_empty()
+                && !allowed_content_types.contains(&k.content_type.as_str())
+            {
                 result.add_warning(&format!(
                     "Knowledge '{}' uses non-standard content_type '{}'. Consider using 'mermaid', 'file-tree', 'project-map', etc.",
                     k.id, k.content_type
@@ -118,7 +133,10 @@ impl OkfValidator {
             }
 
             // Special validation for diagram types
-            if matches!(k.content_type.as_str(), "mermaid" | "diagram" | "project-map") {
+            if matches!(
+                k.content_type.as_str(),
+                "mermaid" | "diagram" | "project-map"
+            ) {
                 if k.content.as_ref().map_or(true, |c| c.trim().is_empty()) && k.url.is_none() {
                     result.add_warning(&format!(
                         "Diagram knowledge '{}' has no inline content and no url. It should contain Mermaid source or a link.",
@@ -138,7 +156,10 @@ impl OkfValidator {
             }
 
             if !s.schema.is_object() {
-                result.add_warning(&format!("Schema '{}' does not appear to be a valid JSON object", s.id));
+                result.add_warning(&format!(
+                    "Schema '{}' does not appear to be a valid JSON object",
+                    s.id
+                ));
             }
         }
 
@@ -149,11 +170,19 @@ impl OkfValidator {
     pub fn validate_registry(&self, registry: &OkfRegistry) -> ValidationResult {
         let mut result = ValidationResult::ok();
 
-        if registry.bundle_id.as_ref().map_or(true, |s| s.trim().is_empty()) {
+        if registry
+            .bundle_id
+            .as_ref()
+            .map_or(true, |s| s.trim().is_empty())
+        {
             result.add_warning("Registry has no bundle_id");
         }
 
-        if registry.bundle_version.as_ref().map_or(true, |s| s.trim().is_empty()) {
+        if registry
+            .bundle_version
+            .as_ref()
+            .map_or(true, |s| s.trim().is_empty())
+        {
             result.add_warning("Registry has no bundle_version");
         }
 
@@ -188,7 +217,9 @@ impl OkfValidator {
             return false;
         }
         // Accept 1.0, 1.2.3, v1.2.3, 2.0.0-alpha etc. loosely
-        parts.iter().all(|p| !p.is_empty() && p.chars().next().unwrap().is_ascii_digit() || p.starts_with('v'))
+        parts.iter().all(|p| {
+            !p.is_empty() && p.chars().next().unwrap().is_ascii_digit() || p.starts_with('v')
+        })
     }
 }
 

@@ -179,8 +179,7 @@ fn result_to_string(result: &CallToolResult) -> String {
 
     if let Some(structured) = &result.structured_content {
         parts.push(
-            serde_json::to_string_pretty(structured)
-                .unwrap_or_else(|_| structured.to_string()),
+            serde_json::to_string_pretty(structured).unwrap_or_else(|_| structured.to_string()),
         );
     }
 
@@ -189,12 +188,8 @@ fn result_to_string(result: &CallToolResult) -> String {
             ContentBlock::Text(t) => parts.push(t.text.clone()),
             ContentBlock::Image(_) => parts.push("[mcp: image content omitted]".to_string()),
             ContentBlock::Audio(_) => parts.push("[mcp: audio content omitted]".to_string()),
-            ContentBlock::Resource(_) => {
-                parts.push("[mcp: embedded resource omitted]".to_string())
-            }
-            ContentBlock::ResourceLink(r) => {
-                parts.push(format!("[mcp: resource link: {}]", r.uri))
-            }
+            ContentBlock::Resource(_) => parts.push("[mcp: embedded resource omitted]".to_string()),
+            ContentBlock::ResourceLink(r) => parts.push(format!("[mcp: resource link: {}]", r.uri)),
             // ContentBlock is #[non_exhaustive]: future block kinds degrade
             // to a placeholder instead of failing to compile.
             _ => parts.push("[mcp: non-text content omitted]".to_string()),
@@ -250,7 +245,10 @@ mod tests {
             }],
         });
         let defs = mgr.tool_definitions().await;
-        assert!(defs.is_empty(), "missing mail-mcp binary must advertise no tools");
+        assert!(
+            defs.is_empty(),
+            "missing mail-mcp binary must advertise no tools"
+        );
         for d in &defs {
             let name = d
                 .get("function")
@@ -284,8 +282,7 @@ mod tests {
     #[test]
     fn result_to_string_extracts_text() {
         use rmcp::model::{CallToolResult, ContentBlock, TextContent};
-        let result =
-            CallToolResult::success(vec![ContentBlock::Text(TextContent::new("hello"))]);
+        let result = CallToolResult::success(vec![ContentBlock::Text(TextContent::new("hello"))]);
         assert_eq!(result_to_string(&result), "hello");
     }
 

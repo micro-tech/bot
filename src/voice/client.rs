@@ -79,15 +79,10 @@ pub async fn speak(
         "response_format": "wav",
     });
 
-    let resp = client
-        .post(&url)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| {
-            warn!("voice speak: request to {url} failed: {e}");
-            map_reqwest_err(e)
-        })?;
+    let resp = client.post(&url).json(&body).send().await.map_err(|e| {
+        warn!("voice speak: request to {url} failed: {e}");
+        map_reqwest_err(e)
+    })?;
     let status = resp.status();
     if !status.is_success() {
         warn!("voice speak: {url} returned {status}");
@@ -171,7 +166,7 @@ fn verify_wav(bytes: &[u8]) -> Result<(), VoiceError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{extract::State, routing::post, Json, Router};
+    use axum::{Json, Router, extract::State, routing::post};
     use std::sync::Arc;
 
     fn test_cfg(port: u16) -> VoiceConfig {
@@ -199,8 +194,7 @@ mod tests {
         let app = Router::new().route(
             "/v1/audio/speech",
             post(
-                |State(mode): State<Arc<str>>,
-                 Json(body): Json<serde_json::Value>| async move {
+                |State(mode): State<Arc<str>>, Json(body): Json<serde_json::Value>| async move {
                     match mode.as_ref() {
                         "ok" => {
                             assert_eq!(body["model"], "supertonic-tts");
@@ -220,11 +214,9 @@ mod tests {
                             br#"{"error":"nope"}"#.to_vec(),
                         )
                             .into_response(),
-                        _ => (
-                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                            "boom",
-                        )
-                            .into_response(),
+                        _ => {
+                            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "boom").into_response()
+                        }
                     }
                 },
             ),
@@ -284,21 +276,19 @@ mod tests {
     async fn mock_stt_server() -> u16 {
         let app = Router::new().route(
             "/v1/audio/transcriptions",
-            post(
-                |req: axum::extract::Request| async move {
-                    let ct = req
-                        .headers()
-                        .get(axum::http::header::CONTENT_TYPE)
-                        .and_then(|v| v.to_str().ok())
-                        .unwrap_or("")
-                        .to_string();
-                    assert!(
-                        ct.starts_with("multipart/form-data"),
-                        "expected multipart, got {ct}"
-                    );
-                    axum::Json(serde_json::json!({"text": "hello world"}))
-                },
-            ),
+            post(|req: axum::extract::Request| async move {
+                let ct = req
+                    .headers()
+                    .get(axum::http::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("")
+                    .to_string();
+                assert!(
+                    ct.starts_with("multipart/form-data"),
+                    "expected multipart, got {ct}"
+                );
+                axum::Json(serde_json::json!({"text": "hello world"}))
+            }),
         );
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();

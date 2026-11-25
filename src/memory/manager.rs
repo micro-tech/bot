@@ -143,7 +143,12 @@ impl MemoryManager {
         let mut mermaid = "graph TD;\n".to_string();
         for (key, value) in &self.beliefs {
             let val_str = value.to_string().replace("\"", "'");
-            mermaid.push_str(&format!("    {}[\"{}: {}\"];\n", key.replace(" ", "_").replace("-", "_"), key, val_str));
+            mermaid.push_str(&format!(
+                "    {}[\"{}: {}\"];\n",
+                key.replace(" ", "_").replace("-", "_"),
+                key,
+                val_str
+            ));
         }
         mermaid
     }

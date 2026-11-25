@@ -57,13 +57,19 @@ impl std::fmt::Display for BudgetBlock {
             BudgetBlock::SignatureOpen { signature } => {
                 write!(f, "open proposal already exists for signature {signature}")
             }
-            BudgetBlock::DeclinedCooldown { signature, days_left } => {
+            BudgetBlock::DeclinedCooldown {
+                signature,
+                days_left,
+            } => {
                 write!(
                     f,
                     "signature {signature} declined {days_left} day(s) inside cooldown"
                 )
             }
-            BudgetBlock::FailedEvalCooldown { signature, days_left } => {
+            BudgetBlock::FailedEvalCooldown {
+                signature,
+                days_left,
+            } => {
                 write!(
                     f,
                     "signature {signature} failed eval {days_left} day(s) inside cooldown"
@@ -129,9 +135,13 @@ pub fn check_proposal_allowed(
     if let Some(declined) = latest_with_status(proposals, signature, "declined") {
         let cooldown = cfg.declined_cooldown_days.saturating_mul(DAY_MS);
         if now_ms < declined.updated_at.saturating_add(cooldown) {
-            let left =
-                (declined.updated_at.saturating_add(cooldown).saturating_sub(now_ms) + DAY_MS - 1)
-                    / DAY_MS;
+            let left = (declined
+                .updated_at
+                .saturating_add(cooldown)
+                .saturating_sub(now_ms)
+                + DAY_MS
+                - 1)
+                / DAY_MS;
             return Err(BudgetBlock::DeclinedCooldown {
                 signature: signature.to_string(),
                 days_left: left,
@@ -141,9 +151,13 @@ pub fn check_proposal_allowed(
     if let Some(failed) = latest_with_status(proposals, signature, "eval-failed") {
         let cooldown = cfg.failed_eval_cooldown_days.saturating_mul(DAY_MS);
         if now_ms < failed.updated_at.saturating_add(cooldown) {
-            let left =
-                (failed.updated_at.saturating_add(cooldown).saturating_sub(now_ms) + DAY_MS - 1)
-                    / DAY_MS;
+            let left = (failed
+                .updated_at
+                .saturating_add(cooldown)
+                .saturating_sub(now_ms)
+                + DAY_MS
+                - 1)
+                / DAY_MS;
             return Err(BudgetBlock::FailedEvalCooldown {
                 signature: signature.to_string(),
                 days_left: left,
@@ -200,7 +214,10 @@ pub fn record_loop_outcome(
 ) {
     let mut state = crate::agents::agent_state::AgentState::new();
     crate::agents::memory_continuity::record_important_outcome(
-        &mut state, "self-improve", summary, tags,
+        &mut state,
+        "self-improve",
+        summary,
+        tags,
     );
     crate::agents::memory_continuity::persist_memory_deltas(&mut state, memory);
 }
@@ -260,7 +277,9 @@ mod tests {
         let proposals = vec![proposal("sig-a", "proposed", now - 1000, now - 1000)];
         assert_eq!(
             check_proposal_allowed(&proposals, "sig-a", &cfg(), now),
-            Err(BudgetBlock::SignatureOpen { signature: "sig-a".to_string() })
+            Err(BudgetBlock::SignatureOpen {
+                signature: "sig-a".to_string()
+            })
         );
         assert!(check_proposal_allowed(&proposals, "sig-b", &cfg(), now).is_ok());
     }
@@ -270,12 +289,22 @@ mod tests {
         // GIVEN a decline 29 days ago (inside the 30-day cooldown),
         // WHEN gated, THEN blocked; at 31 days, allowed.
         let now = 100 * WEEK_MS;
-        let declined_29 = vec![proposal("sig-a", "declined", now - 40 * DAY_MS, now - 29 * DAY_MS)];
+        let declined_29 = vec![proposal(
+            "sig-a",
+            "declined",
+            now - 40 * DAY_MS,
+            now - 29 * DAY_MS,
+        )];
         assert!(matches!(
             check_proposal_allowed(&declined_29, "sig-a", &cfg(), now),
             Err(BudgetBlock::DeclinedCooldown { .. })
         ));
-        let declined_31 = vec![proposal("sig-a", "declined", now - 40 * DAY_MS, now - 31 * DAY_MS)];
+        let declined_31 = vec![proposal(
+            "sig-a",
+            "declined",
+            now - 40 * DAY_MS,
+            now - 31 * DAY_MS,
+        )];
         assert!(check_proposal_allowed(&declined_31, "sig-a", &cfg(), now).is_ok());
     }
 
@@ -285,12 +314,22 @@ mod tests {
         // WHEN gated on the SAME signature, THEN blocked; at 8 days,
         // allowed; and a CHANGED signature bypasses even at 6 days.
         let now = 100 * WEEK_MS;
-        let failed_6 = vec![proposal("sig-a", "eval-failed", now - 10 * DAY_MS, now - 6 * DAY_MS)];
+        let failed_6 = vec![proposal(
+            "sig-a",
+            "eval-failed",
+            now - 10 * DAY_MS,
+            now - 6 * DAY_MS,
+        )];
         assert!(matches!(
             check_proposal_allowed(&failed_6, "sig-a", &cfg(), now),
             Err(BudgetBlock::FailedEvalCooldown { .. })
         ));
-        let failed_8 = vec![proposal("sig-a", "eval-failed", now - 10 * DAY_MS, now - 8 * DAY_MS)];
+        let failed_8 = vec![proposal(
+            "sig-a",
+            "eval-failed",
+            now - 10 * DAY_MS,
+            now - 8 * DAY_MS,
+        )];
         assert!(check_proposal_allowed(&failed_8, "sig-a", &cfg(), now).is_ok());
         assert!(
             check_proposal_allowed(&failed_6, "sig-b", &cfg(), now).is_ok(),

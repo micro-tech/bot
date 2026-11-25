@@ -7,35 +7,35 @@ use std::fs;
 use tokio;
 use toml;
 
-mod config;
-mod bus;
-mod io;
-mod cpu;
-mod hy_evo;
-mod tools;
-mod utils;
-mod memory;
-mod skills;
-mod hooks;
+mod a2a;
+mod acp;
+mod agents;
 mod bayesian;
+mod bus;
+mod chat_command; // task 295: chat-hub command loop (read-only diagnostics)
+mod chat_history;
+mod config;
+mod cpu;
+mod cron;
+mod hooks;
+mod hy_evo;
+mod io;
+mod mcp_client;
+mod memory;
+mod network_capture; // task 376: hourly network capture log (24h archive)
+mod okf;
+mod persona;
 mod planning;
 mod reasoning;
-mod agents;
-mod okf;
-mod mcp_client;
 mod router;
 mod security;
-mod acp;
-mod a2a;
-mod ssh;
-mod persona;
-mod cron;
-mod chat_history;
-mod support_watch;
-mod chat_command; // task 295: chat-hub command loop (read-only diagnostics)
-mod network_capture; // task 376: hourly network capture log (24h archive)
-mod voice;
 mod self_improve;
+mod skills;
+mod ssh;
+mod support_watch;
+mod tools;
+mod utils;
+mod voice;
 
 #[tokio::main]
 async fn main() {
@@ -220,7 +220,10 @@ async fn run_helix() {
         })
         .collect();
 
-    println!("=== Parsed Ollama backends ({} total) ===", ollama_backends.len());
+    println!(
+        "=== Parsed Ollama backends ({} total) ===",
+        ollama_backends.len()
+    );
     for (i, (name, url, model)) in ollama_backends.iter().enumerate() {
         println!("  [{}] name='{}' url='{}' model='{}'", i, name, url, model);
     }
@@ -235,7 +238,10 @@ async fn run_helix() {
             .and_then(|v| v.get("helix")?.get("commander")?.get("enabled")?.as_bool())
             .unwrap_or(true);
         crate::tools::subagent_tool::set_commander_enabled(enabled);
-        println!("commander mode: {}", if enabled { "enabled" } else { "disabled" });
+        println!(
+            "commander mode: {}",
+            if enabled { "enabled" } else { "disabled" }
+        );
     }
 
     // ── Task 233: persona files ([helix.persona] self_author, default false) ──
@@ -245,7 +251,12 @@ async fn run_helix() {
     {
         let self_author = toml::from_str::<toml::Value>(&config_str)
             .ok()
-            .and_then(|v| v.get("helix")?.get("persona")?.get("self_author")?.as_bool())
+            .and_then(|v| {
+                v.get("helix")?
+                    .get("persona")?
+                    .get("self_author")?
+                    .as_bool()
+            })
             .unwrap_or(false);
         crate::persona::set_self_author_enabled(self_author);
         println!(
@@ -279,11 +290,14 @@ async fn run_helix() {
     // box (overflow/embeddings). Unmatched entries fall back positionally:
     // first -> local, second -> lan.
     {
-        use crate::tools::subagent_tool::{set_ollama_endpoints, OllamaEndpoint};
+        use crate::tools::subagent_tool::{OllamaEndpoint, set_ollama_endpoints};
         let mut local: Option<OllamaEndpoint> = None;
         let mut lan: Option<OllamaEndpoint> = None;
         for (name, url, model) in &ollama_backends {
-            let ep = OllamaEndpoint { url: url.clone(), model: model.clone() };
+            let ep = OllamaEndpoint {
+                url: url.clone(),
+                model: model.clone(),
+            };
             let n = name.to_lowercase();
             if (n.contains("local") || n.contains("desktop")) && local.is_none() {
                 local = Some(ep);
@@ -294,19 +308,28 @@ async fn run_helix() {
         let mut iter = ollama_backends.iter();
         if local.is_none() {
             if let Some((_, url, model)) = iter.next() {
-                local = Some(OllamaEndpoint { url: url.clone(), model: model.clone() });
+                local = Some(OllamaEndpoint {
+                    url: url.clone(),
+                    model: model.clone(),
+                });
             }
         }
         if lan.is_none() {
             if let Some((_, url, model)) = iter.next() {
-                lan = Some(OllamaEndpoint { url: url.clone(), model: model.clone() });
+                lan = Some(OllamaEndpoint {
+                    url: url.clone(),
+                    model: model.clone(),
+                });
             }
         }
         set_ollama_endpoints(local.clone(), lan.clone());
         println!(
             "spawn_subagent backends: local={} lan={}",
-            local.map(|e| format!("{} {}", e.url, e.model)).unwrap_or_else(|| "(env/default)".to_string()),
-            lan.map(|e| format!("{} {}", e.url, e.model)).unwrap_or_else(|| "(env/default)".to_string()),
+            local
+                .map(|e| format!("{} {}", e.url, e.model))
+                .unwrap_or_else(|| "(env/default)".to_string()),
+            lan.map(|e| format!("{} {}", e.url, e.model))
+                .unwrap_or_else(|| "(env/default)".to_string()),
         );
     }
 
@@ -415,14 +438,9 @@ async fn run_helix() {
                         }
                         let payload: serde_json::Value =
                             serde_json::from_str(&msg.data).unwrap_or_default();
-                        let routine_id = payload["routine_id"]
-                            .as_str()
-                            .unwrap_or("")
-                            .to_string();
-                        let routine_name = payload["routine_name"]
-                            .as_str()
-                            .unwrap_or("")
-                            .to_string();
+                        let routine_id = payload["routine_id"].as_str().unwrap_or("").to_string();
+                        let routine_name =
+                            payload["routine_name"].as_str().unwrap_or("").to_string();
                         if routine_id.is_empty() {
                             continue;
                         }
@@ -448,23 +466,18 @@ async fn run_helix() {
                         // heartbeat state — never the Cpu mutex — so it
                         // keeps landing while a routine holds the Cpu.
                         let (tick, uptime_secs) = {
-                            let mut hb = hb_state
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner());
+                            let mut hb = hb_state.lock().unwrap_or_else(|e| e.into_inner());
                             hb.handle_heartbeat();
                             (hb.tick_count, hb.uptime.as_secs())
                         };
                         // Task 200: observability. Every beat writes
                         // heartbeat.md and appends to logs/hartbeat_log.md.
                         let ts = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-                        let errors = beat_errors_clone
-                            .load(std::sync::atomic::Ordering::Relaxed);
-                        let hb_md = crate::utils::format_heartbeat_md(
-                            tick, &ts, uptime_secs, errors
-                        );
+                        let errors = beat_errors_clone.load(std::sync::atomic::Ordering::Relaxed);
+                        let hb_md =
+                            crate::utils::format_heartbeat_md(tick, &ts, uptime_secs, errors);
                         if std::fs::write(hb_dir.join("heartbeat.md"), &hb_md).is_err() {
-                            beat_errors_clone
-                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            beat_errors_clone.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         }
                         let log_line = format!(
                             "[{}] tick={} uptime_secs={} errors={}\n",
@@ -505,9 +518,8 @@ async fn run_helix() {
                 // Missed-beat watchdog: if the beat file goes stale (> 3x the
                 // interval), the tick loop is stuck — log loudly and alert.
                 tokio::spawn(async move {
-                    let mut check = tokio::time::interval(std::time::Duration::from_secs(
-                        hb_interval,
-                    ));
+                    let mut check =
+                        tokio::time::interval(std::time::Duration::from_secs(hb_interval));
                     check.tick().await; // let beats land before first check
                     loop {
                         check.tick().await;
@@ -518,7 +530,9 @@ async fn run_helix() {
                         if crate::utils::is_heartbeat_missed(stale, hb_interval) {
                             eprintln!(
                                 "Heartbeat watchdog: MISSED BEAT — last beat {:?} (threshold {}s)",
-                                stale.map(|s| format!("{}s ago", s)).unwrap_or_else(|| "never".to_string()),
+                                stale
+                                    .map(|s| format!("{}s ago", s))
+                                    .unwrap_or_else(|| "never".to_string()),
                                 3 * hb_interval
                             );
                             let _ = wd_bus.publish(crate::bus::Message {
@@ -551,7 +565,12 @@ async fn run_helix() {
         // Load logging paths (fall back to defaults)
         let chat_log_path: String = toml::from_str::<toml::Value>(&config_str)
             .ok()
-            .and_then(|v| v.get("logging")?.get("chat_log")?.as_str().map(|s| s.to_string()))
+            .and_then(|v| {
+                v.get("logging")?
+                    .get("chat_log")?
+                    .as_str()
+                    .map(|s| s.to_string())
+            })
             .unwrap_or_else(|| "logs/chat_log.md".to_string());
 
         tokio::spawn(async move {
@@ -559,7 +578,11 @@ async fn run_helix() {
             println!("CPU response forwarder started (subscribed to 'cpu')");
 
             while let Some(msg) = rx.recv().await {
-                println!("[CPU-Forwarder] received message to cpu | from='{}' data_preview='{}'", msg.from, crate::utils::truncate_str(&msg.data, 120));
+                println!(
+                    "[CPU-Forwarder] received message to cpu | from='{}' data_preview='{}'",
+                    msg.from,
+                    crate::utils::truncate_str(&msg.data, 120)
+                );
                 if msg.data.contains("\"type\":\"llm_response\"") {
                     let payload: serde_json::Value =
                         serde_json::from_str(&msg.data).unwrap_or_default();
@@ -581,7 +604,10 @@ async fn run_helix() {
                     // Normalize the 'from' label for the UI
                     // "ollama_server" → "server", "ollama_desktop" → "desktop", "gemini" → "gemini"
                     let display_from = if msg.from.starts_with("ollama_") {
-                        msg.from.strip_prefix("ollama_").unwrap_or(&msg.from).to_string()
+                        msg.from
+                            .strip_prefix("ollama_")
+                            .unwrap_or(&msg.from)
+                            .to_string()
                     } else {
                         msg.from.clone()
                     };
@@ -607,11 +633,21 @@ async fn run_helix() {
                         .open(&chat_log_path)
                     {
                         use std::io::Write;
-                        let _ = writeln!(f, "[{}] {}: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), display_from, text);
+                        let _ = writeln!(
+                            f,
+                            "[{}] {}: {}",
+                            chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                            display_from,
+                            text
+                        );
                     }
 
                     let _ = bus_clone.publish(ui_msg);
-                    println!("[CPU-Forwarder] ✅ Forwarded LLM response from {} ({} chars) to web_interface", display_from, text.len());
+                    println!(
+                        "[CPU-Forwarder] ✅ Forwarded LLM response from {} ({} chars) to web_interface",
+                        display_from,
+                        text.len()
+                    );
                 }
             }
         });
@@ -628,7 +664,10 @@ async fn run_helix() {
             let topic = format!("ollama_{}", backend_name);
             let mut rx = bus_clone.subscribe(&topic);
 
-            println!("✅ Ollama listener SUBSCRIBED for topic='{}'  url={}  model={}", topic, backend_url, backend_model);
+            println!(
+                "✅ Ollama listener SUBSCRIBED for topic='{}'  url={}  model={}",
+                topic, backend_url, backend_model
+            );
             println!("   (waiting for messages on this bus topic...)");
 
             // Startup health probe with extra visibility for desktop
@@ -636,15 +675,23 @@ async fn run_helix() {
             if health_ok {
                 println!("[{}] startup health probe: OK ✅", topic);
             } else {
-                println!("[{}] startup health probe: FAILED ❌  (Ollama not reachable at {})", topic, backend_url);
-                println!("    → Desktop/remote Ollama usually needs: OLLAMA_HOST=0.0.0.0 ollama serve");
+                println!(
+                    "[{}] startup health probe: FAILED ❌  (Ollama not reachable at {})",
+                    topic, backend_url
+                );
+                println!(
+                    "    → Desktop/remote Ollama usually needs: OLLAMA_HOST=0.0.0.0 ollama serve"
+                );
             }
 
             // One-time startup health probe (very useful for diagnosis)
             if crate::io::ollama::check_ollama_health(&backend_url).await {
                 println!("[{}] startup health probe: OK", topic);
             } else {
-                println!("[{}] startup health probe: FAILED (Ollama not reachable at this URL)", topic);
+                println!(
+                    "[{}] startup health probe: FAILED (Ollama not reachable at this URL)",
+                    topic
+                );
             }
 
             // Ollama cold-load warmup (task 89, wired up 2026-11-11): the
@@ -659,7 +706,8 @@ async fn run_helix() {
                 let preload_model = backend_model.clone();
                 tokio::spawn(async move {
                     if let Err(e) =
-                        crate::io::ollama::keepalive::preload_model(&preload_url, &preload_model).await
+                        crate::io::ollama::keepalive::preload_model(&preload_url, &preload_model)
+                            .await
                     {
                         println!("Ollama preload warning (model '{}'): {}", preload_model, e);
                     }
@@ -672,8 +720,12 @@ async fn run_helix() {
             );
 
             while let Some(msg) = rx.recv().await {
-                println!("[{}] 📥 RECEIVED message from='{}'  preview='{}'",
-                    topic, msg.from, crate::utils::truncate_str(&msg.data, 160));
+                println!(
+                    "[{}] 📥 RECEIVED message from='{}'  preview='{}'",
+                    topic,
+                    msg.from,
+                    crate::utils::truncate_str(&msg.data, 160)
+                );
 
                 // Only handle chat requests
                 if msg.data.contains("\"type\":\"chat_request\"") {
@@ -714,11 +766,19 @@ async fn run_helix() {
 
         tokio::spawn(async move {
             let mut rx = bus_clone.subscribe("gemini");
-            println!("Gemini listener started (subscribed to 'gemini', model={})", gemini_model);
+            println!(
+                "Gemini listener started (subscribed to 'gemini', model={})",
+                gemini_model
+            );
 
             while let Some(msg) = rx.recv().await {
                 if msg.data.contains("\"type\":\"chat_request\"") {
-                    crate::io::llm_gemini::handle_gemini_bus_message(msg, &bus_clone, &gemini_model).await;
+                    crate::io::llm_gemini::handle_gemini_bus_message(
+                        msg,
+                        &bus_clone,
+                        &gemini_model,
+                    )
+                    .await;
                 }
             }
         });
@@ -802,14 +862,9 @@ async fn run_helix() {
     // along so the web config editor reads/writes the file Helix actually
     // loaded, not a hardcoded CWD-relative "config.toml".
     let web_config_path = config_path_used.to_string();
-    if let Err(e) = crate::io::web_server::start_web_server(
-        bus,
-        port,
-        config_str,
-        web_config_path,
-        routines,
-    )
-    .await
+    if let Err(e) =
+        crate::io::web_server::start_web_server(bus, port, config_str, web_config_path, routines)
+            .await
     {
         eprintln!("Failed to start web server: {}", e);
     }

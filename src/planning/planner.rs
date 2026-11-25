@@ -30,12 +30,16 @@ impl PlannerInterface for Planner {
         );
 
         // Use the public LlmInterface method
-        let response = match self.llm.call("default", &prompt, &serde_json::json!({})).await {
+        let response = match self
+            .llm
+            .call("default", &prompt, &serde_json::json!({}))
+            .await
+        {
             crate::hy_evo::node::NodeResult::Text(text) => text,
             crate::hy_evo::node::NodeResult::Error(e) => return Err(anyhow::anyhow!(e)),
             _ => return Err(anyhow::anyhow!("Unexpected LLM response")),
         };
-        
+
         // Try to parse JSON array from response
         let subtasks: Vec<String> = match serde_json::from_str(&response) {
             Ok(list) => list,
@@ -44,7 +48,11 @@ impl PlannerInterface for Planner {
                 response
                     .lines()
                     .filter(|l| !l.trim().is_empty())
-                    .map(|l| l.trim_start_matches("- ").trim_start_matches("* ").to_string())
+                    .map(|l| {
+                        l.trim_start_matches("- ")
+                            .trim_start_matches("* ")
+                            .to_string()
+                    })
                     .collect()
             }
         };

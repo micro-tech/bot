@@ -1,13 +1,13 @@
 // router/override.rs - Full User Override & Session Preference System (Task 133)
 use crate::router::LLMBackend;
+use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc, Duration};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OverrideTier {
-    OneShot,     // Highest priority - cleared after use
-    Session,     // Persists for the conversation
-    Persistent,  // Stored in user profile / survives restarts
+    OneShot,    // Highest priority - cleared after use
+    Session,    // Persists for the conversation
+    Persistent, // Stored in user profile / survives restarts
 }
 
 #[derive(Debug, Clone)]
@@ -95,8 +95,7 @@ impl OverrideStore {
     /// Remove expired overrides
     pub fn cleanup_expired(&mut self) {
         let now = Utc::now();
-        self.overrides.retain(|_, ov| {
-            ov.expires_at.map_or(true, |exp| now <= exp)
-        });
+        self.overrides
+            .retain(|_, ov| ov.expires_at.map_or(true, |exp| now <= exp));
     }
 }

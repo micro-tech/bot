@@ -20,7 +20,10 @@ impl SystemManifest {
 
     pub fn load_from_string(raw: &str) -> Self {
         let sections = Self::parse_sections(raw);
-        Self { raw: raw.to_string(), sections }
+        Self {
+            raw: raw.to_string(),
+            sections,
+        }
     }
 
     pub fn parse_sections(raw: &str) -> HashMap<String, String> {
@@ -53,8 +56,6 @@ impl SystemManifest {
     pub fn diff(&self, other: &SystemManifest) -> String {
         let diff = TextDiff::from_lines(&self.raw, &other.raw);
 
-        diff.unified_diff()
-            .context_radius(3)
-            .to_string()
+        diff.unified_diff().context_radius(3).to_string()
     }
 }
