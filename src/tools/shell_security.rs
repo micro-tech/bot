@@ -88,6 +88,65 @@ fn shell_word_split(command: &str) -> Vec<String> {
     words
 }
 
+/// Split a shell command into segments at command separators (`;`, `&`,
+/// `|`, newline), respecting single quotes, double quotes, and backslash
+/// escapes — so a `;` inside `'...'` or `"..."` or after `\` is literal,
+/// not a separator.
+///
+/// `&&`, `||`, `;;` produce empty segments between the doubled separator
+/// chars; those are harmless (`check_shell_argv0` returns `Ok` on them).
+/// Quotes are kept in the segments so [`shell_word_split`] sees the exact
+/// text it would see for the whole command.
+fn split_command_segments(command: &str) -> Vec<String> {
+    let mut segments = Vec::new();
+    let mut current = String::new();
+    let mut chars = command.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\'' => {
+                // Single-quoted: literal until closing quote. An unterminated
+                // quote runs to end of string (a real shell rejects the
+                // command outright), so separators inside never split.
+                current.push(c);
+                for qc in chars.by_ref() {
+                    current.push(qc);
+                    if qc == '\'' {
+                        break;
+                    }
+                }
+            }
+            '"' => {
+                // Double-quoted: backslash escapes one char, rest literal.
+                current.push(c);
+                while let Some(qc) = chars.next() {
+                    current.push(qc);
+                    if qc == '"' {
+                        break;
+                    }
+                    if qc == '\\' {
+                        if let Some(esc) = chars.next() {
+                            current.push(esc);
+                        }
+                    }
+                }
+            }
+            '\\' => {
+                // Escaped char is literal (e.g. `\;` is not a separator).
+                current.push(c);
+                if let Some(esc) = chars.next() {
+                    current.push(esc);
+                }
+            }
+            ';' | '&' | '|' | '\n' => {
+                segments.push(std::mem::take(&mut current));
+            }
+            c => current.push(c),
+        }
+    }
+    segments.push(current);
+    segments
+}
+
 /// `argv[0]`-based dangerous-command analysis.
 ///
 /// Returns `Err(reason)` when the tokenized command is recognisably
@@ -191,11 +250,14 @@ fn check_shell_argv0(command: &str) -> Result<(), String> {
 /// Two layers, both best-effort **defense-in-depth behind the user-approval
 /// gate** — never the sole protection:
 ///
-/// 1. **`argv[0]` analysis** — the command is shell-word split
-///    (quotes/backslashes honoured, `${IFS}`/`$IFS` normalised to spaces)
-///    and the real program name is matched: `r''m -rf /`, `"rm" -rf /`,
-///    `sudo rm -rf /`, `rm${IFS}-rf${IFS}/`, and `rm -rf $HOME` are all
-///    caught even though the substrings differ.
+/// 1. **`argv[0]` analysis, per command segment** — the command is split
+///    at `;` / `&&` / `||` / `|` / `&` / newline (quoting honoured) and
+///    each segment is shell-word split (quotes/backslashes honoured,
+///    `${IFS}`/`$IFS` normalised to spaces) and the real program name is
+///    matched: `r''m -rf /`, `"rm" -rf /`, `sudo rm -rf /`,
+///    `rm${IFS}-rf${IFS}/`, and `rm -rf $HOME` are all caught even though
+///    the substrings differ — including when chained after a benign
+///    command (`echo ok; rm -rf $HOME`, H8).
 /// 2. **Substring denylist** — catches known-dangerous patterns anywhere
 ///    in the command (pipe-to-shell, reverse shells, fork bombs, …).
 ///
@@ -207,18 +269,21 @@ pub fn validate_shell_command(command: &str) -> Result<(), String> {
     }
 
     // ── argv[0] layer ─────────────────────────────────────────────────────
-    // Tokenize first: quoting tricks like `r''m` or `"rm"` collapse to the
-    // real program name, and `${IFS}` games become plain whitespace.
-    if let Err(reason) = check_shell_argv0(command) {
-        warn!(
-            "Shell command blocked by security denylist (argv[0] analysis): command='{}' reason='{}'",
-            command, reason
-        );
-        return Err(format!(
-            "Command blocked for security reasons: {}.\n\
-             If this is a legitimate operation, run it directly in your terminal.",
-            reason
-        ));
+    // Analyse EVERY ;- / &&- / ||- / |- / &- / newline-separated segment,
+    // not just the first command: `echo ok; rm -rf $HOME` must not slip
+    // past (the substring layer does not cover the generalised cases).
+    for segment in split_command_segments(command) {
+        if let Err(reason) = check_shell_argv0(&segment) {
+            warn!(
+                "Shell command blocked by security denylist (argv[0] analysis): command='{}' segment='{}' reason='{}'",
+                command, segment, reason
+            );
+            return Err(format!(
+                "Command blocked for security reasons: {}.\n\
+                 If this is a legitimate operation, run it directly in your terminal.",
+                reason
+            ));
+        }
     }
 
     // Normalise: lowercase for case-insensitive matching, collapse whitespace
@@ -375,8 +440,78 @@ mod tests {
     }
 
     #[test]
+    fn split_command_segments_respects_quotes_and_escapes() {
+        assert_eq!(
+            split_command_segments("echo a; echo b"),
+            vec!["echo a", " echo b"]
+        );
+        // Doubled separators (`&&`, `||`) yield an empty segment between them.
+        assert_eq!(split_command_segments("a && b"), vec!["a ", "", " b"]);
+        assert_eq!(split_command_segments("a || b"), vec!["a ", "", " b"]);
+        // Separators inside quotes are literal, not boundaries.
+        assert_eq!(
+            split_command_segments("echo 'a;b'; rm -rf $HOME"),
+            vec!["echo 'a;b'", " rm -rf $HOME"]
+        );
+        assert_eq!(
+            split_command_segments("echo \"x && y\" | grep x"),
+            vec!["echo \"x && y\" ", " grep x"]
+        );
+        // Escaped separator is literal.
+        assert_eq!(
+            split_command_segments("echo a\\;b; echo c"),
+            vec!["echo a\\;b", " echo c"]
+        );
+        // Newline is a separator.
+        assert_eq!(
+            split_command_segments("echo ok\nrm -rf $HOME"),
+            vec!["echo ok", "rm -rf $HOME"]
+        );
+        // Unterminated quote: separator inside is literal, no split.
+        assert_eq!(split_command_segments("echo 'a;b"), vec!["echo 'a;b"]);
+    }
+
+    #[test]
     fn validate_shell_command_rejects_empty() {
         assert!(validate_shell_command("").is_err());
         assert!(validate_shell_command("   ").is_err());
+    }
+
+    // ── H8: chained-command denylist bypass ───────────────────────────────
+    // The argv[0] layer only analysed the FIRST command, so a denied
+    // command chained after a benign one slipped past both layers (the
+    // substring layer does not cover the generalised cases like
+    // `rm -rf $HOME` or `dd of=/dev/<anything>`).
+
+    #[test]
+    fn validate_shell_command_blocks_chained_denied_segments() {
+        // `;` chaining — generalised rm/dd cases the substring layer misses.
+        assert!(validate_shell_command("echo ok; rm -rf $HOME").is_err());
+        assert!(validate_shell_command("echo ok; rm -rf ${HOME}").is_err());
+        assert!(validate_shell_command("ls; dd if=/dev/zero of=/dev/vda").is_err());
+        // `&&` / `||` / `&` chaining.
+        assert!(validate_shell_command("echo ok && rm -rf $HOME").is_err());
+        assert!(validate_shell_command("true || rm -rf $HOME").is_err());
+        assert!(validate_shell_command("echo ok & rm -rf $HOME").is_err());
+        // `|` chaining — the denied command is the downstream segment.
+        assert!(validate_shell_command("echo hi | dd of=/dev/vda").is_err());
+        // Newline-separated commands (sh -c runs multi-line scripts).
+        assert!(validate_shell_command("echo ok\nrm -rf $HOME").is_err());
+        // Quoted separators are NOT separators: the denied segment is real.
+        assert!(validate_shell_command("echo 'a;b'; rm -rf $HOME").is_err());
+        assert!(validate_shell_command("echo \"x && y\"; rm -rf $HOME").is_err());
+        assert!(validate_shell_command("echo a\\;b; rm -rf $HOME").is_err());
+    }
+
+    #[test]
+    fn validate_shell_command_allows_benign_chaining_and_quoted_denied_text() {
+        // Benign chaining must keep working.
+        assert!(validate_shell_command("echo a; echo b").is_ok());
+        assert!(validate_shell_command("ls && pwd").is_ok());
+        assert!(validate_shell_command("false || echo fallback").is_ok());
+        assert!(validate_shell_command("echo hi | grep hi").is_ok());
+        // Denied text inside quotes is an argument, not a command.
+        assert!(validate_shell_command("echo 'rm -rf $HOME'").is_ok());
+        assert!(validate_shell_command("echo \"dd of=/dev/vda\"").is_ok());
     }
 }
