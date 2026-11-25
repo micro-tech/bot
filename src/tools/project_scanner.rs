@@ -554,11 +554,11 @@ pub fn generate_mermaid_from_scan_result(
             mermaid.push_str(&format!("        {} --> {}\n", pid, nid));
         }
 
-        if typ == "directory" {
-            if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
-                for child in children {
-                    add_node(child, Some(&nid), mermaid, node_id);
-                }
+        if typ == "directory"
+            && let Some(children) = node.get("children").and_then(|c| c.as_array())
+        {
+            for child in children {
+                add_node(child, Some(&nid), mermaid, node_id);
             }
         }
     }

@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn drain_capped_truncates_and_reports() {
-        let data = vec![b'x'; 100];
+        let data = [b'x'; 100];
         let (buf, truncated) = drain_capped(&mut &data[..], 10);
         assert_eq!(buf.len(), 10);
         assert!(truncated);

@@ -359,7 +359,8 @@ async fn start_stream(
             // Poll until the serialized task changes or it goes terminal.
             for _ in 0..40 {
                 // ~10s max per gap; yields promptly on change.
-                if let Some(task) = store.get(&task_id) {
+                {
+                    let task = store.get(&task_id)?;
                     let snapshot = serde_json::to_string(&task).unwrap_or_default();
                     let terminal = task.status.state.is_terminal();
                     if Some(&snapshot) != last_seen.as_ref() {
@@ -376,8 +377,6 @@ async fn start_stream(
                     if terminal {
                         return None;
                     }
-                } else {
-                    return None;
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(250)).await;
             }
@@ -459,10 +458,10 @@ mod tests {
         let task_id = v["id"].as_str().expect("has id").to_string();
         // Poll until terminal (the agent loop runs async).
         for _ in 0..100 {
-            if let Some(t) = state.store.get(&task_id) {
-                if t.status.state.is_terminal() {
-                    break;
-                }
+            if let Some(t) = state.store.get(&task_id)
+                && t.status.state.is_terminal()
+            {
+                break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
@@ -485,10 +484,10 @@ mod tests {
         let task_id = v["id"].as_str().unwrap().to_string();
         // Wait for completion, then cancel must report false (already terminal).
         for _ in 0..100 {
-            if let Some(t) = state.store.get(&task_id) {
-                if t.status.state.is_terminal() {
-                    break;
-                }
+            if let Some(t) = state.store.get(&task_id)
+                && t.status.state.is_terminal()
+            {
+                break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }

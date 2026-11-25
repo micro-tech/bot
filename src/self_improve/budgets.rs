@@ -135,13 +135,11 @@ pub fn check_proposal_allowed(
     if let Some(declined) = latest_with_status(proposals, signature, "declined") {
         let cooldown = cfg.declined_cooldown_days.saturating_mul(DAY_MS);
         if now_ms < declined.updated_at.saturating_add(cooldown) {
-            let left = (declined
+            let left = declined
                 .updated_at
                 .saturating_add(cooldown)
                 .saturating_sub(now_ms)
-                + DAY_MS
-                - 1)
-                / DAY_MS;
+                .div_ceil(DAY_MS);
             return Err(BudgetBlock::DeclinedCooldown {
                 signature: signature.to_string(),
                 days_left: left,
@@ -151,13 +149,11 @@ pub fn check_proposal_allowed(
     if let Some(failed) = latest_with_status(proposals, signature, "eval-failed") {
         let cooldown = cfg.failed_eval_cooldown_days.saturating_mul(DAY_MS);
         if now_ms < failed.updated_at.saturating_add(cooldown) {
-            let left = (failed
+            let left = failed
                 .updated_at
                 .saturating_add(cooldown)
                 .saturating_sub(now_ms)
-                + DAY_MS
-                - 1)
-                / DAY_MS;
+                .div_ceil(DAY_MS);
             return Err(BudgetBlock::FailedEvalCooldown {
                 signature: signature.to_string(),
                 days_left: left,

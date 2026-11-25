@@ -24,34 +24,6 @@ pub struct ScheduleConfig {
     pub profiles: HashMap<String, RoutingProfile>,
 }
 
-impl ScheduleConfig {
-    pub fn default() -> Self {
-        let mut profiles = HashMap::new();
-        profiles.insert(
-            "default".into(),
-            RoutingProfile {
-                name: "default".into(),
-                complexity_threshold: 0.7,
-                preferred_backends: vec!["gemini".into()],
-                fallback_chain: vec!["ollama".into(), "fallback".into()],
-            },
-        );
-        profiles.insert(
-            "night".into(),
-            RoutingProfile {
-                name: "night".into(),
-                complexity_threshold: 0.4,
-                preferred_backends: vec!["ollama".into()],
-                fallback_chain: vec!["gemini".into()],
-            },
-        );
-        Self {
-            windows: vec![],
-            profiles,
-        }
-    }
-}
-
 /// Pure deterministic evaluator — returns the active profile name
 pub fn evaluate(timestamp: DateTime<Utc>, config: &ScheduleConfig) -> String {
     let hour = timestamp.hour();

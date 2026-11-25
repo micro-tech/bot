@@ -109,10 +109,7 @@ mod tests {
     fn reassemble(chunks: &[String]) -> String {
         chunks
             .iter()
-            .map(|c| {
-                let body = c.split_once("] ").map(|(_, b)| b).unwrap_or(c.as_str());
-                body
-            })
+            .map(|c| c.split_once("] ").map(|(_, b)| b).unwrap_or(c.as_str()))
             .collect()
     }
 

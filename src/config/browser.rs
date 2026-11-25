@@ -23,7 +23,7 @@ use serde::Deserialize;
 ///
 /// Security boundary (tasks 351/353): the browser runs as cobble on the
 /// R630 and can reach the LAN; its Google session is John's. Scope is OAuth
-/// + user-directed browsing, NOT open-ended LLM web browsing with John's
+/// and user-directed browsing, NOT open-ended LLM web browsing with John's
 /// Google session. Navigation is confined to `allowed_hosts` (default:
 /// Google + localhost); anything else is refused and the LLM is told to ask
 /// the user. The tool never returns password field contents (see

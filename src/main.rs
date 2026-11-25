@@ -4,8 +4,6 @@ use std::fs;
 // use std::env;
 // use std::path::Path;
 // use std::process::{Command, Stdio};
-use tokio;
-use toml;
 
 mod a2a;
 mod acp;
@@ -167,14 +165,14 @@ async fn run_helix() {
     if config_path_used == "config.toml" {
         let primary = fs::read("config.toml");
         let fallback = fs::read("/etc/helix/config.toml");
-        if let (Ok(a), Ok(b)) = (primary, fallback) {
-            if a != b {
-                eprintln!(
-                    "WARNING: ./config.toml and /etc/helix/config.toml differ — \
+        if let (Ok(a), Ok(b)) = (primary, fallback)
+            && a != b
+        {
+            eprintln!(
+                "WARNING: ./config.toml and /etc/helix/config.toml differ — \
                      using ./config.toml (first match); the /etc/helix copy is stale. \
                      Reconcile them or reinstall."
-                );
-            }
+            );
         }
     }
 
@@ -306,21 +304,21 @@ async fn run_helix() {
             }
         }
         let mut iter = ollama_backends.iter();
-        if local.is_none() {
-            if let Some((_, url, model)) = iter.next() {
-                local = Some(OllamaEndpoint {
-                    url: url.clone(),
-                    model: model.clone(),
-                });
-            }
+        if local.is_none()
+            && let Some((_, url, model)) = iter.next()
+        {
+            local = Some(OllamaEndpoint {
+                url: url.clone(),
+                model: model.clone(),
+            });
         }
-        if lan.is_none() {
-            if let Some((_, url, model)) = iter.next() {
-                lan = Some(OllamaEndpoint {
-                    url: url.clone(),
-                    model: model.clone(),
-                });
-            }
+        if lan.is_none()
+            && let Some((_, url, model)) = iter.next()
+        {
+            lan = Some(OllamaEndpoint {
+                url: url.clone(),
+                model: model.clone(),
+            });
         }
         set_ollama_endpoints(local.clone(), lan.clone());
         println!(

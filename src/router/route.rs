@@ -12,10 +12,10 @@ pub fn route(ctx: &RoutingContext, config: &RouterConfig) -> LLMBackend {
     }
 
     // 2. Check schedule windows first (highest priority after override)
-    if let Some(profile) = check_schedule(ctx, config) {
-        if let Some(backend) = select_from_profile(&profile, ctx) {
-            return backend;
-        }
+    if let Some(profile) = check_schedule(ctx, config)
+        && let Some(backend) = select_from_profile(&profile, ctx)
+    {
+        return backend;
     }
 
     // 3. Complexity-based routing

@@ -96,10 +96,10 @@ fn history_file_path() -> String {
 fn append_to_disk(turn: &ChatTurn) {
     let line = serde_json::json!({ "user": turn.user, "assistant": turn.assistant }).to_string();
     let path = history_file_path();
-    if let Some(parent) = std::path::Path::new(&path).parent() {
-        if !parent.as_os_str().is_empty() {
-            let _ = std::fs::create_dir_all(parent);
-        }
+    if let Some(parent) = std::path::Path::new(&path).parent()
+        && !parent.as_os_str().is_empty()
+    {
+        let _ = std::fs::create_dir_all(parent);
     }
     use std::io::Write;
     match std::fs::OpenOptions::new()
@@ -161,10 +161,10 @@ pub fn load_from_disk() {
         let mut first_err: Option<std::io::Error> = None;
         for t in &turns {
             let line = serde_json::json!({ "user": t.user, "assistant": t.assistant }).to_string();
-            if let Err(e) = writeln!(f, "{}", line) {
-                if first_err.is_none() {
-                    first_err = Some(e);
-                }
+            if let Err(e) = writeln!(f, "{}", line)
+                && first_err.is_none()
+            {
+                first_err = Some(e);
             }
         }
         if let Some(e) = first_err {

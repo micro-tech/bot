@@ -130,7 +130,7 @@ fn notes_list_internal() -> Vec<String> {
         .map(|entries| {
             let mut names: Vec<String> = entries
                 .flatten()
-                .filter(|e| e.path().extension().map_or(false, |ext| ext == "md"))
+                .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
                 .filter_map(|e| {
                     e.path()
                         .file_stem()
@@ -680,22 +680,21 @@ fn render_full_network_map_svg(
 fn helix_own_ips(gateway_base: &str) -> Vec<String> {
     if let Some(raw) =
         crate::mcp_client::try_execute("mcp__wire__interfaces", &serde_json::json!({}))
+        && let Ok(ifaces) = parse_wire_interfaces(&raw)
     {
-        if let Ok(ifaces) = parse_wire_interfaces(&raw) {
-            let mut ips: Vec<String> = ifaces
-                .iter()
-                .flat_map(|i| {
-                    i.addresses
-                        .iter()
-                        .map(|a| a.split('/').next().unwrap_or("").to_string())
-                })
-                .filter(|a| !a.is_empty() && !a.starts_with("127.") && !a.starts_with("::"))
-                .collect();
-            ips.sort();
-            ips.dedup();
-            if !ips.is_empty() {
-                return ips;
-            }
+        let mut ips: Vec<String> = ifaces
+            .iter()
+            .flat_map(|i| {
+                i.addresses
+                    .iter()
+                    .map(|a| a.split('/').next().unwrap_or("").to_string())
+            })
+            .filter(|a| !a.is_empty() && !a.starts_with("127.") && !a.starts_with("::"))
+            .collect();
+        ips.sort();
+        ips.dedup();
+        if !ips.is_empty() {
+            return ips;
         }
     }
     if gateway_base == "192.168.1" {
@@ -984,11 +983,11 @@ pub fn generate_mermaid_project_map(args: &Value) -> String {
             mermaid.push_str(&format!("        {} --> {}\n", pid, nid));
         }
 
-        if typ == "directory" {
-            if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
-                for child in children {
-                    add_node(child, Some(&nid), mermaid, node_id, id_map);
-                }
+        if typ == "directory"
+            && let Some(children) = node.get("children").and_then(|c| c.as_array())
+        {
+            for child in children {
+                add_node(child, Some(&nid), mermaid, node_id, id_map);
             }
         }
     }
@@ -1030,7 +1029,7 @@ pub fn generate_mermaid_project_map(args: &Value) -> String {
         }
     });
 
-    serde_json::to_string_pretty(&knowledge_payload).unwrap_or_else(|_| mermaid)
+    serde_json::to_string_pretty(&knowledge_payload).unwrap_or(mermaid)
 }
 
 /// Convenience wrapper: produce a ready-to-send OKF knowledge entry for a project map.
@@ -1193,7 +1192,7 @@ mod tests {
         let result =
             create_artifact(&json!({"kind": "html", "title": "Test Chart", "content": content}));
         let url = artifact_path_from_result(&result)
-            .expect(&format!("expected success, got: {}", result));
+            .unwrap_or_else(|| panic!("expected success, got: {}", result));
         // sanitise_filename preserves case (spaces -> underscores).
         assert!(url.starts_with("/artifacts/Test_Chart-"), "url: {}", url);
         assert!(url.ends_with(".html"), "url: {}", url);
@@ -1230,7 +1229,7 @@ mod tests {
             &json!({"kind": "text", "title": "../../etc/passwd", "content": "pwn"}),
         );
         let url = artifact_path_from_result(&result)
-            .expect(&format!("expected success, got: {}", result));
+            .unwrap_or_else(|| panic!("expected success, got: {}", result));
         assert!(!url.contains(".."), "url must not contain ..: {}", url);
         assert!(
             !url["/artifacts/".len()..].contains('/'),
@@ -1276,7 +1275,7 @@ mod tests {
         let _cleanup_overrides = Cleanup::new(crate::mcp_client::clear_test_overrides);
         let result = create_network_map(&json!({"title": "Test Net Map"}));
         let url = artifact_path_from_result(&result)
-            .expect(&format!("expected success, got: {}", result));
+            .unwrap_or_else(|| panic!("expected success, got: {}", result));
         assert!(url.ends_with(".svg"), "url: {}", url);
         let _cleanup = Cleanup::new(|| remove_artifact(&url));
         let svg = std::fs::read_to_string(url.trim_start_matches('/')).expect("svg must exist");
@@ -1314,7 +1313,7 @@ mod tests {
         let _cleanup_overrides = Cleanup::new(crate::mcp_client::clear_test_overrides);
         let result = create_network_map(&json!({"title": "Test Doubled Map"}));
         let url = artifact_path_from_result(&result)
-            .expect(&format!("expected success, got: {}", result));
+            .unwrap_or_else(|| panic!("expected success, got: {}", result));
         assert!(url.ends_with(".svg"), "url: {}", url);
         let _cleanup = Cleanup::new(|| remove_artifact(&url));
         let svg = std::fs::read_to_string(url.trim_start_matches('/')).expect("svg must exist");

@@ -123,10 +123,10 @@ fn split_command_segments(command: &str) -> Vec<String> {
                     if qc == '"' {
                         break;
                     }
-                    if qc == '\\' {
-                        if let Some(esc) = chars.next() {
-                            current.push(esc);
-                        }
+                    if qc == '\\'
+                        && let Some(esc) = chars.next()
+                    {
+                        current.push(esc);
                     }
                 }
             }

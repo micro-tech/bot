@@ -38,32 +38,33 @@ pub async fn resolve_with_fallback(
     // 2. Check health of primary choice (async)
     if let Some(h) = health {
         let primary_name = format!("{:?}", primary).to_lowercase();
-        if let Some(status) = h.get(&primary_name).await {
-            if !status.reachable || status.degraded {
-                attempted.push((primary.clone(), "primary degraded/unreachable".into()));
+        if let Some(status) = h.get(&primary_name).await
+            && (!status.reachable || status.degraded)
+        {
+            attempted.push((primary.clone(), "primary degraded/unreachable".into()));
 
-                for fb_name in &config.fallback_chain {
-                    if let Some(fb_status) = h.get(fb_name).await {
-                        if fb_status.reachable && !fb_status.degraded {
-                            return BackendSelection {
-                                chosen: parse_backend(fb_name),
-                                fallbacks_attempted: attempted,
-                                reason: "primary unhealthy, used fallback".into(),
-                                timestamp: Utc::now(),
-                                health_snapshot: Some(format!("{:?}", fb_status)),
-                            };
-                        }
-                    }
+            for fb_name in &config.fallback_chain {
+                if let Some(fb_status) = h.get(fb_name).await
+                    && fb_status.reachable
+                    && !fb_status.degraded
+                {
+                    return BackendSelection {
+                        chosen: parse_backend(fb_name),
+                        fallbacks_attempted: attempted,
+                        reason: "primary unhealthy, used fallback".into(),
+                        timestamp: Utc::now(),
+                        health_snapshot: Some(format!("{:?}", fb_status)),
+                    };
                 }
-
-                return BackendSelection {
-                    chosen: LLMBackend::Fallback,
-                    fallbacks_attempted: attempted,
-                    reason: "all backends unhealthy".into(),
-                    timestamp: Utc::now(),
-                    health_snapshot: None,
-                };
             }
+
+            return BackendSelection {
+                chosen: LLMBackend::Fallback,
+                fallbacks_attempted: attempted,
+                reason: "all backends unhealthy".into(),
+                timestamp: Utc::now(),
+                health_snapshot: None,
+            };
         }
     }
 

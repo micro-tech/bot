@@ -158,7 +158,15 @@ impl VectorMemory {
     pub fn new() -> Self {
         Self::with_embedder(Box::new(OllamaEmbedder::from_env()), None)
     }
+}
 
+impl Default for VectorMemory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl VectorMemory {
     /// In-memory with an injected embedder (tests, custom providers).
     pub fn with_embedder(embedder: Box<dyn Embedder + Send + Sync>, file: Option<PathBuf>) -> Self {
         Self {
@@ -324,10 +332,14 @@ fn cosine_sim(a: &[f32], b: &[f32]) -> f32 {
 mod tests {
     use super::*;
 
+    /// Scripted embedder response: map text -> vector, or None to
+    /// simulate an unreachable backend.
+    type EmbedFn = Box<dyn FnMut(&str) -> Option<Vec<f32>> + Send + Sync>;
+
     /// Test embedder with scripted responses: map text -> vector, or None to
     /// simulate an unreachable backend.
     struct StubEmbedder {
-        f: Box<dyn FnMut(&str) -> Option<Vec<f32>> + Send + Sync>,
+        f: EmbedFn,
         pub calls: usize,
     }
 

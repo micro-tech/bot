@@ -717,7 +717,7 @@ where
                         log_to_file(&format!(
                             "self_improve: phase_failure: proposals unreadable: {e}"
                         ));
-                        format!("phase_failure:proposals unreadable")
+                        "phase_failure:proposals unreadable".to_string()
                     }
                     Ok(prior) => {
                         match crate::self_improve::budgets::check_proposal_allowed(
@@ -1387,15 +1387,13 @@ where
         let logs_dir = self.runtime_dir.join("logs");
         if let Ok(entries) = std::fs::read_dir(&logs_dir) {
             for entry in entries.flatten() {
-                if let Ok(metadata) = entry.metadata() {
-                    if let Ok(modified) = metadata.modified() {
-                        if modified.elapsed().unwrap_or_default()
-                            > std::time::Duration::from_secs(7 * 24 * 3600)
-                        {
-                            // 7 days
-                            let _ = std::fs::remove_file(entry.path());
-                        }
-                    }
+                if let Ok(metadata) = entry.metadata()
+                    && let Ok(modified) = metadata.modified()
+                    && modified.elapsed().unwrap_or_default()
+                        > std::time::Duration::from_secs(7 * 24 * 3600)
+                {
+                    // 7 days
+                    let _ = std::fs::remove_file(entry.path());
                 }
             }
         }
@@ -1431,7 +1429,7 @@ where
                     health["message"].as_str().unwrap_or("unknown")
                 ));
                 // Optionally auto-reset if stuck
-                if self.heartbeat_tick() % 200 == 0 {
+                if self.heartbeat_tick().is_multiple_of(200) {
                     self.reset_reasoning();
                     log_to_file("Auto-reset reasoning engine due to poor health");
                 }
@@ -1962,7 +1960,8 @@ pub struct ErrorFindings {
 ///   format) parses and falls within the last 24h of `now`,
 /// - it carries an error marker: `[ERROR]`, `ERROR:`, `Error`, `Failed`,
 ///   `failed`, or `HALTED`.
-/// The marker match is case-sensitive on purpose: routine chatter uses
+///
+ /// The marker match is case-sensitive on purpose: routine chatter uses
 /// lowercase "error" ("error-log review: N error lines", "or error
 /// occurred"), and the review's own summary line must never count itself.
 /// Lines without a parseable timestamp are not counted: every current
@@ -1982,7 +1981,8 @@ pub struct ErrorFindings {
 ///   so a run ending is not a failure. Any other HALTED reason still
 ///   counts (e.g. `watchdog tripped`, `Tool failed: ...`), mirroring the
 ///   acp/agent.rs rule that only `Tool failed:` is a genuine halt error.
-/// Because `findings.recent` is built from counted lines only, these
+///
+ /// Because `findings.recent` is built from counted lines only, these
 /// exclusions also keep non-actionable lines out of `maybe_nightly_fix`
 /// input (task 293.3) with no separate fixer change.
 /// Task 312: two more shapes are routine/audit chatter, not errors,
@@ -1996,7 +1996,8 @@ pub struct ErrorFindings {
 ///   operation — rejections, spawn failures, execution records, task
 ///   events; the echoed command/reason/task text can contain marker
 ///   words, e.g. a `grep Error ...` command or a `spawn failed` note).
-/// Genuine errors that merely MENTION a routine or a chat command still
+///
+ /// Genuine errors that merely MENTION a routine or a chat command still
 /// count: the exclusion is by line prefix, not by substring.
 const ERROR_LOG_RECENT_WINDOW_MINUTES: i64 = 24 * 60;
 const ERROR_MARKERS: [&str; 6] = ["[ERROR]", "ERROR:", "Error", "Failed", "failed", "HALTED"];
@@ -2030,10 +2031,10 @@ fn is_counted_error_line(line: &str, now: chrono::NaiveDateTime) -> bool {
     if body.starts_with("self_improve: metrics") || body.starts_with("nightly fix attempt:") {
         return false;
     }
-    if let Some(reason) = body.strip_prefix("[AgentState] HALTED:") {
-        if BENIGN_HALT_REASONS.contains(&reason.trim()) {
-            return false;
-        }
+    if let Some(reason) = body.strip_prefix("[AgentState] HALTED:")
+        && BENIGN_HALT_REASONS.contains(&reason.trim())
+    {
+        return false;
     }
     // Task 312: routine + audit chatter is not an error (see doc above).
     // `CPU routine_run:` lines carry the routine's own name, which can

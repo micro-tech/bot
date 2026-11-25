@@ -79,10 +79,11 @@ fn run_systemctl(args: &[&str]) -> Result<std::process::ExitStatus, String> {
 /// Returns the non-root user the service should run as.
 /// Preference order: SUDO_USER (best when run via sudo) → $USER → fallback "helix".
 fn get_runtime_user() -> String {
-    if let Ok(u) = std::env::var("SUDO_USER") {
-        if !u.is_empty() && u != "root" {
-            return u;
-        }
+    if let Ok(u) = std::env::var("SUDO_USER")
+        && !u.is_empty()
+        && u != "root"
+    {
+        return u;
     }
     std::env::var("USER")
         .or_else(|_| std::env::var("LOGNAME"))
@@ -478,7 +479,7 @@ fn backup_existing(dest: &Path) {
         .unwrap_or(0);
     let backup_name = format!("{}.bak-{}", dest.display(), epoch);
     let backup = Path::new(&backup_name);
-    match fs::copy(dest, &backup) {
+    match fs::copy(dest, backup) {
         Ok(_) => println!("Backed up {} -> {}", dest.display(), backup.display()),
         Err(e) => eprintln!(
             "WARNING: could not back up {}: {} — proceeding with overwrite",
@@ -504,11 +505,11 @@ fn safe_copy_to_both(name: &str, src: &Path, primary_runtime_dir: &str) {
     for dest_dir in [primary_runtime_dir, "/etc/helix"] {
         let dest = Path::new(dest_dir).join(name);
 
-        if let Some(ref sc) = src_canonical {
-            if dest.canonicalize().ok().as_ref() == Some(sc) {
-                println!("Skipped {} (already in place at {})", name, dest.display());
-                continue;
-            }
+        if let Some(ref sc) = src_canonical
+            && dest.canonicalize().ok().as_ref() == Some(sc)
+        {
+            println!("Skipped {} (already in place at {})", name, dest.display());
+            continue;
         }
 
         backup_existing(&dest);

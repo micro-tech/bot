@@ -107,7 +107,7 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoEngine<L> {
         }
 
         // 1. Select top N
-        let mut sorted: Vec<_> = self.population.iter().cloned().collect();
+        let mut sorted: Vec<_> = self.population.to_vec();
         sorted.sort_by(|a, b| {
             b.score
                 .partial_cmp(&a.score)
@@ -150,8 +150,6 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoEngine<L> {
         });
 
         let replace_count = offspring.len().min(self.population.len());
-        for i in 0..replace_count {
-            self.population[i] = offspring[i].clone();
-        }
+        self.population[..replace_count].clone_from_slice(&offspring[..replace_count]);
     }
 }

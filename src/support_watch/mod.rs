@@ -181,12 +181,12 @@ pub(crate) fn strip_untrusted_tags(output: &str) -> &str {
 /// `split_whitespace().next()` turned "Alice <alice@example.com>" into
 /// "Alice", misaddressing the draft).
 pub fn extract_email(from: &str) -> String {
-    if let Some(a) = from.find('<') {
-        if let Some(b) = from[a..].find('>') {
-            let inner = from[a + 1..a + b].trim();
-            if !inner.is_empty() {
-                return inner.to_string();
-            }
+    if let Some(a) = from.find('<')
+        && let Some(b) = from[a..].find('>')
+    {
+        let inner = from[a + 1..a + b].trim();
+        if !inner.is_empty() {
+            return inner.to_string();
         }
     }
     from.split_whitespace()
@@ -546,9 +546,11 @@ mod tests {
 
     #[test]
     fn no_check_before_cadence_elapses() {
-        let mut st = WatchState::default();
-        st.last_check_ms = Some(wednesday_afternoon_ms());
-        st.mode = WatchMode::NormalDay;
+        let st = WatchState {
+            last_check_ms: Some(wednesday_afternoon_ms()),
+            mode: WatchMode::NormalDay,
+            ..Default::default()
+        };
         // 4 minutes later: not yet.
         assert!(!should_check(
             wednesday_afternoon_ms() + 4 * 60_000,
@@ -566,8 +568,10 @@ mod tests {
     #[test]
     fn new_mail_enters_burst_and_two_clean_checks_exit() {
         let c = cfg();
-        let mut st = WatchState::default();
-        st.mode = WatchMode::NormalDay;
+        let mut st = WatchState {
+            mode: WatchMode::NormalDay,
+            ..Default::default()
+        };
         // GIVEN new mail arrives:
         let m = record_check(&mut st, wednesday_afternoon_ms(), &["m1".into()], &c);
         assert_eq!(m, WatchMode::Burst);
@@ -585,9 +589,11 @@ mod tests {
     #[test]
     fn burst_exits_to_night_mode_overnight() {
         let c = cfg();
-        let mut st = WatchState::default();
-        st.mode = WatchMode::Burst;
-        st.quiet_streak = 1;
+        let mut st = WatchState {
+            mode: WatchMode::Burst,
+            quiet_streak: 1,
+            ..Default::default()
+        };
         let m = record_check(&mut st, wednesday_night_ms(), &[], &c);
         assert_eq!(m, WatchMode::NormalNight);
     }

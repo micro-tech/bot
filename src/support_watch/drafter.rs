@@ -122,7 +122,7 @@ pub fn cite_playbook(msg: &IncomingMail, playbook: &[PlaybookSection]) -> (Strin
         })
         .filter(|(score, _)| *score > 0)
         .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|a| std::cmp::Reverse(a.0));
     scored.truncate(3);
     if scored.is_empty() {
         return ("No playbook entry matched.".to_string(), Vec::new());
@@ -204,12 +204,12 @@ pub fn extract_draft_body(report: &str) -> Option<String> {
         .split_once("final:\n")
         .map(|(_, f)| f)
         .unwrap_or(report);
-    if let Some((_, rest)) = final_text.split_once(DRAFT_BEGIN) {
-        if let Some((body, _)) = rest.split_once(DRAFT_END) {
-            let body = body.trim().to_string();
-            if !body.is_empty() {
-                return Some(body);
-            }
+    if let Some((_, rest)) = final_text.split_once(DRAFT_BEGIN)
+        && let Some((body, _)) = rest.split_once(DRAFT_END)
+    {
+        let body = body.trim().to_string();
+        if !body.is_empty() {
+            return Some(body);
         }
     }
     let fallback = final_text.trim().to_string();

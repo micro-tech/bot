@@ -56,3 +56,9 @@ impl WorkflowExecutor {
         Ok(metrics)
     }
 }
+
+impl Default for WorkflowExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
+}

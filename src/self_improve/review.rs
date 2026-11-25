@@ -293,10 +293,11 @@ mod tests {
     }
 
     fn cfg_open() -> crate::self_improve::SelfImproveConfig {
-        let mut cfg = crate::self_improve::SelfImproveConfig::default();
-        cfg.pr_opening = true;
-        cfg.eval_set_approved = true;
-        cfg
+        crate::self_improve::SelfImproveConfig {
+            pr_opening: true,
+            eval_set_approved: true,
+            ..Default::default()
+        }
     }
 
     fn check_named<'a>(checks: &'a [GateCheck], name: &str) -> &'a GateCheck {

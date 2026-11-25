@@ -5814,7 +5814,7 @@
             388.2
           ],
           "id": 388.3,
-          "status": "in_progress",
+          "status": "done",
           "title": "Implement the fmt fix (whole-tree format OR amended workflow step); run cargo fmt --check + cargo check"
         },
         {
@@ -5822,7 +5822,7 @@
             388.3
           ],
           "id": 388.5,
-          "status": "pending",
+          "status": "in_progress",
           "title": "Clippy mechanical pass: cargo clippy --fix --all-targets for machine-applicable lints (~120: collapsible_if, manual_*, useless_*, needless_*); re-run fmt check after"
         },
         {

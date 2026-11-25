@@ -51,13 +51,13 @@ pub(crate) fn append_log_line(path: &PathBuf, line: &str) {
             }
         }
     }
-    if let Some(f) = handles.get_mut(path) {
-        if let Err(e) = f.write_all(line.as_bytes()) {
-            error!("Failed to write to log file {:?}: {}", path, e);
-            // Stale handle (e.g. the file was replaced): drop it so the
-            // next call reopens.
-            handles.remove(path);
-        }
+    if let Some(f) = handles.get_mut(path)
+        && let Err(e) = f.write_all(line.as_bytes())
+    {
+        error!("Failed to write to log file {:?}: {}", path, e);
+        // Stale handle (e.g. the file was replaced): drop it so the
+        // next call reopens.
+        handles.remove(path);
     }
 }
 
@@ -340,7 +340,7 @@ pub fn in_nightly_window() -> bool {
 pub fn in_nightly_window_at<Tz: chrono::TimeZone>(dt: &chrono::DateTime<Tz>) -> bool {
     use chrono::Timelike;
     let h = dt.hour();
-    h >= 1 && h < 7
+    (1..7).contains(&h)
 }
 
 #[cfg(test)]

@@ -67,6 +67,12 @@ impl OllamaRouter {
     }
 }
 
+impl Default for OllamaRouter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ── tunables ──────────────────────────────────────────────────────────────────
 
 /// Seconds to wait for the TCP connection to be established.
@@ -181,12 +187,11 @@ fn probe_cache()
 /// Health + model list for `base_url`, served from a 60s TTL cache.
 /// One `/api/tags` round trip populates both — no separate health check needed.
 async fn probe_ollama(base_url: &str) -> OllamaProbe {
-    if let Ok(cache) = probe_cache().lock() {
-        if let Some((probe, at)) = cache.get(base_url) {
-            if at.elapsed() < PROBE_TTL {
-                return probe.clone();
-            }
-        }
+    if let Ok(cache) = probe_cache().lock()
+        && let Some((probe, at)) = cache.get(base_url)
+        && at.elapsed() < PROBE_TTL
+    {
+        return probe.clone();
     }
     let probe = probe_ollama_fresh(base_url).await;
     if let Ok(mut cache) = probe_cache().lock() {
@@ -233,10 +238,7 @@ async fn probe_ollama_fresh(base_url: &str) -> OllamaProbe {
 /// `Unknown` counts as usable — the caller may proceed anyway; only a hard
 /// `Unreachable` (refused/timeout/non-2xx) counts as down.
 pub async fn ollama_reachable(base_url: &str) -> bool {
-    match probe_ollama(base_url).await {
-        OllamaProbe::Unreachable => false,
-        _ => true,
-    }
+    !matches!(probe_ollama(base_url).await, OllamaProbe::Unreachable)
 }
 
 /// Drop the cached probe for `base_url` so the next turn re-validates.
@@ -547,7 +549,7 @@ pub async fn handle_ollama_message(
             // REMOVED: direct publish to web_interface to avoid duplicate replies.
             // The CPU forwarder will handle turning llm_response into llm_output.
 
-            return Some(response);
+            Some(response)
         }
 
         Err(e) => {
@@ -712,12 +714,12 @@ async fn read_streaming_response(
     }
     // Trailing line without a newline terminator.
     if !buf.trim().is_empty() {
-        if let Some((token, _)) = parse_stream_line(&buf) {
-            if !token.is_empty() {
-                content.push_str(&token);
-                if let Some(cb) = on_token.as_ref() {
-                    cb(token.clone());
-                }
+        if let Some((token, _)) = parse_stream_line(&buf)
+            && !token.is_empty()
+        {
+            content.push_str(&token);
+            if let Some(cb) = on_token.as_ref() {
+                cb(token.clone());
             }
         }
         // Task 334: same as the main loop — a tool call in the trailing
@@ -1332,6 +1334,9 @@ mod tests {
     // ── cold-load budget (2026-11-11) ─────────────────────────────────────
 
     #[test]
+    // Deliberate guard on the timeout const: the assert is statically
+    // true today, but it must fail loudly if someone lowers the budget.
+    #[allow(clippy::assertions_on_constants)]
     fn test_request_timeout_covers_cold_load() {
         // gpt-oss-20b measured 53.6 s just to load on the .149 box
         // (62.5 s total for a two-word reply), and a real turn adds prompt

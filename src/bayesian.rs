@@ -96,7 +96,7 @@ impl NaiveBayesMultinomial {
                 *self
                     .class_word_counts
                     .entry(label.clone())
-                    .or_insert_with(HashMap::new)
+                    .or_default()
                     .entry(word.clone())
                     .or_insert(0) += 1;
             }

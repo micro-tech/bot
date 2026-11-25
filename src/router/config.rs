@@ -96,7 +96,7 @@ impl ConfigManager {
 
     fn load_from_file(path: &Path) -> Option<RouterConfig> {
         let content = std::fs::read_to_string(path).ok()?;
-        if path.extension().map_or(false, |e| e == "toml") {
+        if path.extension().is_some_and(|e| e == "toml") {
             toml::from_str(&content).ok()
         } else {
             serde_json::from_str(&content).ok()
@@ -112,15 +112,15 @@ impl ConfigManager {
             let watch_path_for_watch = watch_path.clone();
             let mut watcher: RecommendedWatcher =
                 notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-                    if let Ok(event) = res {
-                        if matches!(event.kind, notify::EventKind::Modify(_)) {
-                            if let Some(new_cfg) = Self::load_from_file(&watch_path) {
-                                let mut guard = config_arc.blocking_write();
-                                *guard = new_cfg;
-                                info!("Router config hot-reloaded from {:?}", watch_path);
-                            } else {
-                                warn!("Failed to reload config from {:?}", watch_path);
-                            }
+                    if let Ok(event) = res
+                        && matches!(event.kind, notify::EventKind::Modify(_))
+                    {
+                        if let Some(new_cfg) = Self::load_from_file(&watch_path) {
+                            let mut guard = config_arc.blocking_write();
+                            *guard = new_cfg;
+                            info!("Router config hot-reloaded from {:?}", watch_path);
+                        } else {
+                            warn!("Failed to reload config from {:?}", watch_path);
                         }
                     }
                 })
@@ -191,7 +191,7 @@ impl Default for RouterConfig {
     }
 }
 
-/// === Task 145 Enhancements ===
+// === Task 145 Enhancements ===
 
 /// Validate a RouterConfig and return detailed errors if invalid.
 pub fn validate_config(cfg: &RouterConfig) -> Result<(), Vec<String>> {
@@ -249,20 +249,20 @@ pub fn validate_config(cfg: &RouterConfig) -> Result<(), Vec<String>> {
 
 /// Apply environment variable overrides (LLM_ROUTER_*)
 pub fn apply_env_overrides(cfg: &mut RouterConfig) {
-    if let Ok(val) = env::var("LLM_ROUTER_COMPLEXITY_GLOBAL_THRESHOLD") {
-        if let Ok(v) = val.parse::<f32>() {
-            cfg.complexity.global_threshold = v;
-        }
+    if let Ok(val) = env::var("LLM_ROUTER_COMPLEXITY_GLOBAL_THRESHOLD")
+        && let Ok(v) = val.parse::<f32>()
+    {
+        cfg.complexity.global_threshold = v;
     }
-    if let Ok(val) = env::var("LLM_ROUTER_LOAD_GPU_MAX") {
-        if let Ok(v) = val.parse::<f32>() {
-            cfg.load_thresholds.gpu_max = v;
-        }
+    if let Ok(val) = env::var("LLM_ROUTER_LOAD_GPU_MAX")
+        && let Ok(v) = val.parse::<f32>()
+    {
+        cfg.load_thresholds.gpu_max = v;
     }
-    if let Ok(val) = env::var("LLM_ROUTER_LOAD_VRAM_MAX") {
-        if let Ok(v) = val.parse::<f32>() {
-            cfg.load_thresholds.vram_max = v;
-        }
+    if let Ok(val) = env::var("LLM_ROUTER_LOAD_VRAM_MAX")
+        && let Ok(v) = val.parse::<f32>()
+    {
+        cfg.load_thresholds.vram_max = v;
     }
     if let Ok(val) = env::var("LLM_ROUTER_HOT_RELOAD") {
         cfg.hot_reload = val.to_lowercase() == "true";

@@ -25,3 +25,9 @@ impl WorkflowRegistry {
         self.store.keys().cloned().collect()
     }
 }
+
+impl Default for WorkflowRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}

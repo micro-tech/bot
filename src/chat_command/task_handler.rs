@@ -181,10 +181,10 @@ pub fn role_file_content(role: &str, tools: &[String]) -> String {
 /// write when the content is already identical. Returns whether it
 /// wrote. Errors are fatal to the submit (fail closed).
 pub fn ensure_role_file(path: &Path, content: &str) -> Result<bool, String> {
-    if let Ok(existing) = std::fs::read_to_string(path) {
-        if existing == content {
-            return Ok(false);
-        }
+    if let Ok(existing) = std::fs::read_to_string(path)
+        && existing == content
+    {
+        return Ok(false);
     }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("could not create role dir: {e}"))?;
@@ -424,12 +424,12 @@ pub fn merge_restored(state: &mut HandlerState, file: &QueueFile) -> (usize, usi
     for backend in backends {
         let mut seen: std::collections::HashSet<i64> = std::collections::HashSet::new();
         let mut q: VecDeque<QueuedTask> = VecDeque::new();
-        if let Some(rt) = file.state.running.get(&backend) {
-            if seen.insert(rt.hub_id) {
-                q.push_back(rt.clone());
-                demoted += 1;
-                restored += 1;
-            }
+        if let Some(rt) = file.state.running.get(&backend)
+            && seen.insert(rt.hub_id)
+        {
+            q.push_back(rt.clone());
+            demoted += 1;
+            restored += 1;
         }
         if let Some(queued) = file.state.queues.get(&backend) {
             for t in queued {
@@ -454,10 +454,7 @@ pub fn merge_restored(state: &mut HandlerState, file: &QueueFile) -> (usize, usi
 pub fn save_queue(runtime_dir: &Path) -> std::io::Result<()> {
     match handler_state().lock() {
         Ok(state) => save_queue_to(runtime_dir, &state),
-        Err(_) => Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "handler state poisoned",
-        )),
+        Err(_) => Err(std::io::Error::other("handler state poisoned")),
     }
 }
 
@@ -483,11 +480,11 @@ pub fn pop_next_to_start(state: &mut HandlerState) -> Vec<QueuedTask> {
         if state.running.contains_key(&backend) {
             continue;
         }
-        if let Some(q) = state.queues.get_mut(&backend) {
-            if let Some(task) = q.pop_front() {
-                state.running.insert(backend, task.clone());
-                started.push(task);
-            }
+        if let Some(q) = state.queues.get_mut(&backend)
+            && let Some(task) = q.pop_front()
+        {
+            state.running.insert(backend, task.clone());
+            started.push(task);
         }
     }
     started
@@ -525,10 +522,10 @@ pub fn resume_queued(tools: &ResolvedChatTools, cfg: &ChatCommandConfig, runtime
                 task.backend.display()
             ),
         );
-        if !try_spawn(tools, &cfg.room, cfg.chunk_bytes, &task, runtime_dir) {
-            if let Ok(mut pending) = pending_spawns().lock() {
-                pending.push(task);
-            }
+        if !try_spawn(tools, &cfg.room, cfg.chunk_bytes, &task, runtime_dir)
+            && let Ok(mut pending) = pending_spawns().lock()
+        {
+            pending.push(task);
         }
     }
 }
@@ -867,10 +864,10 @@ fn advance_queue(
         chunk_bytes,
         &format!("task #{} started on {}", next.hub_id, backend.display()),
     );
-    if !try_spawn(tools, room, chunk_bytes, &next, runtime_dir) {
-        if let Ok(mut pending) = pending_spawns().lock() {
-            pending.push(next);
-        }
+    if !try_spawn(tools, room, chunk_bytes, &next, runtime_dir)
+        && let Ok(mut pending) = pending_spawns().lock()
+    {
+        pending.push(next);
     }
 }
 
@@ -1292,7 +1289,7 @@ mod tests {
             back.running.get(&LlmBackend::Desktop).map(|t| t.hub_id),
             Some(3)
         );
-        assert!(back.running.get(&LlmBackend::Gemini).is_none());
+        assert!(!back.running.contains_key(&LlmBackend::Gemini));
         let server: Vec<i64> = back.queues[&LlmBackend::Server]
             .iter()
             .map(|t| t.hub_id)

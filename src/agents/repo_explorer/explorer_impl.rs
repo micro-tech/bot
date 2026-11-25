@@ -125,7 +125,7 @@ impl LocalRepoExplorer {
             .collect();
 
         let results = join_all(futures).await;
-        results.into_iter().filter_map(|r| r).collect()
+        results.into_iter().flatten().collect()
     }
 
     /// Core exploration with support for parallel tool calls.
@@ -152,26 +152,26 @@ impl LocalRepoExplorer {
 
             // Check for explicit done
             if decision_text.contains("\"action\":\"done\"") {
-                if let Ok(parsed) = serde_json::from_str::<Value>(&decision_text) {
-                    if let Some(ev_arr) = parsed.get("evidence").and_then(|e| e.as_array()) {
-                        for item in ev_arr {
-                            if let (Some(path), Some(summary)) = (
-                                item.get("path").and_then(|p| p.as_str()),
-                                item.get("summary").and_then(|s| s.as_str()),
-                            ) {
-                                evidence_items.push(RepoEvidenceItem {
-                                    path: path.to_string(),
-                                    line_start: item
-                                        .get("line_start")
-                                        .and_then(|v| v.as_u64())
-                                        .map(|v| v as usize),
-                                    line_end: item
-                                        .get("line_end")
-                                        .and_then(|v| v.as_u64())
-                                        .map(|v| v as usize),
-                                    summary: summary.to_string(),
-                                });
-                            }
+                if let Ok(parsed) = serde_json::from_str::<Value>(&decision_text)
+                    && let Some(ev_arr) = parsed.get("evidence").and_then(|e| e.as_array())
+                {
+                    for item in ev_arr {
+                        if let (Some(path), Some(summary)) = (
+                            item.get("path").and_then(|p| p.as_str()),
+                            item.get("summary").and_then(|s| s.as_str()),
+                        ) {
+                            evidence_items.push(RepoEvidenceItem {
+                                path: path.to_string(),
+                                line_start: item
+                                    .get("line_start")
+                                    .and_then(|v| v.as_u64())
+                                    .map(|v| v as usize),
+                                line_end: item
+                                    .get("line_end")
+                                    .and_then(|v| v.as_u64())
+                                    .map(|v| v as usize),
+                                summary: summary.to_string(),
+                            });
                         }
                     }
                 }
@@ -186,10 +186,10 @@ impl LocalRepoExplorer {
                 if let Some(arr) = val.as_array() {
                     // Parallel execution path (159.4)
                     new_items = self.execute_parallel(arr).await;
-                } else if val.is_object() {
-                    if let Some(item) = self.execute_single_tool(&val).await {
-                        new_items.push(item);
-                    }
+                } else if val.is_object()
+                    && let Some(item) = self.execute_single_tool(&val).await
+                {
+                    new_items.push(item);
                 }
             }
 

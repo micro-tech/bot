@@ -235,10 +235,9 @@ pub fn trace_index_from_ledger(
             .support_stats
             .get("unhandled_count")
             .and_then(|v| v.as_u64())
+            && unhandled > 0
         {
-            if unhandled > 0 {
-                metric_keys.push("support:unhandled".to_string());
-            }
+            metric_keys.push("support:unhandled".to_string());
         }
     }
     let known_test_names = prior
@@ -514,8 +513,10 @@ mod tests {
         // One ledger cycle with a genuine error signal, so the metric
         // key "errors:logs/error_log.md" is known to intake.
         let cfg = crate::self_improve::SelfImproveConfig::default();
-        let mut inputs = CycleInputs::default();
-        inputs.error_total = 3;
+        let mut inputs = CycleInputs {
+            error_total: 3,
+            ..Default::default()
+        };
         inputs.error_by_file.insert(
             "logs/error_log.md".to_string(),
             ErrorFileCounts {

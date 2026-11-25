@@ -42,18 +42,18 @@ impl OverrideStore {
     /// Resolve the effective override for a user (highest tier wins)
     pub fn resolve(&self, user_id: &str) -> Option<LLMBackend> {
         // Check one-shot first (highest priority)
-        if let Some(used) = self.one_shot_used.get(user_id) {
-            if *used {
-                return None; // already consumed
-            }
+        if let Some(used) = self.one_shot_used.get(user_id)
+            && *used
+        {
+            return None; // already consumed
         }
 
         if let Some(ov) = self.overrides.get(user_id) {
             // Check expiration
-            if let Some(exp) = ov.expires_at {
-                if Utc::now() > exp {
-                    return None;
-                }
+            if let Some(exp) = ov.expires_at
+                && Utc::now() > exp
+            {
+                return None;
             }
             return Some(ov.backend.clone());
         }
@@ -96,6 +96,12 @@ impl OverrideStore {
     pub fn cleanup_expired(&mut self) {
         let now = Utc::now();
         self.overrides
-            .retain(|_, ov| ov.expires_at.map_or(true, |exp| now <= exp));
+            .retain(|_, ov| ov.expires_at.is_none_or(|exp| now <= exp));
+    }
+}
+
+impl Default for OverrideStore {
+    fn default() -> Self {
+        Self::new()
     }
 }

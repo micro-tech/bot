@@ -135,6 +135,12 @@ impl SkillRegistry {
     }
 }
 
+impl Default for SkillRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Implement the SkillInterface so HyEvo can call skills.
 #[async_trait]
 impl SkillInterface for SkillRegistry {

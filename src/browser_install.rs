@@ -363,10 +363,10 @@ impl SystemOps for RealSystemOps {
 
     fn ensure_mozilla_repo(&self) -> Result<bool, String> {
         let sources_path = Path::new("/etc/apt/sources.list.d/mozilla.list");
-        if let Ok(existing) = fs::read_to_string(sources_path) {
-            if mozilla_repo_present(&existing) {
-                return Ok(false);
-            }
+        if let Ok(existing) = fs::read_to_string(sources_path)
+            && mozilla_repo_present(&existing)
+        {
+            return Ok(false);
         }
         // Keyring dir (documented Mozilla procedure).
         fs::create_dir_all("/etc/apt/keyrings")
@@ -540,7 +540,7 @@ mod tests {
             let calls = self.calls.lock().unwrap();
             // Before install: the canned version; after an install call:
             // the post-install version.
-            if calls.iter().any(|c| *c == "install_firefox") {
+            if calls.contains(&"install_firefox") {
                 self.version_after.clone()
             } else {
                 self.version_before.clone()
@@ -551,7 +551,7 @@ mod tests {
             // After an install, the snap is gone (the Mozilla build
             // replaced it).
             let calls = self.calls.lock().unwrap();
-            if calls.iter().any(|c| *c == "install_firefox") {
+            if calls.contains(&"install_firefox") {
                 false
             } else {
                 self.snap
@@ -562,7 +562,7 @@ mod tests {
             // After an install, the binary is the Mozilla APT build, not
             // the snap path.
             let calls = self.calls.lock().unwrap();
-            if calls.iter().any(|c| *c == "install_firefox") {
+            if calls.contains(&"install_firefox") {
                 "/usr/bin/firefox".to_string()
             } else if self.snap {
                 "/snap/bin/firefox".to_string()

@@ -619,10 +619,10 @@ fn static_tool_definitions() -> &'static Vec<Value> {
 /// change) must call [`invalidate_tool_definitions`] afterward.
 pub fn tool_definitions() -> Value {
     // Fast path: clone the cached build.
-    if let Ok(guard) = definitions_cache().read() {
-        if let Some(cached) = guard.as_ref() {
-            return cached.clone();
-        }
+    if let Ok(guard) = definitions_cache().read()
+        && let Some(cached) = guard.as_ref()
+    {
+        return cached.clone();
     }
     // Slow path, single-flight (task 294): hold the write lock across
     // check -> build -> store, so concurrent cache-miss callers serialize
@@ -671,23 +671,23 @@ fn build_tool_definitions() -> Value {
     let mut defs = static_tool_definitions().clone();
 
     // Merge OKF tools (if any are loaded via the global librarian)
-    if let Some(librarian_arc) = crate::okf::get_global_librarian() {
-        if let Ok(guard) = librarian_arc.try_lock() {
-            for (name, tool) in &guard.registry.tools {
-                let mut func = serde_json::json!({
-                    "type": "function",
-                    "function": {
-                        "name": name,
-                        "description": tool.description.clone(),
-                    }
-                });
-
-                if let Some(schema) = &tool.input_schema {
-                    func["function"]["parameters"] = schema.clone();
+    if let Some(librarian_arc) = crate::okf::get_global_librarian()
+        && let Ok(guard) = librarian_arc.try_lock()
+    {
+        for (name, tool) in &guard.registry.tools {
+            let mut func = serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": tool.description.clone(),
                 }
+            });
 
-                defs.push(func);
+            if let Some(schema) = &tool.input_schema {
+                func["function"]["parameters"] = schema.clone();
             }
+
+            defs.push(func);
         }
     }
 
@@ -1046,12 +1046,10 @@ mod tests {
         // - Default build (no feature) still compiles and the tools are usable for local scans
         #[cfg(feature = "ssh")]
         {
-            assert!(true);
         }
         #[cfg(not(feature = "ssh"))]
         {
             // This is the common case on Windows without Perl + full OpenSSL build
-            assert!(true, "Default build path without ssh feature is active");
         }
     }
 

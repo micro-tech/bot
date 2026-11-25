@@ -46,13 +46,13 @@ impl UnixSocketServer {
     pub async fn run(&self) -> anyhow::Result<()> {
         let path = Path::new(&self.config.path);
 
-        if path.exists() {
-            if let Err(e) = fs::remove_file(path) {
-                log_to_file(&format!(
-                    "Failed to remove existing socket {}: {}",
-                    self.config.path, e
-                ));
-            }
+        if path.exists()
+            && let Err(e) = fs::remove_file(path)
+        {
+            log_to_file(&format!(
+                "Failed to remove existing socket {}: {}",
+                self.config.path, e
+            ));
         }
 
         let listener = match UnixListener::bind(path) {

@@ -76,15 +76,15 @@ impl OkfFetcher {
             let token = token_owned.clone();
             async move {
                 let mut req = client.get(&url);
-                if let Some(etag) = etag {
-                    if !etag.is_empty() {
-                        req = req.header("If-None-Match", etag);
-                    }
+                if let Some(etag) = etag
+                    && !etag.is_empty()
+                {
+                    req = req.header("If-None-Match", etag);
                 }
-                if let Some(token) = token {
-                    if !token.is_empty() {
-                        req = req.bearer_auth(token);
-                    }
+                if let Some(token) = token
+                    && !token.is_empty()
+                {
+                    req = req.bearer_auth(token);
                 }
                 match req.send().await {
                     Err(e) => {

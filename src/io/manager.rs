@@ -152,7 +152,6 @@ mod tests {
         let bus = create_mock_bus();
         let io_manager = IOManager::new(bus);
         io_manager.publish_to_bus("ollama", "test", "hello");
-        assert!(true);
     }
 
     #[test]
@@ -164,6 +163,5 @@ mod tests {
             timestamp: 0,
         };
         IOManager::handle_ollama_message(message);
-        assert!(true);
     }
 }

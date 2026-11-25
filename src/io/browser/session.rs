@@ -16,8 +16,8 @@
 //!
 //! Policy lives in the session, not the driver, so it applies regardless
 //! of which driver is behind it:
-//! - Navigation is confined to `[browser] allowed_hosts` (default Google
-//!   + localhost). Anything else is refused with a message telling the
+//! - Navigation is confined to `[browser] allowed_hosts` (default: Google
+//!   and localhost). Anything else is refused with a message telling the
 //!   LLM to ask the user.
 //! - The tool never returns password field contents: `get_text` strips
 //!   `input[type=password]` before extracting text, and `evaluate`
@@ -412,10 +412,10 @@ impl BrowserDriver for RealDriver {
         // Single-session rule: always session.end, then quit the driver.
         // The seam is taken out so a second shutdown is a no-op for BiDi.
         let mut guard = self.seam.lock().await;
-        if let Some(mut seam) = guard.take() {
-            if let Err(e) = seam.end().await {
-                warn!("browser: BiDi session end failed during shutdown: {e}");
-            }
+        if let Some(mut seam) = guard.take()
+            && let Err(e) = seam.end().await
+        {
+            warn!("browser: BiDi session end failed during shutdown: {e}");
         }
         drop(guard);
         // WebDriver is Clone (Arc wrapper); quitting the clone ends the
@@ -935,6 +935,7 @@ impl BrowserSession {
     /// 2. If the search already works, the token is valid: report that.
     /// 3. Otherwise navigate the browser to the consent URL and report
     ///    the next steps for John (sign in, 2FA via the 355 affordance).
+    ///
     /// The redirect lands on R630 localhost where google-mcp listens, so
     /// no SSH tunnel is needed at any step.
     pub async fn gmail_oauth(&mut self) -> Result<String, String> {
@@ -1129,14 +1130,14 @@ fn token_expiry_note(token: &Value) -> String {
         }
         return format!("{expiry} (unparsed)");
     }
-    if let Some(secs) = token.get("expires_at").and_then(|v| v.as_i64()) {
-        if let Some(dt) = chrono::DateTime::from_timestamp(secs, 0) {
-            let now = chrono::Utc::now();
-            if dt > now {
-                return format!("{} (valid)", dt.to_rfc3339());
-            }
-            return format!("{} (EXPIRED — run the gmail_oauth flow)", dt.to_rfc3339());
+    if let Some(secs) = token.get("expires_at").and_then(|v| v.as_i64())
+        && let Some(dt) = chrono::DateTime::from_timestamp(secs, 0)
+    {
+        let now = chrono::Utc::now();
+        if dt > now {
+            return format!("{} (valid)", dt.to_rfc3339());
         }
+        return format!("{} (EXPIRED — run the gmail_oauth flow)", dt.to_rfc3339());
     }
     "unknown (no expiry field parsed — the live search below is the real proof)".to_string()
 }

@@ -136,13 +136,13 @@ impl OkfValidator {
             if matches!(
                 k.content_type.as_str(),
                 "mermaid" | "diagram" | "project-map"
-            ) {
-                if k.content.as_ref().map_or(true, |c| c.trim().is_empty()) && k.url.is_none() {
-                    result.add_warning(&format!(
+            ) && k.content.as_ref().is_none_or(|c| c.trim().is_empty())
+                && k.url.is_none()
+            {
+                result.add_warning(&format!(
                         "Diagram knowledge '{}' has no inline content and no url. It should contain Mermaid source or a link.",
                         k.id
                     ));
-                }
             }
         }
 
@@ -173,7 +173,7 @@ impl OkfValidator {
         if registry
             .bundle_id
             .as_ref()
-            .map_or(true, |s| s.trim().is_empty())
+            .is_none_or(|s| s.trim().is_empty())
         {
             result.add_warning("Registry has no bundle_id");
         }
@@ -181,7 +181,7 @@ impl OkfValidator {
         if registry
             .bundle_version
             .as_ref()
-            .map_or(true, |s| s.trim().is_empty())
+            .is_none_or(|s| s.trim().is_empty())
         {
             result.add_warning("Registry has no bundle_version");
         }

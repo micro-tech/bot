@@ -56,6 +56,12 @@ impl HeuristicRegistry {
     }
 }
 
+impl Default for HeuristicRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ============== Core Heuristic Implementations ==============
 
 pub struct TokenCountHeuristic;

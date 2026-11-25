@@ -224,7 +224,8 @@ fn audit(line: &str) {
 ///    server '<server>'");
 /// 3. tool on the server's read-tool allowlist (else "tool '<tool>'
 ///    is not a read tool").
-/// Then the call runs on a worker thread within the `time` budget.
+///
+ /// Then the call runs on a worker thread within the `time` budget.
 ///
 /// `pub(super)` — only `mod.rs` (`dispatch_structured`) calls it.
 /// That also keeps the return type (`super::Slot`, private to the

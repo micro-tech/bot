@@ -130,7 +130,7 @@ pub fn stage_draft(
     };
     save_draft(&dir, &draft)?;
     // Handled = a draft now exists for John's review (task 256 definition).
-    super::mark_handled(&[msg.id.clone()]);
+    super::mark_handled(std::slice::from_ref(&msg.id));
     Ok(draft)
 }
 

@@ -1,7 +1,7 @@
 // IO Module for Helix
 // This mod.rs file declares the sub-modules for the IO component.
 
-pub mod io;
+pub mod manager;
 #[cfg(unix)]
 pub mod unix_socket;
 

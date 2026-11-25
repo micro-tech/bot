@@ -252,7 +252,7 @@ fn prune_locked(map: &mut HashMap<String, SubagentRecord>) {
     if finished.len() <= MAX_FINISHED_KEPT {
         return;
     }
-    finished.sort_by(|a, b| b.0.cmp(&a.0)); // newest first
+    finished.sort_by_key(|a| std::cmp::Reverse(a.0)); // newest first
     for (_, id) in finished.into_iter().skip(MAX_FINISHED_KEPT) {
         map.remove(&id);
     }

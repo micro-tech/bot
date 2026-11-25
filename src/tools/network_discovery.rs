@@ -134,12 +134,11 @@ pub fn parse_ip_route_default(content: &str) -> Option<String> {
         if cols.first() != Some(&"default") {
             continue;
         }
-        if let Some(pos) = cols.iter().position(|c| *c == "via") {
-            if let Some(ip) = cols.get(pos + 1) {
-                if !ip.is_empty() {
-                    return Some(ip.to_string());
-                }
-            }
+        if let Some(pos) = cols.iter().position(|c| *c == "via")
+            && let Some(ip) = cols.get(pos + 1)
+            && !ip.is_empty()
+        {
+            return Some(ip.to_string());
         }
     }
     None
@@ -336,10 +335,10 @@ fn netbios_name(ip: &str) -> Option<String> {
         if !line.contains("<00>") || line.contains("GROUP") {
             continue;
         }
-        if let Some(name) = line.split_whitespace().next() {
-            if !name.is_empty() {
-                return Some(name.to_string());
-            }
+        if let Some(name) = line.split_whitespace().next()
+            && !name.is_empty()
+        {
+            return Some(name.to_string());
         }
     }
     None
@@ -438,10 +437,10 @@ pub fn aggregate_hosts(
     }
     let gw_base = gateway.and_then(subnet_base);
     for c in KNOWN_CONFIG_HOSTS {
-        if let Some(base) = &gw_base {
-            if subnet_base(c.ip).as_deref() != Some(base.as_str()) {
-                continue;
-            }
+        if let Some(base) = &gw_base
+            && subnet_base(c.ip).as_deref() != Some(base.as_str())
+        {
+            continue;
         }
         let h = by_ip
             .entry(c.ip.to_string())

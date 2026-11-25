@@ -310,7 +310,7 @@ fn process_message(
     let rest = match parse_trigger(&msg.body) {
         Trigger::Ignored => return Slot::Ignored,
         Trigger::Empty => {
-            send_text(tools, &cfg, "empty command");
+            send_text(tools, cfg, "empty command");
             return Slot::Command;
         }
         Trigger::Command(rest) => rest,
@@ -326,15 +326,15 @@ fn process_message(
             // This runs AFTER the sender gate and JSON parse, BEFORE
             // any dispatch. (Plain `!` commands never reach here —
             // they have no `to` and are always broadcast.)
-            if let Some(to) = s.addressee() {
-                if to != cfg.agent_name {
-                    log::info!(
-                        "chat-command: message addressed to '{to}' ignored (this agent is '{}', room={})",
-                        cfg.agent_name,
-                        cfg.room
-                    );
-                    return Slot::Ignored;
-                }
+            if let Some(to) = s.addressee()
+                && to != cfg.agent_name
+            {
+                log::info!(
+                    "chat-command: message addressed to '{to}' ignored (this agent is '{}', room={})",
+                    cfg.agent_name,
+                    cfg.room
+                );
+                return Slot::Ignored;
             }
             return dispatch_structured(tools, cfg, runtime_dir, ssh_bin, msg, s);
         }

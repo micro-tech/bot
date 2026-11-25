@@ -130,9 +130,7 @@ impl OkfRegistry {
 
     /// Write the registry to a file (e.g. okf_index.json).
     pub fn write_to_file(&self, path: &str) -> std::io::Result<()> {
-        let json = self
-            .to_json_pretty()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json = self.to_json_pretty().map_err(std::io::Error::other)?;
         fs::write(path, json)
     }
 

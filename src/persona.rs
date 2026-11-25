@@ -133,8 +133,8 @@ fn parse_tools_key(fm_lines: &[&str]) -> Option<Vec<String>> {
     let mut iter = fm_lines.iter().peekable();
     while let Some(line) = iter.next() {
         let t = line.trim();
-        if t.starts_with("tools:") {
-            let rest = t["tools:".len()..].trim();
+        if let Some(rest) = t.strip_prefix("tools:") {
+            let rest = rest.trim();
             if rest.starts_with('[') {
                 // Inline form: tools: [web_search, gmail_read]
                 let inner = rest.trim_start_matches('[');
@@ -152,10 +152,9 @@ fn parse_tools_key(fm_lines: &[&str]) -> Option<Vec<String>> {
                 let mut names = Vec::new();
                 while let Some(next) = iter.peek() {
                     let nt = next.trim();
-                    if nt.starts_with("- ") {
+                    if let Some(item) = nt.strip_prefix("- ") {
                         names.push(
-                            nt[2..]
-                                .trim()
+                            item.trim()
                                 .trim_matches('"')
                                 .trim_matches('\'')
                                 .to_string(),
@@ -357,13 +356,13 @@ pub fn note_revision(path: &Path) -> Result<(), String> {
     }
     let mut times = revision_times().lock().unwrap_or_else(|e| e.into_inner());
     let now = Instant::now();
-    if let Some(&last) = times.get(path) {
-        if now.duration_since(last) < Duration::from_secs(3600) {
-            return Err(format!(
-                "persona revision rate limit: {} was already revised within the last hour",
-                path.display()
-            ));
-        }
+    if let Some(&last) = times.get(path)
+        && now.duration_since(last) < Duration::from_secs(3600)
+    {
+        return Err(format!(
+            "persona revision rate limit: {} was already revised within the last hour",
+            path.display()
+        ));
     }
     times.insert(path.to_path_buf(), now);
     Ok(())
@@ -448,13 +447,13 @@ pub fn list_pending() -> Vec<PathBuf> {
     for candidate in [dir.join("agent.md.pending"), dir.join("agents")] {
         if candidate.is_file() {
             out.push(candidate);
-        } else if candidate.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&candidate) {
-                for e in entries.flatten() {
-                    let p = e.path();
-                    if p.extension().and_then(|x| x.to_str()) == Some("pending") {
-                        out.push(p);
-                    }
+        } else if candidate.is_dir()
+            && let Ok(entries) = std::fs::read_dir(&candidate)
+        {
+            for e in entries.flatten() {
+                let p = e.path();
+                if p.extension().and_then(|x| x.to_str()) == Some("pending") {
+                    out.push(p);
                 }
             }
         }

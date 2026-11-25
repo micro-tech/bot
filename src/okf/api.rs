@@ -411,14 +411,14 @@ pub async fn okf_push_concept(
 
     let mut librarian = state.lock().await;
 
-    if let Some(loaded_id) = &librarian.registry.bundle_id {
-        if *loaded_id != bundle {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": format!("unknown bundle '{}'", bundle)})),
-            )
-                .into_response();
-        }
+    if let Some(loaded_id) = &librarian.registry.bundle_id
+        && *loaded_id != bundle
+    {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": format!("unknown bundle '{}'", bundle)})),
+        )
+            .into_response();
     }
 
     let mut metadata = std::collections::HashMap::new();

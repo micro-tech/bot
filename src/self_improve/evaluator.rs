@@ -255,16 +255,16 @@ fn run_cargo_parsed(mut cmd: std::process::Command, label: &str) -> Vec<TestResu
     let mut results = Vec::new();
     for line in stdout.lines() {
         // `test path::name ... ok` / `... FAILED` / `... ignored`.
-        if let Some(rest) = line.strip_prefix("test ") {
-            if let Some((name, verdict)) = rest.split_once(" ... ") {
-                let verdict = verdict.trim();
-                if matches!(verdict, "ok" | "FAILED" | "ignored") {
-                    results.push(TestResult {
-                        name: name.to_string(),
-                        passed: verdict == "ok" || verdict == "ignored",
-                        detail: verdict.to_string(),
-                    });
-                }
+        if let Some(rest) = line.strip_prefix("test ")
+            && let Some((name, verdict)) = rest.split_once(" ... ")
+        {
+            let verdict = verdict.trim();
+            if matches!(verdict, "ok" | "FAILED" | "ignored") {
+                results.push(TestResult {
+                    name: name.to_string(),
+                    passed: verdict == "ok" || verdict == "ignored",
+                    detail: verdict.to_string(),
+                });
             }
         }
     }
@@ -340,7 +340,7 @@ pub fn slugify_signature(signature: &str) -> String {
 /// separator here is fail-closed: a file literally named `..\x`
 /// is rejected, and no legitimate proposal names one.
 pub(crate) fn path_segments(path: &str) -> impl Iterator<Item = &str> {
-    path.split(|c| c == '/' || c == '\\')
+    path.split(['/', '\\'])
 }
 
 /// Validate a diff path: relative, no `..` segments, no absolute path,
@@ -427,11 +427,9 @@ pub fn sweep_stale_worktrees(root: &Path, now_ms: u64, max_age_ms: u64) -> Vec<S
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
-        if now_ms.saturating_sub(mtime_ms) > max_age_ms {
-            if std::fs::remove_dir_all(&path).is_ok() {
-                eprintln!("self_improve: swept stale worktree {}", path.display());
-                removed.push(path.display().to_string());
-            }
+        if now_ms.saturating_sub(mtime_ms) > max_age_ms && std::fs::remove_dir_all(&path).is_ok() {
+            eprintln!("self_improve: swept stale worktree {}", path.display());
+            removed.push(path.display().to_string());
         }
     }
     removed
@@ -493,10 +491,8 @@ pub fn evaluate_proposal(
         if let Err(e) = git.remove_worktree(name) {
             eprintln!("self_improve: worktree cleanup failed for {name}: {e}");
         }
-        if !keep_branch {
-            if let Err(e) = git.delete_branch(branch) {
-                eprintln!("self_improve: branch cleanup failed for {branch}: {e}");
-            }
+        if !keep_branch && let Err(e) = git.delete_branch(branch) {
+            eprintln!("self_improve: branch cleanup failed for {branch}: {e}");
         }
     };
     // Apply: read old lines first (for the stat), then write.

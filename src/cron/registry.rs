@@ -160,13 +160,12 @@ pub fn next_run_after(sched: Schedule, from_ms: u64) -> u64 {
             let today = from
                 .date_naive()
                 .and_hms_opt(hour, min, 0)
-                .map(|naive| {
+                .and_then(|naive| {
                     Local
                         .from_local_datetime(&naive)
                         .single()
                         .map(|dt| dt.timestamp_millis() as u64)
-                })
-                .flatten();
+                });
             match today {
                 Some(t) if t > from_ms => t,
                 _ => {
@@ -555,22 +554,19 @@ impl RoutineRegistry {
         let before = self.routines.len();
         self.routines.retain(|r| r.id != id);
         let removed = self.routines.len() != before;
-        if removed {
-            if let Err(e) = self.save() {
-                eprintln!("cron: failed to persist routine delete: {}", e);
-            }
+        if removed && let Err(e) = self.save() {
+            eprintln!("cron: failed to persist routine delete: {}", e);
         }
         removed
     }
 
     pub fn save(&self) -> std::io::Result<()> {
-        if let Some(parent) = self.path.parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = self.path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent)?;
         }
-        let data = serde_json::to_string_pretty(&self.routines)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let data = serde_json::to_string_pretty(&self.routines).map_err(std::io::Error::other)?;
         std::fs::write(&self.path, data)
     }
 
@@ -592,10 +588,10 @@ impl RoutineRegistry {
                 .map(|sched| next_run_after(sched, now_ms));
             fired.push(r.clone());
         }
-        if !fired.is_empty() {
-            if let Err(e) = self.save() {
-                eprintln!("cron: failed to persist fired routines: {}", e);
-            }
+        if !fired.is_empty()
+            && let Err(e) = self.save()
+        {
+            eprintln!("cron: failed to persist fired routines: {}", e);
         }
         fired
     }

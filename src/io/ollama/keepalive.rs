@@ -413,6 +413,9 @@ mod tests {
     // ── cold-load budget (2026-11-11) ─────────────────────────────────────
 
     #[test]
+    // Deliberate guard on the timeout const: the assert is statically
+    // true today, but it must fail loudly if someone lowers the budget.
+    #[allow(clippy::assertions_on_constants)]
     fn test_preload_timeout_covers_cold_load() {
         // gpt-oss-20b measured 53.6 s just to load on the .149 box. The
         // old 30 s budget meant the preload always timed out on the big

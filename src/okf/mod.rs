@@ -81,12 +81,11 @@ pub fn list_okf_tool_names() -> Vec<String> {
 
 /// Try to get a description for an OKF tool.
 pub fn get_okf_tool_description(name: &str) -> Option<String> {
-    if let Some(librarian) = get_global_librarian() {
-        if let Ok(guard) = librarian.try_lock() {
-            if let Some(tool) = guard.registry.get_tool(name) {
-                return Some(tool.description.clone());
-            }
-        }
+    if let Some(librarian) = get_global_librarian()
+        && let Ok(guard) = librarian.try_lock()
+        && let Some(tool) = guard.registry.get_tool(name)
+    {
+        return Some(tool.description.clone());
     }
     None
 }

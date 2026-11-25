@@ -553,14 +553,14 @@ async fn run_subagent(
     // Task 233: pre-spawn draft — when the role has no persona file and
     // self-authoring is on, the commander drafts one now (lands as .pending,
     // never live). Best-effort: a failed draft must not block the spawn.
-    if !role_hint.trim().is_empty() {
-        if let Err(e) = crate::persona::ensure_persona_file(Some(role_hint)).await {
-            log::debug!(
-                "persona: pre-spawn draft skipped for role '{}': {}",
-                role_hint,
-                e
-            );
-        }
+    if !role_hint.trim().is_empty()
+        && let Err(e) = crate::persona::ensure_persona_file(Some(role_hint)).await
+    {
+        log::debug!(
+            "persona: pre-spawn draft skipped for role '{}': {}",
+            role_hint,
+            e
+        );
     }
     let composed = crate::persona::compose_subagent_prompt(task_id, task, role_hint);
     // Task 233: the role's frontmatter allowlist filters the toolset
@@ -890,7 +890,7 @@ mod tests {
         // GIVEN a global bus with a web_interface subscriber and the test stub armed:
         let bus = std::sync::Arc::new(crate::bus::Bus::new());
         let mut rx = bus.subscribe("web_interface");
-        let _ = crate::bus::set_global_bus(bus.clone());
+        crate::bus::set_global_bus(bus.clone());
         crate::agents::subagent_registry::reset_for_tests();
         // SAFETY: single-threaded test env manipulation; stub only affects this process.
         unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
@@ -916,14 +916,13 @@ mod tests {
         let mut events = Vec::new();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while events.len() < 2 && std::time::Instant::now() < deadline {
-            match tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await {
-                Ok(Some(msg)) => {
-                    let v: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
-                    if v["type"] == "subagent_event" {
-                        events.push(v["event"].as_str().unwrap_or("").to_string());
-                    }
+            if let Ok(Some(msg)) =
+                tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await
+            {
+                let v: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
+                if v["type"] == "subagent_event" {
+                    events.push(v["event"].as_str().unwrap_or("").to_string());
                 }
-                _ => {}
             }
         }
         assert_eq!(

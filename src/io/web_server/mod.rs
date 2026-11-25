@@ -290,10 +290,10 @@ pub async fn start_web_server(
         let _ = librarian.reload_from_index_file();
 
         // Optionally load sample manifest in dev if registry is empty
-        if librarian.registry.tool_count() == 0 {
-            if let Ok(sample) = std::fs::read_to_string("okf_sample_manifest.json") {
-                let _ = librarian.load_manifest_from_json(&sample);
-            }
+        if librarian.registry.tool_count() == 0
+            && let Ok(sample) = std::fs::read_to_string("okf_sample_manifest.json")
+        {
+            let _ = librarian.load_manifest_from_json(&sample);
         }
 
         std::sync::Arc::new(tokio::sync::Mutex::new(librarian))
@@ -526,7 +526,7 @@ pub async fn start_web_server(
 // restores any ***REDACTED*** placeholders the operator left untouched from
 // the on-disk config before validating + writing.
 
-/// Placeholder substituted for secret values in config text sent to clients.
+// Placeholder substituted for secret values in config text sent to clients.
 // REDACTED, is_secret_key and redacted_config_str live in `auth`
 // (task 321 dedupe) and are imported at the top of this file.
 
@@ -587,11 +587,12 @@ fn restore_redacted_text(orig_text: &str, new_text: &str) -> String {
         if let Some((k, v)) = line.trim().split_once('=') {
             let raw_key = k.trim();
             let key = raw_key.trim_matches('"').trim_matches('\'');
-            if v.trim() == format!("\"{}\"", REDACTED) && is_secret_key(key) {
-                if let Some(orig_v) = find_orig_value(orig_text, &cur_section, key) {
-                    let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
-                    restored = Some(format!("{}{} = {}", indent, raw_key, orig_v));
-                }
+            if v.trim() == format!("\"{}\"", REDACTED)
+                && is_secret_key(key)
+                && let Some(orig_v) = find_orig_value(orig_text, &cur_section, key)
+            {
+                let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+                restored = Some(format!("{}{} = {}", indent, raw_key, orig_v));
             }
         }
         out.push(restored.unwrap_or_else(|| line.to_string()));
@@ -2647,8 +2648,7 @@ fn handle_slash_command(cmd: &str) -> String {
                 _ => "Usage: /support [drafts|approve <id>|send <id>|discard <id>]".to_string(),
             }
         }
-        "help" => format!(
-            "Slash commands:\n\
+        "help" => "Slash commands:\n\
              /status              — system health\n\
              /tools               — list all tools\n\
              /notes               — list saved notes\n\
@@ -2668,7 +2668,7 @@ fn handle_slash_command(cmd: &str) -> String {
              /support send <id>   — send an approved draft\n\
              /support discard <id> — discard a draft\n\
              /help                — this message"
-        ),
+            .to_string(),
         other => format!("Unknown command '/{}'  — type /help for a list", other),
     }
 }
@@ -3050,8 +3050,10 @@ mod tests {
         )
         .unwrap();
         // One ledger cycle so latest_ledger is non-null.
-        let mut inputs = crate::self_improve::metrics::CycleInputs::default();
-        inputs.support_stats = serde_json::json!({"mode": "normal_night"});
+        let inputs = crate::self_improve::metrics::CycleInputs {
+            support_stats: serde_json::json!({"mode": "normal_night"}),
+            ..Default::default()
+        };
         let cfg = crate::self_improve::SelfImproveConfig {
             enabled: true,
             ..Default::default()
@@ -4172,11 +4174,9 @@ mod tests {
     /// because read_until skips non-matching types.
     async fn ws_auth_drain(ws: &mut WsAuthStream) {
         use futures_util::StreamExt;
-        loop {
-            match tokio::time::timeout(std::time::Duration::from_millis(300), ws.next()).await {
-                Ok(Some(Ok(_))) => continue,
-                _ => break,
-            }
+        while let Ok(Some(Ok(_))) =
+            tokio::time::timeout(std::time::Duration::from_millis(300), ws.next()).await
+        {
         }
     }
 
@@ -4206,12 +4206,11 @@ mod tests {
                 .expect("WS read timed out")
                 .expect("WS stream ended")
                 .expect("WS read error");
-            if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if val["type"].as_str() == Some(want) {
-                        return val;
-                    }
-                }
+            if let tokio_tungstenite::tungstenite::Message::Text(text) = msg
+                && let Ok(val) = serde_json::from_str::<serde_json::Value>(&text)
+                && val["type"].as_str() == Some(want)
+            {
+                return val;
             }
         }
     }

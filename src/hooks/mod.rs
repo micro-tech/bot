@@ -41,3 +41,9 @@ impl HookRegistry {
         }
     }
 }
+
+impl Default for HookRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}

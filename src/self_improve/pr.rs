@@ -285,8 +285,8 @@ impl PrBackend for QueueBackend {
 /// Deliver a promoted proposal end to end (task 364): gate → push
 /// the preserved eval branch to `origin` → queue the PR payload →
 /// mark `queued`. The push is the ONLY push the loop ever does, and
-/// it happens only after `phase3_gate` passes (promoted + eval green
-/// + clean audit + `eval_set_approved` + target PreRelese +
+/// it happens only after `phase3_gate` passes (promoted, eval green,
+/// clean audit, `eval_set_approved`, target PreRelese,
 /// `pr_opening` true). The branch must exist locally
 /// (`proposal.eval_branch`, recorded by the evaluator on promotion);
 /// a missing/empty branch is an error and nothing is pushed or
@@ -434,10 +434,10 @@ pub fn withdraw_proposal(
     now_ms: u64,
 ) -> Result<(), String> {
     let mut note = format!("withdrawn: {regression_note}");
-    if let Some(n) = pull_number {
-        if let Err(e) = backend.close_pr(n, regression_note) {
-            note.push_str(&format!(" (close failed: {e}; John closes manually)"));
-        }
+    if let Some(n) = pull_number
+        && let Err(e) = backend.close_pr(n, regression_note)
+    {
+        note.push_str(&format!(" (close failed: {e}; John closes manually)"));
     }
     proposal.status = "withdrawn".to_string();
     proposal.notes.push(note);
@@ -522,10 +522,11 @@ mod tests {
     }
 
     fn cfg_open() -> crate::self_improve::SelfImproveConfig {
-        let mut cfg = crate::self_improve::SelfImproveConfig::default();
-        cfg.pr_opening = true;
-        cfg.eval_set_approved = true;
-        cfg
+        crate::self_improve::SelfImproveConfig {
+            pr_opening: true,
+            eval_set_approved: true,
+            ..Default::default()
+        }
     }
 
     fn clean_audit() -> AuditReport {

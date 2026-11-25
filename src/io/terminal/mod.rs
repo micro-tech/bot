@@ -46,10 +46,6 @@ mod tests {
 
         // Since handle_terminal_message doesn't return a value, just verify it doesn't panic
         handle_terminal_message(message.clone(), &mut bus);
-        assert!(
-            true,
-            "handle_terminal_message should execute without panicking"
-        );
 
         // TODO: Add assertions for output formatting or side effects when implemented
     }
@@ -61,7 +57,6 @@ mod tests {
 
         // Verify that starting the terminal doesn't panic
         start_terminal(&mut bus);
-        assert!(true, "start_terminal should execute without panicking");
 
         // TODO: Add assertions for input loop or bus messages when implemented
     }

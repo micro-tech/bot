@@ -49,7 +49,7 @@ impl RuntimeTrace {
         let mut out = String::new();
         out.push_str("=== Runtime Trace ===\n");
 
-        for (_i, step) in self.steps.iter().enumerate() {
+        for step in self.steps.iter() {
             out.push_str(&format!("\n--- Step {} ---\n", step.step_number));
 
             if let Some(po) = &step.planner_output {

@@ -20,7 +20,7 @@ impl BayesianHook {
 
         let mut nb = NaiveBayesMultinomial::new(1.0);
         // Load training data from memory or config
-        nb.fit(&vec![]); // Placeholder - in real use, load from memory
+        nb.fit(&[]); // Placeholder - in real use, load from memory
 
         Self {
             reasoner,

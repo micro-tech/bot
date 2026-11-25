@@ -311,10 +311,10 @@ fn exit_code_for_report(report: &str) -> u32 {
     // Reports from spawn_and_wait carry "[exit: code N]".
     if let Some(idx) = report.find("[exit: code ") {
         let rest = &report[idx + "[exit: code ".len()..];
-        if let Some(end) = rest.find(']') {
-            if let Ok(n) = rest[..end].trim().parse::<i32>() {
-                return n.max(0) as u32;
-            }
+        if let Some(end) = rest.find(']')
+            && let Ok(n) = rest[..end].trim().parse::<i32>()
+        {
+            return n.max(0) as u32;
         }
     }
     1

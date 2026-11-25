@@ -88,10 +88,11 @@ impl NavEvents {
     pub async fn wait_for_load(&self, since: Instant, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
         loop {
-            if let Some(ev) = self.last() {
-                if ev.kind == NavEventKind::Load && ev.at >= since {
-                    return true;
-                }
+            if let Some(ev) = self.last()
+                && ev.kind == NavEventKind::Load
+                && ev.at >= since
+            {
+                return true;
             }
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {

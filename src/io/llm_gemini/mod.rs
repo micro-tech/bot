@@ -15,10 +15,10 @@ use std::time::Duration;
 
 const CONNECT_TIMEOUT_SECS: u64 = 10;
 const REQUEST_TIMEOUT_SECS: u64 = 60;
-/// Retry policy now lives in the shared helper (`crate::io::retry`):
-/// up to 5 attempts, jittered exponential backoff 2 s -> 60 s cap.
-/// (The old per-handler MAX_RETRIES / RETRY_DELAY_MS are gone with the
-/// outer retry loop — see H4, task 373.)
+// Retry policy now lives in the shared helper (`crate::io::retry`):
+// up to 5 attempts, jittered exponential backoff 2 s -> 60 s cap.
+// (The old per-handler MAX_RETRIES / RETRY_DELAY_MS are gone with the
+// outer retry loop — see H4, task 373.)
 
 // ── Gemini API endpoint ───────────────────────────────────────────────────────
 
@@ -141,8 +141,6 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
 
             // REMOVED: direct publish to web_interface to avoid duplicate replies.
             // The CPU forwarder in main.rs will convert llm_response → llm_output.
-
-            return;
         }
         Err(e) => {
             let last_err = e.to_string();
@@ -319,20 +317,19 @@ fn sanitize_gemini_schema(schema: &mut Value) {
     obj.remove("additionalProperties");
     // schemars `Option<T>` pattern: `anyOf: [{...}, {"type": "null"}]`
     // → inner schema + `nullable: true` (the OpenAPI way).
-    if let Some(any_of) = obj.get("anyOf").and_then(|v| v.as_array()).cloned() {
-        if any_of.len() == 2
-            && let Some(null_idx) = any_of
-                .iter()
-                .position(|v| v.get("type").and_then(|t| t.as_str()) == Some("null"))
-        {
-            let mut inner = any_of[1 - null_idx].clone();
-            sanitize_gemini_schema(&mut inner);
-            if let Some(inner_obj) = inner.as_object_mut() {
-                inner_obj.insert("nullable".to_string(), Value::Bool(true));
-            }
-            *schema = inner;
-            return;
+    if let Some(any_of) = obj.get("anyOf").and_then(|v| v.as_array()).cloned()
+        && any_of.len() == 2
+        && let Some(null_idx) = any_of
+            .iter()
+            .position(|v| v.get("type").and_then(|t| t.as_str()) == Some("null"))
+    {
+        let mut inner = any_of[1 - null_idx].clone();
+        sanitize_gemini_schema(&mut inner);
+        if let Some(inner_obj) = inner.as_object_mut() {
+            inner_obj.insert("nullable".to_string(), Value::Bool(true));
         }
+        *schema = inner;
+        return;
     }
     // `"type": ["string", "null"]` → `"type": "string", "nullable": true`.
     // A bare union without null keeps its first entry.
@@ -917,24 +914,25 @@ mod tests {
         // The tool_call bus message is the UI contract (delegation cards).
         let mut saw_spawn = false;
         while let Ok(msg) = rx.try_recv() {
-            if let Ok(v) = serde_json::from_str::<Value>(&msg.data) {
-                if v["type"] == "tool_call" && v["tool"] == "spawn_subagent" {
-                    saw_spawn = true;
-                    assert!(
-                        v["args"]["task"]
-                            .as_str()
-                            .unwrap_or("")
-                            .contains("rust bot"),
-                        "args not forwarded: {}",
-                        v["args"]
-                    );
-                    assert!(
-                        v["result_preview"]
-                            .as_str()
-                            .unwrap_or("")
-                            .contains("subagent-test-stub")
-                    );
-                }
+            if let Ok(v) = serde_json::from_str::<Value>(&msg.data)
+                && v["type"] == "tool_call"
+                && v["tool"] == "spawn_subagent"
+            {
+                saw_spawn = true;
+                assert!(
+                    v["args"]["task"]
+                        .as_str()
+                        .unwrap_or("")
+                        .contains("rust bot"),
+                    "args not forwarded: {}",
+                    v["args"]
+                );
+                assert!(
+                    v["result_preview"]
+                        .as_str()
+                        .unwrap_or("")
+                        .contains("subagent-test-stub")
+                );
             }
         }
         assert!(saw_spawn, "expected a spawn_subagent tool_call on the bus");
@@ -1028,10 +1026,11 @@ mod tests {
         // its tool_call bus message twice.
         let mut spawn_calls = 0;
         while let Ok(msg) = rx.try_recv() {
-            if let Ok(v) = serde_json::from_str::<Value>(&msg.data) {
-                if v["type"] == "tool_call" && v["tool"] == "spawn_subagent" {
-                    spawn_calls += 1;
-                }
+            if let Ok(v) = serde_json::from_str::<Value>(&msg.data)
+                && v["type"] == "tool_call"
+                && v["tool"] == "spawn_subagent"
+            {
+                spawn_calls += 1;
             }
         }
         assert_eq!(

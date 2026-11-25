@@ -205,7 +205,7 @@ fn has_credential_identifier(content: &str) -> bool {
 /// no longer be bypassed by spelling.
 fn normalize_audit_path(path: &str) -> String {
     let mut out: Vec<&str> = Vec::new();
-    for seg in path.split(|c| c == '/' || c == '\\') {
+    for seg in path.split(['/', '\\']) {
         match seg {
             "" | "." => {} // collapse empty / dot segments
             ".." => {
