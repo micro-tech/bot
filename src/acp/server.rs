@@ -240,7 +240,9 @@ async fn handle_prompt(
 fn tool_call_title(tc: &ToolCallRecord) -> String {
     let args = tc.args.to_string();
     let short = if args.len() > 80 {
-        format!("{}…", &args[..80])
+        // H12 (task 386): `&args[..80]` panics when byte 80 lands inside a
+        // multi-byte char (e.g. emoji in model-supplied tool args).
+        format!("{}…", crate::utils::truncate_str(&args, 80))
     } else {
         args
     };
@@ -298,5 +300,28 @@ mod tests {
         // THEN it names the tool and truncates:
         assert!(title.starts_with("repo_grep "));
         assert!(title.len() < 120);
+    }
+
+    /// H12 (task 386): `tool_call_title` sliced `&args[..80]` on a byte
+    /// index, which panics when byte 80 lands inside a multi-byte char
+    /// (e.g. emoji in model-supplied tool args). Must truncate cleanly.
+    #[test]
+    fn tool_call_title_never_panics_on_non_ascii_args() {
+        // GIVEN args whose byte 80 is inside a 7-byte `🖥️` (9-byte
+        // `{"text":"` prefix + 10 whole emoji = 79 bytes, so byte 80 is
+        // inside emoji #11):
+        let args = serde_json::json!({ "text": "🖥️".repeat(50) }).to_string();
+        assert_eq!(args.len(), 9 + 50 * 7 + 2);
+        assert!(!args.is_char_boundary(80));
+        let tc = ToolCallRecord {
+            name: "run_prompt".to_string(),
+            args: serde_json::from_str(&args).unwrap(),
+            result_summary: String::new(),
+        };
+        // WHEN we title it:
+        let title = tool_call_title(&tc);
+        // THEN it truncates cleanly on a char boundary:
+        assert!(title.starts_with("run_prompt "));
+        assert!(title.ends_with("…"));
     }
 }

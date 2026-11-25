@@ -66,6 +66,14 @@ fn now_ms() -> u64 {
 /// Reads `GEMINI_API_KEY` from the environment, extracts the `"prompt"` field
 /// from `message.data` (falls back to the raw string), calls the Gemini REST
 /// API with timeout + retry, and publishes the reply to `"web_interface"`.
+/// H12 (task 386): prompt preview for the listener log line. The old inline
+/// `&prompt[..prompt.len().min(120)]` panicked when byte 120 landed inside a
+/// multi-byte char — and a panic in `handle_gemini_bus_message` kills the
+/// Gemini listener for good. `truncate_str` backs off to a char boundary.
+fn prompt_preview(prompt: &str) -> &str {
+    crate::utils::truncate_str(prompt, 120)
+}
+
 pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: &str) {
     // ── 1. read API key ───────────────────────────────────────────────────────
     let api_key = match std::env::var("GEMINI_API_KEY") {
@@ -92,7 +100,7 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
     info!(
         "Gemini <- from='{}' prompt='{}'",
         message.from,
-        &prompt[..prompt.len().min(120)]
+        prompt_preview(&prompt)
     );
 
     // ── 3. single attempt ─────────────────────────────────────────────────────
@@ -656,6 +664,24 @@ pub fn call_gemini_sync(prompt: &str) -> Result<String, Box<dyn std::error::Erro
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// H12 (task 386): the listener log line used to slice
+    /// `&prompt[..prompt.len().min(120)]`, which panics when byte 120 lands
+    /// inside a multi-byte char. A panic there kills the Gemini listener.
+    #[test]
+    fn prompt_preview_never_panics_on_non_ascii() {
+        // GIVEN a prompt whose byte 120 is inside a 3-byte em-dash (one
+        // ASCII byte, then dashes starting at byte 1: dash #40 spans
+        // bytes 118..121, so a byte-index slice at 120 would panic):
+        let prompt = format!("x{}", "—".repeat(50));
+        assert_eq!(prompt.len(), 151);
+        assert!(!prompt.is_char_boundary(120));
+        // WHEN we preview it:
+        let preview = prompt_preview(&prompt);
+        // THEN it backs off to the previous char boundary (118):
+        assert_eq!(preview.len(), 118);
+        assert_eq!(preview, format!("x{}", "—".repeat(39)));
+    }
 
     #[test]
     fn test_call_gemini_sync_no_key() {
