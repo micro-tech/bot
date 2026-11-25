@@ -4,8 +4,8 @@
 
 #![allow(dead_code)]
 
-use std::sync::mpsc::Receiver;
 use std::time::Duration;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 // Assuming Bus and Message are defined in the bus module
 use crate::bus::{Bus, Message};
@@ -13,10 +13,10 @@ use crate::bus::{Bus, Message};
 /// IO Manager that routes bus messages to specific external communication handlers.
 pub struct IOManager {
     bus: Bus,
-    ollama_rx: Receiver<Message>,
-    web_rx: Receiver<Message>,
-    terminal_rx: Receiver<Message>,
-    gemini_rx: Receiver<Message>,
+    ollama_rx: UnboundedReceiver<Message>,
+    web_rx: UnboundedReceiver<Message>,
+    terminal_rx: UnboundedReceiver<Message>,
+    gemini_rx: UnboundedReceiver<Message>,
 }
 
 impl IOManager {
@@ -46,25 +46,25 @@ impl IOManager {
         // In production this should run in a dedicated thread or use async
         loop {
             // Poll Ollama
-            if let Ok(msg) = self.ollama_rx.recv_timeout(Duration::from_millis(50)) {
+            if let Ok(msg) = self.ollama_rx.try_recv() {
                 println!("IO: Routing to Ollama from {}", msg.from);
                 Self::handle_ollama_message(msg);
             }
 
             // Poll Web Interface
-            if let Ok(msg) = self.web_rx.recv_timeout(Duration::from_millis(50)) {
+            if let Ok(msg) = self.web_rx.try_recv() {
                 println!("IO: Routing to Web from {}", msg.from);
                 Self::handle_web_message(msg);
             }
 
             // Poll Terminal
-            if let Ok(msg) = self.terminal_rx.recv_timeout(Duration::from_millis(50)) {
+            if let Ok(msg) = self.terminal_rx.try_recv() {
                 println!("IO: Routing to Terminal from {}", msg.from);
                 Self::handle_terminal_message(msg);
             }
 
             // Poll Gemini
-            if let Ok(msg) = self.gemini_rx.recv_timeout(Duration::from_millis(50)) {
+            if let Ok(msg) = self.gemini_rx.try_recv() {
                 println!("IO: Routing to Gemini from {}", msg.from);
                 Self::handle_gemini_message(msg);
             }
@@ -143,8 +143,8 @@ mod tests {
     #[test]
     fn test_io_manager_new() {
         let bus = create_mock_bus();
-        let io_manager = IOManager::new(bus);
-        assert!(io_manager.ollama_rx.recv_timeout(Duration::from_millis(50)).is_err());
+        let mut io_manager = IOManager::new(bus);
+        assert!(io_manager.ollama_rx.try_recv().is_err());
     }
 
     #[test]

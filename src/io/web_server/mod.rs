@@ -907,48 +907,25 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
         }
     });
 
-    // 6. Bus → WebSocket forwarder.
-    //
-    // IMPORTANT: state.bus uses std::sync::mpsc (blocking).  Calling
-    // rx.recv() directly inside an async task blocks the Tokio thread and
-    // starves other tasks on the same thread (including recv_task above).
-    //
-    // Solution: run the blocking recv loop on a dedicated OS thread via
-    // std::thread::spawn, bridge into async-land through a tokio mpsc channel,
-    // then have a lightweight async task drain that channel into msg_tx.
+    // 6. Bus → WebSocket forwarder (H6/task 383: the bus is now
+    // tokio::sync::mpsc, so this subscribes and recv().await's directly —
+    // the std::thread bridge this replaced existed only because std recv()
+    // blocked a runtime worker).
     let bus_clone = state.bus.clone();
     let msg_tx_clone = state.msg_tx.clone();
-
-    // Bridge channel: blocking thread → async task
-    let (bridge_tx, mut bridge_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-
-    // Blocking thread: subscribes to the bus and forwards to the bridge
     let inflight_bridge = state.inflight.clone();
     let backends_bridge = state.backends_json.clone();
     let msg_tx_bridge = state.msg_tx.clone();
-    std::thread::spawn(move || {
-        let rx = bus_clone.subscribe("web_interface");
-        while let Ok(msg) = rx.recv() {
+    let bus_forward_task = tokio::spawn(async move {
+        let mut rx = bus_clone.subscribe("web_interface");
+        while let Some(msg) = rx.recv().await {
             let (out, dirty) = bridge_out_message(&msg, &inflight_bridge);
             if dirty {
-                // A backend just answered: push a fresh agent_status so its
-                // working indicator flips back to idle without waiting for
-                // the next registry event.
-                let _ =
-                    msg_tx_bridge.send(build_agent_status(&backends_bridge, &inflight_bridge));
+                let _ = msg_tx_bridge.send(build_agent_status(&backends_bridge, &inflight_bridge));
             }
             if let Some(out) = out {
-                if bridge_tx.send(out).is_err() {
-                    break; // async side dropped (WS closed)
-                }
+                let _ = msg_tx_clone.send(out);
             }
-        }
-    });
-
-    // Async task: drains the bridge and fans out into the broadcast channel
-    let bus_forward_task = tokio::spawn(async move {
-        while let Some(out) = bridge_rx.recv().await {
-            let _ = msg_tx_clone.send(out);
         }
     });
 

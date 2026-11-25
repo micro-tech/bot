@@ -526,7 +526,15 @@ async fn call_gemini_tools(
         contents.push(json!({"role": "model", "parts": parts.clone()}));
         let mut response_parts = Vec::with_capacity(calls.len());
         for (name, args) in &calls {
-            let result = crate::tools::execute(name, args);
+            // H6 (task 383): dynamic (model-chosen) tool names can be
+            // `spawn_subagent` / `browser` / `mcp__*`, which need a worker
+            // context via their own `block_in_place`, so `spawn_blocking`
+            // would panic — `block_in_place` is the sanctioned mechanism
+            // and lets the runtime grow a replacement worker.
+            let name_owned = name.clone();
+            let args_owned = args.clone();
+            let result =
+                tokio::task::block_in_place(|| crate::tools::execute(&name_owned, &args_owned));
             if result.starts_with("Error") || result.starts_with("Unknown tool") {
                 // Task 265 (secrets): the error string can echo tool
                 // input; log its length, not its content. The agent
@@ -892,7 +900,7 @@ mod tests {
             .await;
 
         let bus = Arc::new(Bus::new());
-        let rx = bus.subscribe("web_interface");
+        let mut rx = bus.subscribe("web_interface");
         let client = build_client();
         let url = format!("{}{}", server.url(), path);
 
@@ -992,7 +1000,7 @@ mod tests {
             .await;
 
         let bus = Arc::new(Bus::new());
-        let rx = bus.subscribe("web_interface");
+        let mut rx = bus.subscribe("web_interface");
         let client = build_client();
         let url = format!("{}{}", server.url(), path);
 

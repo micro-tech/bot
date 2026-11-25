@@ -1155,6 +1155,20 @@ where
         }
     }
 
+    /// H6 (task 383): the nightly fix loop's tools are a FIXED set — `run_shell`
+    /// only (find / cargo test / rm / mv). `run_shell` is a sync `Command` with
+    /// its own timeout and never touches a Tokio runtime, so it can safely run
+    /// on the blocking pool. (The model-driven tool loops cannot use this: their
+    /// tool names are dynamic and include `spawn_subagent` / `browser` /
+    /// `mcp__*`, which need a worker context — those use `block_in_place`.)
+    async fn nightly_shell(&self, command: String) -> String {
+        tokio::task::spawn_blocking(move || {
+            crate::tools::execute("run_shell", &serde_json::json!({ "command": command }))
+        })
+        .await
+        .unwrap_or_else(|e| format!("Error: nightly shell task failed: {}", e))
+    }
+
     /// One bounded fix attempt: a ReAct loop over the repo-scoped tools,
     /// then test verification with revert-on-red.
     async fn attempt_nightly_fix(&mut self, error_line: &str) {
@@ -1231,7 +1245,16 @@ where
             let args = call.get("args").cloned().unwrap_or(serde_json::Value::Null);
             // run_shell is already gated on [shell] enabled + denylist +
             // timeouts + workdir confinement (task 191).
-            let result = crate::tools::execute(tool, &args);
+            // H6 (task 383): the tool here is model-chosen but confined to
+            // the `allowed` set above (repo_read / repo_grep / repo_glob /
+            // run_shell) — all sync tools that never touch a Tokio runtime —
+            // so the blocking pool is safe. (The open-ended model tool loops
+            // in ollama/gemini use `block_in_place` instead.)
+            let tool_owned = tool.to_string();
+            let result =
+                tokio::task::spawn_blocking(move || crate::tools::execute(&tool_owned, &args))
+                    .await
+                    .unwrap_or_else(|e| format!("Error: nightly tool task failed: {}", e));
             transcript.push_str(&format!(
                 "\n[tool {} ->]\n{}\n",
                 tool,
@@ -1241,34 +1264,29 @@ where
 
         // Every .nightly-bak the loop created (per its RULES) — discovered
         // from the filesystem, not trusted from tool output.
-        let bak_list = crate::tools::execute(
-            "run_shell",
-            &serde_json::json!({"command": format!("find {} -name '*.nightly-bak' 2>/dev/null", self.runtime_dir.display())}),
-        );
+        let bak_list = self
+            .nightly_shell(format!(
+                "find {} -name '*.nightly-bak' 2>/dev/null",
+                self.runtime_dir.display()
+            ))
+            .await;
         let bak_files: Vec<&str> = bak_list.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
 
         // Guardrail: verify with the relevant tests; revert on red.
-        let test_out = crate::tools::execute(
-            "run_shell",
-            &serde_json::json!({"command": "cargo test --lib 2>&1 | tail -5"}),
-        );
+        let test_out = self
+            .nightly_shell("cargo test --lib 2>&1 | tail -5".to_string())
+            .await;
         let green = test_out.contains("test result: ok");
         if green {
             // Clean up backups — the fix survived its tests.
             for bak in &bak_files {
-                let _ = crate::tools::execute(
-                    "run_shell",
-                    &serde_json::json!({"command": format!("rm -f {}", bak)}),
-                );
+                let _ = self.nightly_shell(format!("rm -f {}", bak)).await;
             }
         } else {
             // Revert: restore every .nightly-bak the loop made.
             for bak in &bak_files {
                 let orig = bak.trim_end_matches(".nightly-bak");
-                let _ = crate::tools::execute(
-                    "run_shell",
-                    &serde_json::json!({"command": format!("mv -f {} {}", bak, orig)}),
-                );
+                let _ = self.nightly_shell(format!("mv -f {} {}", bak, orig)).await;
             }
             outcome = format!("REVERTED (tests red): {}. Test output: {}", outcome, truncate_200(&test_out));
         }

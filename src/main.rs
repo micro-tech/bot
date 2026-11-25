@@ -408,8 +408,8 @@ async fn run_helix() {
                 let routine_cpu = cpu.clone();
                 let routine_bus = bus.clone();
                 tokio::spawn(async move {
-                    let rx = routine_bus.subscribe("cpu");
-                    while let Ok(msg) = rx.recv() {
+                    let mut rx = routine_bus.subscribe("cpu");
+                    while let Some(msg) = rx.recv().await {
                         if !msg.data.contains("\"type\":\"routine_run\"") {
                             continue;
                         }
@@ -555,10 +555,10 @@ async fn run_helix() {
             .unwrap_or_else(|| "logs/chat_log.md".to_string());
 
         tokio::spawn(async move {
-            let rx = bus_clone.subscribe("cpu");
+            let mut rx = bus_clone.subscribe("cpu");
             println!("CPU response forwarder started (subscribed to 'cpu')");
 
-            while let Ok(msg) = rx.recv() {
+            while let Some(msg) = rx.recv().await {
                 println!("[CPU-Forwarder] received message to cpu | from='{}' data_preview='{}'", msg.from, crate::utils::truncate_str(&msg.data, 120));
                 if msg.data.contains("\"type\":\"llm_response\"") {
                     let payload: serde_json::Value =
@@ -626,7 +626,7 @@ async fn run_helix() {
 
         tokio::spawn(async move {
             let topic = format!("ollama_{}", backend_name);
-            let rx = bus_clone.subscribe(&topic);
+            let mut rx = bus_clone.subscribe(&topic);
 
             println!("✅ Ollama listener SUBSCRIBED for topic='{}'  url={}  model={}", topic, backend_url, backend_model);
             println!("   (waiting for messages on this bus topic...)");
@@ -671,7 +671,7 @@ async fn run_helix() {
                 crate::io::ollama::keepalive::read_keep_alive_secs(),
             );
 
-            while let Ok(msg) = rx.recv() {
+            while let Some(msg) = rx.recv().await {
                 println!("[{}] 📥 RECEIVED message from='{}'  preview='{}'",
                     topic, msg.from, crate::utils::truncate_str(&msg.data, 160));
 
@@ -713,10 +713,10 @@ async fn run_helix() {
             .unwrap_or_else(|| "gemini-2.0-flash".to_string());
 
         tokio::spawn(async move {
-            let rx = bus_clone.subscribe("gemini");
+            let mut rx = bus_clone.subscribe("gemini");
             println!("Gemini listener started (subscribed to 'gemini', model={})", gemini_model);
 
-            while let Ok(msg) = rx.recv() {
+            while let Some(msg) = rx.recv().await {
                 if msg.data.contains("\"type\":\"chat_request\"") {
                     crate::io::llm_gemini::handle_gemini_bus_message(msg, &bus_clone, &gemini_model).await;
                 }
