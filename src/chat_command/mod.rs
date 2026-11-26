@@ -1318,6 +1318,10 @@ mod tests {
         (script, log)
     }
 
+    // Unix-only: every caller is a #[cfg(unix)] test (the ASUS stub
+    // ssh script cannot run on Windows), so without the gate this
+    // helper is dead code on Windows and trips `-D dead-code`.
+    #[cfg(unix)]
     fn asus_config() -> String {
         "[chat_command]\nallowed_senders = [\"cobble-jr\"]\nasus_enabled = true\nasus_host = \"100.112.110.14\"\nasus_user = \"someone\"\nasus_key_path = \"/home/cobble/.ssh/id_helix_asus\"\n"
             .to_string()

@@ -209,6 +209,10 @@ pub fn run_command_with_timeout(
     }
 
     let mut child = cmd.spawn()?;
+    // `pid` is only read by the Unix `kill_tree` call below; on
+    // Windows the timeout path uses `child.kill()` instead, so
+    // binding it unconditionally trips `-D unused-variables`.
+    #[cfg(unix)]
     let pid = child.id();
     let mut out_pipe = child.stdout.take();
     let mut err_pipe = child.stderr.take();
