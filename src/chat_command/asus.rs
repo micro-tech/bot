@@ -33,11 +33,10 @@ pub fn check_asus_command(argv: &[String]) -> Result<(), String> {
     let Some(first) = argv.first() else {
         return Err("empty command".to_string());
     };
-    if !ASUS_ALLOWLIST
-        .iter()
-        .any(|c| c.eq_ignore_ascii_case(first))
-    {
-        return Err(format!("rejected: `{first}` is not in the ASUS read-only allowlist"));
+    if !ASUS_ALLOWLIST.iter().any(|c| c.eq_ignore_ascii_case(first)) {
+        return Err(format!(
+            "rejected: `{first}` is not in the ASUS read-only allowlist"
+        ));
     }
     Ok(())
 }
@@ -92,8 +91,18 @@ mod tests {
     #[test]
     fn asus_allowlist_is_case_insensitive() {
         // PowerShell cmdlets are case-insensitive; the check is too.
-        for cmd in ["hostname", "whoami", "Get-Process", "get-process", "GET-SERVICE", "systeminfo"] {
-            assert!(check_asus_command(&argv(&[cmd])).is_ok(), "{cmd} must be allowed");
+        for cmd in [
+            "hostname",
+            "whoami",
+            "Get-Process",
+            "get-process",
+            "GET-SERVICE",
+            "systeminfo",
+        ] {
+            assert!(
+                check_asus_command(&argv(&[cmd])).is_ok(),
+                "{cmd} must be allowed"
+            );
         }
     }
 
@@ -107,7 +116,10 @@ mod tests {
             vec!["Restart-Computer"],
             vec!["ssh", "other"],
         ] {
-            assert!(check_asus_command(&argv(&words)).is_err(), "{words:?} must be rejected");
+            assert!(
+                check_asus_command(&argv(&words)).is_err(),
+                "{words:?} must be rejected"
+            );
         }
     }
 

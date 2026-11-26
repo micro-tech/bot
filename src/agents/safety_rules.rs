@@ -41,7 +41,10 @@ mod tests {
 
     #[test]
     fn test_max_steps() {
-        let rules = SafetyRules { max_steps: 2, ..Default::default() };
+        let rules = SafetyRules {
+            max_steps: 2,
+            ..Default::default()
+        };
         let mut state = AgentState::new();
         state.step_count = 3;
         assert!(rules.check(&state).is_err());

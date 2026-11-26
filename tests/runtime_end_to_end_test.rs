@@ -1,11 +1,11 @@
 //! End-to-end smoke test for the Unified Agent Runtime (Task 154.4)
 
 use async_trait::async_trait;
+use helix::agents::agent_state::AgentState;
 use helix::agents::planner::Planner;
 use helix::agents::planner_output::PlannerOutput;
-use helix::agents::runtime_loop::RuntimeLoop;
 use helix::agents::rule_layer::RuleLayer;
-use helix::agents::agent_state::AgentState;
+use helix::agents::runtime_loop::RuntimeLoop;
 
 /// Test planner with SimplePlanner's 3-steps-then-answer shape, but calling
 /// the real read-only `system_status` tool: the `noop` tool SimplePlanner

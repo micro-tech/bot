@@ -1,10 +1,10 @@
 //! Unit + integration tests for PlannerOutput + ReflectionPlannerAdapter (Task 155.5)
 
-use helix::agents::planner_output::PlannerOutput;
-use helix::agents::planner::Planner;
-use helix::agents::reflection_planner_adapter::ReflectionPlannerAdapter;
-use helix::agents::agent_state::AgentState;
 use async_trait::async_trait;
+use helix::agents::agent_state::AgentState;
+use helix::agents::planner::Planner;
+use helix::agents::planner_output::PlannerOutput;
+use helix::agents::reflection_planner_adapter::ReflectionPlannerAdapter;
 
 /// Message-driven stub planner implementing the parsing contract the adapter
 /// tests were written against ("use tool: <name> <json>" and
@@ -24,8 +24,7 @@ impl Planner for Dummy {
                     Some(i) => (rest[..i].trim(), rest[i..].trim()),
                     None => (rest, "{}"),
                 };
-                let args_json =
-                    serde_json::from_str(args).unwrap_or(serde_json::json!({}));
+                let args_json = serde_json::from_str(args).unwrap_or(serde_json::json!({}));
                 return PlannerOutput::ToolCall {
                     tool_name: name.to_string(),
                     args_json,
@@ -70,7 +69,9 @@ async fn test_planner_output_variants() {
     assert!(matches!(fa, PlannerOutput::FinalAnswer { .. }));
 
     // Error
-    let err = PlannerOutput::Error { message: "fail".into() };
+    let err = PlannerOutput::Error {
+        message: "fail".into(),
+    };
     assert!(matches!(err, PlannerOutput::Error { .. }));
 }
 

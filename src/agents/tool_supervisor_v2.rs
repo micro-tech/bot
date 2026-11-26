@@ -47,7 +47,9 @@ impl ToolError {
     pub fn is_retryable(&self) -> bool {
         matches!(
             self,
-            ToolError::RateLimit { .. } | ToolError::Timeout { .. } | ToolError::ExecutionError { .. }
+            ToolError::RateLimit { .. }
+                | ToolError::Timeout { .. }
+                | ToolError::ExecutionError { .. }
         )
     }
 }
@@ -94,11 +96,7 @@ impl ToolSupervisorV2 {
     }
 
     /// Execute a tool with validation, error classification, and retry.
-    pub async fn execute(
-        &self,
-        tool_name: &str,
-        args: &Value,
-    ) -> ToolResult {
+    pub async fn execute(&self, tool_name: &str, args: &Value) -> ToolResult {
         // Basic argument validation (placeholder)
         if args.is_null() && tool_name != "noop" {
             return ToolResult::FatalError(ToolError::InvalidArgs {

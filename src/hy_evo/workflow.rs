@@ -69,19 +69,21 @@ impl Workflow {
 
             Node::MemoryWrite { key, value } => ctx.memory_write(key, value.clone()),
 
-            Node::Memory { operation, key, value } => {
-                match operation.as_str() {
-                    "read" => ctx.memory_read(key),
-                    "write" => {
-                        if let Some(v) = value {
-                            ctx.memory_write(key, v.clone())
-                        } else {
-                            NodeResult::Error("Missing value for memory write".into())
-                        }
+            Node::Memory {
+                operation,
+                key,
+                value,
+            } => match operation.as_str() {
+                "read" => ctx.memory_read(key),
+                "write" => {
+                    if let Some(v) = value {
+                        ctx.memory_write(key, v.clone())
+                    } else {
+                        NodeResult::Error("Missing value for memory write".into())
                     }
-                    _ => NodeResult::Error("Unknown memory operation".into()),
                 }
-            }
+                _ => NodeResult::Error("Unknown memory operation".into()),
+            },
 
             Node::Reflection { target: _, prompt } => {
                 NodeResult::Text(format!("Reflection: {}", prompt))

@@ -70,11 +70,7 @@ impl SupportConfig {
         let (h, m) = s.split_once(':')?;
         let h: u32 = h.trim().parse().ok()?;
         let m: u32 = m.trim().parse().ok()?;
-        if h < 24 && m < 60 {
-            Some((h, m))
-        } else {
-            None
-        }
+        if h < 24 && m < 60 { Some((h, m)) } else { None }
     }
 
     pub fn business_start_hm(&self) -> (u32, u32) {

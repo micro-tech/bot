@@ -31,10 +31,7 @@ impl TaskState {
     pub fn is_terminal(self) -> bool {
         matches!(
             self,
-            TaskState::Completed
-                | TaskState::Canceled
-                | TaskState::Failed
-                | TaskState::Rejected
+            TaskState::Completed | TaskState::Canceled | TaskState::Failed | TaskState::Rejected
         )
     }
 }
@@ -295,8 +292,12 @@ mod tests {
         let m = Message {
             role: "user".to_string(),
             parts: vec![
-                Part::Text(TextPart { text: "hello".into() }),
-                Part::Text(TextPart { text: "world".into() }),
+                Part::Text(TextPart {
+                    text: "hello".into(),
+                }),
+                Part::Text(TextPart {
+                    text: "world".into(),
+                }),
             ],
             message_id: "m1".into(),
         };
@@ -311,8 +312,13 @@ mod tests {
             version: "1".into(),
             protocol_version: A2A_PROTOCOL_VERSION.into(),
             url: "http://127.0.0.1:8443/a2a".into(),
-            capabilities: AgentCapabilities { streaming: true, push_notifications: false },
-            authentication: AgentAuthentication { schemes: vec!["bearer".into()] },
+            capabilities: AgentCapabilities {
+                streaming: true,
+                push_notifications: false,
+            },
+            authentication: AgentAuthentication {
+                schemes: vec!["bearer".into()],
+            },
             default_input_modes: vec!["text/plain".into()],
             default_output_modes: vec!["text/plain".into()],
             skills: vec![],

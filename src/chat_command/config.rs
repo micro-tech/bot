@@ -101,7 +101,9 @@ impl ChatCommandConfig {
     /// (via `config::load_section`, which never logs values — a wrong
     /// type could be a secret).
     pub fn load_from_toml(toml_str: &str) -> Self {
-        crate::config::load_section(toml_str, "[chat_command]", |v| v.get("chat_command").cloned())
+        crate::config::load_section(toml_str, "[chat_command]", |v| {
+            v.get("chat_command").cloned()
+        })
     }
 
     /// Read the live config from `<runtime_dir>/config.toml`.
@@ -116,8 +118,16 @@ impl ChatCommandConfig {
     /// set. Anything less fails closed (no ssh attempted).
     pub fn asus_configured(&self) -> bool {
         self.asus_enabled
-            && self.asus_host.as_ref().map(|s| !s.is_empty()).unwrap_or(false)
-            && self.asus_user.as_ref().map(|s| !s.is_empty()).unwrap_or(false)
+            && self
+                .asus_host
+                .as_ref()
+                .map(|s| !s.is_empty())
+                .unwrap_or(false)
+            && self
+                .asus_user
+                .as_ref()
+                .map(|s| !s.is_empty())
+                .unwrap_or(false)
             && self
                 .asus_key_path
                 .as_ref()
@@ -134,8 +144,14 @@ mod tests {
     fn missing_section_yields_fail_closed_defaults() {
         let cfg = ChatCommandConfig::load_from_toml("[helix]\nname = \"x\"\n");
         assert_eq!(cfg.room, "command");
-        assert!(cfg.allowed_senders.is_empty(), "empty senders = nothing executes");
-        assert_eq!(cfg.agent_name, "helix", "own name defaults to the hub token name");
+        assert!(
+            cfg.allowed_senders.is_empty(),
+            "empty senders = nothing executes"
+        );
+        assert_eq!(
+            cfg.agent_name, "helix",
+            "own name defaults to the hub token name"
+        );
         assert_eq!(cfg.command_timeout_secs, 30);
         assert_eq!(cfg.max_output_bytes, 131072);
         assert_eq!(cfg.chunk_bytes, 7500);

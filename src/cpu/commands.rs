@@ -1,8 +1,8 @@
 //! CPU command handlers for the Unified Agent Runtime.
 
 use crate::cpu::Cpu;
-use crate::hy_evo::reflection::ReflectionLlm;
 use crate::cpu::interfaces::LlmInterface;
+use crate::hy_evo::reflection::ReflectionLlm;
 use log::info;
 
 /// Execute the `agent.run` command with optional trace logging.
@@ -15,7 +15,10 @@ pub async fn handle_agent_run<L>(
 where
     L: ReflectionLlm + LlmInterface + Send + Sync + 'static,
 {
-    info!("[CPU] Received agent.run command with goal: {} (trace={})", goal, trace);
+    info!(
+        "[CPU] Received agent.run command with goal: {} (trace={})",
+        goal, trace
+    );
 
     let planner = crate::agents::simple_planner::SimplePlanner::new(goal.to_string());
     let allowed_tools: Vec<String> = vec!["search".into(), "calc".into(), "noop".into()];

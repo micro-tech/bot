@@ -16,7 +16,7 @@
 use axum::{
     body::Body,
     extract::State,
-    http::{header::AUTHORIZATION, HeaderMap, Request, StatusCode},
+    http::{HeaderMap, Request, StatusCode, header::AUTHORIZATION},
     middleware::Next,
     response::Response,
 };
@@ -49,7 +49,10 @@ pub fn http_token_ok(token: &str, headers: &HeaderMap) -> bool {
     let bearer = headers
         .get(AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer ").or_else(|| s.strip_prefix("bearer ")));
+        .and_then(|s| {
+            s.strip_prefix("Bearer ")
+                .or_else(|| s.strip_prefix("bearer "))
+        });
     let x_token = headers.get("X-Web-Token").and_then(|v| v.to_str().ok());
     bearer
         .or(x_token)
@@ -96,7 +99,10 @@ pub async fn require_okf_write_token(
         .headers()
         .get(AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer ").or_else(|| s.strip_prefix("bearer ")));
+        .and_then(|s| {
+            s.strip_prefix("Bearer ")
+                .or_else(|| s.strip_prefix("bearer "))
+        });
     if !auth.okf_token.is_empty()
         && bearer.is_some_and(|b| constant_time_token_eq(b, &auth.okf_token))
     {
@@ -146,10 +152,7 @@ pub fn redacted_config_str(config_str: &str) -> String {
             {
                 return line.to_string();
             }
-            let raw_key = trimmed
-                .split_once('=')
-                .map(|(k, _)| k.trim())
-                .unwrap_or("");
+            let raw_key = trimmed.split_once('=').map(|(k, _)| k.trim()).unwrap_or("");
             let key = raw_key.trim_matches('"').trim_matches('\'');
             if key.is_empty() || !is_secret_key(key) {
                 return line.to_string();

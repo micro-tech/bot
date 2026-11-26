@@ -26,8 +26,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::broadcast;
 use tokio::sync::RwLock;
+use tokio::sync::broadcast;
 use toml;
 
 // Extracted authentication (Task 318)
@@ -35,7 +35,7 @@ use toml;
 // re-exports them so existing call sites and tests keep working.
 mod auth;
 use auth::{
-    REDACTED, OkfWriteAuth, constant_time_token_eq, is_secret_key, redacted_config_str,
+    OkfWriteAuth, REDACTED, constant_time_token_eq, is_secret_key, redacted_config_str,
     require_okf_write_token, require_web_token,
 };
 
@@ -142,7 +142,7 @@ fn default_key_path() -> String {
 
 #[derive(Deserialize)]
 #[allow(dead_code)] // schema-only: the heartbeat interval is consumed by the
-                    // agent core's scheduler, not the web server
+// agent core's scheduler, not the web server
 struct HeartbeatConfig {
     interval_seconds: u64,
 }
@@ -159,10 +159,18 @@ struct LoggingConfig {
     hartbeat_log: String,
 }
 
-fn default_chat_log() -> String { "logs/chat_log.md".to_string() }
-fn default_error_log() -> String { "logs/error_log.md".to_string() }
-fn default_bus_log() -> String { "logs/bus_log.md".to_string() }
-fn default_hartbeat_log() -> String { "logs/hartbeat_log.md".to_string() }
+fn default_chat_log() -> String {
+    "logs/chat_log.md".to_string()
+}
+fn default_error_log() -> String {
+    "logs/error_log.md".to_string()
+}
+fn default_bus_log() -> String {
+    "logs/bus_log.md".to_string()
+}
+fn default_hartbeat_log() -> String {
+    "logs/hartbeat_log.md".to_string()
+}
 
 impl Default for LoggingConfig {
     fn default() -> Self {
@@ -282,10 +290,10 @@ pub async fn start_web_server(
         let _ = librarian.reload_from_index_file();
 
         // Optionally load sample manifest in dev if registry is empty
-        if librarian.registry.tool_count() == 0 {
-            if let Ok(sample) = std::fs::read_to_string("okf_sample_manifest.json") {
-                let _ = librarian.load_manifest_from_json(&sample);
-            }
+        if librarian.registry.tool_count() == 0
+            && let Ok(sample) = std::fs::read_to_string("okf_sample_manifest.json")
+        {
+            let _ = librarian.load_manifest_from_json(&sample);
         }
 
         std::sync::Arc::new(tokio::sync::Mutex::new(librarian))
@@ -322,10 +330,7 @@ pub async fn start_web_server(
     let a2a_max_steps = crate::config::acp::AcpConfig::load_from_toml(&config_str).max_steps;
     let a2a_state = crate::a2a::A2aState::new(a2a_base_url, a2a_max_steps);
     let a2a_public = Router::new()
-        .route(
-            "/.well-known/agent-card.json",
-            get(crate::a2a::agent_card),
-        )
+        .route("/.well-known/agent-card.json", get(crate::a2a::agent_card))
         .with_state(a2a_state.clone());
     let a2a_protected = Router::new()
         .route("/a2a", post(crate::a2a::a2a_jsonrpc))
@@ -422,9 +427,7 @@ pub async fn start_web_server(
                 };
                 if reaped > 0 {
                     log::warn!("agent_status: reaped {} stale in-flight entries", reaped);
-                    let _ = sweep_state
-                        .msg_tx
-                        .send(agent_status_snapshot(&sweep_state));
+                    let _ = sweep_state.msg_tx.send(agent_status_snapshot(&sweep_state));
                 }
             }
         });
@@ -523,7 +526,7 @@ pub async fn start_web_server(
 // restores any ***REDACTED*** placeholders the operator left untouched from
 // the on-disk config before validating + writing.
 
-/// Placeholder substituted for secret values in config text sent to clients.
+// Placeholder substituted for secret values in config text sent to clients.
 // REDACTED, is_secret_key and redacted_config_str live in `auth`
 // (task 321 dedupe) and are imported at the top of this file.
 
@@ -584,12 +587,12 @@ fn restore_redacted_text(orig_text: &str, new_text: &str) -> String {
         if let Some((k, v)) = line.trim().split_once('=') {
             let raw_key = k.trim();
             let key = raw_key.trim_matches('"').trim_matches('\'');
-            if v.trim() == format!("\"{}\"", REDACTED) && is_secret_key(key) {
-                if let Some(orig_v) = find_orig_value(orig_text, &cur_section, key) {
-                    let indent: String =
-                        line.chars().take_while(|c| c.is_whitespace()).collect();
-                    restored = Some(format!("{}{} = {}", indent, raw_key, orig_v));
-                }
+            if v.trim() == format!("\"{}\"", REDACTED)
+                && is_secret_key(key)
+                && let Some(orig_v) = find_orig_value(orig_text, &cur_section, key)
+            {
+                let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+                restored = Some(format!("{}{} = {}", indent, raw_key, orig_v));
             }
         }
         out.push(restored.unwrap_or_else(|| line.to_string()));
@@ -788,9 +791,9 @@ fn bridge_out_message(
             )
         }
         // Well-formed UI messages — forward as-is (including errors so they are visible)
-        "user_msg" | "config" | "manifest" | "config_status" | "manifest_status"
-        | "log" | "error" | "warning" | "tool_call" | "heartbeat_status"
-        | "heartbeat_missed" | "subagent_event" => (Some(msg.data.clone()), false),
+        "user_msg" | "config" | "manifest" | "config_status" | "manifest_status" | "log"
+        | "error" | "warning" | "tool_call" | "heartbeat_status" | "heartbeat_missed"
+        | "subagent_event" => (Some(msg.data.clone()), false),
         _ => {
             // Unknown — wrap so nothing is silently dropped
             (
@@ -1043,10 +1046,9 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             .list()
                             .iter()
                             .map(|r| {
-                                let sched_text =
-                                    crate::cron::registry::parse_schedule(&r.schedule)
-                                        .map(crate::cron::registry::schedule_display)
-                                        .unwrap_or_else(|_| r.schedule.clone());
+                                let sched_text = crate::cron::registry::parse_schedule(&r.schedule)
+                                    .map(crate::cron::registry::schedule_display)
+                                    .unwrap_or_else(|_| r.schedule.clone());
                                 json!({
                                     "id": r.id,
                                     "name": r.name,
@@ -1137,7 +1139,14 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         let backend = json_val["backend"].as_str().unwrap_or("auto").to_string();
                         let enabled = json_val["enabled"].as_bool().unwrap_or(true);
                         let mut reg = state.routines.write().await;
-                        let reply = match reg.add(&name, &schedule, &agent_role, &task, &backend, enabled) {
+                        let reply = match reg.add(
+                            &name,
+                            &schedule,
+                            &agent_role,
+                            &task,
+                            &backend,
+                            enabled,
+                        ) {
                             Ok(r) => json!({
                                 "type": "routine_saved",
                                 "id": r.id,
@@ -1261,7 +1270,11 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             chat_msg.len()
                         );
                         // Task 265: server diagnostic → log::, not println!.
-                        info!("[WEB] Chat received: llm='{}' msg_len={}", llm, chat_msg.len());
+                        info!(
+                            "[WEB] Chat received: llm='{}' msg_len={}",
+                            llm,
+                            chat_msg.len()
+                        );
 
                         let bus_dest = if llm == "gemini" {
                             "gemini".to_string()
@@ -1287,10 +1300,8 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         {
                             // Task 239: recover from a poisoned mutex instead of
                             // panicking the request handler.
-                            let mut guard = state
-                                .inflight
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner());
+                            let mut guard =
+                                state.inflight.lock().unwrap_or_else(|e| e.into_inner());
                             while guard.contains_key(&correlation_id) {
                                 correlation_id = correlation_id.wrapping_add(1);
                             }
@@ -1302,7 +1313,10 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         println!("[WEB]   to: {}", bus_dest);
                         println!("[WEB]   from: web_interface");
                         println!("[WEB]   type: chat_request");
-                        println!("[WEB]   prompt preview: {}", crate::utils::truncate_str(&chat_msg, 100));
+                        println!(
+                            "[WEB]   prompt preview: {}",
+                            crate::utils::truncate_str(&chat_msg, 100)
+                        );
 
                         println!("[WEB]   to: {}", bus_dest);
 
@@ -1320,9 +1334,15 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         println!("[WEB] Publishing bus message now...");
                         let _ = state.bus.publish(bus_msg);
 
-                        println!("[WEB] Routing to bus_dest='{}'  (llm was '{}')", bus_dest, llm);
+                        println!(
+                            "[WEB] Routing to bus_dest='{}'  (llm was '{}')",
+                            bus_dest, llm
+                        );
                         info!("Routing chat to bus destination: {}", bus_dest);
-                        println!("[WEB] Bus publish done for correlation_id={}", correlation_id);
+                        println!(
+                            "[WEB] Bus publish done for correlation_id={}",
+                            correlation_id
+                        );
 
                         // Echo user message back to UI
                         let echo_msg = json!({
@@ -1383,8 +1403,7 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                                 String::new()
                             }
                         };
-                        let merged_config_str =
-                            restore_redacted_text(&disk_config, new_config_str);
+                        let merged_config_str = restore_redacted_text(&disk_config, new_config_str);
 
                         // Fail-safe: if any placeholder survived the restore
                         // (e.g. the key moved sections), refuse to write
@@ -1392,7 +1411,9 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         if merged_config_str.contains(REDACTED) {
                             // Task 265: a refused save is a journal event,
                             // not just a UI toast the operator might miss.
-                            warn!("config_save: refused, placeholders survived the restore; save not written");
+                            warn!(
+                                "config_save: refused, placeholders survived the restore; save not written"
+                            );
                             let error_msg = json!({
                                 "type": "config_status",
                                 "status": "error",
@@ -1418,13 +1439,9 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             warn!("config_save: rejected, invalid TOML syntax (save not written)");
                         }
                         if let Ok(_parsed) = parse_result {
-                            let write_result =
-                                fs::write(&state.config_path, &merged_config_str);
+                            let write_result = fs::write(&state.config_path, &merged_config_str);
                             if let Err(e) = &write_result {
-                                warn!(
-                                    "config_save: failed to write {}: {e}",
-                                    state.config_path
-                                );
+                                warn!("config_save: failed to write {}: {e}", state.config_path);
                             }
                             if write_result.is_ok() {
                                 let success_msg = json!({
@@ -1682,8 +1699,20 @@ async fn serve_index() -> Html<String> {
 /// with 400, missing files return 404. No POST/upload — writes happen only
 /// server-side via the create_artifact tool, so no new mutation surface.
 async fn serve_artifact(AxumPath(name): AxumPath<String>) -> impl IntoResponse {
-    let bad = |msg: &'static str| (StatusCode::BAD_REQUEST, HeaderMap::new(), msg.as_bytes().to_vec());
-    let not_found = || (StatusCode::NOT_FOUND, HeaderMap::new(), b"artifact not found".to_vec());
+    let bad = |msg: &'static str| {
+        (
+            StatusCode::BAD_REQUEST,
+            HeaderMap::new(),
+            msg.as_bytes().to_vec(),
+        )
+    };
+    let not_found = || {
+        (
+            StatusCode::NOT_FOUND,
+            HeaderMap::new(),
+            b"artifact not found".to_vec(),
+        )
+    };
 
     if name.is_empty()
         || name == "."
@@ -1731,9 +1760,9 @@ async fn serve_artifact(AxumPath(name): AxumPath<String>) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CONTENT_TYPE,
-        content_type.parse().unwrap_or_else(|_| {
-            header::HeaderValue::from_static("application/octet-stream")
-        }),
+        content_type
+            .parse()
+            .unwrap_or_else(|_| header::HeaderValue::from_static("application/octet-stream")),
     );
     if attachment {
         headers.insert(
@@ -1804,13 +1833,7 @@ async fn browser_input(Json(req): Json<BrowserInputRequest>) -> impl IntoRespons
         )
             .into_response();
     }
-    match crate::io::browser::browser_input(
-        &req.kind,
-        req.x,
-        req.y,
-        req.text,
-        req.key,
-    ) {
+    match crate::io::browser::browser_input(&req.kind, req.x, req.y, req.text, req.key) {
         Ok(out) => (StatusCode::OK, Json(json!({"ok": true, "result": out}))).into_response(),
         Err(msg) => (
             StatusCode::BAD_REQUEST,
@@ -1894,9 +1917,11 @@ async fn serve_bus_log(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 async fn serve_hartbeat_log(State(state): State<AppState>) -> impl IntoResponse {
-    let content =
-        fs::read_to_string(resolve_log_path(&state.config_path, &state.logging.hartbeat_log))
-            .unwrap_or_else(|_| "hartbeat_log.md not found or empty".to_string());
+    let content = fs::read_to_string(resolve_log_path(
+        &state.config_path,
+        &state.logging.hartbeat_log,
+    ))
+    .unwrap_or_else(|_| "hartbeat_log.md not found or empty".to_string());
     Html(format!(
         "<pre style='white-space:pre-wrap;'>{}</pre>",
         html_escape(&content)
@@ -1961,7 +1986,8 @@ fn repo_dir(state: &AppState) -> std::path::PathBuf {
         .filter(|p| !p.as_os_str().is_empty())
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| {
-            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/home/cobble/helix"))
+            std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("/home/cobble/helix"))
         })
 }
 
@@ -2266,11 +2292,7 @@ async fn voice_speak(Json(req): Json<VoiceSpeakRequest>) -> impl IntoResponse {
 async fn voice_transcribe(mut multipart: Multipart) -> impl IntoResponse {
     const MAX_UPLOAD_BYTES: usize = 10 * 1024 * 1024; // 10 MB
     let bad = |status: StatusCode, msg: &str| {
-        (
-            status,
-            Json(json!({"ok": false, "error": msg})),
-        )
-            .into_response()
+        (status, Json(json!({"ok": false, "error": msg}))).into_response()
     };
     let mut audio: Option<(Vec<u8>, String)> = None; // (bytes, mime)
     let mut language: Option<String> = None;
@@ -2505,9 +2527,17 @@ fn handle_slash_command(cmd: &str) -> String {
                 "status" => {
                     let mut lines = vec![format!(
                         "Persona self-authoring: {}",
-                        if crate::persona::self_author_enabled() { "enabled" } else { "disabled" }
+                        if crate::persona::self_author_enabled() {
+                            "enabled"
+                        } else {
+                            "disabled"
+                        }
                     )];
-                    let live = if live_path.is_file() { "present" } else { "missing" };
+                    let live = if live_path.is_file() {
+                        "present"
+                    } else {
+                        "missing"
+                    };
                     lines.push(format!("{}: {}", live_path.display(), live));
                     let pending = crate::persona::list_pending();
                     if pending.is_empty() {
@@ -2530,7 +2560,8 @@ fn handle_slash_command(cmd: &str) -> String {
                 },
                 "draft" => {
                     if !crate::persona::self_author_enabled() {
-                        "Persona self-authoring is disabled ([helix.persona] self_author).".to_string()
+                        "Persona self-authoring is disabled ([helix.persona] self_author)."
+                            .to_string()
                     } else {
                         // Block this worker thread until the draft lands, same
                         // pattern as spawn_subagent's sync entry point.
@@ -2554,7 +2585,8 @@ fn handle_slash_command(cmd: &str) -> String {
                         }
                     }
                 }
-                _ => "Usage: /persona [status|approve [role]|discard [role]|draft [role]]".to_string(),
+                _ => "Usage: /persona [status|approve [role]|discard [role]|draft [role]]"
+                    .to_string(),
             }
         }
         "support" => {
@@ -2570,10 +2602,7 @@ fn handle_slash_command(cmd: &str) -> String {
                     if drafts.is_empty() {
                         "No support drafts. (Drafts appear here when the watcher flags new support@ mail.)".to_string()
                     } else {
-                        let mut lines = vec![format!(
-                            "Support drafts ({}):",
-                            drafts.len()
-                        )];
+                        let mut lines = vec![format!("Support drafts ({}):", drafts.len())];
                         for d in drafts {
                             lines.push(format!(
                                 "\n[{}] {:?} — to: {} | subj: {}",
@@ -2619,8 +2648,7 @@ fn handle_slash_command(cmd: &str) -> String {
                 _ => "Usage: /support [drafts|approve <id>|send <id>|discard <id>]".to_string(),
             }
         }
-        "help" => format!(
-            "Slash commands:\n\
+        "help" => "Slash commands:\n\
              /status              — system health\n\
              /tools               — list all tools\n\
              /notes               — list saved notes\n\
@@ -2640,17 +2668,17 @@ fn handle_slash_command(cmd: &str) -> String {
              /support send <id>   — send an approved draft\n\
              /support discard <id> — discard a draft\n\
              /help                — this message"
-        ),
+            .to_string(),
         other => format!("Unknown command '/{}'  — type /help for a list", other),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::auth::http_token_ok;
-    use axum::http::HeaderMap;
+    use super::*;
     use crate::bus::Bus;
+    use axum::http::HeaderMap;
 
     #[tokio::test]
     async fn test_server_start() {
@@ -2662,9 +2690,14 @@ mod tests {
             ),
         ));
         tokio::spawn(async move {
-            let _ =
-                start_web_server(bus, 8443, "".to_string(), "config.toml".to_string(), routines)
-                    .await;
+            let _ = start_web_server(
+                bus,
+                8443,
+                "".to_string(),
+                "config.toml".to_string(),
+                routines,
+            )
+            .await;
         });
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
@@ -2769,7 +2802,8 @@ mod tests {
     }
 
     #[test]
-    fn test_redacted_config_section_aware() {        // Same key name under different sections resolves per-section.
+    fn test_redacted_config_section_aware() {
+        // Same key name under different sections resolves per-section.
         let cfg = "[a]\npassword = \"pw-a\"\n[b]\npassword = \"pw-b\"\n";
         let red = redacted_config_str(cfg);
         assert!(!red.contains("pw-a"));
@@ -2787,7 +2821,11 @@ mod tests {
         let orig = "[web]\nauth_token = \"old-secret\"\nport = 8443\n";
         let new = "[web]\nauth_token = \"brand-new-secret\"\nport = 9999\n";
         let merged = restore_redacted_text(orig, new);
-        assert!(merged.contains("auth_token = \"brand-new-secret\""), "got: {}", merged);
+        assert!(
+            merged.contains("auth_token = \"brand-new-secret\""),
+            "got: {}",
+            merged
+        );
         assert!(merged.contains("port = 9999"), "got: {}", merged);
     }
 
@@ -2813,10 +2851,7 @@ mod tests {
         let a2a_state = crate::a2a::A2aState::new("http://127.0.0.1:1".to_string(), 5);
         let token_state = Arc::new("s3cret".to_string());
         Router::new()
-            .route(
-                "/.well-known/agent-card.json",
-                get(crate::a2a::agent_card),
-            )
+            .route("/.well-known/agent-card.json", get(crate::a2a::agent_card))
             .with_state(a2a_state.clone())
             .merge(
                 Router::new()
@@ -2946,6 +2981,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn support_status_and_drafts_are_public() {
         use tower::ServiceExt;
         let _g = support_route_env("helix-support-route-public");
@@ -2963,9 +2999,17 @@ mod tests {
             .body(axum::body::Body::empty())
             .unwrap();
         let resp = support_test_app().oneshot(req).await.unwrap();
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        for key in ["mode", "last_check_ms", "next_check_ms", "quiet_streak", "unhandled_count"] {
+        for key in [
+            "mode",
+            "last_check_ms",
+            "next_check_ms",
+            "quiet_streak",
+            "unhandled_count",
+        ] {
             assert!(v.get(key).is_some(), "status missing '{key}'");
         }
     }
@@ -2988,6 +3032,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_status_requires_token_and_reports_snapshot() {
         use tower::ServiceExt;
         let _g = crate::tools::subagent_tool::test_env_lock();
@@ -3007,8 +3052,10 @@ mod tests {
         )
         .unwrap();
         // One ledger cycle so latest_ledger is non-null.
-        let mut inputs = crate::self_improve::metrics::CycleInputs::default();
-        inputs.support_stats = serde_json::json!({"mode": "normal_night"});
+        let inputs = crate::self_improve::metrics::CycleInputs {
+            support_stats: serde_json::json!({"mode": "normal_night"}),
+            ..Default::default()
+        };
         let cfg = crate::self_improve::SelfImproveConfig {
             enabled: true,
             ..Default::default()
@@ -3027,7 +3074,10 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "no token");
         // Wrong token -> 401.
         let resp = self_improve_test_app()
-            .oneshot(get(Some(format!("Bearer {}-wrong", self_improve_test_token()))))
+            .oneshot(get(Some(format!(
+                "Bearer {}-wrong",
+                self_improve_test_token()
+            ))))
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "wrong token");
@@ -3037,7 +3087,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK, "right token");
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(v["phase"], 0);
         assert_eq!(v["enabled"], true);
@@ -3053,9 +3105,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-
-
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn support_mutations_require_token() {
         use tower::ServiceExt;
         let _g = support_route_env("helix-support-route-auth");
@@ -3070,21 +3121,33 @@ mod tests {
                 .body(axum::body::Body::from(body.clone()))
                 .unwrap();
             let resp = support_test_app().oneshot(req).await.unwrap();
-            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "POST {uri} without token");
+            assert_eq!(
+                resp.status(),
+                StatusCode::UNAUTHORIZED,
+                "POST {uri} without token"
+            );
             // Wrong token -> 401.
             let req = axum::http::Request::builder()
                 .method("POST")
                 .uri(uri)
                 .header("content-type", "application/json")
-                .header("authorization", format!("Bearer {}-wrong", support_test_token()))
+                .header(
+                    "authorization",
+                    format!("Bearer {}-wrong", support_test_token()),
+                )
                 .body(axum::body::Body::from(body.clone()))
                 .unwrap();
             let resp = support_test_app().oneshot(req).await.unwrap();
-            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "POST {uri} with wrong token");
+            assert_eq!(
+                resp.status(),
+                StatusCode::UNAUTHORIZED,
+                "POST {uri} with wrong token"
+            );
         }
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn support_approve_send_flow_via_routes() {
         use tower::ServiceExt;
         let _g = support_route_env("helix-support-route-flow");
@@ -3100,7 +3163,10 @@ mod tests {
                 .unwrap()
         };
         // Approve with token -> ok.
-        let resp = support_test_app().oneshot(post("/support/approve", body.clone())).await.unwrap();
+        let resp = support_test_app()
+            .oneshot(post("/support/approve", body.clone()))
+            .await
+            .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         // Send without approve would 400 — but this one IS approved; stub the
         // send tool so no real binary is needed.
@@ -3108,15 +3174,21 @@ mod tests {
             {"type":"function","function":{"name":"mcp__mail__send_message","description":"send","parameters":{}}}
         )]);
         crate::mcp_client::stub_try_execute_for_tests("mcp__mail__send_message", "queued");
-        let resp = support_test_app().oneshot(post("/support/send", body.clone())).await.unwrap();
+        let resp = support_test_app()
+            .oneshot(post("/support/send", body.clone()))
+            .await
+            .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&b).unwrap();
         assert_eq!(v["ok"], true);
         assert_eq!(v["draft"]["status"], "sent");
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn support_send_unapproved_is_bad_request() {
         use tower::ServiceExt;
         let _g = support_route_env("helix-support-route-noauto");
@@ -3130,7 +3202,9 @@ mod tests {
             .unwrap();
         let resp = support_test_app().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-        let b = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let b = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&b).unwrap();
         assert_eq!(v["ok"], false);
         assert!(v["error"].as_str().unwrap().contains("not approved"));
@@ -3259,29 +3333,57 @@ mod tests {
     #[test]
     fn build_update_script_full_mode_runs_johns_drill() {
         // GIVEN cgroup escape is available,
-        let s = build_update_script("/home/cobble/helix", "/x/web-update.log", "/x/web-update.pid", true);
+        let s = build_update_script(
+            "/home/cobble/helix",
+            "/x/web-update.log",
+            "/x/web-update.pid",
+            true,
+        );
         // WHEN the script is generated,
         // THEN it runs John's exact drill and reports progress to the log:
         assert!(s.contains("git pull"), "must git pull");
         assert!(s.contains("cargo build --release"), "must build release");
-        assert!(s.contains("cargo run --bin installer"), "must run the installer, not reimplement it");
-        assert!(s.contains("$HOME/.cargo/bin"), "cargo needs its PATH export under systemd");
-        assert!(s.contains("echo $$ > '/x/web-update.pid'"), "must record its pid for the status endpoint");
-        assert!(s.contains(">> '/x/web-update.log' 2>&1"), "must append all output to the log");
+        assert!(
+            s.contains("cargo run --bin installer"),
+            "must run the installer, not reimplement it"
+        );
+        assert!(
+            s.contains("$HOME/.cargo/bin"),
+            "cargo needs its PATH export under systemd"
+        );
+        assert!(
+            s.contains("echo $$ > '/x/web-update.pid'"),
+            "must record its pid for the status endpoint"
+        );
+        assert!(
+            s.contains(">> '/x/web-update.log' 2>&1"),
+            "must append all output to the log"
+        );
         assert!(s.contains("EXIT:"), "must leave an EXIT marker for the UI");
     }
 
     #[test]
     fn build_update_script_safe_mode_skips_installer_step() {
         // GIVEN no systemd-run (no cgroup escape),
-        let s = build_update_script("/home/cobble/helix", "/x/web-update.log", "/x/web-update.pid", false);
+        let s = build_update_script(
+            "/home/cobble/helix",
+            "/x/web-update.log",
+            "/x/web-update.pid",
+            false,
+        );
         // WHEN the script is generated,
         // THEN the installer step is skipped — running it inside
         // helix.service's cgroup would SIGTERM the updater mid-install:
-        assert!(!s.contains("echo '--- cargo run --bin installer ---'"), "must NOT execute the installer without cgroup escape");
+        assert!(
+            !s.contains("echo '--- cargo run --bin installer ---'"),
+            "must NOT execute the installer without cgroup escape"
+        );
         assert!(s.contains("git pull"), "pull still runs");
         assert!(s.contains("cargo build --release"), "build still runs");
-        assert!(s.contains("Finish by hand"), "must tell John the manual finish command");
+        assert!(
+            s.contains("Finish by hand"),
+            "must tell John the manual finish command"
+        );
     }
 
     #[test]
@@ -3425,10 +3527,7 @@ mod tests {
         // WHEN each browser endpoint is hit without credentials,
         // THEN both reject with 401 (the screenshot handler never runs,
         // so no browser is started on an unauthenticated GET):
-        for (method, uri) in [
-            ("GET", "/browser/screenshot"),
-            ("POST", "/browser/input"),
-        ] {
+        for (method, uri) in [("GET", "/browser/screenshot"), ("POST", "/browser/input")] {
             let req = axum::http::Request::builder()
                 .method(method)
                 .uri(uri)
@@ -3513,19 +3612,27 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(v["running"], false);
         assert_eq!(v["log_tail"], "");
         // WHEN a live pid + log exist (simulating a running job),
-        std::fs::write(logs.join("web-update.pid"), format!("{}\n", std::process::id())).unwrap();
+        std::fs::write(
+            logs.join("web-update.pid"),
+            format!("{}\n", std::process::id()),
+        )
+        .unwrap();
         std::fs::write(logs.join("web-update.log"), "building…\n").unwrap();
         let resp = app
             .clone()
             .oneshot(authed("GET", "/ops/update/status"))
             .await
             .unwrap();
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         // THEN the contract reports running with the log tail:
         assert_eq!(v["running"], true);
@@ -3537,7 +3644,9 @@ mod tests {
             .oneshot(authed("GET", "/ops/update/status"))
             .await
             .unwrap();
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         // THEN running flips false but the log remains readable:
         assert_eq!(v["running"], false);
@@ -3560,7 +3669,9 @@ mod tests {
             .body(axum::body::Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         // THEN we get honest structured JSON, never a panic or a hang:
         // either initiated (a real helix box) or a detailed error here.
@@ -3653,8 +3764,7 @@ mod tests {
             .insert(4242, ("server".to_string(), get_timestamp()));
 
         // WHEN we build the snapshot,
-        let v: serde_json::Value =
-            serde_json::from_str(&agent_status_snapshot(&state)).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&agent_status_snapshot(&state)).unwrap();
 
         // THEN the shape matches the UI contract: every backend carries an
         // activity flag and the live sub-agent row is present:
@@ -3662,10 +3772,7 @@ mod tests {
         let backends = v["backends"].as_array().unwrap();
         assert_eq!(backends.len(), 3);
         let activity = |id: &str| {
-            backends
-                .iter()
-                .find(|b| b["id"] == id)
-                .unwrap()["activity"]
+            backends.iter().find(|b| b["id"] == id).unwrap()["activity"]
                 .as_str()
                 .unwrap()
                 .to_string()
@@ -3796,10 +3903,7 @@ mod tests {
             let (out, _) = bridge_out_message(&msg, &inflight);
             let v: serde_json::Value = serde_json::from_str(&out.unwrap()).unwrap();
             assert_eq!(v["type"], "llm_output");
-            assert_eq!(
-                v["backend"], want,
-                "from={from} must tag backend={want}"
-            );
+            assert_eq!(v["backend"], want, "from={from} must tag backend={want}");
             // `from` itself is still forwarded unchanged.
             assert_eq!(v["from"], from);
         }
@@ -3817,7 +3921,10 @@ mod tests {
             "kind": "svg",
             "title": "Network Map",
         }));
-        let msg = Message { from: "ollama_desktop".to_string(), ..msg };
+        let msg = Message {
+            from: "ollama_desktop".to_string(),
+            ..msg
+        };
         let (out, dirty) = bridge_out_message(&msg, &inflight);
         assert!(!dirty, "artifact must not retire in-flight entries");
         let out = out.expect("well-formed artifact must forward");
@@ -3880,7 +3987,9 @@ mod tests {
             .await
             .into_response();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-        let resp = serve_artifact(AxumPath("..".to_string())).await.into_response();
+        let resp = serve_artifact(AxumPath("..".to_string()))
+            .await
+            .into_response();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
         // Missing: 404.
@@ -3933,7 +4042,10 @@ mod tests {
         stage_one("Try rebooting.");
         let out = handle_slash_command("/support drafts");
         assert!(out.contains("Support drafts (1)"), "unexpected: {out}");
-        assert!(out.contains("Try rebooting."), "full body must be visible: {out}");
+        assert!(
+            out.contains("Try rebooting."),
+            "full body must be visible: {out}"
+        );
     }
 
     #[test]
@@ -3946,7 +4058,10 @@ mod tests {
         let d = stage_one("Draft body here.");
         // Approve does NOT send:
         let out = handle_slash_command(&format!("/support approve {}", d.id));
-        assert!(out.contains("approved") && out.contains("NOT been sent"), "unexpected: {out}");
+        assert!(
+            out.contains("approved") && out.contains("NOT been sent"),
+            "unexpected: {out}"
+        );
         // Send works only after approval:
         let out = handle_slash_command(&format!("/support send {}", d.id));
         assert!(out.contains("sent to"), "unexpected: {out}");
@@ -3957,7 +4072,10 @@ mod tests {
         let _g = support_test_env("helix-support-cmd-noauto");
         let d = stage_one("Not yet reviewed.");
         let out = handle_slash_command(&format!("/support send {}", d.id));
-        assert!(out.contains("not approved"), "unapproved send must be refused: {out}");
+        assert!(
+            out.contains("not approved"),
+            "unapproved send must be refused: {out}"
+        );
     }
 
     #[test]
@@ -4061,12 +4179,9 @@ mod tests {
     /// because read_until skips non-matching types.
     async fn ws_auth_drain(ws: &mut WsAuthStream) {
         use futures_util::StreamExt;
-        loop {
-            match tokio::time::timeout(std::time::Duration::from_millis(300), ws.next()).await {
-                Ok(Some(Ok(_))) => continue,
-                _ => break,
-            }
-        }
+        while let Ok(Some(Ok(_))) =
+            tokio::time::timeout(std::time::Duration::from_millis(300), ws.next()).await
+        {}
     }
 
     /// Send one JSON message on the socket.
@@ -4095,12 +4210,11 @@ mod tests {
                 .expect("WS read timed out")
                 .expect("WS stream ended")
                 .expect("WS read error");
-            if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if val["type"].as_str() == Some(want) {
-                        return val;
-                    }
-                }
+            if let tokio_tungstenite::tungstenite::Message::Text(text) = msg
+                && let Ok(val) = serde_json::from_str::<serde_json::Value>(&text)
+                && val["type"].as_str() == Some(want)
+            {
+                return val;
             }
         }
     }

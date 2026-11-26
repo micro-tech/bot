@@ -237,10 +237,9 @@ impl HelixAcpAgent {
             .as_deref()
             .is_some_and(|e| e.contains("failed"));
         if final_message.is_empty() {
-            final_message = final_state
-                .last_error
-                .clone()
-                .unwrap_or_else(|| "The agent completed without producing a final answer.".to_string());
+            final_message = final_state.last_error.clone().unwrap_or_else(|| {
+                "The agent completed without producing a final answer.".to_string()
+            });
             warn!("ACP turn produced no FinalAnswer; using fallback message");
         }
 
@@ -326,6 +325,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn run_prompt_produces_final_answer() {
         let _lock = hermetic_mcp_disabled();
         // GIVEN an agent and a session:
@@ -342,6 +342,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn run_prompt_unknown_session_still_runs() {
         let _lock = hermetic_mcp_disabled();
         // GIVEN an agent with no such session:

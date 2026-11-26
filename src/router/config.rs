@@ -1,14 +1,14 @@
 // router/config.rs - Full Configuration System & Hot-Reloading (Task 132 + 145)
 // Enhanced with validation, environment variable overrides, and better error handling.
 
+use log::{info, warn};
+use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use log::{info, warn};
-use notify::{Watcher, RecursiveMode, RecommendedWatcher, Event};
-use std::env;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RouterConfig {
@@ -82,7 +82,12 @@ impl ConfigManager {
             path,
         };
 
-        if manager.config.try_read().map(|c| c.hot_reload).unwrap_or(false) {
+        if manager
+            .config
+            .try_read()
+            .map(|c| c.hot_reload)
+            .unwrap_or(false)
+        {
             manager.start_watcher();
         }
 
@@ -91,7 +96,7 @@ impl ConfigManager {
 
     fn load_from_file(path: &Path) -> Option<RouterConfig> {
         let content = std::fs::read_to_string(path).ok()?;
-        if path.extension().map_or(false, |e| e == "toml") {
+        if path.extension().is_some_and(|e| e == "toml") {
             toml::from_str(&content).ok()
         } else {
             serde_json::from_str(&content).ok()
@@ -105,9 +110,11 @@ impl ConfigManager {
         std::thread::spawn(move || {
             let watch_path = path.clone();
             let watch_path_for_watch = watch_path.clone();
-            let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-                if let Ok(event) = res {
-                    if matches!(event.kind, notify::EventKind::Modify(_)) {
+            let mut watcher: RecommendedWatcher =
+                notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
+                    if let Ok(event) = res
+                        && matches!(event.kind, notify::EventKind::Modify(_))
+                    {
                         if let Some(new_cfg) = Self::load_from_file(&watch_path) {
                             let mut guard = config_arc.blocking_write();
                             *guard = new_cfg;
@@ -116,10 +123,12 @@ impl ConfigManager {
                             warn!("Failed to reload config from {:?}", watch_path);
                         }
                     }
-                }
-            }).unwrap();
+                })
+                .unwrap();
 
-            watcher.watch(&watch_path_for_watch, RecursiveMode::NonRecursive).ok();
+            watcher
+                .watch(&watch_path_for_watch, RecursiveMode::NonRecursive)
+                .ok();
 
             // Keep thread alive to receive events (block forever)
             std::thread::park();
@@ -145,11 +154,14 @@ impl ConfigManager {
 impl Default for RouterConfig {
     fn default() -> Self {
         let mut profiles = HashMap::new();
-        profiles.insert("default".into(), RoutingProfile {
-            complexity_threshold: 0.7,
-            preferred_backends: vec!["gemini".into()],
-            fallback_chain: vec!["ollama".into()],
-        });
+        profiles.insert(
+            "default".into(),
+            RoutingProfile {
+                complexity_threshold: 0.7,
+                preferred_backends: vec!["gemini".into()],
+                fallback_chain: vec!["ollama".into()],
+            },
+        );
 
         Self {
             complexity: ComplexityConfig {
@@ -179,19 +191,31 @@ impl Default for RouterConfig {
     }
 }
 
-/// === Task 145 Enhancements ===
+// === Task 145 Enhancements ===
 
 /// Validate a RouterConfig and return detailed errors if invalid.
 pub fn validate_config(cfg: &RouterConfig) -> Result<(), Vec<String>> {
     let mut errors = Vec::new();
 
     // Complexity weights must be non-negative
-    if cfg.complexity.token_weight < 0.0 { errors.push("token_weight must be >= 0".into()); }
-    if cfg.complexity.code_weight < 0.0 { errors.push("code_weight must be >= 0".into()); }
-    if cfg.complexity.reasoning_weight < 0.0 { errors.push("reasoning_weight must be >= 0".into()); }
-    if cfg.complexity.math_weight < 0.0 { errors.push("math_weight must be >= 0".into()); }
-    if cfg.complexity.multi_step_weight < 0.0 { errors.push("multi_step_weight must be >= 0".into()); }
-    if cfg.complexity.structural_weight < 0.0 { errors.push("structural_weight must be >= 0".into()); }
+    if cfg.complexity.token_weight < 0.0 {
+        errors.push("token_weight must be >= 0".into());
+    }
+    if cfg.complexity.code_weight < 0.0 {
+        errors.push("code_weight must be >= 0".into());
+    }
+    if cfg.complexity.reasoning_weight < 0.0 {
+        errors.push("reasoning_weight must be >= 0".into());
+    }
+    if cfg.complexity.math_weight < 0.0 {
+        errors.push("math_weight must be >= 0".into());
+    }
+    if cfg.complexity.multi_step_weight < 0.0 {
+        errors.push("multi_step_weight must be >= 0".into());
+    }
+    if cfg.complexity.structural_weight < 0.0 {
+        errors.push("structural_weight must be >= 0".into());
+    }
 
     // Global threshold must be between 0 and 1
     if cfg.complexity.global_threshold < 0.0 || cfg.complexity.global_threshold > 1.0 {
@@ -225,20 +249,20 @@ pub fn validate_config(cfg: &RouterConfig) -> Result<(), Vec<String>> {
 
 /// Apply environment variable overrides (LLM_ROUTER_*)
 pub fn apply_env_overrides(cfg: &mut RouterConfig) {
-    if let Ok(val) = env::var("LLM_ROUTER_COMPLEXITY_GLOBAL_THRESHOLD") {
-        if let Ok(v) = val.parse::<f32>() {
-            cfg.complexity.global_threshold = v;
-        }
+    if let Ok(val) = env::var("LLM_ROUTER_COMPLEXITY_GLOBAL_THRESHOLD")
+        && let Ok(v) = val.parse::<f32>()
+    {
+        cfg.complexity.global_threshold = v;
     }
-    if let Ok(val) = env::var("LLM_ROUTER_LOAD_GPU_MAX") {
-        if let Ok(v) = val.parse::<f32>() {
-            cfg.load_thresholds.gpu_max = v;
-        }
+    if let Ok(val) = env::var("LLM_ROUTER_LOAD_GPU_MAX")
+        && let Ok(v) = val.parse::<f32>()
+    {
+        cfg.load_thresholds.gpu_max = v;
     }
-    if let Ok(val) = env::var("LLM_ROUTER_LOAD_VRAM_MAX") {
-        if let Ok(v) = val.parse::<f32>() {
-            cfg.load_thresholds.vram_max = v;
-        }
+    if let Ok(val) = env::var("LLM_ROUTER_LOAD_VRAM_MAX")
+        && let Ok(v) = val.parse::<f32>()
+    {
+        cfg.load_thresholds.vram_max = v;
     }
     if let Ok(val) = env::var("LLM_ROUTER_HOT_RELOAD") {
         cfg.hot_reload = val.to_lowercase() == "true";

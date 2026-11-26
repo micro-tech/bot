@@ -19,9 +19,9 @@
 //! so the model layer treats message bodies as DATA, never instructions.
 
 pub mod config;
-pub mod state;
-pub mod drafts;
 pub mod drafter;
+pub mod drafts;
+pub mod state;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -30,7 +30,7 @@ use chrono_tz::Tz;
 use log::{debug, info, warn};
 
 pub use config::SupportConfig;
-pub use state::{WatchMode, WatchState, MAX_DRAFT_ATTEMPTS};
+pub use state::{MAX_DRAFT_ATTEMPTS, WatchMode, WatchState};
 
 /// Backend pinned for support reply drafting (task 258).
 ///
@@ -129,12 +129,7 @@ pub fn resolve_mail_tools() -> Option<ResolvedMailTools> {
     let prefix = format!("mcp__{}__", MAIL_SERVER_NAME);
     let names: Vec<String> = crate::mcp_client::tool_definitions()
         .iter()
-        .filter_map(|d| {
-            d.get("function")?
-                .get("name")?
-                .as_str()
-                .map(str::to_string)
-        })
+        .filter_map(|d| d.get("function")?.get("name")?.as_str().map(str::to_string))
         .filter(|n| n.starts_with(&prefix))
         .collect();
     if names.is_empty() {
@@ -151,8 +146,15 @@ pub fn resolve_mail_tools() -> Option<ResolvedMailTools> {
     };
     // Prefer explicit check/list names; fall back to the first mail tool so
     // a differently-named surface still yields *something* to probe with.
-    let check = pick(&["check_inbox", "list_messages", "check", "inbox", "list", "messages"])
-        .or_else(|| names.first().cloned())?;
+    let check = pick(&[
+        "check_inbox",
+        "list_messages",
+        "check",
+        "inbox",
+        "list",
+        "messages",
+    ])
+    .or_else(|| names.first().cloned())?;
     let send = pick(&["send_message", "send", "reply"])?;
     Some(ResolvedMailTools { check, send })
 }
@@ -179,12 +181,12 @@ pub(crate) fn strip_untrusted_tags(output: &str) -> &str {
 /// `split_whitespace().next()` turned "Alice <alice@example.com>" into
 /// "Alice", misaddressing the draft).
 pub fn extract_email(from: &str) -> String {
-    if let Some(a) = from.find('<') {
-        if let Some(b) = from[a..].find('>') {
-            let inner = from[a + 1..a + b].trim();
-            if !inner.is_empty() {
-                return inner.to_string();
-            }
+    if let Some(a) = from.find('<')
+        && let Some(b) = from[a..].find('>')
+    {
+        let inner = from[a + 1..a + b].trim();
+        if !inner.is_empty() {
+            return inner.to_string();
         }
     }
     from.split_whitespace()
@@ -237,12 +239,7 @@ pub fn parse_mail_list(output: &str) -> Vec<IncomingMail> {
             if id.is_empty() {
                 return None;
             }
-            let str_field = |k: &str| {
-                m.get(k)
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string()
-            };
+            let str_field = |k: &str| m.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
             Some(IncomingMail {
                 id: id.to_string(),
                 from: extract_email(&str_field("from")),
@@ -303,9 +300,7 @@ pub fn desired_cadence_ms(now_ms: u64, mode: WatchMode, cfg: &SupportConfig) -> 
 pub fn should_check(now_ms: u64, state: &WatchState, cfg: &SupportConfig) -> bool {
     match state.last_check_ms {
         None => true, // first run: check immediately
-        Some(last) => {
-            now_ms.saturating_sub(last) >= desired_cadence_ms(now_ms, state.mode, cfg)
-        }
+        Some(last) => now_ms.saturating_sub(last) >= desired_cadence_ms(now_ms, state.mode, cfg),
     }
 }
 
@@ -473,8 +468,8 @@ pub fn status_snapshot() -> serde_json::Value {
     })
 }
 
-use chrono::Timelike;
 use chrono::TimeZone;
+use chrono::Timelike;
 
 #[cfg(test)]
 mod tests {
@@ -551,20 +546,32 @@ mod tests {
 
     #[test]
     fn no_check_before_cadence_elapses() {
-        let mut st = WatchState::default();
-        st.last_check_ms = Some(wednesday_afternoon_ms());
-        st.mode = WatchMode::NormalDay;
+        let st = WatchState {
+            last_check_ms: Some(wednesday_afternoon_ms()),
+            mode: WatchMode::NormalDay,
+            ..Default::default()
+        };
         // 4 minutes later: not yet.
-        assert!(!should_check(wednesday_afternoon_ms() + 4 * 60_000, &st, &cfg()));
+        assert!(!should_check(
+            wednesday_afternoon_ms() + 4 * 60_000,
+            &st,
+            &cfg()
+        ));
         // 6 minutes later: yes.
-        assert!(should_check(wednesday_afternoon_ms() + 6 * 60_000, &st, &cfg()));
+        assert!(should_check(
+            wednesday_afternoon_ms() + 6 * 60_000,
+            &st,
+            &cfg()
+        ));
     }
 
     #[test]
     fn new_mail_enters_burst_and_two_clean_checks_exit() {
         let c = cfg();
-        let mut st = WatchState::default();
-        st.mode = WatchMode::NormalDay;
+        let mut st = WatchState {
+            mode: WatchMode::NormalDay,
+            ..Default::default()
+        };
         // GIVEN new mail arrives:
         let m = record_check(&mut st, wednesday_afternoon_ms(), &["m1".into()], &c);
         assert_eq!(m, WatchMode::Burst);
@@ -582,9 +589,11 @@ mod tests {
     #[test]
     fn burst_exits_to_night_mode_overnight() {
         let c = cfg();
-        let mut st = WatchState::default();
-        st.mode = WatchMode::Burst;
-        st.quiet_streak = 1;
+        let mut st = WatchState {
+            mode: WatchMode::Burst,
+            quiet_streak: 1,
+            ..Default::default()
+        };
         let m = record_check(&mut st, wednesday_night_ms(), &[], &c);
         assert_eq!(m, WatchMode::NormalNight);
     }
@@ -672,7 +681,10 @@ mod tests {
             "99"
         );
         // String ids still work, and id-less / null-id items still drop:
-        assert_eq!(parse_mail_list(r#"[{"id":"abc","subject":"x"}]"#)[0].id, "abc");
+        assert_eq!(
+            parse_mail_list(r#"[{"id":"abc","subject":"x"}]"#)[0].id,
+            "abc"
+        );
         assert!(parse_mail_list(r#"[{"uid":null,"subject":"x"}]"#).is_empty());
         assert!(parse_mail_list(r#"[{"subject":"x"}]"#).is_empty());
     }
@@ -726,7 +738,11 @@ mod tests {
         }
         // THEN burst is exited and the streak reset.
         let st = WatchState::load(&dir);
-        assert_ne!(st.mode, WatchMode::Burst, "two clean checks must exit burst");
+        assert_ne!(
+            st.mode,
+            WatchMode::Burst,
+            "two clean checks must exit burst"
+        );
         assert_eq!(st.quiet_streak, 0);
         // No new mail seen: sink still has exactly the first message.
         assert_eq!(sink.got.lock().unwrap().len(), 1);
@@ -781,7 +797,8 @@ mod tests {
 
         // WHEN the cap is reached:
         let mut st = WatchState::load(&dir);
-        st.draft_attempts.insert("r1".to_string(), MAX_DRAFT_ATTEMPTS);
+        st.draft_attempts
+            .insert("r1".to_string(), MAX_DRAFT_ATTEMPTS);
         st.save(&dir).unwrap();
         backdate_last_check(&dir);
         // THEN it is no longer re-driven, but stays unhandled for John:
@@ -821,6 +838,7 @@ mod tests {
     /// before approval. Then approve + send: the send tool must fire exactly
     /// once, carrying the approved text.
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn mock_end_to_end_support_loop() {
         let _g = crate::tools::subagent_tool::test_env_lock();
         let dir = std::env::temp_dir().join("helix-support-e2e-mock");
@@ -851,7 +869,11 @@ mod tests {
 
         // 2. Burst mode entered while the message is unhandled.
         let state = WatchState::load(&dir);
-        assert_eq!(state.mode, WatchMode::Burst, "expected burst after new mail");
+        assert_eq!(
+            state.mode,
+            WatchMode::Burst,
+            "expected burst after new mail"
+        );
         assert_eq!(state.unhandled_count(), 1);
 
         // 3. Draft via the Gemini-delegated path (sub-agent dispatch stubbed;
@@ -893,9 +915,17 @@ mod tests {
             .iter()
             .filter(|(n, _)| n == "mcp__mail__send_message")
             .collect();
-        assert_eq!(sends.len(), 1, "send tool must fire exactly once: {calls:?}");
         assert_eq!(
-            sends[0].1.get("body").and_then(|v| v.as_str()).unwrap_or(""),
+            sends.len(),
+            1,
+            "send tool must fire exactly once: {calls:?}"
+        );
+        assert_eq!(
+            sends[0]
+                .1
+                .get("body")
+                .and_then(|v| v.as_str())
+                .unwrap_or(""),
             approved.body.as_str(),
             "send must carry the approved text"
         );

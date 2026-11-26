@@ -51,13 +51,13 @@ pub(crate) fn append_log_line(path: &PathBuf, line: &str) {
             }
         }
     }
-    if let Some(f) = handles.get_mut(path) {
-        if let Err(e) = f.write_all(line.as_bytes()) {
-            error!("Failed to write to log file {:?}: {}", path, e);
-            // Stale handle (e.g. the file was replaced): drop it so the
-            // next call reopens.
-            handles.remove(path);
-        }
+    if let Some(f) = handles.get_mut(path)
+        && let Err(e) = f.write_all(line.as_bytes())
+    {
+        error!("Failed to write to log file {:?}: {}", path, e);
+        // Stale handle (e.g. the file was replaced): drop it so the
+        // next call reopens.
+        handles.remove(path);
     }
 }
 
@@ -225,10 +225,7 @@ pub fn parse_heartbeat_md(content: &str) -> Option<(u64, String, u64, u64)> {
 /// Seconds since the beat file was last modified, measured against `now`.
 /// None when the file is missing or its mtime is unreadable (treated as
 /// infinitely stale by the watchdog).
-pub fn heartbeat_stale_secs(
-    path: &std::path::Path,
-    now: std::time::SystemTime,
-) -> Option<u64> {
+pub fn heartbeat_stale_secs(path: &std::path::Path, now: std::time::SystemTime) -> Option<u64> {
     let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok()?;
     now.duration_since(mtime).ok().map(|d| d.as_secs())
 }
@@ -308,10 +305,7 @@ mod heartbeat_utils_tests {
         let long_ago = now - Duration::from_secs(3000);
 
         // WHEN the predicate runs with a 300s interval:
-        let stale = now
-            .duration_since(long_ago)
-            .ok()
-            .map(|d| d.as_secs());
+        let stale = now.duration_since(long_ago).ok().map(|d| d.as_secs());
 
         // THEN the beat is reported missed:
         assert_eq!(stale, Some(3000));
@@ -346,7 +340,7 @@ pub fn in_nightly_window() -> bool {
 pub fn in_nightly_window_at<Tz: chrono::TimeZone>(dt: &chrono::DateTime<Tz>) -> bool {
     use chrono::Timelike;
     let h = dt.hour();
-    h >= 1 && h < 7
+    (1..7).contains(&h)
 }
 
 #[cfg(test)]
@@ -355,7 +349,10 @@ mod nightly_window_tests {
     use chrono::{Local, TimeZone};
 
     fn at(h: u32, m: u32) -> chrono::DateTime<Local> {
-        Local.with_ymd_and_hms(2026, 10, 5, h, m, 0).single().unwrap()
+        Local
+            .with_ymd_and_hms(2026, 10, 5, h, m, 0)
+            .single()
+            .unwrap()
     }
 
     #[test]

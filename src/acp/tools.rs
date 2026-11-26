@@ -67,7 +67,11 @@ mod tests {
         // THEN we get a real catalog with the known tools:
         assert!(!catalog.is_empty(), "expected Helix to advertise tools");
         let names: Vec<&str> = catalog.iter().map(|t| t.name.as_str()).collect();
-        assert!(names.contains(&"send_email"), "missing send_email: {:?}", names);
+        assert!(
+            names.contains(&"send_email"),
+            "missing send_email: {:?}",
+            names
+        );
         assert!(names.contains(&"read_log"), "missing read_log: {:?}", names);
     }
 

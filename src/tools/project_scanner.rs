@@ -13,10 +13,10 @@
 //! See Cargo.toml [features] and the comments there for setup on Windows
 //! (set OPENSSL_DIR after installing OpenSSL).
 
-use serde_json::Value;
-use std::path::Path;
-use std::fs;
 use chrono::Utc;
+use serde_json::Value;
+use std::fs;
+use std::path::Path;
 
 use crate::config::project_scanner::{ProjectConfig, ProjectScannerConfig};
 
@@ -25,9 +25,9 @@ use crate::config::project_scanner::{ProjectConfig, ProjectScannerConfig};
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProjectScanResult {
     pub project_name: String,
-    pub target_machine: String,     // e.g. "main-pc"
-    pub scanned_from: String,       // e.g. "dell630"
-    pub protocol: String,           // "ssh", "smb", "local", etc.
+    pub target_machine: String, // e.g. "main-pc"
+    pub scanned_from: String,   // e.g. "dell630"
+    pub protocol: String,       // "ssh", "smb", "local", etc.
     pub base_path: String,
     pub scanned_at: String,
     pub file_count: usize,
@@ -39,15 +39,25 @@ pub struct ProjectScanResult {
 
 /// Main entry: scan a single project using its config + global scanner config.
 /// For "ssh" protocol we use real SSH when possible (via ssh2 + system or vendored OpenSSL).
-pub fn scan_project(project: &ProjectConfig, scanner_cfg: &ProjectScannerConfig) -> ProjectScanResult {
+pub fn scan_project(
+    project: &ProjectConfig,
+    scanner_cfg: &ProjectScannerConfig,
+) -> ProjectScanResult {
     let protocol = project.effective_protocol(&scanner_cfg.default_protocol());
     let max_depth = project.effective_max_depth(scanner_cfg.default_max_depth());
     let scanned_from = scanner_cfg.scanned_from();
 
     let effective_path = project.remote_path.clone();
 
-    let (tree, file_count, dir_count) = if protocol == "local" || Path::new(&effective_path).exists() {
-        walk_local_directory(&effective_path, max_depth, &project.include_globs, &project.exclude_globs)
+    let (tree, file_count, dir_count) = if protocol == "local"
+        || Path::new(&effective_path).exists()
+    {
+        walk_local_directory(
+            &effective_path,
+            max_depth,
+            &project.include_globs,
+            &project.exclude_globs,
+        )
     } else if protocol == "ssh" {
         // Real SSH remote walker (preferred for Dell 630 → Main PC over LAN).
         // This code path is only active when the "ssh" Cargo feature is enabled.
@@ -65,12 +75,22 @@ pub fn scan_project(project: &ProjectConfig, scanner_cfg: &ProjectScannerConfig)
             ) {
                 Ok(res) => res,
                 Err(e) => {
-                    eprintln!("[project_scanner] SSH scan failed: {}. Using local fallback if possible.", e);
+                    eprintln!(
+                        "[project_scanner] SSH scan failed: {}. Using local fallback if possible.",
+                        e
+                    );
                     if Path::new(&effective_path).exists() {
-                        walk_local_directory(&effective_path, max_depth, &project.include_globs, &project.exclude_globs)
+                        walk_local_directory(
+                            &effective_path,
+                            max_depth,
+                            &project.include_globs,
+                            &project.exclude_globs,
+                        )
                     } else {
                         (
-                            vec![serde_json::json!({"type": "error", "message": format!("SSH error: {}", e)})],
+                            vec![
+                                serde_json::json!({"type": "error", "message": format!("SSH error: {}", e)}),
+                            ],
                             0,
                             0,
                         )
@@ -87,7 +107,12 @@ pub fn scan_project(project: &ProjectConfig, scanner_cfg: &ProjectScannerConfig)
                 project.name
             );
             if Path::new(&effective_path).exists() {
-                walk_local_directory(&effective_path, max_depth, &project.include_globs, &project.exclude_globs)
+                walk_local_directory(
+                    &effective_path,
+                    max_depth,
+                    &project.include_globs,
+                    &project.exclude_globs,
+                )
             } else {
                 (
                     vec![serde_json::json!({
@@ -106,7 +131,12 @@ pub fn scan_project(project: &ProjectConfig, scanner_cfg: &ProjectScannerConfig)
             protocol, project.name
         );
         if Path::new(&effective_path).exists() {
-            walk_local_directory(&effective_path, max_depth, &project.include_globs, &project.exclude_globs)
+            walk_local_directory(
+                &effective_path,
+                max_depth,
+                &project.include_globs,
+                &project.exclude_globs,
+            )
         } else {
             (vec![], 0, 0)
         }
@@ -134,6 +164,7 @@ pub fn scan_project(project: &ProjectConfig, scanner_cfg: &ProjectScannerConfig)
 }
 
 /// Walks a local (or mounted) directory. Respects include/exclude globs at a basic level.
+#[allow(clippy::too_many_arguments)]
 fn walk_local_directory(
     base_path: &str,
     max_depth: usize,
@@ -144,7 +175,12 @@ fn walk_local_directory(
     let mut file_count = 0usize;
     let mut dir_count = 0usize;
 
-    fn should_include(name: &str, rel_path: &str, include: &Option<Vec<String>>, exclude: &Option<Vec<String>>) -> bool {
+    fn should_include(
+        name: &str,
+        rel_path: &str,
+        include: &Option<Vec<String>>,
+        exclude: &Option<Vec<String>>,
+    ) -> bool {
         if let Some(ex) = exclude {
             for pat in ex {
                 let pat_clean = pat.trim_matches('*');
@@ -154,7 +190,9 @@ fn walk_local_directory(
             }
         }
         if let Some(inc) = include {
-            if inc.is_empty() { return true; }
+            if inc.is_empty() {
+                return true;
+            }
             for pat in inc {
                 let pat_clean = pat.trim_matches('*');
                 if rel_path.contains(pat_clean) || name.contains(pat_clean) {
@@ -183,8 +221,16 @@ fn walk_local_directory(
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-                let rel_path = path.strip_prefix(dir).unwrap_or(&path).to_string_lossy().to_string();
+                let name = path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                let rel_path = path
+                    .strip_prefix(dir)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .to_string();
 
                 if !should_include(&name, &rel_path, include, exclude) {
                     continue;
@@ -195,7 +241,16 @@ fn walk_local_directory(
                 if is_dir {
                     *dir_count += 1;
                     let mut children = Vec::new();
-                    walk(&path, current_depth + 1, max_depth, include, exclude, &mut children, file_count, dir_count);
+                    walk(
+                        &path,
+                        current_depth + 1,
+                        max_depth,
+                        include,
+                        exclude,
+                        &mut children,
+                        file_count,
+                        dir_count,
+                    );
 
                     tree.push(serde_json::json!({
                         "type": "directory",
@@ -217,7 +272,16 @@ fn walk_local_directory(
     }
 
     let start = Path::new(base_path);
-    walk(start, 0, max_depth, include_globs, exclude_globs, &mut tree, &mut file_count, &mut dir_count);
+    walk(
+        start,
+        0,
+        max_depth,
+        include_globs,
+        exclude_globs,
+        &mut tree,
+        &mut file_count,
+        &mut dir_count,
+    );
 
     (tree, file_count, dir_count)
 }
@@ -261,8 +325,7 @@ fn walk_ssh_directory(
         let mut last_err: Option<std::io::Error> = None;
         let mut tcp_opt: Option<TcpStream> = None;
         for addr in &addrs {
-            match TcpStream::connect_timeout(addr, Duration::from_secs(SSH_CONNECT_TIMEOUT_SECS))
-            {
+            match TcpStream::connect_timeout(addr, Duration::from_secs(SSH_CONNECT_TIMEOUT_SECS)) {
                 Ok(tcp) => {
                     tcp_opt = Some(tcp);
                     break;
@@ -315,17 +378,30 @@ fn walk_ssh_directory(
         fc: &mut usize,
         dc: &mut usize,
     ) -> Result<(), String> {
-        if depth > max_depth { return Ok(()); }
+        if depth > max_depth {
+            return Ok(());
+        }
 
-        let entries = sftp.readdir(std::path::Path::new(path))
+        let entries = sftp
+            .readdir(std::path::Path::new(path))
             .map_err(|e| format!("readdir {}: {}", path, e))?;
 
         for (p, stat) in entries {
-            let name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
-            let rel = p.strip_prefix(path).unwrap_or(&p).to_string_lossy().to_string();
+            let name = p
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let rel = p
+                .strip_prefix(path)
+                .unwrap_or(&p)
+                .to_string_lossy()
+                .to_string();
 
             if let Some(ex) = exclude {
-                if ex.iter().any(|pat| rel.contains(pat.trim_matches('*'))) { continue; }
+                if ex.iter().any(|pat| rel.contains(pat.trim_matches('*'))) {
+                    continue;
+                }
             }
             if let Some(inc) = include {
                 if !inc.is_empty() && !inc.iter().any(|pat| rel.contains(pat.trim_matches('*'))) {
@@ -336,7 +412,17 @@ fn walk_ssh_directory(
             if stat.is_dir() {
                 *dc += 1;
                 let mut children = vec![];
-                let _ = walk_remote(sftp, &p.to_string_lossy(), depth + 1, max_depth, include, exclude, &mut children, fc, dc);
+                let _ = walk_remote(
+                    sftp,
+                    &p.to_string_lossy(),
+                    depth + 1,
+                    max_depth,
+                    include,
+                    exclude,
+                    &mut children,
+                    fc,
+                    dc,
+                );
                 tree.push(serde_json::json!({
                     "type": "directory",
                     "name": name,
@@ -356,7 +442,17 @@ fn walk_ssh_directory(
         Ok(())
     }
 
-    walk_remote(&sftp, remote_path, 0, max_depth, include_globs, exclude_globs, &mut tree, &mut file_count, &mut dir_count)?;
+    walk_remote(
+        &sftp,
+        remote_path,
+        0,
+        max_depth,
+        include_globs,
+        exclude_globs,
+        &mut tree,
+        &mut file_count,
+        &mut dir_count,
+    )?;
     Ok((tree, file_count, dir_count))
 }
 
@@ -382,7 +478,8 @@ fn walk_ssh_directory(
 
 /// Tool wrapper: scan_projects
 pub fn scan_projects(args: &Value) -> String {
-    let config_str = args.get("config_toml")
+    let config_str = args
+        .get("config_toml")
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
@@ -399,9 +496,13 @@ pub fn scan_projects(args: &Value) -> String {
 
     let results: Vec<_> = if let Some(name) = project_name {
         if name == "all" || name == "*" {
-            projects.iter().map(|p| scan_project(p, &scanner_cfg)).collect()
+            projects
+                .iter()
+                .map(|p| scan_project(p, &scanner_cfg))
+                .collect()
         } else {
-            projects.iter()
+            projects
+                .iter()
                 .filter(|p| p.name == name)
                 .map(|p| scan_project(p, &scanner_cfg))
                 .collect()
@@ -418,11 +519,15 @@ pub fn scan_projects(args: &Value) -> String {
         serde_json::to_value(&results).unwrap_or_default()
     };
 
-    serde_json::to_string_pretty(&output).unwrap_or_else(|_| "Failed to serialize scan results".to_string())
+    serde_json::to_string_pretty(&output)
+        .unwrap_or_else(|_| "Failed to serialize scan results".to_string())
 }
 
 /// === Task 172: Mermaid Project Map Enhancer ===
-pub fn generate_mermaid_from_scan_result(scan_result: &ProjectScanResult, title: Option<&str>) -> String {
+pub fn generate_mermaid_from_scan_result(
+    scan_result: &ProjectScanResult,
+    title: Option<&str>,
+) -> String {
     let title = title.unwrap_or(&scan_result.project_name);
     let mut mermaid = format!(
         "```mermaid\ngraph TD\n    subgraph \"{}\" [{} on {} (scanned from {})]\n",
@@ -431,12 +536,7 @@ pub fn generate_mermaid_from_scan_result(scan_result: &ProjectScanResult, title:
 
     let mut node_id = 0u32;
 
-    fn add_node(
-        node: &Value,
-        parent_id: Option<&str>,
-        mermaid: &mut String,
-        node_id: &mut u32,
-    ) {
+    fn add_node(node: &Value, parent_id: Option<&str>, mermaid: &mut String, node_id: &mut u32) {
         let name = node["name"].as_str().unwrap_or("?");
         let typ = node["type"].as_str().unwrap_or("file");
 
@@ -455,11 +555,11 @@ pub fn generate_mermaid_from_scan_result(scan_result: &ProjectScanResult, title:
             mermaid.push_str(&format!("        {} --> {}\n", pid, nid));
         }
 
-        if typ == "directory" {
-            if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
-                for child in children {
-                    add_node(child, Some(&nid), mermaid, node_id);
-                }
+        if typ == "directory"
+            && let Some(children) = node.get("children").and_then(|c| c.as_array())
+        {
+            for child in children {
+                add_node(child, Some(&nid), mermaid, node_id);
             }
         }
     }
@@ -519,7 +619,8 @@ pub fn generate_project_map_from_scan(args: &Value) -> String {
                 if let Ok(s) = serde_json::from_value(val.clone()) {
                     s
                 } else {
-                    return "Error: could not parse scan result. Run scan_projects first.".to_string();
+                    return "Error: could not parse scan result. Run scan_projects first."
+                        .to_string();
                 }
             } else {
                 return "Error parsing scan input".to_string();
@@ -583,7 +684,12 @@ exclude_globs = ["target/**"]
         assert_eq!(p.target_machine, "main-pc");
         assert_eq!(p.effective_protocol("ssh"), "local");
         assert_eq!(p.effective_max_depth(10), 2);
-        assert!(p.include_globs.as_ref().unwrap().contains(&"*.rs".to_string()));
+        assert!(
+            p.include_globs
+                .as_ref()
+                .unwrap()
+                .contains(&"*.rs".to_string())
+        );
     }
 
     #[test]
@@ -616,8 +722,8 @@ max_depth = 1
         }));
 
         // Should be valid JSON and contain the project name
-        let parsed: serde_json::Value = serde_json::from_str(&result_str)
-            .expect("scan_projects should return valid JSON");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&result_str).expect("scan_projects should return valid JSON");
         assert_eq!(parsed["project_name"], "current");
         assert!(parsed["file_count"].as_u64().is_some());
         assert!(parsed["tree"].is_array());
@@ -646,8 +752,8 @@ max_depth = 0
             "project": "all"
         }));
 
-        let parsed: serde_json::Value = serde_json::from_str(&result_str)
-            .expect("should return array of results");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&result_str).expect("should return array of results");
         assert!(parsed.is_array());
         let arr = parsed.as_array().unwrap();
         assert!(arr.len() >= 2);
@@ -667,7 +773,7 @@ max_depth = 0
             max_depth: 2,
             tree: vec![
                 json!({"type": "directory", "name": "src", "path": "src", "children": []}),
-                json!({"type": "file", "name": "Cargo.toml", "path": "Cargo.toml", "size": 1234})
+                json!({"type": "file", "name": "Cargo.toml", "path": "Cargo.toml", "size": 1234}),
             ],
             metadata: json!({"source": "test"}),
         };
@@ -747,6 +853,6 @@ max_depth = 0
 
         let json_str = serde_json::to_string(&scan).expect("ProjectScanResult should serialize");
         assert!(json_str.contains("serde-test"));
-        let _ : ProjectScanResult = serde_json::from_str(&json_str).expect("should roundtrip");
+        let _: ProjectScanResult = serde_json::from_str(&json_str).expect("should roundtrip");
     }
 }

@@ -20,8 +20,10 @@ async fn test_skill_list_tools() {
 
     let result = ctx.skills.call("list_tools", &json!({}));
     // Should return text (even if empty)
-    assert!(matches!(result, helix::hy_evo::node::NodeResult::Text(_)) ||
-            matches!(result, helix::hy_evo::node::NodeResult::Value(_)));
+    assert!(
+        matches!(result, helix::hy_evo::node::NodeResult::Text(_))
+            || matches!(result, helix::hy_evo::node::NodeResult::Value(_))
+    );
 
     ctx.shutdown().await;
 }

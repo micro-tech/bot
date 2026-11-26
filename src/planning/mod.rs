@@ -6,4 +6,4 @@ pub mod reflection;
 #[allow(unused_imports)]
 pub use planner::{Planner, PlannerInterface};
 #[allow(unused_imports)]
-pub use reflection::{Reflector, ReflectionInterface};
+pub use reflection::{ReflectionInterface, Reflector};

@@ -22,9 +22,12 @@ pub struct Message {
 }
 
 /// Bus system to route messages between components.
+/// One subscriber: (component name, channel sender).
+type Subscriber = (String, tokio::sync::mpsc::UnboundedSender<Message>);
+
 pub struct Bus {
     sender: Sender<Message>,
-    subscribers: Arc<Mutex<Vec<(String, tokio::sync::mpsc::UnboundedSender<Message>)>>>, // List of subscribers (component name, channel sender)
+    subscribers: Arc<Mutex<Vec<Subscriber>>>, // List of subscribers (component name, channel sender)
 }
 
 // H6 (task 383): subscribers are now tokio::sync::mpsc receivers. The old
@@ -51,14 +54,17 @@ pub fn global_bus() -> Option<Arc<Bus>> {
     GLOBAL_BUS.get().cloned()
 }
 
+impl Default for Bus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Bus {
     /// Creates a new bus instance with router thread.
     pub fn new() -> Self {
         let (sender, receiver) = channel::<Message>();
-        let subscribers = Arc::new(Mutex::new(Vec::<(
-            String,
-            tokio::sync::mpsc::UnboundedSender<Message>,
-        )>::new()));
+        let subscribers = Arc::new(Mutex::new(Vec::<Subscriber>::new()));
         let subs_clone = Arc::clone(&subscribers);
         thread::spawn(move || {
             println!("[Bus] Router thread started");
@@ -67,10 +73,8 @@ impl Bus {
                 let subs_guard = subs_clone.lock().unwrap_or_else(|e| e.into_inner());
                 let mut delivered = false;
                 for (component, sub_sender) in subs_guard.iter() {
-                    if component == &message.to {
-                        if sub_sender.send(message.clone()).is_ok() {
-                            delivered = true;
-                        }
+                    if component == &message.to && sub_sender.send(message.clone()).is_ok() {
+                        delivered = true;
                     }
                 }
                 if !delivered {
@@ -79,7 +83,10 @@ impl Bus {
                     // preview — bus data is untrusted content, so the
                     // eprintln! above (routing metadata only) is the
                     // whole report; no duplicate, no preview.
-                    eprintln!("[Bus] ⚠️ NO SUBSCRIBER for destination: '{}' (from='{}')", message.to, message.from);
+                    eprintln!(
+                        "[Bus] ⚠️ NO SUBSCRIBER for destination: '{}' (from='{}')",
+                        message.to, message.from
+                    );
                 }
             }
             println!("[Bus] Router thread exited");
@@ -133,10 +140,7 @@ impl Bus {
             message.data.len()
         );
 
-        crate::utils::append_log_line(
-            &std::path::PathBuf::from("logs/bus_log.md"),
-            &log_entry,
-        );
+        crate::utils::append_log_line(&std::path::PathBuf::from("logs/bus_log.md"), &log_entry);
     }
 }
 
@@ -193,14 +197,13 @@ mod tests {
         // Delivery still works on the async channel.
         let bus2 = Bus::new();
         let mut rx2 = bus2.subscribe("web_interface");
-        bus2
-            .publish(Message {
-                to: "web_interface".into(),
-                from: "test".into(),
-                data: "hello".into(),
-                timestamp: 0,
-            })
-            .unwrap();
+        bus2.publish(Message {
+            to: "web_interface".into(),
+            from: "test".into(),
+            data: "hello".into(),
+            timestamp: 0,
+        })
+        .unwrap();
         let got = tokio::time::timeout(Duration::from_secs(5), rx2.recv()).await;
         assert!(got.is_ok(), "published message must arrive");
         assert_eq!(got.unwrap().expect("channel open").data, "hello");

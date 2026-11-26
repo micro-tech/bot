@@ -92,15 +92,32 @@ impl ProjectScannerConfig {
                     name,
                     target_machine,
                     remote_path,
-                    protocol: entry.get("protocol").and_then(|p| p.as_str()).map(|s| s.to_string()),
+                    protocol: entry
+                        .get("protocol")
+                        .and_then(|p| p.as_str())
+                        .map(|s| s.to_string()),
                     include_globs: entry.get("include_globs").and_then(|g| {
-                        g.as_array().map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                        g.as_array().map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect()
+                        })
                     }),
                     exclude_globs: entry.get("exclude_globs").and_then(|g| {
-                        g.as_array().map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                        g.as_array().map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect()
+                        })
                     }),
-                    max_depth: entry.get("max_depth").and_then(|d| d.as_integer()).map(|i| i as usize),
-                    description: entry.get("description").and_then(|d| d.as_str()).map(|s| s.to_string()),
+                    max_depth: entry
+                        .get("max_depth")
+                        .and_then(|d| d.as_integer())
+                        .map(|i| i as usize),
+                    description: entry
+                        .get("description")
+                        .and_then(|d| d.as_str())
+                        .map(|s| s.to_string()),
                 })
             })
             .collect()

@@ -52,7 +52,15 @@ impl WorkflowGenome {
             last_modified: now,
         }
     }
+}
 
+impl Default for WorkflowGenome {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WorkflowGenome {
     /// Add a node to the genome and return its index
     pub fn add_node(&mut self, metadata: NodeMetadata, node: Node) -> usize {
         let index = self.nodes.len();

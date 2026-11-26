@@ -1,7 +1,7 @@
 //! Persistent Genome Storage (Task 35)
 use crate::hy_evo::genome::WorkflowGenome;
-use sqlx::sqlite::SqlitePool;
 use sqlx::Row;
+use sqlx::sqlite::SqlitePool;
 
 pub struct GenomeStore {
     pool: SqlitePool,

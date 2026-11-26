@@ -63,8 +63,14 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoEngine<L> {
 
         // Attach reflection to workflow metadata
         if let Some(g) = self.population.first_mut() {
-            g.metadata.insert("last_reflection".to_string(), serde_json::Value::String(summary));
-            g.metadata.insert("reflection_suggestions".to_string(), serde_json::json!(suggestions));
+            g.metadata.insert(
+                "last_reflection".to_string(),
+                serde_json::Value::String(summary),
+            );
+            g.metadata.insert(
+                "reflection_suggestions".to_string(),
+                serde_json::json!(suggestions),
+            );
         }
 
         Ok(record)
@@ -101,8 +107,12 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoEngine<L> {
         }
 
         // 1. Select top N
-        let mut sorted: Vec<_> = self.population.iter().cloned().collect();
-        sorted.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        let mut sorted: Vec<_> = self.population.to_vec();
+        sorted.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         let parents: Vec<_> = sorted.into_iter().take(top_n).collect();
 
         // 2. Generate offspring via mutation + crossover
@@ -133,11 +143,13 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoEngine<L> {
         }
 
         // 4. Replace worst performers
-        self.population.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
+        self.population.sort_by(|a, b| {
+            a.score
+                .partial_cmp(&b.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         let replace_count = offspring.len().min(self.population.len());
-        for i in 0..replace_count {
-            self.population[i] = offspring[i].clone();
-        }
+        self.population[..replace_count].clone_from_slice(&offspring[..replace_count]);
     }
 }

@@ -1,11 +1,11 @@
 //! End-to-end test verifying ReflectionPlannerAdapter as default planner (Task 2)
 //! and HealthStore integration in Cpu (Task 161).
 
-use helix::agents::simple_planner::SimplePlanner;
-use helix::agents::reflection_planner_adapter::ReflectionPlannerAdapter;
-use helix::agents::runtime_loop::RuntimeLoop;
-use helix::agents::rule_layer::RuleLayer;
 use helix::agents::agent_state::AgentState;
+use helix::agents::reflection_planner_adapter::ReflectionPlannerAdapter;
+use helix::agents::rule_layer::RuleLayer;
+use helix::agents::runtime_loop::RuntimeLoop;
+use helix::agents::simple_planner::SimplePlanner;
 
 #[tokio::test]
 async fn test_reflection_planner_adapter_end_to_end() {
@@ -20,7 +20,10 @@ async fn test_reflection_planner_adapter_end_to_end() {
     let final_state = runtime.run(state).await;
 
     // Should complete within step limit and halt cleanly
-    assert!(final_state.halted, "Runtime should halt after goal completion or max steps");
+    assert!(
+        final_state.halted,
+        "Runtime should halt after goal completion or max steps"
+    );
 
     // The planner (via ReflectionPlannerAdapter) successfully produced decisions.
     // "Tool 'noop' not found" is expected because we didn't register tools in this test.
@@ -33,8 +36,10 @@ async fn test_reflection_planner_adapter_end_to_end() {
         assert!(is_expected, "Unexpected error: {}", err);
     }
 
-    println!("✅ ReflectionPlannerAdapter E2E test passed (halted={}, steps={}, reason={:?})",
-             final_state.halted, final_state.step_count, final_state.last_error);
+    println!(
+        "✅ ReflectionPlannerAdapter E2E test passed (halted={}, steps={}, reason={:?})",
+        final_state.halted, final_state.step_count, final_state.last_error
+    );
 
     // Verify ReflectionPlannerAdapter was actually used (it delegates to SimplePlanner)
     // The key success metric is that the planner produced a valid decision without crashing

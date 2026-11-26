@@ -52,7 +52,11 @@ impl OkfFetcher {
 
         let base = self.config.server_url();
         let url = if let Some(id) = bundle_id {
-            format!("{}/okf/bundles/{}/manifest.json", base.trim_end_matches('/'), id)
+            format!(
+                "{}/okf/bundles/{}/manifest.json",
+                base.trim_end_matches('/'),
+                id
+            )
         } else {
             format!("{}/okf/manifest.json", base.trim_end_matches('/'))
         };
@@ -72,15 +76,15 @@ impl OkfFetcher {
             let token = token_owned.clone();
             async move {
                 let mut req = client.get(&url);
-                if let Some(etag) = etag {
-                    if !etag.is_empty() {
-                        req = req.header("If-None-Match", etag);
-                    }
+                if let Some(etag) = etag
+                    && !etag.is_empty()
+                {
+                    req = req.header("If-None-Match", etag);
                 }
-                if let Some(token) = token {
-                    if !token.is_empty() {
-                        req = req.bearer_auth(token);
-                    }
+                if let Some(token) = token
+                    && !token.is_empty()
+                {
+                    req = req.bearer_auth(token);
                 }
                 match req.send().await {
                     Err(e) => {
@@ -97,9 +101,7 @@ impl OkfFetcher {
                     }
                     Ok(resp) => {
                         let status = resp.status();
-                        if status.is_success()
-                            || status == reqwest::StatusCode::NOT_MODIFIED
-                        {
+                        if status.is_success() || status == reqwest::StatusCode::NOT_MODIFIED {
                             Ok(resp)
                         } else if crate::io::retry::is_retryable_status(status) {
                             let delay = policy.delay_for_response(attempt, resp.headers());
@@ -427,8 +429,7 @@ mod tests {
         // GIVEN the official schema and a manifest from the mock server:
         let schema_text =
             std::fs::read_to_string("okf_bundle_schema.json").expect("schema file present");
-        let schema: serde_json::Value =
-            serde_json::from_str(&schema_text).expect("schema parses");
+        let schema: serde_json::Value = serde_json::from_str(&schema_text).expect("schema parses");
         let required: Vec<&str> = schema["required"]
             .as_array()
             .expect("schema has required")

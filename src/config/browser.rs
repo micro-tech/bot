@@ -23,7 +23,7 @@ use serde::Deserialize;
 ///
 /// Security boundary (tasks 351/353): the browser runs as cobble on the
 /// R630 and can reach the LAN; its Google session is John's. Scope is OAuth
-/// + user-directed browsing, NOT open-ended LLM web browsing with John's
+/// and user-directed browsing, NOT open-ended LLM web browsing with John's
 /// Google session. Navigation is confined to `allowed_hosts` (default:
 /// Google + localhost); anything else is refused and the LLM is told to ask
 /// the user. The tool never returns password field contents (see
@@ -131,7 +131,10 @@ impl BrowserConfig {
     /// built-in Google + localhost default when none are configured.
     pub fn effective_allowed_hosts(&self) -> Vec<String> {
         if self.allowed_hosts.is_empty() {
-            DEFAULT_ALLOWED_HOSTS.iter().map(|s| s.to_string()).collect()
+            DEFAULT_ALLOWED_HOSTS
+                .iter()
+                .map(|s| s.to_string())
+                .collect()
         } else {
             self.allowed_hosts.clone()
         }
@@ -169,8 +172,9 @@ impl BrowserConfig {
             return p;
         }
         match std::env::var("HOME") {
-            Ok(home) if !home.is_empty() => std::path::PathBuf::from(home)
-                .join(".config/google-mcp/token.json"),
+            Ok(home) if !home.is_empty() => {
+                std::path::PathBuf::from(home).join(".config/google-mcp/token.json")
+            }
             _ => std::path::PathBuf::from(".config/google-mcp/token.json"),
         }
     }

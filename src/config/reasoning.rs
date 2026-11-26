@@ -21,9 +21,9 @@ impl ReasoningConfig {
     }
 
     pub fn default_goal(&self) -> String {
-        self.default_goal.clone().unwrap_or_else(|| {
-            "Improve agent reliability, safety, and self-correction".to_string()
-        })
+        self.default_goal
+            .clone()
+            .unwrap_or_else(|| "Improve agent reliability, safety, and self-correction".to_string())
     }
 
     pub fn cycle_interval(&self) -> u64 {

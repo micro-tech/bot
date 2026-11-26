@@ -8,7 +8,9 @@ pub struct WorkflowRegistry {
 
 impl WorkflowRegistry {
     pub fn new() -> Self {
-        Self { store: HashMap::new() }
+        Self {
+            store: HashMap::new(),
+        }
     }
 
     pub fn register(&mut self, input_type: &str, genome: WorkflowGenome) {
@@ -21,5 +23,11 @@ impl WorkflowRegistry {
 
     pub fn list_types(&self) -> Vec<String> {
         self.store.keys().cloned().collect()
+    }
+}
+
+impl Default for WorkflowRegistry {
+    fn default() -> Self {
+        Self::new()
     }
 }

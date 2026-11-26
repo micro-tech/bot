@@ -158,7 +158,15 @@ impl VectorMemory {
     pub fn new() -> Self {
         Self::with_embedder(Box::new(OllamaEmbedder::from_env()), None)
     }
+}
 
+impl Default for VectorMemory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl VectorMemory {
     /// In-memory with an injected embedder (tests, custom providers).
     pub fn with_embedder(embedder: Box<dyn Embedder + Send + Sync>, file: Option<PathBuf>) -> Self {
         Self {
@@ -292,7 +300,11 @@ impl VectorMemory {
             match serde_json::to_vec_pretty(&facts) {
                 Ok(bytes) => {
                     if let Err(e) = durable_write_json(path, &bytes) {
-                        log::error!("failed to persist vector facts to {}: {}", path.display(), e);
+                        log::error!(
+                            "failed to persist vector facts to {}: {}",
+                            path.display(),
+                            e
+                        );
                     }
                 }
                 Err(e) => log::error!("failed to serialize vector facts: {}", e),
@@ -320,10 +332,14 @@ fn cosine_sim(a: &[f32], b: &[f32]) -> f32 {
 mod tests {
     use super::*;
 
+    /// Scripted embedder response: map text -> vector, or None to
+    /// simulate an unreachable backend.
+    type EmbedFn = Box<dyn FnMut(&str) -> Option<Vec<f32>> + Send + Sync>;
+
     /// Test embedder with scripted responses: map text -> vector, or None to
     /// simulate an unreachable backend.
     struct StubEmbedder {
-        f: Box<dyn FnMut(&str) -> Option<Vec<f32>> + Send + Sync>,
+        f: EmbedFn,
         pub calls: usize,
     }
 
@@ -364,8 +380,7 @@ mod tests {
     #[test]
     fn semantically_similar_facts_rank_above_unrelated_ones() {
         // GIVEN facts from two topics with a working embedder:
-        let mut mem =
-            VectorMemory::with_embedder(Box::new(two_topic_embedder()), None);
+        let mut mem = VectorMemory::with_embedder(Box::new(two_topic_embedder()), None);
         mem.add_fact("the dog barked loudly".to_string());
         mem.add_fact("rust ownership model".to_string());
 
@@ -409,10 +424,8 @@ mod tests {
         // WHEN facts are added through a disk-backed memory,
         // THEN dropping and reloading restores identical content and search works:
         {
-            let mut mem = VectorMemory::with_embedder(
-                Box::new(two_topic_embedder()),
-                Some(path.clone()),
-            );
+            let mut mem =
+                VectorMemory::with_embedder(Box::new(two_topic_embedder()), Some(path.clone()));
             mem.add_fact("the dog barked".to_string());
             mem.add_fact("rust ownership".to_string());
             assert!(path.exists(), "facts file must exist after add_fact");

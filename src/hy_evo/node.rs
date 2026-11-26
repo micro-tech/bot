@@ -27,10 +27,7 @@ pub enum Node {
     },
 
     /// Reflection step
-    Reflection {
-        target: String,
-        prompt: String,
-    },
+    Reflection { target: String, prompt: String },
 
     /// Execute a deterministic Rust function
     Code {
@@ -65,7 +62,9 @@ pub enum ConditionNode {
         key: String,
         value: serde_json::Value,
     },
-    OutputContains { text: String },
+    OutputContains {
+        text: String,
+    },
     Custom {
         name: String,
         params: HashMap<String, serde_json::Value>,

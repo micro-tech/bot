@@ -41,8 +41,7 @@ pub struct ChatTurn {
     pub assistant: String,
 }
 
-static HISTORY: LazyLock<Mutex<VecDeque<ChatTurn>>> =
-    LazyLock::new(|| Mutex::new(VecDeque::new()));
+static HISTORY: LazyLock<Mutex<VecDeque<ChatTurn>>> = LazyLock::new(|| Mutex::new(VecDeque::new()));
 
 fn lock() -> std::sync::MutexGuard<'static, VecDeque<ChatTurn>> {
     HISTORY.lock().unwrap_or_else(|e| e.into_inner())
@@ -95,13 +94,12 @@ fn history_file_path() -> String {
 
 /// Append one turn as a JSONL line. Best-effort: logs and continues on error.
 fn append_to_disk(turn: &ChatTurn) {
-    let line =
-        serde_json::json!({ "user": turn.user, "assistant": turn.assistant }).to_string();
+    let line = serde_json::json!({ "user": turn.user, "assistant": turn.assistant }).to_string();
     let path = history_file_path();
-    if let Some(parent) = std::path::Path::new(&path).parent() {
-        if !parent.as_os_str().is_empty() {
-            let _ = std::fs::create_dir_all(parent);
-        }
+    if let Some(parent) = std::path::Path::new(&path).parent()
+        && !parent.as_os_str().is_empty()
+    {
+        let _ = std::fs::create_dir_all(parent);
     }
     use std::io::Write;
     match std::fs::OpenOptions::new()
@@ -162,12 +160,11 @@ pub fn load_from_disk() {
         // line, silently losing history on the next restart. Report once.
         let mut first_err: Option<std::io::Error> = None;
         for t in &turns {
-            let line =
-                serde_json::json!({ "user": t.user, "assistant": t.assistant }).to_string();
-            if let Err(e) = writeln!(f, "{}", line) {
-                if first_err.is_none() {
-                    first_err = Some(e);
-                }
+            let line = serde_json::json!({ "user": t.user, "assistant": t.assistant }).to_string();
+            if let Err(e) = writeln!(f, "{}", line)
+                && first_err.is_none()
+            {
+                first_err = Some(e);
             }
         }
         if let Some(e) = first_err {
@@ -314,15 +311,21 @@ mod tests {
         with_clean_history(|| {
             let path = std::env::var("HELIX_CHAT_HISTORY_FILE").unwrap();
             let mut content = String::new();
-            content.push_str(&serde_json::json!({"user": "good one", "assistant": "good answer"}).to_string());
+            content.push_str(
+                &serde_json::json!({"user": "good one", "assistant": "good answer"}).to_string(),
+            );
             content.push('\n');
             content.push_str("this is not json at all\n");
-            content.push_str(&serde_json::json!({"user": "", "assistant": "empty user"}).to_string());
+            content
+                .push_str(&serde_json::json!({"user": "", "assistant": "empty user"}).to_string());
             content.push('\n');
             content.push_str(&serde_json::json!({"broken": "no user field"}).to_string());
             content.push('\n');
             content.push('\n');
-            content.push_str(&serde_json::json!({"user": "good two", "assistant": "good answer two"}).to_string());
+            content.push_str(
+                &serde_json::json!({"user": "good two", "assistant": "good answer two"})
+                    .to_string(),
+            );
             content.push('\n');
             std::fs::write(&path, content).unwrap();
             // WHEN reloading,
@@ -342,7 +345,9 @@ mod tests {
             let path = std::env::var("HELIX_CHAT_HISTORY_FILE").unwrap();
             let mut content = String::new();
             for i in 0..25 {
-                let line = serde_json::json!({"user": format!("q{}", i), "assistant": format!("a{}", i)}).to_string();
+                let line =
+                    serde_json::json!({"user": format!("q{}", i), "assistant": format!("a{}", i)})
+                        .to_string();
                 content.push_str(&line);
                 content.push('\n');
             }
@@ -355,10 +360,7 @@ mod tests {
             assert_eq!(turns[0].user, "q15");
             assert_eq!(turns[MAX_TURNS - 1].user, "q24");
             // AND the file was compacted to the retained turns:
-            let line_count = std::fs::read_to_string(&path)
-                .unwrap()
-                .lines()
-                .count();
+            let line_count = std::fs::read_to_string(&path).unwrap().lines().count();
             assert_eq!(line_count, MAX_TURNS);
         });
     }

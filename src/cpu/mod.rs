@@ -1,22 +1,22 @@
 // src/cpu/mod.rs
 #![allow(unused_imports)]
 
+pub mod commands;
 pub mod executor;
 pub mod instructions;
 pub mod interfaces;
 pub mod state;
 pub mod workflow_executor;
-pub mod commands;
 
 use std::sync::Arc;
 use std::time::Instant;
 
 use crate::bus::{Bus, Message};
-use crate::reasoning::engine::ReasoningEngine;
 use crate::cpu::instructions::Instruction;
 #[allow(unused_imports)]
 use crate::cpu::interfaces::{BusInterface, LlmInterface, MemoryInterface, SkillInterface};
 use crate::cpu::state::{AgentState, HeartbeatState};
+use crate::reasoning::engine::ReasoningEngine;
 use log::{debug, error, info, warn};
 
 use crate::hy_evo::integration::{CpuExecutor as HyEvoCpuExecutor, HyEvoIntegration};
@@ -27,7 +27,9 @@ use crate::hy_evo::workflow::{Workflow, WorkflowContext};
 use crate::config::manifest::SystemManifest;
 use crate::io::ollama::LlmTarget;
 use crate::memory::MemoryManager;
-use crate::router::{route, resolve_with_fallback, LLMBackend, RoutingContext, RouterConfig, HealthStore};
+use crate::router::{
+    HealthStore, LLMBackend, RouterConfig, RoutingContext, resolve_with_fallback, route,
+};
 use crate::utils::{log_to_file, now_ms};
 
 use crate::agents::{
@@ -97,16 +99,14 @@ where
     /// Load router configuration from a TOML file (hot-reload friendly).
     pub fn load_router_config(&mut self, path: &str) -> Result<(), String> {
         match std::fs::read_to_string(path) {
-            Ok(content) => {
-                match toml::from_str::<RouterConfig>(&content) {
-                    Ok(cfg) => {
-                        self.router_config = cfg;
-                        log_to_file(&format!("Loaded router config from {}", path));
-                        Ok(())
-                    }
-                    Err(e) => Err(format!("Failed to parse router config: {}", e)),
+            Ok(content) => match toml::from_str::<RouterConfig>(&content) {
+                Ok(cfg) => {
+                    self.router_config = cfg;
+                    log_to_file(&format!("Loaded router config from {}", path));
+                    Ok(())
                 }
-            }
+                Err(e) => Err(format!("Failed to parse router config: {}", e)),
+            },
             Err(e) => Err(format!("Failed to read router config file: {}", e)),
         }
     }
@@ -130,18 +130,19 @@ where
 
         // Load router configuration at startup (non-fatal)
         let router_config = match std::fs::read_to_string("router.toml") {
-            Ok(content) => {
-                match toml::from_str::<RouterConfig>(&content) {
-                    Ok(cfg) => {
-                        log_to_file("Loaded router.toml at Cpu startup");
-                        cfg
-                    }
-                    Err(e) => {
-                        log_to_file(&format!("Failed to parse router.toml, using defaults: {}", e));
-                        RouterConfig::default()
-                    }
+            Ok(content) => match toml::from_str::<RouterConfig>(&content) {
+                Ok(cfg) => {
+                    log_to_file("Loaded router.toml at Cpu startup");
+                    cfg
                 }
-            }
+                Err(e) => {
+                    log_to_file(&format!(
+                        "Failed to parse router.toml, using defaults: {}",
+                        e
+                    ));
+                    RouterConfig::default()
+                }
+            },
             Err(_) => {
                 log_to_file("router.toml not found, using RouterConfig::default()");
                 RouterConfig::default()
@@ -263,7 +264,10 @@ where
         allowed_tools: Vec<String>,
         max_steps: u32,
     ) -> anyhow::Result<String> {
-        log_to_file(&format!("[CPU] Starting unified agent runtime with goal: {}", goal));
+        log_to_file(&format!(
+            "[CPU] Starting unified agent runtime with goal: {}",
+            goal
+        ));
 
         let mut state = UnifiedAgentState::new();
         state.messages.push(format!("goal: {}", goal));
@@ -322,15 +326,20 @@ where
     /// Uses ReflectionPlannerAdapter<SimplePlanner> for structured reasoning (Task 2).
     /// Falls back to SimplePlanner if reflection parsing fails.
     pub async fn run_agent(&mut self, goal: &str, max_steps: u32) -> anyhow::Result<String> {
-        log_to_file(&format!("[CPU] run_agent (ReflectionPlannerAdapter default) started: {}", goal));
+        log_to_file(&format!(
+            "[CPU] run_agent (ReflectionPlannerAdapter default) started: {}",
+            goal
+        ));
 
         // Wrap SimplePlanner with ReflectionPlannerAdapter for structured output
         let inner_planner = SimplePlanner::new(goal.to_string());
-        let planner = crate::agents::reflection_planner_adapter::ReflectionPlannerAdapter::new(inner_planner);
+        let planner =
+            crate::agents::reflection_planner_adapter::ReflectionPlannerAdapter::new(inner_planner);
 
         let allowed_tools = vec!["noop".to_string(), "search".to_string(), "calc".to_string()];
 
-        self.run_unified_agent(goal, planner, allowed_tools, max_steps).await
+        self.run_unified_agent(goal, planner, allowed_tools, max_steps)
+            .await
     }
 
     /// Reset reasoning state (stop + clear goal)
@@ -345,7 +354,8 @@ where
         let engine = match &self.reasoning {
             Some(e) => e,
             None => {
-                self.start_reasoning("Improve agent reliability and self-correction").await?;
+                self.start_reasoning("Improve agent reliability and self-correction")
+                    .await?;
                 self.reasoning.as_ref().unwrap()
             }
         };
@@ -353,7 +363,9 @@ where
         // If no hypotheses yet, propose one
         let state = engine.get_state().await;
         if state.hypotheses.is_empty() {
-            engine.propose_hypothesis("Use self-correction loops to recover from failures").await;
+            engine
+                .propose_hypothesis("Use self-correction loops to recover from failures")
+                .await;
         }
 
         // Create plan if we don't have one
@@ -387,31 +399,31 @@ where
     }
 
     // -------------------------------------------------------------------------
-// Reasoning Engine API
-// -------------------------------------------------------------------------
-//
-// Public methods for controlling and observing the ReasoningEngine:
-//
-// Control:
-//   - start_reasoning(goal)
-//   - stop_reasoning()
-//   - reset_reasoning()
-//   - change_goal(new_goal)
-//   - pause_reasoning()
-//   - resume_reasoning()
-//   - force_next_reasoning_step()   [manual trigger]
-//
-// Observation:
-//   - reasoning_metrics()
-//   - reasoning_health_check()
-//   - reasoning_status()            [combined view]
-//   - reasoning_summary()
-//   - reasoning_trace()
-//
-// Bus integration:
-//   - reasoning_command messages (pause/resume/reset/force_step)
-//   - Periodic publishing of metrics and state
-// -------------------------------------------------------------------------
+    // Reasoning Engine API
+    // -------------------------------------------------------------------------
+    //
+    // Public methods for controlling and observing the ReasoningEngine:
+    //
+    // Control:
+    //   - start_reasoning(goal)
+    //   - stop_reasoning()
+    //   - reset_reasoning()
+    //   - change_goal(new_goal)
+    //   - pause_reasoning()
+    //   - resume_reasoning()
+    //   - force_next_reasoning_step()   [manual trigger]
+    //
+    // Observation:
+    //   - reasoning_metrics()
+    //   - reasoning_health_check()
+    //   - reasoning_status()            [combined view]
+    //   - reasoning_summary()
+    //   - reasoning_trace()
+    //
+    // Bus integration:
+    //   - reasoning_command messages (pause/resume/reset/force_step)
+    //   - Periodic publishing of metrics and state
+    // -------------------------------------------------------------------------
 
     /// Check if reasoning is currently paused
     pub fn is_reasoning_paused(&self) -> bool {
@@ -441,7 +453,10 @@ where
     /// Dispatch a fired routine to its handler.
     pub async fn handle_routine_run(&mut self, routine_id: &str, routine_name: &str) {
         println!("[CPU] routine_run: {} ({})", routine_name, routine_id);
-        log_to_file(&format!("CPU routine_run: {} ({})", routine_name, routine_id));
+        log_to_file(&format!(
+            "CPU routine_run: {} ({})",
+            routine_name, routine_id
+        ));
         match routine_id {
             "nightly_memory_consolidation" => self.routine_memory_consolidation().await,
             "error_log_review" => self.routine_error_log_review().await,
@@ -589,10 +604,11 @@ where
             );
         }
         let qm_path = crate::self_improve::metrics::qm_summary_path(&rt);
-        let (qm_summary, qm_parse_error) = match crate::self_improve::metrics::parse_qm_summary(&qm_path) {
-            Ok(s) => (s, None),
-            Err(e) => (None, Some(e)),
-        };
+        let (qm_summary, qm_parse_error) =
+            match crate::self_improve::metrics::parse_qm_summary(&qm_path) {
+                Ok(s) => (s, None),
+                Err(e) => (None, Some(e)),
+            };
         // Task 326 (H2): count_restarts is cumulative (total boot
         // markers ever written under <rt>/logs/), so the "restarts
         // detected" trigger must use the delta since the last cycle —
@@ -607,7 +623,10 @@ where
         let mut inputs = crate::self_improve::metrics::CycleInputs {
             routine_outcomes: std::collections::BTreeMap::from([(
                 "self-improve".to_string(),
-                crate::self_improve::metrics::RoutineOutcome { fired: 1, failed: 0 },
+                crate::self_improve::metrics::RoutineOutcome {
+                    fired: 1,
+                    failed: 0,
+                },
             )]),
             support_stats: crate::support_watch::status_snapshot(),
             error_total: findings.total,
@@ -686,15 +705,19 @@ where
         }
         let outcome = match crate::self_improve::worker::parse_worker_report(&report) {
             Err(e) => {
-                log_to_file(&format!("self_improve: worker report unparseable, no proposal: {e}"));
+                log_to_file(&format!(
+                    "self_improve: worker report unparseable, no proposal: {e}"
+                ));
                 "parse_failed".to_string()
             }
             Ok(new_proposal) => {
                 let signature = new_proposal.trace.trim().to_string();
                 match crate::self_improve::worker::read_proposals(&rt) {
                     Err(e) => {
-                        log_to_file(&format!("self_improve: phase_failure: proposals unreadable: {e}"));
-                        format!("phase_failure:proposals unreadable")
+                        log_to_file(&format!(
+                            "self_improve: phase_failure: proposals unreadable: {e}"
+                        ));
+                        "phase_failure:proposals unreadable".to_string()
                     }
                     Ok(prior) => {
                         match crate::self_improve::budgets::check_proposal_allowed(
@@ -712,7 +735,9 @@ where
                             }
                             Ok(()) => {
                                 match crate::self_improve::worker::intake_proposal(
-                                    &rt, new_proposal, now,
+                                    &rt,
+                                    new_proposal,
+                                    now,
                                 ) {
                                     Err(e) => {
                                         log_to_file(&format!(
@@ -727,7 +752,10 @@ where
                                                 "self-improve proposal intaked for {}",
                                                 record.signature
                                             ),
-                                            vec!["self-improve".to_string(), "proposal".to_string()],
+                                            vec![
+                                                "self-improve".to_string(),
+                                                "proposal".to_string(),
+                                            ],
                                         );
                                         format!("proposal:{}", record.signature)
                                     }
@@ -738,7 +766,9 @@ where
                 }
             }
         };
-        inputs.proposal_outcomes.insert("cycle".to_string(), outcome);
+        inputs
+            .proposal_outcomes
+            .insert("cycle".to_string(), outcome);
         // Task 362: per-cycle drafting arm — draft the oldest
         // "proposed" record that still has no diff files, via the
         // loop-drafter role (same 8 read-only tools as the worker).
@@ -793,7 +823,11 @@ where
                 work_dir: std::path::PathBuf::new(),
             };
             match crate::self_improve::evaluator::evaluate_oldest_proposal(
-                &rt, &rt, &cfg, &mut runner, eval_now,
+                &rt,
+                &rt,
+                &cfg,
+                &mut runner,
+                eval_now,
             ) {
                 Ok(Some(report)) => {
                     let outcome = if report.promoted {
@@ -832,13 +866,14 @@ where
             log_to_file("self_improve: delivery skipped: cycle deadline expired");
         } else {
             match crate::self_improve::pr::deliver_oldest_promoted_proposal(
-                &rt, &rt, &cfg, deliver_now,
+                &rt,
+                &rt,
+                &cfg,
+                deliver_now,
             ) {
                 Ok(Some(id)) => {
                     log_to_file(&format!("self_improve: delivery {id}"));
-                    inputs
-                        .proposal_outcomes
-                        .insert("delivery".to_string(), id);
+                    inputs.proposal_outcomes.insert("delivery".to_string(), id);
                 }
                 Ok(None) => {
                     inputs
@@ -896,7 +931,10 @@ where
                 f.write_all(entry.as_bytes())
             })
         {
-            warn!("nightly_report: failed to append to {}: {e}", path.display());
+            warn!(
+                "nightly_report: failed to append to {}: {e}",
+                path.display()
+            );
         }
     }
 
@@ -1038,10 +1076,8 @@ where
         // not on the log_to_file hot path). Rotation never deletes
         // silently: the older remainder is archived to <path>.prev.
         for path in self.error_log_candidates() {
-            match crate::utils::rotate_error_log_if_needed(
-                &path,
-                crate::utils::MAX_ERROR_LOG_LINES,
-            ) {
+            match crate::utils::rotate_error_log_if_needed(&path, crate::utils::MAX_ERROR_LOG_LINES)
+            {
                 Ok(Some((kept, archived))) => body.push_str(&format!(
                     "  (rotated {}: kept last {} lines, archived {} older lines to {}.prev)\n",
                     path.display(),
@@ -1112,10 +1148,7 @@ where
     fn error_log_candidates(&self) -> Vec<std::path::PathBuf> {
         let mut candidates = vec![self.runtime_dir.join("logs/error_log.md")];
         if let Some(home) = std::env::var_os("HOME") {
-            candidates.push(
-                std::path::PathBuf::from(home)
-                    .join(".helix/logs/error_log.md"),
-            );
+            candidates.push(std::path::PathBuf::from(home).join(".helix/logs/error_log.md"));
         }
         candidates
     }
@@ -1136,7 +1169,10 @@ where
             FixDecision::ProposeOnly(reason) => {
                 self.nightly_report(
                     "Code-fix autonomy",
-                    &format!("Propose-only: {}. Findings recorded, no changes made.", reason),
+                    &format!(
+                        "Propose-only: {}. Findings recorded, no changes made.",
+                        reason
+                    ),
                 );
                 return;
             }
@@ -1202,7 +1238,11 @@ where
                 "{}\n\nRespond with exactly one JSON tool call, no prose.",
                 transcript
             );
-            let reply = match self.llm.call("ollama", &prompt, &serde_json::Value::Null).await {
+            let reply = match self
+                .llm
+                .call("ollama", &prompt, &serde_json::Value::Null)
+                .await
+            {
                 crate::hy_evo::node::NodeResult::Text(t) => t,
                 _ => {
                     transcript.push_str("\nLLM gave no usable reply; stopping.\n");
@@ -1222,14 +1262,18 @@ where
             if call.get("done").and_then(|v| v.as_bool()).unwrap_or(false) {
                 outcome = format!(
                     "fix applied: {}",
-                    call.get("summary").and_then(|v| v.as_str()).unwrap_or("(no summary)")
+                    call.get("summary")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("(no summary)")
                 );
                 break;
             }
             if call.get("stuck").and_then(|v| v.as_bool()).unwrap_or(false) {
                 outcome = format!(
                     "STUCK: {}",
-                    call.get("why").and_then(|v| v.as_str()).unwrap_or("(no reason)")
+                    call.get("why")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("(no reason)")
                 );
                 break;
             }
@@ -1270,7 +1314,11 @@ where
                 self.runtime_dir.display()
             ))
             .await;
-        let bak_files: Vec<&str> = bak_list.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+        let bak_files: Vec<&str> = bak_list
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .collect();
 
         // Guardrail: verify with the relevant tests; revert on red.
         let test_out = self
@@ -1288,13 +1336,25 @@ where
                 let orig = bak.trim_end_matches(".nightly-bak");
                 let _ = self.nightly_shell(format!("mv -f {} {}", bak, orig)).await;
             }
-            outcome = format!("REVERTED (tests red): {}. Test output: {}", outcome, truncate_200(&test_out));
+            outcome = format!(
+                "REVERTED (tests red): {}. Test output: {}",
+                outcome,
+                truncate_200(&test_out)
+            );
         }
         self.nightly_report(
             "Fix attempt result",
-            &format!("Error: {}\nOutcome: {}\nTests: {}\n", error_line, outcome, if green { "GREEN" } else { "RED — reverted" }),
+            &format!(
+                "Error: {}\nOutcome: {}\nTests: {}\n",
+                error_line,
+                outcome,
+                if green { "GREEN" } else { "RED — reverted" }
+            ),
         );
-        log_to_file(&format!("nightly fix attempt: {} -> {}", error_line, outcome));
+        log_to_file(&format!(
+            "nightly fix attempt: {} -> {}",
+            error_line, outcome
+        ));
     }
 
     pub async fn arbitrate_skill(&self, task: &str) -> String {
@@ -1327,25 +1387,21 @@ where
         let logs_dir = self.runtime_dir.join("logs");
         if let Ok(entries) = std::fs::read_dir(&logs_dir) {
             for entry in entries.flatten() {
-                if let Ok(metadata) = entry.metadata() {
-                    if let Ok(modified) = metadata.modified() {
-                        if modified.elapsed().unwrap_or_default()
-                            > std::time::Duration::from_secs(7 * 24 * 3600)
-                        {
-                            // 7 days
-                            let _ = std::fs::remove_file(entry.path());
-                        }
-                    }
+                if let Ok(metadata) = entry.metadata()
+                    && let Ok(modified) = metadata.modified()
+                    && modified.elapsed().unwrap_or_default()
+                        > std::time::Duration::from_secs(7 * 24 * 3600)
+                {
+                    // 7 days
+                    let _ = std::fs::remove_file(entry.path());
                 }
             }
         }
 
         // Backup manifest
         let backups_dir = self.runtime_dir.join("backups");
-        let backup_path = backups_dir.join(format!(
-            "manifest_{}.md",
-            chrono::Utc::now().timestamp()
-        ));
+        let backup_path =
+            backups_dir.join(format!("manifest_{}.md", chrono::Utc::now().timestamp()));
         let _ = std::fs::create_dir_all(&backups_dir);
         let _ = std::fs::write(&backup_path, &self.manifest.raw);
 
@@ -1373,7 +1429,7 @@ where
                     health["message"].as_str().unwrap_or("unknown")
                 ));
                 // Optionally auto-reset if stuck
-                if self.heartbeat_tick() % 200 == 0 {
+                if self.heartbeat_tick().is_multiple_of(200) {
                     self.reset_reasoning();
                     log_to_file("Auto-reset reasoning engine due to poor health");
                 }
@@ -1444,7 +1500,8 @@ where
     /// Build a RoutingContext from a prompt for intelligent backend selection.
     fn build_routing_context(&self, prompt: &str, _correlation_id: u64) -> RoutingContext {
         let token_estimate = prompt.split_whitespace().count();
-        let has_code = prompt.contains("```") || prompt.contains("fn ") || prompt.contains("struct ");
+        let has_code =
+            prompt.contains("```") || prompt.contains("fn ") || prompt.contains("struct ");
 
         RoutingContext {
             prompt: prompt.to_string(),
@@ -1508,7 +1565,10 @@ where
         let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
         let text = payload["msg"].as_str().unwrap_or("").to_string();
 
-        println!("[CPU] Forwarding response to web_interface ({} chars)", text.len());
+        println!(
+            "[CPU] Forwarding response to web_interface ({} chars)",
+            text.len()
+        );
 
         // Build UI message
         let ui_msg = Message {
@@ -1635,7 +1695,9 @@ where
                         "resume" => self.resume_reasoning(),
                         "reset" => self.reset_reasoning(),
                         "force_step" => {
-                            log_to_file("force_step requested via bus (not yet supported in sync handler)");
+                            log_to_file(
+                                "force_step requested via bus (not yet supported in sync handler)",
+                            );
                         }
                         _ => log_to_file(&format!("Unknown reasoning_command: {}", cmd)),
                     }
@@ -1648,7 +1710,10 @@ where
                     if goal.is_empty() {
                         log_to_file("CPU received empty agent_run goal — ignored");
                     } else {
-                        log_to_file(&format!("CPU received AgentRun via bus: {} (max_steps={})", goal, max_steps));
+                        log_to_file(&format!(
+                            "CPU received AgentRun via bus: {} (max_steps={})",
+                            goal, max_steps
+                        ));
 
                         let bus_clone = self.bus.clone();
                         let goal_clone = goal.clone();
@@ -1662,19 +1727,21 @@ where
                                 "goal": goal_clone.clone(),
                                 "max_steps": max_steps,
                                 "status": "running"
-                            }).to_string(),
+                            })
+                            .to_string(),
                             timestamp: now_ms(),
                         });
 
                         // Real async execution using RuntimeLoop + SimplePlanner
                         tokio::spawn(async move {
-                            use crate::agents::simple_planner::SimplePlanner;
+                            use crate::agents::agent_state::AgentState as UnifiedAgentState;
                             use crate::agents::rule_layer::RuleLayer;
                             use crate::agents::runtime_loop::RuntimeLoop;
-                            use crate::agents::agent_state::AgentState as UnifiedAgentState;
+                            use crate::agents::simple_planner::SimplePlanner;
 
                             let planner = SimplePlanner::new(goal_clone.clone());
-                            let allowed_tools = vec!["noop".to_string(), "search".to_string(), "calc".to_string()];
+                            let allowed_tools =
+                                vec!["noop".to_string(), "search".to_string(), "calc".to_string()];
                             let rule_layer = RuleLayer::new(allowed_tools);
                             let mut runtime = RuntimeLoop::new(planner, rule_layer, max_steps);
 
@@ -1698,15 +1765,18 @@ where
                                     "status": status,
                                     "steps_taken": final_state.step_count,
                                     "error": final_state.last_error
-                                }).to_string(),
+                                })
+                                .to_string(),
                                 timestamp: now_ms(),
                             });
 
-                            log_to_file(&format!("[CPU] RuntimeLoop finished for goal '{}' with status {}", goal_clone, status));
+                            log_to_file(&format!(
+                                "[CPU] RuntimeLoop finished for goal '{}' with status {}",
+                                goal_clone, status
+                            ));
                         });
                     }
                 }
-
 
                 "skill_request" => {
                     // Direct skill execution request — CPU runs the skill synchronously
@@ -1890,6 +1960,7 @@ pub struct ErrorFindings {
 ///   format) parses and falls within the last 24h of `now`,
 /// - it carries an error marker: `[ERROR]`, `ERROR:`, `Error`, `Failed`,
 ///   `failed`, or `HALTED`.
+///
 /// The marker match is case-sensitive on purpose: routine chatter uses
 /// lowercase "error" ("error-log review: N error lines", "or error
 /// occurred"), and the review's own summary line must never count itself.
@@ -1910,6 +1981,7 @@ pub struct ErrorFindings {
 ///   so a run ending is not a failure. Any other HALTED reason still
 ///   counts (e.g. `watchdog tripped`, `Tool failed: ...`), mirroring the
 ///   acp/agent.rs rule that only `Tool failed:` is a genuine halt error.
+///
 /// Because `findings.recent` is built from counted lines only, these
 /// exclusions also keep non-actionable lines out of `maybe_nightly_fix`
 /// input (task 293.3) with no separate fixer change.
@@ -1924,6 +1996,7 @@ pub struct ErrorFindings {
 ///   operation — rejections, spawn failures, execution records, task
 ///   events; the echoed command/reason/task text can contain marker
 ///   words, e.g. a `grep Error ...` command or a `spawn failed` note).
+///
 /// Genuine errors that merely MENTION a routine or a chat command still
 /// count: the exclusion is by line prefix, not by substring.
 const ERROR_LOG_RECENT_WINDOW_MINUTES: i64 = 24 * 60;
@@ -1945,17 +2018,12 @@ fn is_counted_error_line(line: &str, now: chrono::NaiveDateTime) -> bool {
     let Some((ts, body)) = rest.split_once(']') else {
         return false;
     };
-    let Ok(stamp) = chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %I:%M:%S %p")
-    else {
+    let Ok(stamp) = chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %I:%M:%S %p") else {
         return false;
     };
     // A future stamp (clock skew) counts as recent: its age is negative,
     // which is within the window by construction.
-    if now
-        .signed_duration_since(stamp)
-        .num_minutes()
-        > ERROR_LOG_RECENT_WINDOW_MINUTES
-    {
+    if now.signed_duration_since(stamp).num_minutes() > ERROR_LOG_RECENT_WINDOW_MINUTES {
         return false;
     }
     // Task 293: report/telemetry shapes are not errors (see doc above).
@@ -1963,10 +2031,10 @@ fn is_counted_error_line(line: &str, now: chrono::NaiveDateTime) -> bool {
     if body.starts_with("self_improve: metrics") || body.starts_with("nightly fix attempt:") {
         return false;
     }
-    if let Some(reason) = body.strip_prefix("[AgentState] HALTED:") {
-        if BENIGN_HALT_REASONS.contains(&reason.trim()) {
-            return false;
-        }
+    if let Some(reason) = body.strip_prefix("[AgentState] HALTED:")
+        && BENIGN_HALT_REASONS.contains(&reason.trim())
+    {
+        return false;
     }
     // Task 312: routine + audit chatter is not an error (see doc above).
     // `CPU routine_run:` lines carry the routine's own name, which can
@@ -1986,10 +2054,7 @@ fn is_counted_error_line(line: &str, now: chrono::NaiveDateTime) -> bool {
 
 /// Task 276: the shared scan behind check_error_logs_at, over an explicit
 /// path list so tests can point it at fixtures without HOME leaking in.
-fn check_error_logs_in(
-    paths: &[std::path::PathBuf],
-    now: chrono::NaiveDateTime,
-) -> ErrorFindings {
+fn check_error_logs_in(paths: &[std::path::PathBuf], now: chrono::NaiveDateTime) -> ErrorFindings {
     let mut findings = ErrorFindings::default();
     for path in paths {
         let Ok(content) = std::fs::read_to_string(path) else {
@@ -2005,11 +2070,9 @@ fn check_error_logs_in(
             .filter(|l| is_counted_error_line(l, now))
             .collect();
         findings.total += counted.len();
-        findings.files.push((
-            path.display().to_string(),
-            counted.len(),
-            lines.len(),
-        ));
+        findings
+            .files
+            .push((path.display().to_string(), counted.len(), lines.len()));
         for line in counted.iter().rev().take(5) {
             findings.recent.push(truncate_200(line).to_string());
         }
@@ -2146,8 +2209,7 @@ mod heartbeat_tests {
         std::fs::write(&manifest_path, manifest_body).unwrap();
 
         let llm = DummyLlm;
-        let hyevo =
-            HyEvoIntegration::new(HyEvoEngine::new(llm.clone()));
+        let hyevo = HyEvoIntegration::new(HyEvoEngine::new(llm.clone()));
         Cpu::new(
             MemoryManager::new(100, 50),
             Box::new(SkillRegistry::new()),
@@ -2257,8 +2319,7 @@ mod heartbeat_tests {
         let mut cpu = test_cpu("");
         let enhanced = cpu.enhance_prompt_with_memory("hello");
         assert!(
-            enhanced.contains("fixture_belief_key")
-                && enhanced.contains("fixture_belief_value"),
+            enhanced.contains("fixture_belief_key") && enhanced.contains("fixture_belief_value"),
             "prompt must include beliefs from beliefs.json, got:\n{}",
             enhanced
         );
@@ -2268,7 +2329,8 @@ mod heartbeat_tests {
     }
 
     #[tokio::test]
-    async fn handle_heartbeat_advances_tick_count_and_timestamp() {        // GIVEN a live Cpu with an empty manifest:
+    async fn handle_heartbeat_advances_tick_count_and_timestamp() {
+        // GIVEN a live Cpu with an empty manifest:
         let cpu = test_cpu("");
         let before = std::time::Instant::now();
 
@@ -2332,8 +2394,7 @@ mod heartbeat_tests {
     fn dead_tick_paths_are_gone() {
         // The TimeScheduler placeholder and the uncompiled cpu.rs duplicate
         // must not come back: exactly one tick path (main.rs) may exist.
-        let main_rs =
-            std::fs::read_to_string("src/main.rs").expect("must run from repo root");
+        let main_rs = std::fs::read_to_string("src/main.rs").expect("must run from repo root");
         assert!(
             main_rs.contains("handle_heartbeat"),
             "main.rs must drive handle_heartbeat"
@@ -2420,17 +2481,17 @@ mod nightly_tests {
             crate::config::reasoning::ReasoningConfig::default(),
         )
         .expect("test Cpu construction must succeed");
-        assert_eq!(cpu.runtime_dir, dir, "runtime_dir derives from manifest parent");
+        assert_eq!(
+            cpu.runtime_dir, dir,
+            "runtime_dir derives from manifest parent"
+        );
         (cpu, dir)
     }
 
     #[test]
     fn fix_autonomy_gate_holds_all_four_cases() {
         // Armed only when every guardrail passes.
-        assert_eq!(
-            fix_autonomy_decision(true, 3, true),
-            FixDecision::Armed
-        );
+        assert_eq!(fix_autonomy_decision(true, 3, true), FixDecision::Armed);
         // Outside the window -> propose-only (John's grant is nightly-only).
         assert_eq!(
             fix_autonomy_decision(false, 3, true),
@@ -2451,6 +2512,7 @@ mod nightly_tests {
     // ── Task 295: chat-command routine arm ─────────────────────────────
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn chat_command_watch_dispatch_quiet_skips_without_tools() {
         // GIVEN a Cpu with no [chat_command] config and no chat tools
         // advertised, WHEN the chat-command-watch routine fires, THEN
@@ -2485,8 +2547,8 @@ mod nightly_tests {
         std::fs::write(&old_path, "old\n").unwrap();
         std::fs::write(&fresh_path, "fresh\n").unwrap();
         // Backdate the old file 8 days (past the 7-day cleanup bound):
-        let eight_days_ago = std::time::SystemTime::now()
-            - std::time::Duration::from_secs(8 * 24 * 3600);
+        let eight_days_ago =
+            std::time::SystemTime::now() - std::time::Duration::from_secs(8 * 24 * 3600);
         std::fs::File::open(&old_path)
             .unwrap()
             .set_times(std::fs::FileTimes::new().set_modified(eight_days_ago))
@@ -2509,6 +2571,7 @@ mod nightly_tests {
     // ── Task 376: hourly network capture log is a live routine ────────
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn network_capture_log_routine_appends_line() {
         // GIVEN a Cpu with stubbed wire MCP tools (interfaces + capture):
         let _lock = crate::tools::subagent_tool::test_env_lock();
@@ -2537,10 +2600,26 @@ mod nightly_tests {
         let content = std::fs::read_to_string(&log).expect("capture log must exist");
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(lines.len(), 1, "one tick appends one line: {content}");
-        assert!(lines[0].contains("ens18"), "line names the interface: {}", lines[0]);
-        assert!(lines[0].contains("pkts=3"), "line carries the packet count: {}", lines[0]);
-        assert!(lines[0].contains("retr=1"), "line counts the retransmission: {}", lines[0]);
-        assert!(lines[0].contains("rst=1"), "line counts the RST: {}", lines[0]);
+        assert!(
+            lines[0].contains("ens18"),
+            "line names the interface: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("pkts=3"),
+            "line carries the packet count: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("retr=1"),
+            "line counts the retransmission: {}",
+            lines[0]
+        );
+        assert!(
+            lines[0].contains("rst=1"),
+            "line counts the RST: {}",
+            lines[0]
+        );
         let calls = crate::mcp_client::take_try_execute_calls_for_tests();
         assert!(
             calls.iter().any(|(n, _)| n == "mcp__wire__interfaces"),
@@ -2560,6 +2639,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn network_capture_log_routine_fails_soft_without_mcp() {
         // GIVEN a Cpu with no MCP tools stubbed (wire unavailable):
         let _lock = crate::tools::subagent_tool::test_env_lock();
@@ -2591,22 +2671,22 @@ mod nightly_tests {
         .unwrap();
         std::fs::write(
             dir.join("routines.json"),
-            format!(
-                r#"[{{"id":"self-improve","enabled":{}}}]"#,
-                routine_enabled
-            ),
+            format!(r#"[{{"id":"self-improve","enabled":{}}}]"#, routine_enabled),
         )
         .unwrap();
         crate::support_watch::override_runtime_dir_for_tests(dir.clone());
         (cpu, dir)
     }
 
-    fn self_improve_ledger(dir: &std::path::Path) -> Vec<crate::self_improve::metrics::LedgerEntry> {
+    fn self_improve_ledger(
+        dir: &std::path::Path,
+    ) -> Vec<crate::self_improve::metrics::LedgerEntry> {
         let cfg = crate::self_improve::SelfImproveConfig::default();
         crate::self_improve::metrics::read_ledger(dir, &cfg).0
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_phase_zero_collects_and_proposes_nothing() {
         // GIVEN phase 0 + all kill switches clear, WHEN the arm fires,
         // THEN one ledger entry is written and NO worker is dispatched
@@ -2615,7 +2695,8 @@ mod nightly_tests {
         crate::agents::subagent_registry::reset_for_tests();
         unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
         let (mut cpu, dir) = self_improve_cpu(0, true);
-        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        cpu.handle_routine_run("self-improve", "Self-improvement loop")
+            .await;
         unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
         let entries = self_improve_ledger(&dir);
         assert_eq!(entries.len(), 1, "phase 0 must still collect one entry");
@@ -2627,6 +2708,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_kill_switch_aborts_before_dispatch() {
         // GIVEN the routine disabled in routines.json (kill #3),
         // WHEN the arm fires, THEN nothing is collected and nobody is
@@ -2635,7 +2717,8 @@ mod nightly_tests {
         crate::agents::subagent_registry::reset_for_tests();
         unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
         let (mut cpu, dir) = self_improve_cpu(1, false);
-        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        cpu.handle_routine_run("self-improve", "Self-improvement loop")
+            .await;
         unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
         assert!(
             self_improve_ledger(&dir).is_empty(),
@@ -2649,6 +2732,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_phase_one_dispatches_one_worker_on_signal() {
         // GIVEN phase 1 + a failing signal (a restart marker in the
         // runtime logs), WHEN the arm fires, THEN one ledger entry is
@@ -2662,7 +2746,8 @@ mod nightly_tests {
         let log_dir = dir.join("logs");
         std::fs::create_dir_all(&log_dir).unwrap();
         std::fs::write(log_dir.join("boot.log"), "Helix is running...\n").unwrap();
-        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        cpu.handle_routine_run("self-improve", "Self-improvement loop")
+            .await;
         unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
         let entries = self_improve_ledger(&dir);
         assert_eq!(entries.len(), 1);
@@ -2679,6 +2764,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_config_disabled_aborts_before_any_work() {
         // GIVEN config enabled=false (kill #1) with the routine enabled,
         // WHEN the arm fires, THEN nothing is collected and nobody is
@@ -2687,8 +2773,13 @@ mod nightly_tests {
         crate::agents::subagent_registry::reset_for_tests();
         unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
         let (mut cpu, dir) = self_improve_cpu(1, true);
-        std::fs::write(dir.join("config.toml"), "[self_improve]\nenabled = false\nphase = 1\n").unwrap();
-        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        std::fs::write(
+            dir.join("config.toml"),
+            "[self_improve]\nenabled = false\nphase = 1\n",
+        )
+        .unwrap();
+        cpu.handle_routine_run("self-improve", "Self-improvement loop")
+            .await;
         unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
         assert!(self_improve_ledger(&dir).is_empty());
         assert!(crate::agents::subagent_registry::snapshot().is_empty());
@@ -2696,6 +2787,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_stop_file_aborts_before_any_work() {
         // GIVEN a stop file present (kill #2) with config + routine
         // enabled, WHEN the arm fires, THEN nothing is collected and
@@ -2705,7 +2797,8 @@ mod nightly_tests {
         unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
         let (mut cpu, dir) = self_improve_cpu(1, true);
         std::fs::write(dir.join("SELF_IMPROVE_OFF"), "").unwrap();
-        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        cpu.handle_routine_run("self-improve", "Self-improvement loop")
+            .await;
         unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
         assert!(self_improve_ledger(&dir).is_empty());
         assert!(crate::agents::subagent_registry::snapshot().is_empty());
@@ -2713,6 +2806,7 @@ mod nightly_tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn self_improve_stop_file_mid_cycle_aborts_next_and_reenable_resumes() {
         // GIVEN a running loop (phase 1 + restart signal), WHEN a stop
         // file appears between cycles, THEN the next cycle aborts
@@ -2729,13 +2823,15 @@ mod nightly_tests {
         std::fs::create_dir_all(&log_dir).unwrap();
         std::fs::write(log_dir.join("boot.log"), "Helix is running...\n").unwrap();
         // Cycle 1: proceeds, dispatches once.
-        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        cpu.handle_routine_run("self-improve", "Self-improvement loop")
+            .await;
         assert_eq!(self_improve_ledger(&dir).len(), 1);
         assert_eq!(crate::agents::subagent_registry::snapshot().len(), 1);
         // Stop file appears mid-stream (between cycles).
         std::fs::write(dir.join("SELF_IMPROVE_OFF"), "").unwrap();
         // Cycle 2: aborts — no entry, no dispatch, no proposal file.
-        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        cpu.handle_routine_run("self-improve", "Self-improvement loop")
+            .await;
         assert_eq!(self_improve_ledger(&dir).len(), 1);
         assert_eq!(crate::agents::subagent_registry::snapshot().len(), 1);
         assert!(
@@ -2752,7 +2848,8 @@ mod nightly_tests {
             "Helix is running...\nHelix is running...\n",
         )
         .unwrap();
-        cpu.handle_routine_run("self-improve", "Self-improvement loop").await;
+        cpu.handle_routine_run("self-improve", "Self-improvement loop")
+            .await;
         assert_eq!(self_improve_ledger(&dir).len(), 2);
         assert_eq!(crate::agents::subagent_registry::snapshot().len(), 2);
         unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
@@ -2787,7 +2884,12 @@ mod nightly_tests {
         assert_eq!(entry.2, 2);
         assert!(findings.total >= 2);
         assert!(!findings.recent.is_empty());
-        assert!(findings.recent.iter().any(|l| l.contains("something broke")));
+        assert!(
+            findings
+                .recent
+                .iter()
+                .any(|l| l.contains("something broke"))
+        );
     }
 
     #[tokio::test]
@@ -2870,9 +2972,24 @@ mod nightly_tests {
         assert_eq!(findings.total, 3);
         assert_eq!(findings.files[0].1, 3);
         assert_eq!(findings.files[0].2, 7);
-        assert!(findings.recent.iter().any(|l| l.contains("disk write failed")));
-        assert!(findings.recent.iter().any(|l| l.contains("Failed to publish")));
-        assert!(findings.recent.iter().any(|l| l.contains("watchdog tripped")));
+        assert!(
+            findings
+                .recent
+                .iter()
+                .any(|l| l.contains("disk write failed"))
+        );
+        assert!(
+            findings
+                .recent
+                .iter()
+                .any(|l| l.contains("Failed to publish"))
+        );
+        assert!(
+            findings
+                .recent
+                .iter()
+                .any(|l| l.contains("watchdog tripped"))
+        );
         assert!(!findings.recent.iter().any(|l| l.contains("stale failure")));
         assert!(!findings.recent.iter().any(|l| l.contains("routine_run")));
     }
@@ -2914,14 +3031,54 @@ mod nightly_tests {
         assert_eq!(findings.total, 4);
         assert_eq!(findings.files[0].1, 4);
         assert_eq!(findings.files[0].2, 9);
-        assert!(findings.recent.iter().any(|l| l.contains("disk write failed")));
-        assert!(findings.recent.iter().any(|l| l.contains("Failed to publish")));
-        assert!(findings.recent.iter().any(|l| l.contains("watchdog tripped")));
-        assert!(findings.recent.iter().any(|l| l.contains("Tool failed: disk full")));
-        assert!(!findings.recent.iter().any(|l| l.contains("Terminal step reached")));
-        assert!(!findings.recent.iter().any(|l| l.contains("test termination")));
-        assert!(!findings.recent.iter().any(|l| l.contains("self_improve: metrics")));
-        assert!(!findings.recent.iter().any(|l| l.contains("nightly fix attempt")));
+        assert!(
+            findings
+                .recent
+                .iter()
+                .any(|l| l.contains("disk write failed"))
+        );
+        assert!(
+            findings
+                .recent
+                .iter()
+                .any(|l| l.contains("Failed to publish"))
+        );
+        assert!(
+            findings
+                .recent
+                .iter()
+                .any(|l| l.contains("watchdog tripped"))
+        );
+        assert!(
+            findings
+                .recent
+                .iter()
+                .any(|l| l.contains("Tool failed: disk full"))
+        );
+        assert!(
+            !findings
+                .recent
+                .iter()
+                .any(|l| l.contains("Terminal step reached"))
+        );
+        assert!(
+            !findings
+                .recent
+                .iter()
+                .any(|l| l.contains("test termination"))
+        );
+        assert!(
+            !findings
+                .recent
+                .iter()
+                .any(|l| l.contains("self_improve: metrics"))
+        );
+        assert!(
+            !findings
+                .recent
+                .iter()
+                .any(|l| l.contains("nightly fix attempt"))
+        );
         assert!(!findings.recent.iter().any(|l| l.contains("sprocket")));
     }
 
@@ -2952,9 +3109,12 @@ mod nightly_tests {
     fn is_counted_error_line_predicate() {
         let now = chrono::Local::now().naive_local();
         let recent = chrono::Local::now().format("%Y-%m-%d %I:%M:%S %p");
-        let old = (chrono::Local::now() - chrono::Duration::hours(48))
-            .format("%Y-%m-%d %I:%M:%S %p");
-        assert!(is_counted_error_line(&format!("[{recent}] ERROR: boom"), now));
+        let old =
+            (chrono::Local::now() - chrono::Duration::hours(48)).format("%Y-%m-%d %I:%M:%S %p");
+        assert!(is_counted_error_line(
+            &format!("[{recent}] ERROR: boom"),
+            now
+        ));
         assert!(is_counted_error_line(
             &format!("[{recent}] Failed to publish: x"),
             now
@@ -2999,11 +3159,15 @@ mod nightly_tests {
             now
         ));
         assert!(!is_counted_error_line(
-            &format!("[{recent}] self_improve: metrics ts=1 routines=1 routine_failed=0 errors=0 restarts=0 qm_missing=false proposals=0"),
+            &format!(
+                "[{recent}] self_improve: metrics ts=1 routines=1 routine_failed=0 errors=0 restarts=0 qm_missing=false proposals=0"
+            ),
             now
         ));
         assert!(!is_counted_error_line(
-            &format!("[{recent}] self_improve: metrics ts=1 routines=1 routine_failed=3 errors=9 restarts=0 qm_missing=false proposals=0"),
+            &format!(
+                "[{recent}] self_improve: metrics ts=1 routines=1 routine_failed=3 errors=9 restarts=0 qm_missing=false proposals=0"
+            ),
             now
         ));
         assert!(!is_counted_error_line(
@@ -3026,15 +3190,21 @@ mod nightly_tests {
             now
         ));
         assert!(!is_counted_error_line(
-            &format!("[{recent}] chat-command: spawn failed sender=cobble-jr target=local cmd=uptime err=No such file"),
+            &format!(
+                "[{recent}] chat-command: spawn failed sender=cobble-jr target=local cmd=uptime err=No such file"
+            ),
             now
         ));
         assert!(!is_counted_error_line(
-            &format!("[{recent}] chat-command: rejected sender=cobble-jr target=local cmd=grep Error /var/log/syslog reason=not allowlisted"),
+            &format!(
+                "[{recent}] chat-command: rejected sender=cobble-jr target=local cmd=grep Error /var/log/syslog reason=not allowlisted"
+            ),
             now
         ));
         assert!(!is_counted_error_line(
-            &format!("[{recent}] chat-command: sender=cobble-jr target=local cmd=grep Failed /var/log/syslog exit=1 ms=3 bytes=0"),
+            &format!(
+                "[{recent}] chat-command: sender=cobble-jr target=local cmd=grep Failed /var/log/syslog exit=1 ms=3 bytes=0"
+            ),
             now
         ));
         assert!(!is_counted_error_line(
@@ -3042,7 +3212,9 @@ mod nightly_tests {
             now
         ));
         assert!(!is_counted_error_line(
-            &format!("[{recent}] chat-command: task rejected hub_id=2 backend=server reason=Tool failed: boom"),
+            &format!(
+                "[{recent}] chat-command: task rejected hub_id=2 backend=server reason=Tool failed: boom"
+            ),
             now
         ));
         // Prefix, not substring: a genuine error mentioning a routine
@@ -3106,8 +3278,8 @@ mod nightly_tests {
         }
         std::fs::write(&path, &content).unwrap();
 
-        let rotated = crate::utils::rotate_error_log_if_needed(&path, 100)
-            .expect("rotation must not fail");
+        let rotated =
+            crate::utils::rotate_error_log_if_needed(&path, 100).expect("rotation must not fail");
         assert_eq!(rotated, Some((100, 150)));
         let kept = std::fs::read_to_string(&path).unwrap();
         assert_eq!(kept.lines().count(), 100);
@@ -3167,12 +3339,23 @@ mod nightly_tests {
             .expect("consolidated.md must exist");
         assert!(stored.contains("dummy summary"));
         // AND working memory was drained:
-        assert!(cpu.memory.working.get_recent_entries(10).is_none()
-            || cpu.memory.working.get_recent_entries(10).unwrap().is_empty());
+        assert!(
+            cpu.memory.working.get_recent_entries(10).is_none()
+                || cpu
+                    .memory
+                    .working
+                    .get_recent_entries(10)
+                    .unwrap()
+                    .is_empty()
+        );
         // AND an episodic record exists, date-tagged per task 205:
         let episodes = cpu.memory.episodic.recent(5);
         assert!(!episodes.is_empty());
-        assert!(episodes.iter().any(|e| e.event.contains("OUTCOME [nightly memory consolidation]")));
+        assert!(
+            episodes
+                .iter()
+                .any(|e| e.event.contains("OUTCOME [nightly memory consolidation]"))
+        );
         // AND the disk files grew (integration: persistence is real):
         let facts_json =
             std::fs::read_to_string("vector_facts.json").expect("vector facts must persist");
@@ -3236,8 +3419,7 @@ mod nightly_tests {
         // AND the code-fix autonomy stays propose-only unless every guardrail
         // passes (in the sandbox [shell] is off by default, so the gate
         // holds at any hour):
-        let armed = crate::utils::in_nightly_window()
-            && crate::tools::shell_tool::is_enabled();
+        let armed = crate::utils::in_nightly_window() && crate::tools::shell_tool::is_enabled();
         if !armed {
             assert!(
                 report.contains("Propose-only"),

@@ -22,7 +22,9 @@ async fn test_skill_unknown_name() {
     let mut ctx = TestContext::new();
     ctx.bootstrap().await.unwrap();
 
-    let result = ctx.skills.call("nonexistent_skill_xyz", &serde_json::json!({}));
+    let result = ctx
+        .skills
+        .call("nonexistent_skill_xyz", &serde_json::json!({}));
     assert!(matches!(result, helix::hy_evo::node::NodeResult::Error(_)));
 
     ctx.shutdown().await;

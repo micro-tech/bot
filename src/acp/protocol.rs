@@ -55,9 +55,7 @@ pub fn tool_call_notification(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::v1::schema::{
-        InitializeRequest, NewSessionRequest, PromptRequest,
-    };
+    use agent_client_protocol::v1::schema::{InitializeRequest, NewSessionRequest, PromptRequest};
 
     #[test]
     fn protocol_initialize_request_round_trips() {

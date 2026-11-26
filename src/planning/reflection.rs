@@ -35,7 +35,11 @@ impl ReflectionInterface for Reflector {
             metrics.unwrap_or("No metrics provided")
         );
 
-        let response = match self.llm.call("default", &prompt, &serde_json::json!({})).await {
+        let response = match self
+            .llm
+            .call("default", &prompt, &serde_json::json!({}))
+            .await
+        {
             crate::hy_evo::node::NodeResult::Text(text) => text,
             crate::hy_evo::node::NodeResult::Error(e) => return Err(anyhow::anyhow!(e)),
             _ => return Err(anyhow::anyhow!("Unexpected LLM response")),

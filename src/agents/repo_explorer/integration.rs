@@ -3,7 +3,9 @@
 //! Provides a lightweight "Do I need repo context?" hook that the main
 //! planner or RuntimeLoop can call before deciding on heavy file reads.
 
-use super::{needs_repo_context, explorer_impl::LocalRepoExplorer, RepoEvidence, RepoExplorer, RepoQuery};
+use super::{
+    RepoEvidence, RepoExplorer, RepoQuery, explorer_impl::LocalRepoExplorer, needs_repo_context,
+};
 use crate::agents::agent_state::AgentState;
 
 /// Returns true if the current state/query would benefit from repo exploration.

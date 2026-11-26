@@ -68,10 +68,10 @@ pub(crate) fn durable_write_json(path: &Path, bytes: &[u8]) -> std::io::Result<(
     }
     fs::rename(&tmp, path)?;
     // Fsync the directory so the rename itself is durable.
-    if let Some(parent) = path.parent() {
-        if let Ok(dir) = fs::File::open(parent) {
-            let _ = dir.sync_all();
-        }
+    if let Some(parent) = path.parent()
+        && let Ok(dir) = fs::File::open(parent)
+    {
+        let _ = dir.sync_all();
     }
     Ok(())
 }
@@ -143,7 +143,12 @@ impl MemoryManager {
         let mut mermaid = "graph TD;\n".to_string();
         for (key, value) in &self.beliefs {
             let val_str = value.to_string().replace("\"", "'");
-            mermaid.push_str(&format!("    {}[\"{}: {}\"];\n", key.replace(" ", "_").replace("-", "_"), key, val_str));
+            mermaid.push_str(&format!(
+                "    {}[\"{}: {}\"];\n",
+                key.replace(" ", "_").replace("-", "_"),
+                key,
+                val_str
+            ));
         }
         mermaid
     }

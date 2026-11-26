@@ -73,7 +73,10 @@ pub fn inject_long_term_context(state: &mut AgentState, memory: &mut MemoryManag
     // 3. Surface any stored beliefs that might be relevant
     if !memory.beliefs.is_empty() {
         let belief_count = memory.beliefs.len();
-        state.messages.push(format!("[Memory] Loaded {} persistent beliefs", belief_count));
+        state.messages.push(format!(
+            "[Memory] Loaded {} persistent beliefs",
+            belief_count
+        ));
     }
 
     info!(
@@ -102,7 +105,12 @@ pub fn record_lesson(state: &mut AgentState, goal: &str, lesson: &str, confidenc
 /// Create an ImportantOutcome record and stage it as a memory delta on the run
 /// state. Staged deltas are written to the MemoryManager by
 /// `persist_memory_deltas` when the run ends.
-pub fn record_important_outcome(state: &mut AgentState, goal: &str, summary: &str, tags: Vec<String>) {
+pub fn record_important_outcome(
+    state: &mut AgentState,
+    goal: &str,
+    summary: &str,
+    tags: Vec<String>,
+) {
     let outcome = ImportantOutcome {
         goal: goal.to_string(),
         result_summary: summary.to_string(),
@@ -130,15 +138,13 @@ pub fn persist_memory_deltas(state: &mut AgentState, memory: &mut MemoryManager)
         match kind.as_str() {
             "lesson_learned" => {
                 if let Ok(lesson) = serde_json::from_value::<LessonLearned>(value.clone()) {
-                    memory.episodic.record(format!(
-                        "LESSON [{}] {}",
-                        lesson.goal, lesson.lesson
-                    ));
+                    memory
+                        .episodic
+                        .record(format!("LESSON [{}] {}", lesson.goal, lesson.lesson));
                     // Also store in vector memory for semantic retrieval
-                    let _ = memory.vector.add_fact(format!(
-                        "Lesson about {}: {}",
-                        lesson.goal, lesson.lesson
-                    ));
+                    let _ = memory
+                        .vector
+                        .add_fact(format!("Lesson about {}: {}", lesson.goal, lesson.lesson));
                 }
             }
             "important_outcome" => {
@@ -205,19 +211,25 @@ mod tests {
         // THEN episodes and related facts land in the run state:
         let mut state = AgentState::new();
         inject_long_term_context(&mut state, &mut memory, "rust lifetimes");
-        assert!(state
-            .messages
-            .iter()
-            .any(|m| m.contains("Recalled 1 recent episodes")));
-        assert!(state
-            .messages
-            .iter()
-            .any(|m| m.contains("semantically related past facts")));
+        assert!(
+            state
+                .messages
+                .iter()
+                .any(|m| m.contains("Recalled 1 recent episodes"))
+        );
+        assert!(
+            state
+                .messages
+                .iter()
+                .any(|m| m.contains("semantically related past facts"))
+        );
         assert!(state.scratchpad.iter().any(|s| s.contains("did the thing")));
-        assert!(state
-            .scratchpad
-            .iter()
-            .any(|s| s.contains("borrow checker")));
+        assert!(
+            state
+                .scratchpad
+                .iter()
+                .any(|s| s.contains("borrow checker"))
+        );
     }
 
     #[test]
@@ -239,13 +251,21 @@ mod tests {
         assert!(state.memory_deltas.is_empty());
 
         let episodes = memory.episodic.recent(5);
-        assert!(episodes
-            .iter()
-            .any(|e| e.event.contains("LESSON [deploy] never restart without a backup")));
-        assert!(episodes
-            .iter()
-            .any(|e| e.event.contains("OUTCOME [deploy] shipped v2 at midnight")));
-        assert!(!memory.vector.search("never restart without a backup", 5).is_empty());
+        assert!(episodes.iter().any(|e| {
+            e.event
+                .contains("LESSON [deploy] never restart without a backup")
+        }));
+        assert!(
+            episodes
+                .iter()
+                .any(|e| e.event.contains("OUTCOME [deploy] shipped v2 at midnight"))
+        );
+        assert!(
+            !memory
+                .vector
+                .search("never restart without a backup", 5)
+                .is_empty()
+        );
         assert!(!memory.vector.search("shipped v2 at midnight", 5).is_empty());
     }
 

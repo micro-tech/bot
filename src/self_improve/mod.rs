@@ -61,8 +61,7 @@ pub fn set_runtime_dir(dir: PathBuf) {
 /// Test seam: override the runtime dir. Tests that use it must hold
 /// `test_env_lock()` — the override is process-global.
 #[cfg(test)]
-static TEST_RUNTIME_DIR: std::sync::Mutex<Option<PathBuf>> =
-    std::sync::Mutex::new(None);
+static TEST_RUNTIME_DIR: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
 
 #[cfg(test)]
 pub fn override_runtime_dir_for_tests(dir: PathBuf) {
@@ -152,10 +151,7 @@ pub fn check_kill_switches(
 /// `RoutineRegistry::load_or_seed`). Missing file, unparseable content,
 /// or a missing routine entry all read as disabled — fail-closed, so a
 /// handler that cannot prove the routine is enabled must not proceed.
-pub fn routine_enabled_in_file(
-    routines_path: &std::path::Path,
-    routine_id: &str,
-) -> bool {
+pub fn routine_enabled_in_file(routines_path: &std::path::Path, routine_id: &str) -> bool {
     let Ok(data) = std::fs::read_to_string(routines_path) else {
         return false;
     };
@@ -314,7 +310,10 @@ mod tests {
             "read-only check must not seed or rewrite the file"
         );
         // Missing file and garbage both read as disabled (fail-closed).
-        assert!(!routine_enabled_in_file(&dir.join("nope.json"), "self-improve"));
+        assert!(!routine_enabled_in_file(
+            &dir.join("nope.json"),
+            "self-improve"
+        ));
         std::fs::write(&path, "not json ][[[").unwrap();
         assert!(!routine_enabled_in_file(&path, "self-improve"));
         let _ = std::fs::remove_dir_all(&dir);

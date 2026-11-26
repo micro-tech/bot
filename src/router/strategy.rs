@@ -1,5 +1,5 @@
 // router/strategy.rs - Strategy trait for pluggable routing logic
-use crate::router::{LLMBackend, RoutingContext, RouterConfig};
+use crate::router::{LLMBackend, RouterConfig, RoutingContext};
 
 pub trait RoutingStrategy: Send + Sync {
     fn select(&self, ctx: &RoutingContext, config: &RouterConfig) -> LLMBackend;

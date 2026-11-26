@@ -1,37 +1,37 @@
 //! Helix crate library root (for integration tests & reuse)
 //! Re-exports the main public modules.
 
+pub mod a2a;
+pub mod acp;
+pub mod agents;
+pub mod bayesian;
+pub mod browser_install;
 pub mod bus;
-pub mod cpu;
-pub mod memory;
-pub mod skills;
-pub mod hy_evo;
+pub mod chat_command; // task 295: chat-hub command loop (read-only diagnostics)
+pub mod chat_history;
+pub mod chat_mcp_install; // task 295: chat-mcp installer hook (binary + config + [[mcp.servers]] block)
 pub mod config;
-pub mod utils;
-pub mod io;
+pub mod cpu;
+pub mod cron;
 pub mod hooks;
-pub mod tools;
+pub mod hy_evo;
+pub mod io;
 pub mod mcp_client;
+pub mod memory;
+pub mod network_capture; // task 376: hourly network capture log (24h archive)
+pub mod okf;
+pub mod persona;
 pub mod planning;
 pub mod reasoning;
-pub mod bayesian;
-pub mod agents;
-pub mod okf;
 pub mod router;
 pub mod security;
-pub mod acp;
-pub mod a2a;
-pub mod ssh;
-pub mod cron;
-pub mod chat_history;
-pub mod persona;
-pub mod support_watch; // task 256: SYSADMIN-01 adaptive support-mail poll loop
-pub mod chat_command; // task 295: chat-hub command loop (read-only diagnostics)
-pub mod network_capture; // task 376: hourly network capture log (24h archive)
-pub mod voice; // task 267/268: voice-box TTS/STT integration
 pub mod self_improve; // tasks 277+: self-improving loop (Phase 0 config first)
-pub mod chat_mcp_install; // task 295: chat-mcp installer hook (binary + config + [[mcp.servers]] block)
-pub mod browser_install; // tasks 350/360: Firefox + mini-browser installer hook (APT repo, config section, dirs)
+pub mod skills;
+pub mod ssh;
+pub mod support_watch; // task 256: SYSADMIN-01 adaptive support-mail poll loop
+pub mod tools;
+pub mod utils;
+pub mod voice; // task 267/268: voice-box TTS/STT integration // tasks 350/360: Firefox + mini-browser installer hook (APT repo, config section, dirs)
 
 // Re-export commonly used types
 pub use bus::{Bus, Message};
@@ -52,10 +52,8 @@ pub use skills::SkillRegistry;
 /// no-op instead of a panic. Call once, early, from every binary entry
 /// point (`main.rs`) before any code that logs.
 pub fn init_logging() {
-    let _ = env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info"),
-    )
-    .try_init();
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .try_init();
 }
 
 #[cfg(test)]

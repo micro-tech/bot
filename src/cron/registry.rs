@@ -89,11 +89,14 @@ pub fn parse_schedule(s: &str) -> Result<Schedule, String> {
         let rest = rest.trim();
         let (num, unit) = match rest.find(|c: char| !c.is_ascii_digit()) {
             Some(i) => rest.split_at(i),
-            None => return Err(format!("bad every schedule {:?}: want \"every <n>s|m|h|d\"", s)),
+            None => {
+                return Err(format!(
+                    "bad every schedule {:?}: want \"every <n>s|m|h|d\"",
+                    s
+                ));
+            }
         };
-        let n: u64 = num
-            .parse()
-            .map_err(|_| format!("bad count in {:?}", s))?;
+        let n: u64 = num.parse().map_err(|_| format!("bad count in {:?}", s))?;
         if n == 0 {
             return Err(format!("zero interval in {:?}", s));
         }
@@ -157,13 +160,12 @@ pub fn next_run_after(sched: Schedule, from_ms: u64) -> u64 {
             let today = from
                 .date_naive()
                 .and_hms_opt(hour, min, 0)
-                .map(|naive| {
+                .and_then(|naive| {
                     Local
                         .from_local_datetime(&naive)
                         .single()
                         .map(|dt| dt.timestamp_millis() as u64)
-                })
-                .flatten();
+                });
             match today {
                 Some(t) if t > from_ms => t,
                 _ => {
@@ -413,9 +415,7 @@ impl RoutineRegistry {
     fn normalize_backend(s: &str) -> Result<String, String> {
         match s.trim().to_lowercase().as_str() {
             "" | "auto" => Ok("auto".to_string()),
-            "local_ollama" | "lan_ollama" | "gemini" | "grok" => {
-                Ok(s.trim().to_lowercase())
-            }
+            "local_ollama" | "lan_ollama" | "gemini" | "grok" => Ok(s.trim().to_lowercase()),
             other => Err(format!(
                 "unknown backend '{}': use local_ollama | lan_ollama | gemini | grok | auto",
                 other
@@ -554,22 +554,19 @@ impl RoutineRegistry {
         let before = self.routines.len();
         self.routines.retain(|r| r.id != id);
         let removed = self.routines.len() != before;
-        if removed {
-            if let Err(e) = self.save() {
-                eprintln!("cron: failed to persist routine delete: {}", e);
-            }
+        if removed && let Err(e) = self.save() {
+            eprintln!("cron: failed to persist routine delete: {}", e);
         }
         removed
     }
 
     pub fn save(&self) -> std::io::Result<()> {
-        if let Some(parent) = self.path.parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = self.path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent)?;
         }
-        let data = serde_json::to_string_pretty(&self.routines)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let data = serde_json::to_string_pretty(&self.routines).map_err(std::io::Error::other)?;
         std::fs::write(&self.path, data)
     }
 
@@ -591,10 +588,10 @@ impl RoutineRegistry {
                 .map(|sched| next_run_after(sched, now_ms));
             fired.push(r.clone());
         }
-        if !fired.is_empty() {
-            if let Err(e) = self.save() {
-                eprintln!("cron: failed to persist fired routines: {}", e);
-            }
+        if !fired.is_empty()
+            && let Err(e) = self.save()
+        {
+            eprintln!("cron: failed to persist fired routines: {}", e);
         }
         fired
     }
@@ -705,7 +702,11 @@ mod registry_tests {
         };
         reg.save().expect("save");
         let loaded = RoutineRegistry::load_or_seed(path.clone());
-        let r = loaded.list().iter().find(|r| r.id == "mail_check").expect("routine");
+        let r = loaded
+            .list()
+            .iter()
+            .find(|r| r.id == "mail_check")
+            .expect("routine");
         assert!(r.has_agent_job());
         assert_eq!(r.agent_role, "quartermaster");
         assert_eq!(r.task, "Check the inbox.");
@@ -724,13 +725,18 @@ mod registry_tests {
         )
         .unwrap();
         let loaded = RoutineRegistry::load_or_seed(path.clone());
-        let r = loaded.list().iter().find(|r| r.id == "old").expect("routine");
+        let r = loaded
+            .list()
+            .iter()
+            .find(|r| r.id == "old")
+            .expect("routine");
         assert!(!r.has_agent_job());
         assert_eq!(r.backend, "auto"); // serde default
         let _ = std::fs::remove_file(&path);
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn cron_agent_job_end_to_end_via_stub() {
         // Task 218.3 (headless): an every-2m routine carrying an agent payload
         // fires, the payload reaches the shared dispatch helper, and a
@@ -781,7 +787,10 @@ mod registry_tests {
     fn seeded_mail_check_example_exists() {
         // Task 216.4: the twice-daily mail-check template is seeded (disabled).
         let routines = default_routines();
-        let mc = routines.iter().find(|r| r.id == "mail_check").expect("mail_check seed");
+        let mc = routines
+            .iter()
+            .find(|r| r.id == "mail_check")
+            .expect("mail_check seed");
         assert!(mc.has_agent_job());
         assert!(!mc.enabled, "mail check ships disabled; John enables it");
         assert_eq!(mc.schedule, "every 12h");
@@ -928,10 +937,22 @@ mod registry_tests {
 
     #[test]
     fn parse_every_ok() {
-        assert_eq!(parse_schedule("every 6h").unwrap(), Schedule::Every { secs: 21600 });
-        assert_eq!(parse_schedule("every 30m").unwrap(), Schedule::Every { secs: 1800 });
-        assert_eq!(parse_schedule("every 90s").unwrap(), Schedule::Every { secs: 90 });
-        assert_eq!(parse_schedule("every 2d").unwrap(), Schedule::Every { secs: 172800 });
+        assert_eq!(
+            parse_schedule("every 6h").unwrap(),
+            Schedule::Every { secs: 21600 }
+        );
+        assert_eq!(
+            parse_schedule("every 30m").unwrap(),
+            Schedule::Every { secs: 1800 }
+        );
+        assert_eq!(
+            parse_schedule("every 90s").unwrap(),
+            Schedule::Every { secs: 90 }
+        );
+        assert_eq!(
+            parse_schedule("every 2d").unwrap(),
+            Schedule::Every { secs: 172800 }
+        );
     }
 
     #[test]
@@ -1029,13 +1050,14 @@ mod registry_tests {
         // enabled loop with an empty allowed_senders list would still
         // be one config edit away from executing). Everything else
         // ships enabled.
-        assert!(reg
-            .list()
-            .iter()
-            .filter(|r| r.id != "mail_check"
-                && r.id != "self-improve"
-                && r.id != "chat-command-watch")
-            .all(|r| r.enabled));
+        assert!(
+            reg.list()
+                .iter()
+                .filter(|r| r.id != "mail_check"
+                    && r.id != "self-improve"
+                    && r.id != "chat-command-watch")
+                .all(|r| r.enabled)
+        );
         assert!(reg.list().iter().all(|r| r.next_run_ms.is_some()));
         assert!(path.exists());
         let _ = std::fs::remove_file(&path);
@@ -1136,7 +1158,14 @@ mod registry_tests {
     fn crud_add_ok_and_next_run_set() {
         let (mut reg, path) = empty_reg("crud_add.json");
         let r = reg
-            .add("Inbox check", "every 12h", "quartermaster", "Check mail.", "auto", true)
+            .add(
+                "Inbox check",
+                "every 12h",
+                "quartermaster",
+                "Check mail.",
+                "auto",
+                true,
+            )
             .expect("add");
         assert_eq!(r.id, "inbox_check");
         assert_eq!(r.backend, "auto");
@@ -1161,8 +1190,12 @@ mod registry_tests {
     #[test]
     fn crud_add_unique_ids() {
         let (mut reg, path) = empty_reg("crud_add_ids.json");
-        let a = reg.add("Nightly", "daily 02:00", "", "", "auto", true).unwrap();
-        let b = reg.add("Nightly", "daily 03:00", "", "", "auto", true).unwrap();
+        let a = reg
+            .add("Nightly", "daily 02:00", "", "", "auto", true)
+            .unwrap();
+        let b = reg
+            .add("Nightly", "daily 03:00", "", "", "auto", true)
+            .unwrap();
         let c = reg.add("!!!", "daily 04:00", "", "", "auto", true).unwrap();
         assert_eq!(a.id, "nightly");
         assert_eq!(b.id, "nightly-2");
@@ -1173,9 +1206,19 @@ mod registry_tests {
     #[test]
     fn crud_update_patches_and_validates() {
         let (mut reg, path) = empty_reg("crud_update.json");
-        let r = reg.add("Old name", "every 6h", "", "", "auto", true).unwrap();
+        let r = reg
+            .add("Old name", "every 6h", "", "", "auto", true)
+            .unwrap();
         let u = reg
-            .update(&r.id, Some("New name"), Some("daily 09:30"), None, Some("Do things."), Some("gemini"), Some(false))
+            .update(
+                &r.id,
+                Some("New name"),
+                Some("daily 09:30"),
+                None,
+                Some("Do things."),
+                Some("gemini"),
+                Some(false),
+            )
             .expect("update");
         assert_eq!(u.name, "New name");
         assert_eq!(u.schedule, "daily 09:30");
@@ -1183,11 +1226,19 @@ mod registry_tests {
         assert_eq!(u.backend, "gemini");
         assert!(!u.enabled);
         // Partial update keeps untouched fields.
-        let u2 = reg.update(&r.id, None, None, None, None, None, None).expect("noop update");
+        let u2 = reg
+            .update(&r.id, None, None, None, None, None, None)
+            .expect("noop update");
         assert_eq!(u2.name, "New name");
         // Bad schedule / unknown id rejected.
-        assert!(reg.update(&r.id, None, Some("never"), None, None, None, None).is_err());
-        assert!(reg.update("nope", Some("x"), None, None, None, None, None).is_err());
+        assert!(
+            reg.update(&r.id, None, Some("never"), None, None, None, None)
+                .is_err()
+        );
+        assert!(
+            reg.update("nope", Some("x"), None, None, None, None, None)
+                .is_err()
+        );
         let _ = std::fs::remove_file(&path);
     }
 
@@ -1230,14 +1281,21 @@ mod registry_tests {
         )
         .unwrap();
         let reg = RoutineRegistry::load_or_seed(path.clone());
-        let mine = reg.list().iter().find(|r| r.id == "my-job").expect("custom kept");
+        let mine = reg
+            .list()
+            .iter()
+            .find(|r| r.id == "my-job")
+            .expect("custom kept");
         assert!(mine.enabled);
         let watch = reg
             .list()
             .iter()
             .find(|r| r.id == "support-mail-watch")
             .expect("watcher kept");
-        assert!(!watch.enabled, "John's disabled choice must survive the merge");
+        assert!(
+            !watch.enabled,
+            "John's disabled choice must survive the merge"
+        );
         let loop_r = reg
             .list()
             .iter()

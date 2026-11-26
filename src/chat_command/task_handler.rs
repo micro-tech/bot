@@ -181,14 +181,13 @@ pub fn role_file_content(role: &str, tools: &[String]) -> String {
 /// write when the content is already identical. Returns whether it
 /// wrote. Errors are fatal to the submit (fail closed).
 pub fn ensure_role_file(path: &Path, content: &str) -> Result<bool, String> {
-    if let Ok(existing) = std::fs::read_to_string(path) {
-        if existing == content {
-            return Ok(false);
-        }
+    if let Ok(existing) = std::fs::read_to_string(path)
+        && existing == content
+    {
+        return Ok(false);
     }
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("could not create role dir: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("could not create role dir: {e}"))?;
     }
     std::fs::write(path, content).map_err(|e| format!("could not write role file: {e}"))?;
     Ok(true)
@@ -425,12 +424,12 @@ pub fn merge_restored(state: &mut HandlerState, file: &QueueFile) -> (usize, usi
     for backend in backends {
         let mut seen: std::collections::HashSet<i64> = std::collections::HashSet::new();
         let mut q: VecDeque<QueuedTask> = VecDeque::new();
-        if let Some(rt) = file.state.running.get(&backend) {
-            if seen.insert(rt.hub_id) {
-                q.push_back(rt.clone());
-                demoted += 1;
-                restored += 1;
-            }
+        if let Some(rt) = file.state.running.get(&backend)
+            && seen.insert(rt.hub_id)
+        {
+            q.push_back(rt.clone());
+            demoted += 1;
+            restored += 1;
         }
         if let Some(queued) = file.state.queues.get(&backend) {
             for t in queued {
@@ -455,10 +454,7 @@ pub fn merge_restored(state: &mut HandlerState, file: &QueueFile) -> (usize, usi
 pub fn save_queue(runtime_dir: &Path) -> std::io::Result<()> {
     match handler_state().lock() {
         Ok(state) => save_queue_to(runtime_dir, &state),
-        Err(_) => Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "handler state poisoned",
-        )),
+        Err(_) => Err(std::io::Error::other("handler state poisoned")),
     }
 }
 
@@ -484,11 +480,11 @@ pub fn pop_next_to_start(state: &mut HandlerState) -> Vec<QueuedTask> {
         if state.running.contains_key(&backend) {
             continue;
         }
-        if let Some(q) = state.queues.get_mut(&backend) {
-            if let Some(task) = q.pop_front() {
-                state.running.insert(backend, task.clone());
-                started.push(task);
-            }
+        if let Some(q) = state.queues.get_mut(&backend)
+            && let Some(task) = q.pop_front()
+        {
+            state.running.insert(backend, task.clone());
+            started.push(task);
         }
     }
     started
@@ -526,10 +522,10 @@ pub fn resume_queued(tools: &ResolvedChatTools, cfg: &ChatCommandConfig, runtime
                 task.backend.display()
             ),
         );
-        if !try_spawn(tools, &cfg.room, cfg.chunk_bytes, &task, runtime_dir) {
-            if let Ok(mut pending) = pending_spawns().lock() {
-                pending.push(task);
-            }
+        if !try_spawn(tools, &cfg.room, cfg.chunk_bytes, &task, runtime_dir)
+            && let Ok(mut pending) = pending_spawns().lock()
+        {
+            pending.push(task);
         }
     }
 }
@@ -599,9 +595,7 @@ pub fn submit_llm_task(
 ) {
     let role = role_for(&scope);
     let allowlist = allowlist_for(&scope);
-    let role_path = runtime_dir
-        .join("agents")
-        .join(format!("{role}.md"));
+    let role_path = runtime_dir.join("agents").join(format!("{role}.md"));
     if let Err(e) = ensure_role_file(&role_path, &role_file_content(&role, &allowlist)) {
         crate::utils::log_to_file(&format!(
             "chat-command: task rejected hub_id={hub_id} sender={sender} backend={} reason={e}",
@@ -870,10 +864,10 @@ fn advance_queue(
         chunk_bytes,
         &format!("task #{} started on {}", next.hub_id, backend.display()),
     );
-    if !try_spawn(tools, room, chunk_bytes, &next, runtime_dir) {
-        if let Ok(mut pending) = pending_spawns().lock() {
-            pending.push(next);
-        }
+    if !try_spawn(tools, room, chunk_bytes, &next, runtime_dir)
+        && let Ok(mut pending) = pending_spawns().lock()
+    {
+        pending.push(next);
     }
 }
 
@@ -897,7 +891,10 @@ mod tests {
             "generate_mermaid_project_map",
             "spawn_subagent",
         ] {
-            assert!(!allow.contains(&write.to_string()), "read must exclude {write}");
+            assert!(
+                !allow.contains(&write.to_string()),
+                "read must exclude {write}"
+            );
         }
         for read in [
             "read_note",
@@ -908,7 +905,10 @@ mod tests {
             "mcp__wire__interfaces",
             "mcp__wire__analyze_pcap",
         ] {
-            assert!(allow.contains(&read.to_string()), "read must include {read}");
+            assert!(
+                allow.contains(&read.to_string()),
+                "read must include {read}"
+            );
         }
     }
 
@@ -962,7 +962,10 @@ mod tests {
 
     #[test]
     fn role_file_content_carries_the_allowlist() {
-        let content = role_file_content("chat-task-read", &["read_note".to_string(), "read_email".to_string()]);
+        let content = role_file_content(
+            "chat-task-read",
+            &["read_note".to_string(), "read_email".to_string()],
+        );
         assert!(content.starts_with("---\ntools: [read_note, read_email]\n---\n"));
         assert!(content.contains("chat-task-read"));
     }
@@ -988,7 +991,10 @@ mod tests {
     fn verify_toolset_fail_closed_cases() {
         let read = allowlist_for(&Scope::Read);
         assert!(verify_toolset(&read, &Scope::Read).is_ok());
-        assert!(verify_toolset(&[], &Scope::Read).is_err(), "empty must fail");
+        assert!(
+            verify_toolset(&[], &Scope::Read).is_err(),
+            "empty must fail"
+        );
         let mut with_write = read.clone();
         with_write.push("write_note".to_string());
         assert!(
@@ -1027,23 +1033,48 @@ mod tests {
             time_secs: 300,
             scope: Scope::Read,
         };
-        assert_eq!(submit_task(&mut state, mk(1, LlmBackend::Server)), SubmitDecision::RunNow);
+        assert_eq!(
+            submit_task(&mut state, mk(1, LlmBackend::Server)),
+            SubmitDecision::RunNow
+        );
         assert_eq!(
             submit_task(&mut state, mk(2, LlmBackend::Server)),
-            SubmitDecision::Queued { position: 1, running_id: 1 }
+            SubmitDecision::Queued {
+                position: 1,
+                running_id: 1
+            }
         );
         assert_eq!(
             submit_task(&mut state, mk(3, LlmBackend::Server)),
-            SubmitDecision::Queued { position: 2, running_id: 1 }
+            SubmitDecision::Queued {
+                position: 2,
+                running_id: 1
+            }
         );
         // A different backend is idle even while server is busy.
-        assert_eq!(submit_task(&mut state, mk(4, LlmBackend::Desktop)), SubmitDecision::RunNow);
+        assert_eq!(
+            submit_task(&mut state, mk(4, LlmBackend::Desktop)),
+            SubmitDecision::RunNow
+        );
         // Completing the running task pops the next in FIFO order.
-        assert_eq!(complete_task(&mut state, LlmBackend::Server, 1).unwrap().hub_id, 2);
-        assert_eq!(complete_task(&mut state, LlmBackend::Server, 2).unwrap().hub_id, 3);
+        assert_eq!(
+            complete_task(&mut state, LlmBackend::Server, 1)
+                .unwrap()
+                .hub_id,
+            2
+        );
+        assert_eq!(
+            complete_task(&mut state, LlmBackend::Server, 2)
+                .unwrap()
+                .hub_id,
+            3
+        );
         assert!(complete_task(&mut state, LlmBackend::Server, 3).is_none());
         // Stale completion touches nothing.
-        assert_eq!(submit_task(&mut state, mk(5, LlmBackend::Server)), SubmitDecision::RunNow);
+        assert_eq!(
+            submit_task(&mut state, mk(5, LlmBackend::Server)),
+            SubmitDecision::RunNow
+        );
         assert!(complete_task(&mut state, LlmBackend::Server, 999).is_none());
         assert_eq!(
             state.running.get(&LlmBackend::Server).map(|t| t.hub_id),
@@ -1056,7 +1087,10 @@ mod tests {
         for (report, needle) in [
             ("Sub-agent complete\ntask_id: x\nfinal:\ny", "result"),
             ("Sub-agent failed\ntask_id: x\nerror: boom", "failed"),
-            ("Sub-agent timed out after 300s and was cancelled.", "timed out"),
+            (
+                "Sub-agent timed out after 300s and was cancelled.",
+                "timed out",
+            ),
             ("Error: no healthy backend", "failed"),
         ] {
             let header = report_header(7, LlmBackend::Server, report);
@@ -1077,7 +1111,10 @@ mod tests {
         ]);
         assert_eq!(
             tool_names_from_definitions(&defs),
-            vec!["read_note".to_string(), "mcp__google__gmail_search".to_string()]
+            vec![
+                "read_note".to_string(),
+                "mcp__google__gmail_search".to_string()
+            ]
         );
     }
 
@@ -1252,7 +1289,7 @@ mod tests {
             back.running.get(&LlmBackend::Desktop).map(|t| t.hub_id),
             Some(3)
         );
-        assert!(back.running.get(&LlmBackend::Gemini).is_none());
+        assert!(!back.running.contains_key(&LlmBackend::Gemini));
         let server: Vec<i64> = back.queues[&LlmBackend::Server]
             .iter()
             .map(|t| t.hub_id)

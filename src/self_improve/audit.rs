@@ -187,7 +187,8 @@ fn secret_classes_for_line(line: &str) -> Vec<&'static str> {
 /// after it); `auth_token`, `access_token`, `client_secret` DO.
 fn has_credential_identifier(content: &str) -> bool {
     const WORDS: [&str; 4] = ["token", "auth_token", "secret", "credential"];
-    content.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+    content
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
         .any(|word| WORDS.contains(&word))
 }
 
@@ -204,7 +205,7 @@ fn has_credential_identifier(content: &str) -> bool {
 /// no longer be bypassed by spelling.
 fn normalize_audit_path(path: &str) -> String {
     let mut out: Vec<&str> = Vec::new();
-    for seg in path.split(|c| c == '/' || c == '\\') {
+    for seg in path.split(['/', '\\']) {
         match seg {
             "" | "." => {} // collapse empty / dot segments
             ".." => {
@@ -274,7 +275,8 @@ pub fn sensitive_path_hit(path: &str, content: &str) -> Option<String> {
         return Some(format!("sensitive-path:support-auto-send:{path}"));
     }
     let lower_path = normalized.to_lowercase();
-    if lower_path.contains("token") || lower_path.contains("secret") || lower_path.contains("auth") {
+    if lower_path.contains("token") || lower_path.contains("secret") || lower_path.contains("auth")
+    {
         return Some(format!("sensitive-path:credential-path:{path}"));
     }
     if has_credential_identifier(content) {
@@ -314,7 +316,10 @@ mod tests {
     use super::*;
 
     fn diff(path: &str, content: &str) -> DiffFile {
-        DiffFile { path: path.to_string(), content: content.to_string() }
+        DiffFile {
+            path: path.to_string(),
+            content: content.to_string(),
+        }
     }
 
     #[test]
@@ -332,7 +337,10 @@ mod tests {
                 "src/baz.rs",
                 &format!("let h = \"{fake_bearer}\";\n-----BEGIN FAKE PRIVATE KEY-----\n"),
             ),
-            diff("src/qux.rs", "let p = \"hunter2\";\npassword = \"hunter2\"\n"),
+            diff(
+                "src/qux.rs",
+                "let p = \"hunter2\";\npassword = \"hunter2\"\n",
+            ),
         ];
         let report = audit_diff(&files);
         assert!(!report.secret_hits.is_empty(), "fake secrets must block");

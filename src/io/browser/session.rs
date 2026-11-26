@@ -16,8 +16,8 @@
 //!
 //! Policy lives in the session, not the driver, so it applies regardless
 //! of which driver is behind it:
-//! - Navigation is confined to `[browser] allowed_hosts` (default Google
-//!   + localhost). Anything else is refused with a message telling the
+//! - Navigation is confined to `[browser] allowed_hosts` (default: Google
+//!   and localhost). Anything else is refused with a message telling the
 //!   LLM to ask the user.
 //! - The tool never returns password field contents: `get_text` strips
 //!   `input[type=password]` before extracting text, and `evaluate`
@@ -36,7 +36,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use log::{debug, info, warn};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use thirtyfour::prelude::*;
 
 use crate::config::browser::BrowserConfig;
@@ -45,11 +45,11 @@ use super::bidi::{BidiSeam, NavEvent};
 
 /// A 1x1 transparent PNG, returned by the fake driver's screenshot.
 const FAKE_PNG_1X1: &[u8] = &[
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
-    0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
-    0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00,
-    0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-    0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x42, 0x60, 0x82,
 ];
 
 /// JS for `get_text`: clone the body, drop password inputs (defense in
@@ -244,10 +244,7 @@ impl BrowserDriver for RealDriver {
             Some(Err(e)) => warn!("browser: BiDi navigate failed, classic goto fallback: {e}"),
             None => {} // classic-only session: fall through to the fallback
         }
-        self.driver
-            .goto(url)
-            .await
-            .map_err(|e| e.to_string())?;
+        self.driver.goto(url).await.map_err(|e| e.to_string())?;
         self.wait_ready_state(timeout).await?;
         self.current_url_and_title().await
     }
@@ -270,7 +267,10 @@ impl BrowserDriver for RealDriver {
             .map_err(|e| format!("no element for selector '{selector}': {e}"))?;
         el.click().await.map_err(|e| e.to_string())?;
         el.send_keys(text).await.map_err(|e| e.to_string())?;
-        Ok(format!("Typed {} chars into '{selector}'.", text.chars().count()))
+        Ok(format!(
+            "Typed {} chars into '{selector}'.",
+            text.chars().count()
+        ))
     }
 
     async fn screenshot_png(&self) -> Result<Vec<u8>, String> {
@@ -412,15 +412,19 @@ impl BrowserDriver for RealDriver {
         // Single-session rule: always session.end, then quit the driver.
         // The seam is taken out so a second shutdown is a no-op for BiDi.
         let mut guard = self.seam.lock().await;
-        if let Some(mut seam) = guard.take() {
-            if let Err(e) = seam.end().await {
-                warn!("browser: BiDi session end failed during shutdown: {e}");
-            }
+        if let Some(mut seam) = guard.take()
+            && let Err(e) = seam.end().await
+        {
+            warn!("browser: BiDi session end failed during shutdown: {e}");
         }
         drop(guard);
         // WebDriver is Clone (Arc wrapper); quitting the clone ends the
         // shared session.
-        self.driver.clone().quit().await.map_err(|e| e.to_string())?;
+        self.driver
+            .clone()
+            .quit()
+            .await
+            .map_err(|e| e.to_string())?;
         info!("browser: driver quit");
         Ok(())
     }
@@ -534,7 +538,10 @@ impl BrowserDriver for FakeDriver {
             .unwrap()
             .typed
             .push((selector.to_string(), text.to_string()));
-        Ok(format!("Typed {} chars into '{selector}'.", text.chars().count()))
+        Ok(format!(
+            "Typed {} chars into '{selector}'.",
+            text.chars().count()
+        ))
     }
 
     async fn screenshot_png(&self) -> Result<Vec<u8>, String> {
@@ -563,7 +570,11 @@ impl BrowserDriver for FakeDriver {
     }
 
     async fn input_type(&self, text: &str) -> Result<String, String> {
-        self.state.lock().unwrap().input_typed.push(text.to_string());
+        self.state
+            .lock()
+            .unwrap()
+            .input_typed
+            .push(text.to_string());
         Ok(format!("Typed {} chars.", text.chars().count()))
     }
 
@@ -668,9 +679,9 @@ impl BrowserSession {
     pub async fn stop(&mut self) -> Result<String, String> {
         match self.driver.take() {
             Some(driver) => match driver.shutdown().await {
-                Ok(()) => Ok(
-                    "Browser session stopped (BiDi session ended, driver quit).".to_string(),
-                ),
+                Ok(()) => {
+                    Ok("Browser session stopped (BiDi session ended, driver quit).".to_string())
+                }
                 Err(e) => Err(format!(
                     "Browser shutdown reported an error (session cleared anyway): {e}"
                 )),
@@ -710,7 +721,14 @@ impl BrowserSession {
         match &self.driver {
             Some(driver) => {
                 lines.push(format!("Session: running (restarts: {})", self.restarts));
-                lines.push(format!("BiDi: {}", if driver.bidi_ready().await { "ready" } else { "not connected (classic-only)" }));
+                lines.push(format!(
+                    "BiDi: {}",
+                    if driver.bidi_ready().await {
+                        "ready"
+                    } else {
+                        "not connected (classic-only)"
+                    }
+                ));
                 if let Ok(url) = driver.current_url().await {
                     lines.push(format!("URL: {url}"));
                 }
@@ -917,6 +935,7 @@ impl BrowserSession {
     /// 2. If the search already works, the token is valid: report that.
     /// 3. Otherwise navigate the browser to the consent URL and report
     ///    the next steps for John (sign in, 2FA via the 355 affordance).
+    ///
     /// The redirect lands on R630 localhost where google-mcp listens, so
     /// no SSH tunnel is needed at any step.
     pub async fn gmail_oauth(&mut self) -> Result<String, String> {
@@ -1005,7 +1024,11 @@ impl BrowserSession {
         Ok(format!(
             "Gmail OAuth check:\nToken file: {}\nScope: {} (gmail.modify: {})\nRefresh token present: {}\nExpiry: {}\n{}",
             path.display(),
-            if scope.is_empty() { "(none recorded)" } else { &scope },
+            if scope.is_empty() {
+                "(none recorded)"
+            } else {
+                &scope
+            },
             has_gmail,
             refresh,
             expiry_note,
@@ -1041,8 +1064,7 @@ fn truncate(s: &str, max: usize) -> String {
 /// return its /artifacts/ URL.
 fn save_screenshot(png: &[u8]) -> Result<String, String> {
     let dir = std::path::Path::new("artifacts");
-    std::fs::create_dir_all(dir)
-        .map_err(|e| format!("cannot create artifacts dir: {e}"))?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("cannot create artifacts dir: {e}"))?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
     for suffix in ["", "-2", "-3", "-4", "-5"] {
         let name = format!("browser-{stamp}{suffix}.png");
@@ -1108,14 +1130,14 @@ fn token_expiry_note(token: &Value) -> String {
         }
         return format!("{expiry} (unparsed)");
     }
-    if let Some(secs) = token.get("expires_at").and_then(|v| v.as_i64()) {
-        if let Some(dt) = chrono::DateTime::from_timestamp(secs, 0) {
-            let now = chrono::Utc::now();
-            if dt > now {
-                return format!("{} (valid)", dt.to_rfc3339());
-            }
-            return format!("{} (EXPIRED — run the gmail_oauth flow)", dt.to_rfc3339());
+    if let Some(secs) = token.get("expires_at").and_then(|v| v.as_i64())
+        && let Some(dt) = chrono::DateTime::from_timestamp(secs, 0)
+    {
+        let now = chrono::Utc::now();
+        if dt > now {
+            return format!("{} (valid)", dt.to_rfc3339());
         }
+        return format!("{} (EXPIRED — run the gmail_oauth flow)", dt.to_rfc3339());
     }
     "unknown (no expiry field parsed — the live search below is the real proof)".to_string()
 }
@@ -1133,7 +1155,10 @@ mod tests {
 
     fn session_with_fake() -> (BrowserSession, Arc<FakeDriver>) {
         let fake = Arc::new(FakeDriver::new());
-        let session = BrowserSession::with_driver(enabled_config(), Arc::clone(&fake) as Arc<dyn BrowserDriver>);
+        let session = BrowserSession::with_driver(
+            enabled_config(),
+            Arc::clone(&fake) as Arc<dyn BrowserDriver>,
+        );
         (session, fake)
     }
 
@@ -1174,10 +1199,7 @@ mod tests {
             .await
             .expect("click");
         session
-            .act(
-                "type",
-                &json!({"selector": "#code", "text": "123456"}),
-            )
+            .act("type", &json!({"selector": "#code", "text": "123456"}))
             .await
             .expect("type");
         assert_eq!(fake.clicks(), vec!["#signin".to_string()]);
@@ -1268,7 +1290,10 @@ mod tests {
             .and_then(|r| r.split(' ').next())
             .unwrap_or("");
         let path = rel.trim_start_matches('/');
-        assert!(std::path::Path::new(path).exists(), "screenshot file must exist");
+        assert!(
+            std::path::Path::new(path).exists(),
+            "screenshot file must exist"
+        );
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_dir("artifacts");
     }
@@ -1290,7 +1315,10 @@ mod tests {
         let (mut session, fake) = session_with_fake();
         let out = session.act("restart", &json!({})).await.expect("restart");
         assert!(out.contains("restarted"), "got: {out}");
-        assert!(fake.was_shut_down(), "restart must shut the old driver down");
+        assert!(
+            fake.was_shut_down(),
+            "restart must shut the old driver down"
+        );
         // The session is usable again after restart.
         let out = session
             .act("navigate", &json!({"url": "https://mail.google.com/"}))

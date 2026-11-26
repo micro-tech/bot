@@ -23,7 +23,17 @@ pub const METACHARS: &[char] = &[
 /// never silently widen remote execution; allowlist changes go through
 /// code review).
 pub const LOCAL_ALLOWLIST: &[&str] = &[
-    "cat", "tail", "head", "grep", "ls", "ps", "df", "free", "uptime", "whoami", "hostname",
+    "cat",
+    "tail",
+    "head",
+    "grep",
+    "ls",
+    "ps",
+    "df",
+    "free",
+    "uptime",
+    "whoami",
+    "hostname",
     "systemctl",
 ];
 
@@ -57,8 +67,13 @@ pub fn parse_command(line: &str) -> Result<Vec<String>, String> {
         return Err("empty command".to_string());
     }
     for tok in &argv {
-        if tok.chars().any(|c| METACHARS.contains(&c) || c.is_control()) {
-            return Err(format!("rejected: token {tok:?} contains a forbidden character"));
+        if tok
+            .chars()
+            .any(|c| METACHARS.contains(&c) || c.is_control())
+        {
+            return Err(format!(
+                "rejected: token {tok:?} contains a forbidden character"
+            ));
         }
     }
     Ok(argv)
@@ -72,13 +87,17 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
         return Err("empty command".to_string());
     };
     if !LOCAL_ALLOWLIST.contains(&first.as_str()) {
-        return Err(format!("rejected: `{first}` is not in the read-only allowlist"));
+        return Err(format!(
+            "rejected: `{first}` is not in the read-only allowlist"
+        ));
     }
     if first == "systemctl" {
         match argv.get(1).map(String::as_str) {
             Some(sub) if SYSTEMCTL_READ_ONLY.contains(&sub) => {}
             Some(sub) => {
-                return Err(format!("rejected: `systemctl {sub}` is not a read-only subcommand"));
+                return Err(format!(
+                    "rejected: `systemctl {sub}` is not a read-only subcommand"
+                ));
             }
             None => return Err("rejected: `systemctl` needs a read-only subcommand".to_string()),
         }
@@ -193,10 +212,18 @@ pub fn run_command_with_timeout(
     let pid = child.id();
     let mut out_pipe = child.stdout.take();
     let mut err_pipe = child.stderr.take();
-    let out_handle =
-        std::thread::spawn(move || out_pipe.as_mut().map(|p| drain_capped(p, cap_per_stream)).unwrap_or_default());
-    let err_handle =
-        std::thread::spawn(move || err_pipe.as_mut().map(|p| drain_capped(p, cap_per_stream)).unwrap_or_default());
+    let out_handle = std::thread::spawn(move || {
+        out_pipe
+            .as_mut()
+            .map(|p| drain_capped(p, cap_per_stream))
+            .unwrap_or_default()
+    });
+    let err_handle = std::thread::spawn(move || {
+        err_pipe
+            .as_mut()
+            .map(|p| drain_capped(p, cap_per_stream))
+            .unwrap_or_default()
+    });
 
     let mut timed_out = false;
     let status;
@@ -306,10 +333,12 @@ mod tests {
     #[test]
     fn local_allowlist_accepts_each_command() {
         for cmd in [
-            "cat", "tail", "head", "grep", "ls", "ps", "df", "free", "uptime", "whoami",
-            "hostname",
+            "cat", "tail", "head", "grep", "ls", "ps", "df", "free", "uptime", "whoami", "hostname",
         ] {
-            assert!(check_local_command(&argv(&[cmd])).is_ok(), "{cmd} must be allowed");
+            assert!(
+                check_local_command(&argv(&[cmd])).is_ok(),
+                "{cmd} must be allowed"
+            );
         }
         assert!(check_local_command(&argv(&["systemctl", "status"])).is_ok());
         assert!(check_local_command(&argv(&["systemctl", "is-active", "helix"])).is_ok());
@@ -331,7 +360,10 @@ mod tests {
             vec!["chmod", "+x", "x"],
             vec!["curl", "http://example.com"],
         ] {
-            assert!(check_local_command(&argv(&words)).is_err(), "{words:?} must be rejected");
+            assert!(
+                check_local_command(&argv(&words)).is_err(),
+                "{words:?} must be rejected"
+            );
         }
     }
 
@@ -360,12 +392,8 @@ mod tests {
     #[test]
     fn run_times_out_without_hanging() {
         let start = Instant::now();
-        let out = run_command_with_timeout(
-            &argv(&["sleep", "30"]),
-            Duration::from_secs(1),
-            4096,
-        )
-        .expect("sleep must spawn");
+        let out = run_command_with_timeout(&argv(&["sleep", "30"]), Duration::from_secs(1), 4096)
+            .expect("sleep must spawn");
         assert!(out.timed_out, "30s sleep must time out at 1s");
         assert!(
             start.elapsed() < Duration::from_secs(10),

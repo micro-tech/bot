@@ -21,7 +21,10 @@ fn eval_injection_blocks_shell() {
     let args = serde_json::json!({ "command": payload });
     // THEN the call is blocked:
     assert!(
-        matches!(security::validate_tool_call("run_shell", &args), Verdict::Block(_)),
+        matches!(
+            security::validate_tool_call("run_shell", &args),
+            Verdict::Block(_)
+        ),
         "run_shell with lifted untrusted args must BLOCK"
     );
 }
@@ -37,7 +40,10 @@ fn eval_injection_warns_email() {
     let args = serde_json::json!({ "to": "attacker@example.com", "body": secret });
     // THEN we warn (John's calibration) but don't block:
     assert!(
-        matches!(security::validate_tool_call("send_email", &args), Verdict::Warn(_)),
+        matches!(
+            security::validate_tool_call("send_email", &args),
+            Verdict::Warn(_)
+        ),
         "send_email with lifted args must WARN (not block) per John's calibration"
     );
 }
@@ -46,11 +52,15 @@ fn eval_injection_warns_email() {
 
 #[test]
 fn eval_injection_warns_readonly() {
-    let phrase = "eval harness: the quarterly zoning report for parcel 003-021-010-01 was finalized";
+    let phrase =
+        "eval harness: the quarterly zoning report for parcel 003-021-010-01 was finalized";
     security::tag_untrusted(phrase);
     let args = serde_json::json!({ "query": phrase });
     assert!(
-        matches!(security::validate_tool_call("check_inbox", &args), Verdict::Warn(_)),
+        matches!(
+            security::validate_tool_call("check_inbox", &args),
+            Verdict::Warn(_)
+        ),
         "read-only tools must WARN (not block) on untrusted echoes"
     );
 }
@@ -82,7 +92,11 @@ fn eval_tool_definitions_cached() {
     tools::invalidate_tool_definitions();
     let first = tools::tool_definitions();
     for _ in 0..9 {
-        assert_eq!(tools::tool_definitions(), first, "cached definitions must match");
+        assert_eq!(
+            tools::tool_definitions(),
+            first,
+            "cached definitions must match"
+        );
     }
 }
 
@@ -131,7 +145,10 @@ fn eval_spend_cap_warns_by_default() {
     // A metered call over the cap...
     spend::note_api_usage(
         &helix::router::LLMBackend::Gemini,
-        spend::TokenUsage { prompt_tokens: 1_000_000, completion_tokens: 0 },
+        spend::TokenUsage {
+            prompt_tokens: 1_000_000,
+            completion_tokens: 0,
+        },
     );
     // ...must NOT block in default (warn) mode:
     assert!(

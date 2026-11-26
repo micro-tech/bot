@@ -8,7 +8,7 @@
 //! 3. Wrong key → authentication rejected.
 //! 4. No authorized keys → `start_ssh_server` refuses (fail closed).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -50,7 +50,7 @@ fn ssh_config(dir: &std::path::Path, ak_rel: &str) -> (SshConfig, PathBuf) {
     (cfg, dir.to_path_buf())
 }
 
-fn ssh_args<'a>(key: &'a PathBuf, port: &'a str, remote_cmd: Option<&'a str>) -> Vec<&'a str> {
+fn ssh_args<'a>(key: &'a Path, port: &'a str, remote_cmd: Option<&'a str>) -> Vec<&'a str> {
     let mut args = vec![
         "-i",
         key.to_str().unwrap(),
@@ -153,10 +153,7 @@ async fn ssh_exec_authorized_key_works_and_policy_blocks() {
         .stdin(Stdio::null())
         .output()
         .expect("ssh run");
-    assert!(
-        !out.status.success(),
-        "wrong key must not authenticate"
-    );
+    assert!(!out.status.success(), "wrong key must not authenticate");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("Permission denied") || stderr.contains("denied"),

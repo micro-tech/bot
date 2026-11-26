@@ -60,17 +60,16 @@ pub const FIREFOX_MIN_VERSION: u32 = 141;
 pub const MOZILLA_KEY_URL: &str = "https://packages.mozilla.org/apt/repo-signing-key.gpg";
 
 /// The Mozilla APT sources line (Signed-By the keyring below).
-pub const MOZILLA_SOURCES_LINE: &str =
-    "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main";
+pub const MOZILLA_SOURCES_LINE: &str = "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main";
 
 /// APT pin so Mozilla's Firefox wins over Ubuntu's snap-shim package.
-pub const MOZILLA_PIN: &str =
-    "Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n";
+pub const MOZILLA_PIN: &str = "Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n";
 
 /// Default `[browser]` section the installer appends when the live config
 /// has none. Fail-closed: the browser stays disabled until John enables
 /// it (after the profile copy in task 353).
-pub const BROWSER_CONFIG_DEFAULTS: &str = "[browser]\nenabled = false\nheadless = true\naction_timeout_secs = 30\n";
+pub const BROWSER_CONFIG_DEFAULTS: &str =
+    "[browser]\nenabled = false\nheadless = true\naction_timeout_secs = 30\n";
 
 /// What the Firefox check found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,7 +238,11 @@ fn backup_existing(path: &Path) {
         .unwrap_or(0);
     let backup = PathBuf::from(format!("{}.bak-{}", path.display(), epoch));
     match fs::copy(path, &backup) {
-        Ok(_) => eprintln!("browser: backed up {} -> {}", path.display(), backup.display()),
+        Ok(_) => eprintln!(
+            "browser: backed up {} -> {}",
+            path.display(),
+            backup.display()
+        ),
         Err(e) => eprintln!(
             "browser: WARNING: could not back up {}: {} — proceeding with overwrite",
             path.display(),
@@ -321,7 +324,12 @@ fn output_snippet(output: &std::process::Output) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let combined = format!("{stderr}\n{stdout}");
-    combined.chars().take(1000).collect::<String>().trim().to_string()
+    combined
+        .chars()
+        .take(1000)
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 impl SystemOps for RealSystemOps {
@@ -335,11 +343,9 @@ impl SystemOps for RealSystemOps {
 
     fn snap_list_firefox(&self) -> bool {
         match Command::new("snap").args(["list", "firefox"]).output() {
-            Ok(out) if out.status.success() => {
-                String::from_utf8_lossy(&out.stdout)
-                    .lines()
-                    .any(|l| l.split_whitespace().next() == Some("firefox"))
-            }
+            Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .any(|l| l.split_whitespace().next() == Some("firefox")),
             _ => false,
         }
     }
@@ -357,10 +363,10 @@ impl SystemOps for RealSystemOps {
 
     fn ensure_mozilla_repo(&self) -> Result<bool, String> {
         let sources_path = Path::new("/etc/apt/sources.list.d/mozilla.list");
-        if let Ok(existing) = fs::read_to_string(sources_path) {
-            if mozilla_repo_present(&existing) {
-                return Ok(false);
-            }
+        if let Ok(existing) = fs::read_to_string(sources_path)
+            && mozilla_repo_present(&existing)
+        {
+            return Ok(false);
         }
         // Keyring dir (documented Mozilla procedure).
         fs::create_dir_all("/etc/apt/keyrings")
@@ -368,39 +374,28 @@ impl SystemOps for RealSystemOps {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(
-                "/etc/apt/keyrings",
-                fs::Permissions::from_mode(0o755),
-            );
+            let _ = fs::set_permissions("/etc/apt/keyrings", fs::Permissions::from_mode(0o755));
         }
         // Signing key: curl first, wget as fallback (both standard on
         // Ubuntu). The key file is written exactly as Mozilla distributes
         // it; the sources line references it via Signed-By.
         let key_path = "/etc/apt/keyrings/packages.mozilla.org.asc";
-        let downloaded = run_cmd(
-            "curl",
-            &["-fsSL", MOZILLA_KEY_URL, "-o", key_path],
-        )
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-            || run_cmd(
-                "wget",
-                &["-q", MOZILLA_KEY_URL, "-O", key_path],
-            )
+        let downloaded = run_cmd("curl", &["-fsSL", MOZILLA_KEY_URL, "-o", key_path])
             .map(|o| o.status.success())
-            .unwrap_or(false);
+            .unwrap_or(false)
+            || run_cmd("wget", &["-q", MOZILLA_KEY_URL, "-O", key_path])
+                .map(|o| o.status.success())
+                .unwrap_or(false);
         if !downloaded {
             return Err(
                 "browser: could not download the Mozilla APT signing key (curl and wget both failed — check network)"
                     .to_string(),
             );
         }
-        fs::write(sources_path, format!("{MOZILLA_SOURCES_LINE}\n")).map_err(|e| {
-            format!("browser: cannot write {}: {}", sources_path.display(), e)
-        })?;
-        fs::write("/etc/apt/preferences.d/mozilla", MOZILLA_PIN).map_err(|e| {
-            format!("browser: cannot write /etc/apt/preferences.d/mozilla: {e}")
-        })?;
+        fs::write(sources_path, format!("{MOZILLA_SOURCES_LINE}\n"))
+            .map_err(|e| format!("browser: cannot write {}: {}", sources_path.display(), e))?;
+        fs::write("/etc/apt/preferences.d/mozilla", MOZILLA_PIN)
+            .map_err(|e| format!("browser: cannot write /etc/apt/preferences.d/mozilla: {e}"))?;
         let update = run_cmd("apt-get", &["update"])?;
         if !update.status.success() {
             return Err(format!(
@@ -484,8 +479,8 @@ pub fn install_browser_deps(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -497,7 +492,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-tmp-browser-install");
+        let root =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-tmp-browser-install");
         let dir = root.join(format!("{}-{}-{}-{}", tag, std::process::id(), nanos, n));
         fs::create_dir_all(&dir).expect("create test dir");
         dir
@@ -544,7 +540,7 @@ mod tests {
             let calls = self.calls.lock().unwrap();
             // Before install: the canned version; after an install call:
             // the post-install version.
-            if calls.iter().any(|c| *c == "install_firefox") {
+            if calls.contains(&"install_firefox") {
                 self.version_after.clone()
             } else {
                 self.version_before.clone()
@@ -555,7 +551,7 @@ mod tests {
             // After an install, the snap is gone (the Mozilla build
             // replaced it).
             let calls = self.calls.lock().unwrap();
-            if calls.iter().any(|c| *c == "install_firefox") {
+            if calls.contains(&"install_firefox") {
                 false
             } else {
                 self.snap
@@ -566,7 +562,7 @@ mod tests {
             // After an install, the binary is the Mozilla APT build, not
             // the snap path.
             let calls = self.calls.lock().unwrap();
-            if calls.iter().any(|c| *c == "install_firefox") {
+            if calls.contains(&"install_firefox") {
                 "/usr/bin/firefox".to_string()
             } else if self.snap {
                 "/snap/bin/firefox".to_string()
@@ -607,10 +603,7 @@ mod tests {
 
     #[test]
     fn status_decisions() {
-        assert_eq!(
-            firefox_status_from(None, false, ""),
-            FirefoxStatus::Missing
-        );
+        assert_eq!(firefox_status_from(None, false, ""), FirefoxStatus::Missing);
         assert_eq!(
             firefox_status_from(Some("Mozilla Firefox 159.0"), false, "/usr/bin/firefox"),
             FirefoxStatus::Ok(159)
@@ -627,25 +620,19 @@ mod tests {
             firefox_status_from(Some("Mozilla Firefox 159.0"), false, "/snap/bin/firefox"),
             FirefoxStatus::Snap
         );
-        assert_eq!(
-            FirefoxStatus::Ok(159).action(),
-            FirefoxAction::AlreadyOk
-        );
-        assert_eq!(
-            FirefoxStatus::Missing.action(),
-            FirefoxAction::Install
-        );
-        assert_eq!(
-            FirefoxStatus::TooOld(140).action(),
-            FirefoxAction::Install
-        );
+        assert_eq!(FirefoxStatus::Ok(159).action(), FirefoxAction::AlreadyOk);
+        assert_eq!(FirefoxStatus::Missing.action(), FirefoxAction::Install);
+        assert_eq!(FirefoxStatus::TooOld(140).action(), FirefoxAction::Install);
     }
 
     #[test]
     fn browser_section_appended_when_missing() {
         let out = append_browser_section(HELIX_MINIMAL).expect("must append");
         assert!(has_browser_section(&out));
-        assert!(out.contains("enabled = false"), "fail-closed default, got: {out}");
+        assert!(
+            out.contains("enabled = false"),
+            "fail-closed default, got: {out}"
+        );
         assert!(out.contains("headless = true"));
         assert_eq!(out.matches("[browser]").count(), 1, "never duplicated");
     }
@@ -664,7 +651,9 @@ mod tests {
     #[test]
     fn mozilla_repo_present_detection() {
         assert!(mozilla_repo_present(&format!("{MOZILLA_SOURCES_LINE}\n")));
-        assert!(!mozilla_repo_present("deb http://archive.ubuntu.com/ubuntu noble main\n"));
+        assert!(!mozilla_repo_present(
+            "deb http://archive.ubuntu.com/ubuntu noble main\n"
+        ));
         assert!(!mozilla_repo_present(""));
     }
 
@@ -726,7 +715,10 @@ mod tests {
         let first = install_browser_deps_at(&layout, &ops).expect("first run");
         assert!(first.browser_section_appended);
         let second = install_browser_deps_at(&layout, &ops).expect("second run");
-        assert!(!second.browser_section_appended, "re-run must not duplicate the section");
+        assert!(
+            !second.browser_section_appended,
+            "re-run must not duplicate the section"
+        );
         let helix = fs::read_to_string(&layout.helix_config_path).expect("read helix config");
         assert_eq!(helix.matches("[browser]").count(), 1);
         cleanup(&dir);
@@ -740,8 +732,8 @@ mod tests {
         // were already created; the Firefox decision is recorded in the
         // error path via the report being absent).
         let ops = FakeSystemOps::new(Some("Mozilla Firefox 159.0"), false);
-        let err = install_browser_deps_at(&layout, &ops)
-            .expect_err("missing helix config must error");
+        let err =
+            install_browser_deps_at(&layout, &ops).expect_err("missing helix config must error");
         assert!(err.contains("Helix config"), "got: {err}");
         cleanup(&dir);
     }

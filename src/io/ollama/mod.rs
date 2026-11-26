@@ -67,6 +67,12 @@ impl OllamaRouter {
     }
 }
 
+impl Default for OllamaRouter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ── tunables ──────────────────────────────────────────────────────────────────
 
 /// Seconds to wait for the TCP connection to be established.
@@ -169,27 +175,30 @@ enum OllamaProbe {
     Unknown(String),
 }
 
-static PROBE_CACHE: OnceLock<std::sync::Mutex<std::collections::HashMap<String, (OllamaProbe, std::time::Instant)>>> =
-    OnceLock::new();
+static PROBE_CACHE: OnceLock<
+    std::sync::Mutex<std::collections::HashMap<String, (OllamaProbe, std::time::Instant)>>,
+> = OnceLock::new();
 
-fn probe_cache(
-) -> &'static std::sync::Mutex<std::collections::HashMap<String, (OllamaProbe, std::time::Instant)>> {
+fn probe_cache()
+-> &'static std::sync::Mutex<std::collections::HashMap<String, (OllamaProbe, std::time::Instant)>> {
     PROBE_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
 /// Health + model list for `base_url`, served from a 60s TTL cache.
 /// One `/api/tags` round trip populates both — no separate health check needed.
 async fn probe_ollama(base_url: &str) -> OllamaProbe {
-    if let Ok(cache) = probe_cache().lock() {
-        if let Some((probe, at)) = cache.get(base_url) {
-            if at.elapsed() < PROBE_TTL {
-                return probe.clone();
-            }
-        }
+    if let Ok(cache) = probe_cache().lock()
+        && let Some((probe, at)) = cache.get(base_url)
+        && at.elapsed() < PROBE_TTL
+    {
+        return probe.clone();
     }
     let probe = probe_ollama_fresh(base_url).await;
     if let Ok(mut cache) = probe_cache().lock() {
-        cache.insert(base_url.to_string(), (probe.clone(), std::time::Instant::now()));
+        cache.insert(
+            base_url.to_string(),
+            (probe.clone(), std::time::Instant::now()),
+        );
     }
     probe
 }
@@ -229,10 +238,7 @@ async fn probe_ollama_fresh(base_url: &str) -> OllamaProbe {
 /// `Unknown` counts as usable — the caller may proceed anyway; only a hard
 /// `Unreachable` (refused/timeout/non-2xx) counts as down.
 pub async fn ollama_reachable(base_url: &str) -> bool {
-    match probe_ollama(base_url).await {
-        OllamaProbe::Unreachable => false,
-        _ => true,
-    }
+    !matches!(probe_ollama(base_url).await, OllamaProbe::Unreachable)
 }
 
 /// Drop the cached probe for `base_url` so the next turn re-validates.
@@ -485,13 +491,20 @@ pub async fn handle_ollama_message(
         let _ = bus_clone.publish(token_msg);
     });
 
-    match call_ollama(&client, base_url, model, &prompt, bus, &backend_tag, Some(on_token.clone())).await {
+    match call_ollama(
+        &client,
+        base_url,
+        model,
+        &prompt,
+        bus,
+        &backend_tag,
+        Some(on_token.clone()),
+    )
+    .await
+    {
         // SUCCESS — Ollama returned a valid response
         Ok(response) => {
-            info!(
-                "Ollama ✅  replied — {} chars",
-                response.len()
-            );
+            info!("Ollama ✅  replied — {} chars", response.len());
 
             // Task 223: record the completed turn for conversation history.
             crate::chat_history::record_turn(&prompt, &response);
@@ -513,20 +526,30 @@ pub async fn handle_ollama_message(
 
             // Publish to CPU (single source of truth for responses).
             // Task 265: server diagnostic → log::, not println!.
-            info!("[ollama_{}] ✅ SUCCESS from Ollama, publishing llm_response to 'cpu' ({} chars)", backend_name, response.len());
+            info!(
+                "[ollama_{}] ✅ SUCCESS from Ollama, publishing llm_response to 'cpu' ({} chars)",
+                backend_name,
+                response.len()
+            );
             if let Err(e) = bus.publish(response_msg.clone()) {
-                let error_msg = format!("Ollama {} failed to publish LLM response: {}", backend_name, e);
+                let error_msg = format!(
+                    "Ollama {} failed to publish LLM response: {}",
+                    backend_name, e
+                );
                 log_to_file(&error_msg);
                 error!("{}", error_msg);
             } else {
                 debug!("Ollama {} published LLM response to CPU", backend_name);
-                log_to_file(&format!("Ollama {} published LLM response to CPU", backend_name));
+                log_to_file(&format!(
+                    "Ollama {} published LLM response to CPU",
+                    backend_name
+                ));
             }
 
             // REMOVED: direct publish to web_interface to avoid duplicate replies.
             // The CPU forwarder will handle turning llm_response into llm_output.
 
-            return Some(response);
+            Some(response)
         }
 
         Err(e) => {
@@ -578,7 +601,17 @@ async fn call_ollama(
     on_token: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let tool_defs = crate::tools::tool_definitions();
-    tools::call_ollama_tools(client, base_url, model, prompt, tool_defs, bus, backend_from, on_token).await
+    tools::call_ollama_tools(
+        client,
+        base_url,
+        model,
+        prompt,
+        tool_defs,
+        bus,
+        backend_from,
+        on_token,
+    )
+    .await
 }
 
 // ── Task 238: streaming NDJSON support ─────────────────────────────────────
@@ -681,12 +714,12 @@ async fn read_streaming_response(
     }
     // Trailing line without a newline terminator.
     if !buf.trim().is_empty() {
-        if let Some((token, _)) = parse_stream_line(&buf) {
-            if !token.is_empty() {
-                content.push_str(&token);
-                if let Some(cb) = on_token.as_ref() {
-                    cb(token.clone());
-                }
+        if let Some((token, _)) = parse_stream_line(&buf)
+            && !token.is_empty()
+        {
+            content.push_str(&token);
+            if let Some(cb) = on_token.as_ref() {
+                cb(token.clone());
             }
         }
         // Task 334: same as the main loop — a tool call in the trailing
@@ -732,7 +765,10 @@ pub mod tools {
         if messages.len() > MAX_HISTORY_MESSAGES {
             let keep = MAX_HISTORY_MESSAGES - 1;
             messages.drain(1..messages.len() - keep);
-            while messages.get(1).and_then(|m| m.get("role")).and_then(|r| r.as_str())
+            while messages
+                .get(1)
+                .and_then(|m| m.get("role"))
+                .and_then(|r| r.as_str())
                 == Some("tool")
             {
                 messages.remove(1);
@@ -828,6 +864,7 @@ pub mod tools {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn call_ollama_tools(
         client: &Client,
         base_url: &str,
@@ -884,14 +921,15 @@ pub mod tools {
                 async move {
                     match client.post(url).json(&body).send().await {
                         Err(e) => {
-                            let mapped: Box<dyn std::error::Error + Send + Sync> =
-                                if e.is_timeout() {
-                                    format!("request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, e).into()
-                                } else if e.is_connect() {
-                                    format!("connection error: {}", e).into()
-                                } else {
-                                    format!("HTTP error: {}", e).into()
-                                };
+                            let mapped: Box<dyn std::error::Error + Send + Sync> = if e.is_timeout()
+                            {
+                                format!("request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, e)
+                                    .into()
+                            } else if e.is_connect() {
+                                format!("connection error: {}", e).into()
+                            } else {
+                                format!("HTTP error: {}", e).into()
+                            };
                             if crate::io::retry::is_retryable_reqwest_error(&e) {
                                 Err(crate::io::retry::RetryError::Retryable {
                                     source: mapped,
@@ -906,8 +944,7 @@ pub mod tools {
                             if status.is_success() {
                                 Ok(resp)
                             } else if crate::io::retry::is_retryable_status(status) {
-                                let delay =
-                                    policy.delay_for_response(attempt, resp.headers());
+                                let delay = policy.delay_for_response(attempt, resp.headers());
                                 Err(crate::io::retry::RetryError::Retryable {
                                     source: format!("Ollama returned HTTP {}", status).into(),
                                     delay,
@@ -928,7 +965,7 @@ pub mod tools {
             // Task 238: streaming NDJSON vs buffered single-JSON.
             // Reborrow the callback each round (short-lived, no cross-iteration borrow).
             let parsed: Value = if stream {
-                    read_streaming_response(resp, on_token.clone()).await?
+                read_streaming_response(resp, on_token.clone()).await?
             } else {
                 resp.json().await.map_err(|e| {
                     let e: Box<dyn std::error::Error + Send + Sync> =
@@ -1298,6 +1335,9 @@ mod tests {
     // ── cold-load budget (2026-11-11) ─────────────────────────────────────
 
     #[test]
+    // Deliberate guard on the timeout const: the assert is statically
+    // true today, but it must fail loudly if someone lowers the budget.
+    #[allow(clippy::assertions_on_constants)]
     fn test_request_timeout_covers_cold_load() {
         // gpt-oss-20b measured 53.6 s just to load on the .149 box
         // (62.5 s total for a two-word reply), and a real turn adds prompt
@@ -1335,10 +1375,7 @@ mod tests {
         });
         let client = probe_client();
         let start = std::time::Instant::now();
-        let result = client
-            .get(format!("http://{}/api/tags", addr))
-            .send()
-            .await;
+        let result = client.get(format!("http://{}/api/tags", addr)).send().await;
         let elapsed = start.elapsed();
         assert!(result.is_err(), "hung server must produce an error, got Ok");
         assert!(

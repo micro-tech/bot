@@ -156,9 +156,11 @@ fn parse_backend(s: &str) -> Result<LLMBackend, String> {
 
 fn looks_like_code(task: &str) -> bool {
     let t = task.to_lowercase();
-    ["rust", "code", "function", "compile", "cargo", "python", "bug", "refactor", "api"]
-        .iter()
-        .any(|w| t.contains(w))
+    [
+        "rust", "code", "function", "compile", "cargo", "python", "bug", "refactor", "api",
+    ]
+    .iter()
+    .any(|w| t.contains(w))
 }
 
 fn resolve_backend_auto(task: &str) -> LLMBackend {
@@ -175,7 +177,9 @@ fn resolve_backend_auto(task: &str) -> LLMBackend {
     match crate::router::route(&ctx, &RouterConfig::default()) {
         LLMBackend::Grok => {
             // Grok has no client implementation yet — fall back to Gemini.
-            log::warn!("spawn_subagent: router picked Grok (no client yet); falling back to Gemini");
+            log::warn!(
+                "spawn_subagent: router picked Grok (no client yet); falling back to Gemini"
+            );
             LLMBackend::Gemini
         }
         LLMBackend::Fallback => LLMBackend::LocalOllama,
@@ -312,14 +316,19 @@ fn backend_short_name(backend: &LLMBackend) -> &'static str {
 /// Backend ladder, fastest/cheapest first. Health-aware fallback walks DOWN
 /// this list from the requested backend (task 217.3). Grok is parked at the
 /// bottom as not-implemented — the walker never selects it.
-const BACKEND_LADDER: [LLMBackend; 3] =
-    [LLMBackend::LocalOllama, LLMBackend::LanOllama, LLMBackend::Gemini];
+const BACKEND_LADDER: [LLMBackend; 3] = [
+    LLMBackend::LocalOllama,
+    LLMBackend::LanOllama,
+    LLMBackend::Gemini,
+];
 
 /// Walk the ladder from `requested` downward, returning the first backend that
 /// is both reachable (Ollama `/api/tags` probe, 60s cache) and allowed (API
 /// spend gate for Gemini). Also returns a note when a fallback happened, so
 /// the commander report always says what actually ran.
-async fn pick_healthy_backend(requested: LLMBackend) -> Result<(LLMBackend, Option<String>), String> {
+async fn pick_healthy_backend(
+    requested: LLMBackend,
+) -> Result<(LLMBackend, Option<String>), String> {
     let start = BACKEND_LADDER
         .iter()
         .position(|b| *b == requested)
@@ -327,20 +336,18 @@ async fn pick_healthy_backend(requested: LLMBackend) -> Result<(LLMBackend, Opti
     let mut last_err = String::from("unknown");
     for b in &BACKEND_LADDER[start..] {
         match b {
-            LLMBackend::LocalOllama | LLMBackend::LanOllama => {
-                match resolve_ollama_endpoint(b) {
-                    Ok(ep) if crate::io::ollama::ollama_reachable(&ep.url).await => {
-                        let note = if *b != requested {
-                            Some(format!("{:?} unreachable, fell back to {:?}", requested, b))
-                        } else {
-                            None
-                        };
-                        return Ok((b.clone(), note));
-                    }
-                    Ok(ep) => last_err = format!("{:?} at {} unreachable", b, ep.url),
-                    Err(e) => last_err = e,
+            LLMBackend::LocalOllama | LLMBackend::LanOllama => match resolve_ollama_endpoint(b) {
+                Ok(ep) if crate::io::ollama::ollama_reachable(&ep.url).await => {
+                    let note = if *b != requested {
+                        Some(format!("{:?} unreachable, fell back to {:?}", requested, b))
+                    } else {
+                        None
+                    };
+                    return Ok((b.clone(), note));
                 }
-            }
+                Ok(ep) => last_err = format!("{:?} at {} unreachable", b, ep.url),
+                Err(e) => last_err = e,
+            },
             _ => match crate::router::check_api_allowed(b) {
                 Ok(()) => {
                     let note = if *b != requested {
@@ -517,7 +524,7 @@ pub fn spawn_subagent(args: &Value) -> String {
         Err(_) => {
             return "Error: spawn_subagent needs a Tokio runtime (it is only valid \
                     from async chat loops, not from sync threads)."
-                .to_string()
+                .to_string();
         }
     };
 
@@ -546,10 +553,14 @@ async fn run_subagent(
     // Task 233: pre-spawn draft — when the role has no persona file and
     // self-authoring is on, the commander drafts one now (lands as .pending,
     // never live). Best-effort: a failed draft must not block the spawn.
-    if !role_hint.trim().is_empty() {
-        if let Err(e) = crate::persona::ensure_persona_file(Some(role_hint)).await {
-            log::debug!("persona: pre-spawn draft skipped for role '{}': {}", role_hint, e);
-        }
+    if !role_hint.trim().is_empty()
+        && let Err(e) = crate::persona::ensure_persona_file(Some(role_hint)).await
+    {
+        log::debug!(
+            "persona: pre-spawn draft skipped for role '{}': {}",
+            role_hint,
+            e
+        );
     }
     let composed = crate::persona::compose_subagent_prompt(task_id, task, role_hint);
     // Task 233: the role's frontmatter allowlist filters the toolset
@@ -577,7 +588,8 @@ async fn run_subagent(
     match backend {
         LLMBackend::LocalOllama | LLMBackend::LanOllama => {
             let ep = resolve_ollama_endpoint(backend)?;
-            let client = crate::io::ollama::llm_impl::OllamaLlmImpl::new(ep.url.clone(), ep.model.clone());
+            let client =
+                crate::io::ollama::llm_impl::OllamaLlmImpl::new(ep.url.clone(), ep.model.clone());
             // Task 233: sub-agents get a REAL system message when a persona
             // file exists; otherwise the legacy single user message
             // (byte-identical to pre-233).
@@ -593,9 +605,11 @@ async fn run_subagent(
                 .await
                 .map_err(|e| format!("Ollama sub-agent on {:?} failed: {}", backend, e))
         }
-        LLMBackend::Gemini => crate::io::llm_gemini::call_gemini_direct(&composed.user, composed.system.as_deref())
-            .await
-            .map_err(|e| format!("Gemini sub-agent failed: {}", e)),
+        LLMBackend::Gemini => {
+            crate::io::llm_gemini::call_gemini_direct(&composed.user, composed.system.as_deref())
+                .await
+                .map_err(|e| format!("Gemini sub-agent failed: {}", e))
+        }
         LLMBackend::Grok => Err("Grok backend is not implemented yet.".to_string()),
         LLMBackend::Fallback => Err("Fallback is not a runnable backend.".to_string()),
     }
@@ -696,7 +710,11 @@ mod tests {
         // The sub-agent's own toolset must NOT contain spawn_subagent (depth guard).
         let filtered = crate::tools::tool_definitions_excluding(&["spawn_subagent"]);
         let farr = filtered.as_array().unwrap();
-        assert!(!farr.iter().any(|d| d["function"]["name"] == "spawn_subagent"));
+        assert!(
+            !farr
+                .iter()
+                .any(|d| d["function"]["name"] == "spawn_subagent")
+        );
     }
 
     #[test]
@@ -714,7 +732,10 @@ mod tests {
         let _tl = super::test_env_lock();
         use std::sync::Mutex as StdMutex;
         static G: OnceLock<StdMutex<()>> = OnceLock::new();
-        let _g = G.get_or_init(|| StdMutex::new(())).lock().unwrap_or_else(|e| e.into_inner());
+        let _g = G
+            .get_or_init(|| StdMutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // SAFETY: serialized by G; default env (unset) means enabled.
         unsafe { std::env::remove_var("HELIX_COMMANDER_ENABLED") };
         // NOTE: if some other test already called set_commander_enabled(), the
@@ -726,11 +747,15 @@ mod tests {
         assert!(content.contains("spawn_subagent"));
 
         unsafe { std::env::set_var("HELIX_COMMANDER_ENABLED", "0") };
-        assert!(commander_system_message().is_none(), "HELIX_COMMANDER_ENABLED=0 must disable it");
+        assert!(
+            commander_system_message().is_none(),
+            "HELIX_COMMANDER_ENABLED=0 must disable it"
+        );
         unsafe { std::env::remove_var("HELIX_COMMANDER_ENABLED") };
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn dispatch_spawn_uses_stub_and_shared_helper() {
         let _tl = super::test_env_lock();
         // Task 216: the cron job-pump calls dispatch_spawn directly — verify the
@@ -758,6 +783,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn fallback_skips_unreachable_ollama() {
         // Task 217.3: dead Ollama boxes fall through to the next ladder rung.
         let _tl = super::test_env_lock();
@@ -785,6 +811,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn fallback_fails_cleanly_when_everything_is_down() {
         // Task 217.3: dead Ollama + tripped spend cap -> honest error, no panic.
         let _tl = super::test_env_lock();
@@ -818,7 +845,10 @@ mod tests {
     fn parse_backend_accepts_aliases() {
         assert_eq!(parse_backend("auto").unwrap_err(), "__auto__");
         assert_eq!(parse_backend("").unwrap_err(), "__auto__");
-        assert_eq!(parse_backend("local_ollama").unwrap(), LLMBackend::LocalOllama);
+        assert_eq!(
+            parse_backend("local_ollama").unwrap(),
+            LLMBackend::LocalOllama
+        );
         assert_eq!(parse_backend("lan").unwrap(), LLMBackend::LanOllama);
         assert_eq!(parse_backend("GEMINI").unwrap(), LLMBackend::Gemini);
         assert!(parse_backend("skynet").is_err());
@@ -858,12 +888,13 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn stubbed_dispatch_emits_spawned_then_finished_bus_events() {
         let _tl = super::test_env_lock();
         // GIVEN a global bus with a web_interface subscriber and the test stub armed:
         let bus = std::sync::Arc::new(crate::bus::Bus::new());
         let mut rx = bus.subscribe("web_interface");
-        let _ = crate::bus::set_global_bus(bus.clone());
+        crate::bus::set_global_bus(bus.clone());
         crate::agents::subagent_registry::reset_for_tests();
         // SAFETY: single-threaded test env manipulation; stub only affects this process.
         unsafe { std::env::set_var("HELIX_SUBAGENT_TEST_STUB", "1") };
@@ -889,15 +920,13 @@ mod tests {
         let mut events = Vec::new();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while events.len() < 2 && std::time::Instant::now() < deadline {
-            match tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await {
-                Ok(Some(msg)) => {
-                    let v: serde_json::Value =
-                        serde_json::from_str(&msg.data).unwrap_or_default();
-                    if v["type"] == "subagent_event" {
-                        events.push(v["event"].as_str().unwrap_or("").to_string());
-                    }
+            if let Ok(Some(msg)) =
+                tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await
+            {
+                let v: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_default();
+                if v["type"] == "subagent_event" {
+                    events.push(v["event"].as_str().unwrap_or("").to_string());
                 }
-                _ => {}
             }
         }
         assert_eq!(

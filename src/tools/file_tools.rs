@@ -1,8 +1,8 @@
 //! File-based tools: log reading, note writing/reading/listing, and repo exploration tools.
 
 use crate::tools::network_discovery::{
-    aggregate_hosts, discover, ping_sweep_subnet, resolve_hostnames, subnet_base, DiscoveredHost,
-    KNOWN_CONFIG_HOSTS,
+    DiscoveredHost, KNOWN_CONFIG_HOSTS, aggregate_hosts, discover, ping_sweep_subnet,
+    resolve_hostnames, subnet_base,
 };
 use serde_json::Value;
 use std::fs;
@@ -42,7 +42,10 @@ pub fn read_log(args: &Value) -> String {
     let file = args["log_file"].as_str().unwrap_or("logs/chat_log.md");
     let normalised = file.replace('\\', "/");
     if !normalised.starts_with("logs/") {
-        return format!("Security error: only files inside logs/ are readable. Got '{}'.", file);
+        return format!(
+            "Security error: only files inside logs/ are readable. Got '{}'.",
+            file
+        );
     }
     // Canonicalize under logs/: rejects `logs/../../config.toml` and symlink
     // escapes while keeping the historical "must start with logs/" contract.
@@ -103,7 +106,11 @@ pub fn read_note(args: &Value) -> String {
             if available.is_empty() {
                 format!("Note '{}' not found. No notes have been saved yet.", title)
             } else {
-                format!("Note '{}' not found.\n\nAvailable notes:\n{}", title, available.join("\n"))
+                format!(
+                    "Note '{}' not found.\n\nAvailable notes:\n{}",
+                    title,
+                    available.join("\n")
+                )
             }
         }
     }
@@ -123,8 +130,12 @@ fn notes_list_internal() -> Vec<String> {
         .map(|entries| {
             let mut names: Vec<String> = entries
                 .flatten()
-                .filter(|e| e.path().extension().map_or(false, |ext| ext == "md"))
-                .filter_map(|e| e.path().file_stem().map(|s| format!("  • {}", s.to_string_lossy())))
+                .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
+                .filter_map(|e| {
+                    e.path()
+                        .file_stem()
+                        .map(|s| format!("  • {}", s.to_string_lossy()))
+                })
                 .collect();
             names.sort();
             names
@@ -133,12 +144,23 @@ fn notes_list_internal() -> Vec<String> {
 }
 
 fn sanitise_filename(s: &str) -> String {
-    let safe: String = s.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
+    let safe: String = s
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
     let mut result = String::new();
     let mut prev_under = false;
     for c in safe.chars() {
         if c == '_' {
-            if !prev_under { result.push(c); }
+            if !prev_under {
+                result.push(c);
+            }
             prev_under = true;
         } else {
             result.push(c);
@@ -214,7 +236,11 @@ pub fn write_artifact_file(
     }
     let rel = format!("artifacts/{}", filename);
     match fs::write(&rel, content) {
-        Ok(_) => Ok((format!("/artifacts/{}", filename), kind.to_string(), content.len())),
+        Ok(_) => Ok((
+            format!("/artifacts/{}", filename),
+            kind.to_string(),
+            content.len(),
+        )),
         Err(e) => Err(format!("Error saving artifact to '{}': {}", rel, e)),
     }
 }
@@ -465,7 +491,8 @@ fn render_network_map_svg(title: &str, ifaces: &[WireInterface]) -> String {
 /// writer — no duplicated file-writing code.
 pub fn create_network_map(args: &Value) -> String {
     let title = args["title"].as_str().unwrap_or("Network Map");
-    let raw = match crate::mcp_client::try_execute("mcp__wire__interfaces", &serde_json::json!({})) {
+    let raw = match crate::mcp_client::try_execute("mcp__wire__interfaces", &serde_json::json!({}))
+    {
         Some(r) => r,
         None => {
             return "Error: wire MCP server is not available — is [mcp] enabled and the wire server configured in config.toml?"
@@ -525,7 +552,11 @@ fn render_full_network_map_svg(
     // Gateway root node.
     let mut y = header_h;
     let gw_label = gateway.unwrap_or("not detected");
-    let gw_fill = if gateway.is_some() { "#1f2937" } else { "#3f1d1d" };
+    let gw_fill = if gateway.is_some() {
+        "#1f2937"
+    } else {
+        "#3f1d1d"
+    };
     s.push_str(&format!(
         "<rect x=\"24\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"10\" fill=\"{}\" stroke=\"#34d399\" stroke-width=\"2\"/>\n",
         y, full_w, gw_h, gw_fill
@@ -649,22 +680,21 @@ fn render_full_network_map_svg(
 fn helix_own_ips(gateway_base: &str) -> Vec<String> {
     if let Some(raw) =
         crate::mcp_client::try_execute("mcp__wire__interfaces", &serde_json::json!({}))
+        && let Ok(ifaces) = parse_wire_interfaces(&raw)
     {
-        if let Ok(ifaces) = parse_wire_interfaces(&raw) {
-            let mut ips: Vec<String> = ifaces
-                .iter()
-                .flat_map(|i| {
-                    i.addresses
-                        .iter()
-                        .map(|a| a.split('/').next().unwrap_or("").to_string())
-                })
-                .filter(|a| !a.is_empty() && !a.starts_with("127.") && !a.starts_with("::"))
-                .collect();
-            ips.sort();
-            ips.dedup();
-            if !ips.is_empty() {
-                return ips;
-            }
+        let mut ips: Vec<String> = ifaces
+            .iter()
+            .flat_map(|i| {
+                i.addresses
+                    .iter()
+                    .map(|a| a.split('/').next().unwrap_or("").to_string())
+            })
+            .filter(|a| !a.is_empty() && !a.starts_with("127.") && !a.starts_with("::"))
+            .collect();
+        ips.sort();
+        ips.dedup();
+        if !ips.is_empty() {
+            return ips;
         }
     }
     if gateway_base == "192.168.1" {
@@ -689,11 +719,7 @@ pub fn create_full_network_map(args: &Value) -> String {
         .and_then(subnet_base)
         .unwrap_or_else(|| "192.168.1".to_string());
     let ping_live = ping_sweep_subnet(&base);
-    let mut to_resolve: Vec<String> = disc
-        .arp_entries
-        .iter()
-        .map(|e| e.ip.clone())
-        .collect();
+    let mut to_resolve: Vec<String> = disc.arp_entries.iter().map(|e| e.ip.clone()).collect();
     to_resolve.extend(ping_live.iter().cloned());
     to_resolve.extend(KNOWN_CONFIG_HOSTS.iter().map(|c| c.ip.to_string()));
     to_resolve.sort();
@@ -752,7 +778,10 @@ pub fn repo_read(args: &Value) -> String {
             let e = end.unwrap_or(total).min(total);
 
             if s >= e || s >= total {
-                return format!("File '{}' has {} lines. Requested range out of bounds.", path, total);
+                return format!(
+                    "File '{}' has {} lines. Requested range out of bounds.",
+                    path, total
+                );
             }
 
             let slice = &lines[s..e];
@@ -778,7 +807,10 @@ pub fn repo_grep(args: &Value) -> String {
 
     // Very simple implementation – in real code we would use the search_file_content helper.
     // Here we just return a placeholder that the explorer can consume.
-    format!("[repo_grep] pattern='{}' path='{}' (implementation pending real search)", pattern, path)
+    format!(
+        "[repo_grep] pattern='{}' path='{}' (implementation pending real search)",
+        pattern, path
+    )
 }
 
 // ── OKF / Cross-Machine Project Mapping Tools ────────────────────────────────
@@ -815,19 +847,35 @@ pub fn scan_directory(args: &Value) -> String {
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let name = path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
 
                 if !include_hidden && name.starts_with('.') {
                     continue;
                 }
 
                 let is_dir = path.is_dir();
-                let rel_path = path.strip_prefix(dir).unwrap_or(&path).to_string_lossy().to_string();
+                let rel_path = path
+                    .strip_prefix(dir)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .to_string();
 
                 if is_dir {
                     *dir_count += 1;
                     let mut children = Vec::new();
-                    walk(&path, current_depth + 1, max_depth, include_hidden, &mut children, file_count, dir_count);
+                    walk(
+                        &path,
+                        current_depth + 1,
+                        max_depth,
+                        include_hidden,
+                        &mut children,
+                        file_count,
+                        dir_count,
+                    );
 
                     tree.push(serde_json::json!({
                         "type": "directory",
@@ -849,7 +897,15 @@ pub fn scan_directory(args: &Value) -> String {
     }
 
     let start = std::path::Path::new(base_path);
-    walk(start, 0, max_depth, include_hidden, &mut tree, &mut file_count, &mut dir_count);
+    walk(
+        start,
+        0,
+        max_depth,
+        include_hidden,
+        &mut tree,
+        &mut file_count,
+        &mut dir_count,
+    );
 
     let result = serde_json::json!({
         "base_path": base_path,
@@ -860,7 +916,8 @@ pub fn scan_directory(args: &Value) -> String {
         "tree": tree
     });
 
-    serde_json::to_string_pretty(&result).unwrap_or_else(|_| "Failed to serialize scan result".to_string())
+    serde_json::to_string_pretty(&result)
+        .unwrap_or_else(|_| "Failed to serialize scan result".to_string())
 }
 
 /// Generates a Mermaid flowchart from a directory scan.
@@ -885,9 +942,16 @@ pub fn generate_mermaid_project_map(args: &Value) -> String {
     }));
 
     let scan: serde_json::Value = serde_json::from_str(&scan_json).unwrap_or(serde_json::json!({}));
-    let tree = scan.get("tree").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+    let tree = scan
+        .get("tree")
+        .and_then(|t| t.as_array())
+        .cloned()
+        .unwrap_or_default();
 
-    let mut mermaid = format!("```mermaid\ngraph TD\n    subgraph \"{}\" [{}]\n", title, base_path);
+    let mut mermaid = format!(
+        "```mermaid\ngraph TD\n    subgraph \"{}\" [{}]\n",
+        title, base_path
+    );
 
     let mut node_id = 0u32;
     let mut id_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
@@ -919,11 +983,11 @@ pub fn generate_mermaid_project_map(args: &Value) -> String {
             mermaid.push_str(&format!("        {} --> {}\n", pid, nid));
         }
 
-        if typ == "directory" {
-            if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
-                for child in children {
-                    add_node(child, Some(&nid), mermaid, node_id, id_map);
-                }
+        if typ == "directory"
+            && let Some(children) = node.get("children").and_then(|c| c.as_array())
+        {
+            for child in children {
+                add_node(child, Some(&nid), mermaid, node_id, id_map);
             }
         }
     }
@@ -965,7 +1029,7 @@ pub fn generate_mermaid_project_map(args: &Value) -> String {
         }
     });
 
-    serde_json::to_string_pretty(&knowledge_payload).unwrap_or_else(|_| mermaid)
+    serde_json::to_string_pretty(&knowledge_payload).unwrap_or(mermaid)
 }
 
 /// Convenience wrapper: produce a ready-to-send OKF knowledge entry for a project map.
@@ -1011,7 +1075,11 @@ mod tests {
     fn test_repo_read_basic() {
         // This test assumes Cargo.toml exists at project root.
         let result = repo_read(&json!({"path": "Cargo.toml"}));
-        assert!(result.contains("[package]"), "expected Cargo.toml content, got: {}", result);
+        assert!(
+            result.contains("[package]"),
+            "expected Cargo.toml content, got: {}",
+            result
+        );
     }
 
     #[test]
@@ -1123,8 +1191,8 @@ mod tests {
         let content = "<html><body><h1>test</h1></body></html>";
         let result =
             create_artifact(&json!({"kind": "html", "title": "Test Chart", "content": content}));
-        let url =
-            artifact_path_from_result(&result).expect(&format!("expected success, got: {}", result));
+        let url = artifact_path_from_result(&result)
+            .unwrap_or_else(|| panic!("expected success, got: {}", result));
         // sanitise_filename preserves case (spaces -> underscores).
         assert!(url.starts_with("/artifacts/Test_Chart-"), "url: {}", url);
         assert!(url.ends_with(".html"), "url: {}", url);
@@ -1157,10 +1225,11 @@ mod tests {
 
     #[test]
     fn create_artifact_sanitises_path_traversal_title() {
-        let result =
-            create_artifact(&json!({"kind": "text", "title": "../../etc/passwd", "content": "pwn"}));
-        let url =
-            artifact_path_from_result(&result).expect(&format!("expected success, got: {}", result));
+        let result = create_artifact(
+            &json!({"kind": "text", "title": "../../etc/passwd", "content": "pwn"}),
+        );
+        let url = artifact_path_from_result(&result)
+            .unwrap_or_else(|| panic!("expected success, got: {}", result));
         assert!(!url.contains(".."), "url must not contain ..: {}", url);
         assert!(
             !url["/artifacts/".len()..].contains('/'),
@@ -1199,18 +1268,23 @@ mod tests {
     #[test]
     fn create_network_map_renders_wire_interfaces() {
         let _tl = crate::tools::subagent_tool::test_env_lock();
-        crate::mcp_client::stub_try_execute_for_tests("mcp__wire__interfaces", WIRE_INTERFACES_STUB);
+        crate::mcp_client::stub_try_execute_for_tests(
+            "mcp__wire__interfaces",
+            WIRE_INTERFACES_STUB,
+        );
         let _cleanup_overrides = Cleanup::new(crate::mcp_client::clear_test_overrides);
         let result = create_network_map(&json!({"title": "Test Net Map"}));
-        let url =
-            artifact_path_from_result(&result).expect(&format!("expected success, got: {}", result));
+        let url = artifact_path_from_result(&result)
+            .unwrap_or_else(|| panic!("expected success, got: {}", result));
         assert!(url.ends_with(".svg"), "url: {}", url);
         let _cleanup = Cleanup::new(|| remove_artifact(&url));
-        let svg =
-            std::fs::read_to_string(url.trim_start_matches('/')).expect("svg must exist");
+        let svg = std::fs::read_to_string(url.trim_start_matches('/')).expect("svg must exist");
         assert!(svg.contains("ens18"), "svg must name ens18");
         assert!(svg.contains("tailscale0"), "svg must name tailscale0");
-        assert!(svg.contains("192.168.1.168/24"), "svg must show the address");
+        assert!(
+            svg.contains("192.168.1.168/24"),
+            "svg must show the address"
+        );
         assert!(
             svg.contains("100.84.56.110/32"),
             "svg must show the tailscale address"
@@ -1238,14 +1312,16 @@ mod tests {
         crate::mcp_client::stub_try_execute_for_tests("mcp__wire__interfaces", &doubled);
         let _cleanup_overrides = Cleanup::new(crate::mcp_client::clear_test_overrides);
         let result = create_network_map(&json!({"title": "Test Doubled Map"}));
-        let url =
-            artifact_path_from_result(&result).expect(&format!("expected success, got: {}", result));
+        let url = artifact_path_from_result(&result)
+            .unwrap_or_else(|| panic!("expected success, got: {}", result));
         assert!(url.ends_with(".svg"), "url: {}", url);
         let _cleanup = Cleanup::new(|| remove_artifact(&url));
-        let svg =
-            std::fs::read_to_string(url.trim_start_matches('/')).expect("svg must exist");
+        let svg = std::fs::read_to_string(url.trim_start_matches('/')).expect("svg must exist");
         assert!(svg.contains("ens18"), "svg must name ens18");
-        assert!(svg.contains("192.168.1.168/24"), "svg must show the address");
+        assert!(
+            svg.contains("192.168.1.168/24"),
+            "svg must show the address"
+        );
     }
 
     #[test]
@@ -1334,7 +1410,10 @@ mod tests {
         let svg = render_full_network_map_svg("Map <&>", None, &hosts);
         assert!(!svg.contains("<script>"), "raw script tag must not appear");
         assert!(svg.contains("&lt;script&gt;"), "must be escaped");
-        assert!(svg.contains("not detected"), "missing gateway must be stated");
+        assert!(
+            svg.contains("not detected"),
+            "missing gateway must be stated"
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::llm_trait::OllamaLlm;
 use crate::cpu::interfaces::LlmInterface;
@@ -68,7 +68,10 @@ impl OllamaLlm for OllamaLlmImpl {
         }
 
         let parsed: Value = resp.json().await?;
-        let content = parsed["message"]["content"].as_str().unwrap_or("").to_string();
+        let content = parsed["message"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         Ok(content)
     }
 

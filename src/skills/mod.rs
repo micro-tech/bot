@@ -103,10 +103,7 @@ impl SkillRegistry {
         // behind Arc<Mutex<...>> so the closure stays 'static + Send + Sync.
         let bayes = Arc::new(Mutex::new(BayesianSkill::new()));
         registry.register("bayes", move |params| {
-            let command = params
-                .get("command")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let command = params.get("command").and_then(|v| v.as_str()).unwrap_or("");
             match bayes.lock() {
                 Ok(mut skill) => NodeResult::Text(skill.handle(command)),
                 Err(_) => NodeResult::Error("bayes skill lock poisoned".into()),
@@ -138,6 +135,12 @@ impl SkillRegistry {
     }
 }
 
+impl Default for SkillRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Implement the SkillInterface so HyEvo can call skills.
 #[async_trait]
 impl SkillInterface for SkillRegistry {
@@ -163,6 +166,9 @@ mod tests {
         assert!(matches!(updated, NodeResult::Text(_)));
 
         // Unknown skill still errors.
-        assert!(matches!(registry.call("nope", &Value::Null), NodeResult::Error(_)));
+        assert!(matches!(
+            registry.call("nope", &Value::Null),
+            NodeResult::Error(_)
+        ));
     }
 }

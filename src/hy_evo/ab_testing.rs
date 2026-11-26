@@ -23,11 +23,21 @@ impl ABTest {
 
     pub fn record_result(&mut self, variant: char, success: bool) {
         if success {
-            if variant == 'a' { self.results_a += 1; } else { self.results_b += 1; }
+            if variant == 'a' {
+                self.results_a += 1;
+            } else {
+                self.results_b += 1;
+            }
         }
     }
 
     pub fn winner(&self) -> Option<char> {
-        if self.results_a > self.results_b { Some('a') } else if self.results_b > self.results_a { Some('b') } else { None }
+        if self.results_a > self.results_b {
+            Some('a')
+        } else if self.results_b > self.results_a {
+            Some('b')
+        } else {
+            None
+        }
     }
 }

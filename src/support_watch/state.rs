@@ -173,10 +173,12 @@ mod tests {
     fn save_load_round_trip() {
         let dir = std::env::temp_dir().join("helix-support-watch-test-rt");
         let _ = std::fs::remove_dir_all(&dir);
-        let mut st = WatchState::default();
-        st.mode = WatchMode::Burst;
-        st.quiet_streak = 1;
-        st.last_check_ms = Some(12345);
+        let mut st = WatchState {
+            mode: WatchMode::Burst,
+            quiet_streak: 1,
+            last_check_ms: Some(12345),
+            ..Default::default()
+        };
         st.note_seen(&["x".into()]);
         st.save(&dir).expect("save");
         let back = WatchState::load(&dir);

@@ -109,10 +109,7 @@ mod tests {
     fn reassemble(chunks: &[String]) -> String {
         chunks
             .iter()
-            .map(|c| {
-                let body = c.split_once("] ").map(|(_, b)| b).unwrap_or(c.as_str());
-                body
-            })
+            .map(|c| c.split_once("] ").map(|(_, b)| b).unwrap_or(c.as_str()))
             .collect()
     }
 
@@ -145,7 +142,10 @@ mod tests {
         assert_eq!(reassemble(&chunks), text, "chunks must reassemble exactly");
         // Numbering is sequential from 1.
         for (i, c) in chunks.iter().enumerate() {
-            assert!(c.starts_with(&format!("[{}/{}] ", i + 1, chunks.len())), "{c:?}");
+            assert!(
+                c.starts_with(&format!("[{}/{}] ", i + 1, chunks.len())),
+                "{c:?}"
+            );
         }
     }
 
@@ -165,7 +165,9 @@ mod tests {
         assert!(is_send_error("MCP tool reported an error:\nhub error: 429"));
         assert!(is_send_error("mcp: tool call failed: timeout"));
         assert!(is_send_error("hub error: 413 body too large"));
-        assert!(!is_send_error("{\"id\": 5, \"room\": \"command\", \"sender\": \"helix\"}"));
+        assert!(!is_send_error(
+            "{\"id\": 5, \"room\": \"command\", \"sender\": \"helix\"}"
+        ));
         assert!(!is_send_error("ok"));
     }
 }

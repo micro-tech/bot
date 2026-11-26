@@ -15,10 +15,10 @@ use std::time::Duration;
 
 const CONNECT_TIMEOUT_SECS: u64 = 10;
 const REQUEST_TIMEOUT_SECS: u64 = 60;
-/// Retry policy now lives in the shared helper (`crate::io::retry`):
-/// up to 5 attempts, jittered exponential backoff 2 s -> 60 s cap.
-/// (The old per-handler MAX_RETRIES / RETRY_DELAY_MS are gone with the
-/// outer retry loop — see H4, task 373.)
+// Retry policy now lives in the shared helper (`crate::io::retry`):
+// up to 5 attempts, jittered exponential backoff 2 s -> 60 s cap.
+// (The old per-handler MAX_RETRIES / RETRY_DELAY_MS are gone with the
+// outer retry loop — see H4, task 373.)
 
 // ── Gemini API endpoint ───────────────────────────────────────────────────────
 
@@ -119,10 +119,7 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
     // single-shot call — this is what lets the commander delegate.
     match call_gemini_tools(&client, &url, &api_key, &prompt, bus).await {
         Ok(response) => {
-            info!(
-                "Gemini replied -- {} chars",
-                response.len()
-            );
+            info!("Gemini replied -- {} chars", response.len());
 
             // Task 223: record the completed turn for conversation history.
             crate::chat_history::record_turn(&prompt, &response);
@@ -144,8 +141,6 @@ pub async fn handle_gemini_bus_message(message: Message, bus: &Arc<Bus>, model: 
 
             // REMOVED: direct publish to web_interface to avoid duplicate replies.
             // The CPU forwarder in main.rs will convert llm_response → llm_output.
-
-            return;
         }
         Err(e) => {
             let last_err = e.to_string();
@@ -322,20 +317,19 @@ fn sanitize_gemini_schema(schema: &mut Value) {
     obj.remove("additionalProperties");
     // schemars `Option<T>` pattern: `anyOf: [{...}, {"type": "null"}]`
     // → inner schema + `nullable: true` (the OpenAPI way).
-    if let Some(any_of) = obj.get("anyOf").and_then(|v| v.as_array()).cloned() {
-        if any_of.len() == 2
-            && let Some(null_idx) = any_of
-                .iter()
-                .position(|v| v.get("type").and_then(|t| t.as_str()) == Some("null"))
-        {
-            let mut inner = any_of[1 - null_idx].clone();
-            sanitize_gemini_schema(&mut inner);
-            if let Some(inner_obj) = inner.as_object_mut() {
-                inner_obj.insert("nullable".to_string(), Value::Bool(true));
-            }
-            *schema = inner;
-            return;
+    if let Some(any_of) = obj.get("anyOf").and_then(|v| v.as_array()).cloned()
+        && any_of.len() == 2
+        && let Some(null_idx) = any_of
+            .iter()
+            .position(|v| v.get("type").and_then(|t| t.as_str()) == Some("null"))
+    {
+        let mut inner = any_of[1 - null_idx].clone();
+        sanitize_gemini_schema(&mut inner);
+        if let Some(inner_obj) = inner.as_object_mut() {
+            inner_obj.insert("nullable".to_string(), Value::Bool(true));
         }
+        *schema = inner;
+        return;
     }
     // `"type": ["string", "null"]` → `"type": "string", "nullable": true`.
     // A bare union without null keeps its first entry.
@@ -563,9 +557,7 @@ async fn call_gemini_tools(
 
             // Task 335/338: same artifact hook as the Ollama loop, so the
             // card renders whichever backend answered the turn.
-            crate::io::ollama::tools::publish_artifact_if_saved(
-                bus, "gemini", name, args, &result,
-            );
+            crate::io::ollama::tools::publish_artifact_if_saved(bus, "gemini", name, args, &result);
 
             response_parts.push(json!({
                 "functionResponse": {
@@ -599,9 +591,7 @@ fn map_reqwest_err(e: reqwest::Error) -> Box<dyn std::error::Error + Send + Sync
             || detail.contains("ssl")
         {
             format!("TLS/certificate error: {}", e).into()
-        } else if detail.contains("dns")
-            || detail.contains("resolve")
-            || detail.contains("lookup")
+        } else if detail.contains("dns") || detail.contains("resolve") || detail.contains("lookup")
         {
             format!("DNS resolution failed: {}", e).into()
         } else {
@@ -620,7 +610,10 @@ fn map_reqwest_err(e: reqwest::Error) -> Box<dyn std::error::Error + Send + Sync
 /// bus path. Single-shot (no tool loop) — the sub-agent gets one strong answer.
 /// Task 233: `system` carries the composed persona+job block when a role
 /// persona file exists; None keeps the legacy prompt-only behavior.
-pub(crate) async fn call_gemini_direct(prompt: &str, system: Option<&str>) -> Result<String, String> {
+pub(crate) async fn call_gemini_direct(
+    prompt: &str,
+    system: Option<&str>,
+) -> Result<String, String> {
     let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
     if api_key.is_empty() {
         return Err("GEMINI_API_KEY is not set — cannot run a sub-agent on Gemini.                     Set it in the environment or .env, or pick a local backend."
@@ -661,10 +654,7 @@ pub fn call_gemini_sync(prompt: &str) -> Result<String, Box<dyn std::error::Erro
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| GEMINI_MODEL_DEFAULT.to_string());
     // Task 330 (C1): key in the `x-goog-api-key` header, never in the URL.
-    let url = format!(
-        "{}/{}:generateContent",
-        GEMINI_URL_BASE, resolved_model
-    );
+    let url = format!("{}/{}:generateContent", GEMINI_URL_BASE, resolved_model);
     rt.block_on(call_gemini(&client, &url, &api_key, prompt, None))
         .map_err(|e| e.to_string().into())
 }
@@ -856,6 +846,7 @@ mod tests {
     // NOTE: multi_thread flavor — tool_definitions() bridges into the MCP
     // runtime via block_in_place, which panics on a current-thread runtime.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[allow(clippy::await_holding_lock)]
     async fn gemini_tool_loop_emits_spawn_subagent_call() {
         // Task 221.4: headless drill — the Gemini path must emit a
         // spawn_subagent tool call and publish the tool_call bus message the
@@ -911,8 +902,8 @@ mod tests {
             "run a sub agent to plan a rust bot",
             &bus,
         )
-            .await
-            .expect("tool loop should complete");
+        .await
+        .expect("tool loop should complete");
         assert!(
             out.contains("Delegated"),
             "expected the model's final text, got: {}",
@@ -924,16 +915,25 @@ mod tests {
         // The tool_call bus message is the UI contract (delegation cards).
         let mut saw_spawn = false;
         while let Ok(msg) = rx.try_recv() {
-            if let Ok(v) = serde_json::from_str::<Value>(&msg.data) {
-                if v["type"] == "tool_call" && v["tool"] == "spawn_subagent" {
-                    saw_spawn = true;
-                    assert!(
-                        v["args"]["task"].as_str().unwrap_or("").contains("rust bot"),
-                        "args not forwarded: {}",
-                        v["args"]
-                    );
-                    assert!(v["result_preview"].as_str().unwrap_or("").contains("subagent-test-stub"));
-                }
+            if let Ok(v) = serde_json::from_str::<Value>(&msg.data)
+                && v["type"] == "tool_call"
+                && v["tool"] == "spawn_subagent"
+            {
+                saw_spawn = true;
+                assert!(
+                    v["args"]["task"]
+                        .as_str()
+                        .unwrap_or("")
+                        .contains("rust bot"),
+                    "args not forwarded: {}",
+                    v["args"]
+                );
+                assert!(
+                    v["result_preview"]
+                        .as_str()
+                        .unwrap_or("")
+                        .contains("subagent-test-stub")
+                );
             }
         }
         assert!(saw_spawn, "expected a spawn_subagent tool_call on the bus");
@@ -947,6 +947,7 @@ mod tests {
     // NOTE: multi_thread flavor — tool_definitions() bridges into the MCP
     // runtime via block_in_place, which panics on a current-thread runtime.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[allow(clippy::await_holding_lock)]
     async fn gemini_tool_loop_transient_503_does_not_replay_tool_calls() {
         // H4 (task 373): a transient failure in round 2 must retry only
         // round 2's HTTP call — round 1's tool must NOT be re-executed.
@@ -1027,10 +1028,11 @@ mod tests {
         // its tool_call bus message twice.
         let mut spawn_calls = 0;
         while let Ok(msg) = rx.try_recv() {
-            if let Ok(v) = serde_json::from_str::<Value>(&msg.data) {
-                if v["type"] == "tool_call" && v["tool"] == "spawn_subagent" {
-                    spawn_calls += 1;
-                }
+            if let Ok(v) = serde_json::from_str::<Value>(&msg.data)
+                && v["type"] == "tool_call"
+                && v["tool"] == "spawn_subagent"
+            {
+                spawn_calls += 1;
             }
         }
         assert_eq!(

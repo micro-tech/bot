@@ -8,8 +8,8 @@
 //! skill system. The skill system is `SkillRegistry` (`mod.rs`): a name
 //! maps to a closure and `call(name, params)` runs it.
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillMetadata {
@@ -33,7 +33,10 @@ impl SkillMarketplace {
 
     /// Publish a new skill to the marketplace
     pub fn publish(&mut self, meta: SkillMetadata) {
-        println!("📦 Published skill to marketplace: {} v{}", meta.name, meta.version);
+        println!(
+            "📦 Published skill to marketplace: {} v{}",
+            meta.name, meta.version
+        );
         self.skills.insert(meta.name.clone(), meta);
     }
 

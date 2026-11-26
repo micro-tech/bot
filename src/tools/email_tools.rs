@@ -23,7 +23,7 @@
 
 // lettre imports with minimal features (builder + smtp-transport + rustls-tls)
 // "builder" feature is required for Message, Mailbox, ContentType etc.
-use lettre::message::{header::ContentType, Mailbox};
+use lettre::message::{Mailbox, header::ContentType};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use log::{error, info, warn};
@@ -462,6 +462,10 @@ mod tests {
             std::net::TcpListener::bind("127.0.0.1:0").expect("bind a loopback listener");
         let port = listener.local_addr().expect("listener addr").port();
         let out = tcp_connect_timeout("127.0.0.1", port, Duration::from_secs(5));
-        assert!(out.is_ok(), "expected a loopback connect to succeed: {:?}", out);
+        assert!(
+            out.is_ok(),
+            "expected a loopback connect to succeed: {:?}",
+            out
+        );
     }
 }

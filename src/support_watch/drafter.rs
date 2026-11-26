@@ -122,7 +122,7 @@ pub fn cite_playbook(msg: &IncomingMail, playbook: &[PlaybookSection]) -> (Strin
         })
         .filter(|(score, _)| *score > 0)
         .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|a| std::cmp::Reverse(a.0));
     scored.truncate(3);
     if scored.is_empty() {
         return ("No playbook entry matched.".to_string(), Vec::new());
@@ -200,13 +200,16 @@ pub fn extract_draft_body(report: &str) -> Option<String> {
     {
         return None;
     }
-    let final_text = report.split_once("final:\n").map(|(_, f)| f).unwrap_or(report);
-    if let Some((_, rest)) = final_text.split_once(DRAFT_BEGIN) {
-        if let Some((body, _)) = rest.split_once(DRAFT_END) {
-            let body = body.trim().to_string();
-            if !body.is_empty() {
-                return Some(body);
-            }
+    let final_text = report
+        .split_once("final:\n")
+        .map(|(_, f)| f)
+        .unwrap_or(report);
+    if let Some((_, rest)) = final_text.split_once(DRAFT_BEGIN)
+        && let Some((body, _)) = rest.split_once(DRAFT_END)
+    {
+        let body = body.trim().to_string();
+        if !body.is_empty() {
+            return Some(body);
         }
     }
     let fallback = final_text.trim().to_string();
@@ -340,7 +343,10 @@ mod tests {
     #[test]
     fn extract_draft_body_prefers_markers() {
         let report = "Sub-agent complete\ntask_id: x\nbackend: gemini\nrole: y\nfinal:\nSome preamble\n---DRAFT-BEGIN---\nThe actual reply.\n---DRAFT-END---\ntrailing";
-        assert_eq!(extract_draft_body(report).as_deref(), Some("The actual reply."));
+        assert_eq!(
+            extract_draft_body(report).as_deref(),
+            Some("The actual reply.")
+        );
     }
 
     #[test]
@@ -350,11 +356,15 @@ mod tests {
             extract_draft_body(report).as_deref(),
             Some("Just the reply, no markers.")
         );
-        assert!(extract_draft_body("Sub-agent failed\ntask_id: x\nbackend: gemini\nerror: boom").is_none());
+        assert!(
+            extract_draft_body("Sub-agent failed\ntask_id: x\nbackend: gemini\nerror: boom")
+                .is_none()
+        );
         assert!(extract_draft_body("Error: spend gate").is_none());
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn draft_reply_with_stubbed_subagent_stages_draft() {
         // Task 258.4: no Gemini API key needed — the sub-agent dispatch is stubbed.
         let _g = with_env("helix-drafter-test-stub");
@@ -363,7 +373,11 @@ mod tests {
         unsafe { std::env::remove_var("HELIX_SUBAGENT_TEST_STUB") };
         assert_eq!(draft.status, drafts::DraftStatus::Pending);
         assert_eq!(draft.in_reply_to, "m1");
-        assert!(draft.body.contains("[stub]"), "unexpected body: {}", draft.body);
+        assert!(
+            draft.body.contains("[stub]"),
+            "unexpected body: {}",
+            draft.body
+        );
         crate::mcp_client::clear_test_overrides();
     }
 }

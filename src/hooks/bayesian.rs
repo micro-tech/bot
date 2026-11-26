@@ -1,7 +1,7 @@
 use crate::bayesian::{BayesianReasoner, NaiveBayesMultinomial};
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BayesianHookConfig {
@@ -20,18 +20,30 @@ impl BayesianHook {
 
         let mut nb = NaiveBayesMultinomial::new(1.0);
         // Load training data from memory or config
-        nb.fit(&vec![]); // Placeholder - in real use, load from memory
+        nb.fit(&[]); // Placeholder - in real use, load from memory
 
-        Self { reasoner, nb_classifier: nb }
+        Self {
+            reasoner,
+            nb_classifier: nb,
+        }
     }
 
     pub fn pre_process(&mut self, msg: &str) -> String {
-        let tokens: Vec<String> = msg.to_lowercase().split_whitespace().map(String::from).collect();
+        let tokens: Vec<String> = msg
+            .to_lowercase()
+            .split_whitespace()
+            .map(String::from)
+            .collect();
         let probs = self.nb_classifier.predict(&tokens);
         self.reasoner.update(msg.to_string(), probs);
 
         let (top, prob) = self.reasoner.top_belief();
-        format!("Bayesian pre-hook: Intent '{}' ({:.1}%) | Original: {}", top, prob * 100.0, msg)
+        format!(
+            "Bayesian pre-hook: Intent '{}' ({:.1}%) | Original: {}",
+            top,
+            prob * 100.0,
+            msg
+        )
     }
 
     pub fn post_process(&self, response: &str, belief: &str) -> String {

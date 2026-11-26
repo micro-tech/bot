@@ -6,7 +6,7 @@
 
 use super::{LocalLLMClient, RepoEvidence, RepoEvidenceItem, RepoExplorer, RepoQuery};
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// System prompt that keeps the explorer strictly read-only.
 const EXPLORER_SYSTEM_PROMPT: &str = r#"
@@ -45,12 +45,18 @@ impl LocalRepoExplorer {
 
     /// Execute a single tool decision (used by both sequential and parallel paths).
     async fn execute_single_tool(&self, decision: &Value) -> Option<RepoEvidenceItem> {
-        let action = decision.get("action").and_then(|a| a.as_str()).unwrap_or("");
+        let action = decision
+            .get("action")
+            .and_then(|a| a.as_str())
+            .unwrap_or("");
         let args = decision.get("args").cloned().unwrap_or_else(|| json!({}));
 
         match action {
             "repo_glob" => {
-                let pattern = args.get("pattern").and_then(|p| p.as_str()).unwrap_or("**/*");
+                let pattern = args
+                    .get("pattern")
+                    .and_then(|p| p.as_str())
+                    .unwrap_or("**/*");
                 let result = crate::tools::execute("repo_glob", &json!({"pattern": pattern}));
                 Some(RepoEvidenceItem {
                     path: format!("[glob:{}]", pattern),
@@ -61,13 +67,25 @@ impl LocalRepoExplorer {
             }
             "repo_read" => {
                 let path = args.get("path").and_then(|p| p.as_str()).unwrap_or("");
-                if path.is_empty() { return None; }
-                let start = args.get("start_line").and_then(|v| v.as_u64()).map(|v| v as usize);
-                let end = args.get("end_line").and_then(|v| v.as_u64()).map(|v| v as usize);
+                if path.is_empty() {
+                    return None;
+                }
+                let start = args
+                    .get("start_line")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as usize);
+                let end = args
+                    .get("end_line")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as usize);
 
                 let mut call_args = json!({"path": path});
-                if let Some(s) = start { call_args["start_line"] = json!(s); }
-                if let Some(e) = end { call_args["end_line"] = json!(e); }
+                if let Some(s) = start {
+                    call_args["start_line"] = json!(s);
+                }
+                if let Some(e) = end {
+                    call_args["end_line"] = json!(e);
+                }
 
                 let content = crate::tools::execute("repo_read", &call_args);
                 Some(RepoEvidenceItem {
@@ -79,9 +97,12 @@ impl LocalRepoExplorer {
             }
             "repo_grep" => {
                 let pattern = args.get("pattern").and_then(|p| p.as_str()).unwrap_or("");
-                if pattern.is_empty() { return None; }
+                if pattern.is_empty() {
+                    return None;
+                }
                 let path = args.get("path").and_then(|p| p.as_str()).unwrap_or(".");
-                let result = crate::tools::execute("repo_grep", &json!({"pattern": pattern, "path": path}));
+                let result =
+                    crate::tools::execute("repo_grep", &json!({"pattern": pattern, "path": path}));
                 Some(RepoEvidenceItem {
                     path: path.to_string(),
                     line_start: None,
@@ -104,7 +125,7 @@ impl LocalRepoExplorer {
             .collect();
 
         let results = join_all(futures).await;
-        results.into_iter().filter_map(|r| r).collect()
+        results.into_iter().flatten().collect()
     }
 
     /// Core exploration with support for parallel tool calls.
@@ -121,27 +142,36 @@ impl LocalRepoExplorer {
         for _step in 0..self.max_steps {
             let user_prompt = format!(
                 "Task: {}\nWorking directory: {}\n{}\nEvidence so far: {}\nDecide next action(s) or finish.",
-                query.natural_language, cwd, hints, evidence_items.len()
+                query.natural_language,
+                cwd,
+                hints,
+                evidence_items.len()
             );
 
             let decision_text = self.llm.chat(EXPLORER_SYSTEM_PROMPT, &user_prompt).await;
 
             // Check for explicit done
             if decision_text.contains("\"action\":\"done\"") {
-                if let Ok(parsed) = serde_json::from_str::<Value>(&decision_text) {
-                    if let Some(ev_arr) = parsed.get("evidence").and_then(|e| e.as_array()) {
-                        for item in ev_arr {
-                            if let (Some(path), Some(summary)) = (
-                                item.get("path").and_then(|p| p.as_str()),
-                                item.get("summary").and_then(|s| s.as_str()),
-                            ) {
-                                evidence_items.push(RepoEvidenceItem {
-                                    path: path.to_string(),
-                                    line_start: item.get("line_start").and_then(|v| v.as_u64()).map(|v| v as usize),
-                                    line_end: item.get("line_end").and_then(|v| v.as_u64()).map(|v| v as usize),
-                                    summary: summary.to_string(),
-                                });
-                            }
+                if let Ok(parsed) = serde_json::from_str::<Value>(&decision_text)
+                    && let Some(ev_arr) = parsed.get("evidence").and_then(|e| e.as_array())
+                {
+                    for item in ev_arr {
+                        if let (Some(path), Some(summary)) = (
+                            item.get("path").and_then(|p| p.as_str()),
+                            item.get("summary").and_then(|s| s.as_str()),
+                        ) {
+                            evidence_items.push(RepoEvidenceItem {
+                                path: path.to_string(),
+                                line_start: item
+                                    .get("line_start")
+                                    .and_then(|v| v.as_u64())
+                                    .map(|v| v as usize),
+                                line_end: item
+                                    .get("line_end")
+                                    .and_then(|v| v.as_u64())
+                                    .map(|v| v as usize),
+                                summary: summary.to_string(),
+                            });
                         }
                     }
                 }
@@ -156,10 +186,10 @@ impl LocalRepoExplorer {
                 if let Some(arr) = val.as_array() {
                     // Parallel execution path (159.4)
                     new_items = self.execute_parallel(arr).await;
-                } else if val.is_object() {
-                    if let Some(item) = self.execute_single_tool(&val).await {
-                        new_items.push(item);
-                    }
+                } else if val.is_object()
+                    && let Some(item) = self.execute_single_tool(&val).await
+                {
+                    new_items.push(item);
                 }
             }
 
@@ -176,7 +206,9 @@ impl LocalRepoExplorer {
             }
         }
 
-        RepoEvidence { items: evidence_items }
+        RepoEvidence {
+            items: evidence_items,
+        }
     }
 }
 

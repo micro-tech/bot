@@ -49,7 +49,7 @@ impl RuntimeTrace {
         let mut out = String::new();
         out.push_str("=== Runtime Trace ===\n");
 
-        for (_i, step) in self.steps.iter().enumerate() {
+        for step in self.steps.iter() {
             out.push_str(&format!("\n--- Step {} ---\n", step.step_number));
 
             if let Some(po) = &step.planner_output {
@@ -62,7 +62,10 @@ impl RuntimeTrace {
                 out.push_str(&format!("LLM Response: {}\n", r));
             }
             if let Some(name) = &step.tool_name {
-                out.push_str(&format!("Tool Call: {} (args={:?})\n", name, step.tool_args));
+                out.push_str(&format!(
+                    "Tool Call: {} (args={:?})\n",
+                    name, step.tool_args
+                ));
             }
             if let Some(res) = &step.tool_result {
                 out.push_str(&format!("Tool Result: {:?}\n", res));

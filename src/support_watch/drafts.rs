@@ -100,8 +100,7 @@ fn load_draft(dir: &Path, id: &str) -> Result<SupportDraft, String> {
 }
 
 fn save_draft(dir: &Path, draft: &SupportDraft) -> Result<(), String> {
-    std::fs::create_dir_all(dir)
-        .map_err(|e| format!("cannot create drafts dir: {}", e))?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("cannot create drafts dir: {}", e))?;
     let tmp = draft_path(dir, &format!("{}.tmp", draft.id));
     std::fs::write(&tmp, serde_json::to_string_pretty(draft).unwrap())
         .map_err(|e| format!("cannot write draft: {}", e))?;
@@ -131,7 +130,7 @@ pub fn stage_draft(
     };
     save_draft(&dir, &draft)?;
     // Handled = a draft now exists for John's review (task 256 definition).
-    super::mark_handled(&[msg.id.clone()]);
+    super::mark_handled(std::slice::from_ref(&msg.id));
     Ok(draft)
 }
 
@@ -217,8 +216,9 @@ pub fn send_draft(id: &str) -> Result<SupportDraft, String> {
             draft.id, draft.status, draft.id
         ));
     }
-    let tools = resolve_mail_tools()
-        .ok_or_else(|| "cannot send: no mcp__mail__* send tool available (is mail-mcp installed?)".to_string())?;
+    let tools = resolve_mail_tools().ok_or_else(|| {
+        "cannot send: no mcp__mail__* send tool available (is mail-mcp installed?)".to_string()
+    })?;
     // Best-effort arg shape until task 255.3 confirms mail-mcp's exact
     // surface; the server ignores unknown fields.
     let args = serde_json::json!({
@@ -333,7 +333,11 @@ mod tests {
         let d = send_draft(&d.id).unwrap();
         assert_eq!(d.status, DraftStatus::Sent);
         // AND it shows up in the list:
-        assert!(list_drafts().iter().any(|x| x.id == d.id && x.status == DraftStatus::Sent));
+        assert!(
+            list_drafts()
+                .iter()
+                .any(|x| x.id == d.id && x.status == DraftStatus::Sent)
+        );
         crate::mcp_client::clear_test_overrides();
     }
 
@@ -386,9 +390,18 @@ mod tests {
         // injection-guard block must NOT be filed as delivered. The draft
         // stays Approved so John can retry.
         for (name, stub_output) in [
-            ("transport_error", "mcp: tool call 'send_message' failed: connection reset"),
-            ("server_error", "MCP tool reported an error:\nSMTP 550 rejected"),
-            ("unknown_tool", "Unknown tool 'mcp__mail__send_message' — not registered."),
+            (
+                "transport_error",
+                "mcp: tool call 'send_message' failed: connection reset",
+            ),
+            (
+                "server_error",
+                "MCP tool reported an error:\nSMTP 550 rejected",
+            ),
+            (
+                "unknown_tool",
+                "Unknown tool 'mcp__mail__send_message' — not registered.",
+            ),
         ] {
             let _g = with_drafts_dir(&format!("helix-drafts-test-sendfail-{name}"));
             crate::mcp_client::clear_test_overrides();
@@ -416,9 +429,13 @@ mod tests {
     #[test]
     fn send_failed_matches_known_error_shapes_only() {
         assert!(send_failed("Blocked by injection guard: verbatim lift"));
-        assert!(send_failed("mcp: tool 'send_message' on server 'mail' timed out after 30s"));
+        assert!(send_failed(
+            "mcp: tool 'send_message' on server 'mail' timed out after 30s"
+        ));
         assert!(send_failed("MCP tool reported an error:\nboom"));
-        assert!(send_failed("Unknown tool 'mcp__mail__send_message' — not registered."));
+        assert!(send_failed(
+            "Unknown tool 'mcp__mail__send_message' — not registered."
+        ));
         // A plausible delivery confirmation passes through:
         assert!(!send_failed(r#"{"ok":true,"message_id":"abc"}"#));
         assert!(!send_failed("message queued"));

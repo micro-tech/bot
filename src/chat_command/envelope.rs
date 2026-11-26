@@ -378,9 +378,9 @@ fn parse_time(obj: &serde_json::Map<String, serde_json::Value>) -> Result<Option
         Some(0) | None => Err(format!(
             "time must be a positive number of seconds (1-{MAX_TIME_SECS})"
         )),
-        Some(n) if n > MAX_TIME_SECS => Err(format!(
-            "time budget too large (max {MAX_TIME_SECS}s)"
-        )),
+        Some(n) if n > MAX_TIME_SECS => {
+            Err(format!("time budget too large (max {MAX_TIME_SECS}s)"))
+        }
         Some(n) => Ok(Some(n)),
     }
 }
@@ -503,7 +503,9 @@ mod tests {
     #[test]
     fn valid_command_json_honors_asus_and_time() {
         assert_eq!(
-            cmd(r#"{"how": "command", "which": "asus", "time": 45, "scope": "read", "command": "hostname"}"#),
+            cmd(
+                r#"{"how": "command", "which": "asus", "time": 45, "scope": "read", "command": "hostname"}"#
+            ),
             Parsed::Structured(Structured::Command {
                 target: Target::Asus,
                 time_secs: Some(45),
@@ -567,8 +569,13 @@ mod tests {
             Parsed::Structured(Structured::Llm { scope: Scope::Write(d), .. }) if d == "gmail"
         ));
         assert!(matches!(
-            cmd(r#"{"how": "llm", "which": "server", "scope": "notes:read", "task": "Summarize notes"}"#),
-            Parsed::Structured(Structured::Llm { scope: Scope::Read, .. })
+            cmd(
+                r#"{"how": "llm", "which": "server", "scope": "notes:read", "task": "Summarize notes"}"#
+            ),
+            Parsed::Structured(Structured::Llm {
+                scope: Scope::Read,
+                ..
+            })
         ));
         assert_eq!(Scope::Write("gmail".to_string()).display(), "write:gmail");
         assert_eq!(Scope::Read.display(), "read");
@@ -586,7 +593,11 @@ mod tests {
             "[1, 2, 3]",
             "42",
         ] {
-            assert_eq!(cmd(rest), Parsed::Plain(rest.to_string()), "must fall back: {rest}");
+            assert_eq!(
+                cmd(rest),
+                Parsed::Plain(rest.to_string()),
+                "must fall back: {rest}"
+            );
         }
     }
 
@@ -703,15 +714,14 @@ mod tests {
 
     #[test]
     fn addressee_accessor_broadcast_is_none() {
-        let addressed = match cmd(
-            r#"{"how": "command", "to": "helix", "scope": "read", "command": "uptime"}"#,
-        ) {
-            Parsed::Structured(s) => s,
-            other => panic!("expected structured, got {other:?}"),
-        };
+        let addressed =
+            match cmd(r#"{"how": "command", "to": "helix", "scope": "read", "command": "uptime"}"#)
+            {
+                Parsed::Structured(s) => s,
+                other => panic!("expected structured, got {other:?}"),
+            };
         assert_eq!(addressed.addressee(), Some("helix"));
-        let broadcast = match cmd(r#"{"how": "command", "scope": "read", "command": "uptime"}"#)
-        {
+        let broadcast = match cmd(r#"{"how": "command", "scope": "read", "command": "uptime"}"#) {
             Parsed::Structured(s) => s,
             other => panic!("expected structured, got {other:?}"),
         };
@@ -736,7 +746,9 @@ mod tests {
     #[test]
     fn mcp_json_parses_with_args_and_time() {
         assert_eq!(
-            cmd(r#"{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "args": {"query": "from:example.com"}, "time": 60, "scope": "read"}"#),
+            cmd(
+                r#"{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "args": {"query": "from:example.com"}, "time": 60, "scope": "read"}"#
+            ),
             Parsed::Structured(Structured::Mcp {
                 server: "google".to_string(),
                 tool: "gmail_search".to_string(),
@@ -748,7 +760,9 @@ mod tests {
         // `args` absent → empty object; `time` absent → None (the
         // handler applies its 60 s default).
         assert_eq!(
-            cmd(r#"{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "scope": "read"}"#),
+            cmd(
+                r#"{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "scope": "read"}"#
+            ),
             Parsed::Structured(Structured::Mcp {
                 server: "google".to_string(),
                 tool: "gmail_search".to_string(),
@@ -764,7 +778,8 @@ mod tests {
         // `to` is REQUIRED for mcp: without it both agents would run
         // the same tool. A missing `to` is a rejection, never a
         // broadcast and never a silent ignore.
-        match cmd(r#"{"how": "mcp", "server": "google", "tool": "gmail_search", "scope": "read"}"#) {
+        match cmd(r#"{"how": "mcp", "server": "google", "tool": "gmail_search", "scope": "read"}"#)
+        {
             Parsed::Reject(reason) => {
                 assert!(reason.contains("mcp needs a to field"), "{reason}");
             }
@@ -791,7 +806,9 @@ mod tests {
         }
         // "read" and the domain-first "gmail:read" both parse to Read.
         assert!(matches!(
-            cmd(r#"{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "scope": "gmail:read"}"#),
+            cmd(
+                r#"{"how": "mcp", "to": "helix", "server": "google", "tool": "gmail_search", "scope": "gmail:read"}"#
+            ),
             Parsed::Structured(Structured::Mcp { .. })
         ));
     }
@@ -834,7 +851,10 @@ mod tests {
             );
             match cmd(&json) {
                 Parsed::Reject(reason) => {
-                    assert!(reason.contains("args must be a JSON object"), "{json} → {reason}");
+                    assert!(
+                        reason.contains("args must be a JSON object"),
+                        "{json} → {reason}"
+                    );
                 }
                 other => panic!("{json} must reject, got {other:?}"),
             }

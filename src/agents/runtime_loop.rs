@@ -13,7 +13,7 @@ pub struct RuntimeLoop<P: Planner> {
     rule_layer: RuleLayer,
     max_steps: u32,
     trace: bool,
-    pub runtime_trace: RuntimeTrace,   // NEW: structured trace for 157
+    pub runtime_trace: RuntimeTrace, // NEW: structured trace for 157
 }
 
 impl<P: Planner> RuntimeLoop<P> {
@@ -35,7 +35,10 @@ impl<P: Planner> RuntimeLoop<P> {
 
     /// Run one full agent execution cycle.
     pub async fn run(&mut self, mut state: AgentState) -> AgentState {
-        info!("[Runtime] Starting agent run (max_steps={})", self.max_steps);
+        info!(
+            "[Runtime] Starting agent run (max_steps={})",
+            self.max_steps
+        );
 
         // Task 210: consecutive tool-call counter feeding the rule layer's
         // runaway-loop check. Attempts count even when rejected, and any
@@ -46,7 +49,10 @@ impl<P: Planner> RuntimeLoop<P> {
             state.reset_transients();
 
             if self.trace {
-                debug!("[Runtime] Step {} — asking planner for next action", state.step_count);
+                debug!(
+                    "[Runtime] Step {} — asking planner for next action",
+                    state.step_count
+                );
             }
 
             // NEW: Planner now returns PlannerOutput (not AgentStep)
@@ -54,7 +60,11 @@ impl<P: Planner> RuntimeLoop<P> {
 
             if self.trace {
                 match &decision {
-                    PlannerOutput::ToolCall { tool_name, args_json, .. } => {
+                    PlannerOutput::ToolCall {
+                        tool_name,
+                        args_json,
+                        ..
+                    } => {
                         // Task 265 (secrets): log arg KEYS, never values —
                         // args can carry bodies, commands, or secrets.
                         let arg_keys: Vec<&str> = args_json
@@ -67,7 +77,10 @@ impl<P: Planner> RuntimeLoop<P> {
                         );
                     }
                     PlannerOutput::LLMCall { prompt, .. } => {
-                        info!("[Runtime] Planner chose LLMCall (prompt_len={})", prompt.len());
+                        info!(
+                            "[Runtime] Planner chose LLMCall (prompt_len={})",
+                            prompt.len()
+                        );
                     }
                     PlannerOutput::FinalAnswer { message, .. } => {
                         // Task 265 (secrets): the answer can quote tool
@@ -78,10 +91,7 @@ impl<P: Planner> RuntimeLoop<P> {
                         );
                     }
                     PlannerOutput::Error { message } => {
-                        warn!(
-                            "[Runtime] Planner returned Error ({} chars)",
-                            message.len()
-                        );
+                        warn!("[Runtime] Planner returned Error ({} chars)", message.len());
                     }
                     PlannerOutput::Replan { new_goal_focus, .. } => {
                         info!(
@@ -131,16 +141,25 @@ impl<P: Planner> RuntimeLoop<P> {
                     crate::agents::bus_events::emit_agent_error(&state, &message);
                     // Task 265 (secrets): the full text stays in the trace
                     // / bus event; the log line carries length only.
-                    warn!("[Runtime] Agent halted with error ({} chars)", message.len());
+                    warn!(
+                        "[Runtime] Agent halted with error ({} chars)",
+                        message.len()
+                    );
                     step.error = Some(message);
                     step.halted = true;
                     self.runtime_trace.push(step);
                     break;
                 }
-                PlannerOutput::Replan { new_goal_focus, reasoning } => {
+                PlannerOutput::Replan {
+                    new_goal_focus,
+                    reasoning,
+                } => {
                     // Reflection suggested a better path — update state and continue
                     if self.trace {
-                        info!("[Runtime] Reflection triggered REPLAN → focus: {}", new_goal_focus);
+                        info!(
+                            "[Runtime] Reflection triggered REPLAN → focus: {}",
+                            new_goal_focus
+                        );
                     }
                     state.messages.push(format!(
                         "Reflection: replan with focus '{}' — {}",
@@ -155,7 +174,11 @@ impl<P: Planner> RuntimeLoop<P> {
                     self.runtime_trace.push(step);
                     continue;
                 }
-                PlannerOutput::ToolCall { tool_name, args_json, .. } => {
+                PlannerOutput::ToolCall {
+                    tool_name,
+                    args_json,
+                    ..
+                } => {
                     step.tool_name = Some(tool_name.clone());
                     step.tool_args = Some(args_json.clone());
 
@@ -173,12 +196,19 @@ impl<P: Planner> RuntimeLoop<P> {
                             correlation_id: state.step_count as u64,
                         },
                     );
-                    if let Err(reason) = self.rule_layer.validate(&invocation, consecutive_tool_calls) {
+                    if let Err(reason) = self
+                        .rule_layer
+                        .validate(&invocation, consecutive_tool_calls)
+                    {
                         // The attempt counts: a planner hammering rejected
                         // calls must still trip the consecutive-call limit.
                         consecutive_tool_calls += 1;
-                        warn!("[Runtime] Rule layer rejected tool '{}': {}", tool_name, reason);
-                        let msg = format!("Rule layer rejected tool call '{}': {}", tool_name, reason);
+                        warn!(
+                            "[Runtime] Rule layer rejected tool '{}': {}",
+                            tool_name, reason
+                        );
+                        let msg =
+                            format!("Rule layer rejected tool call '{}': {}", tool_name, reason);
                         state.messages.push(msg.clone());
                         state.last_tool_result =
                             Some(serde_json::json!({ "error": msg, "rejected": true }));
@@ -206,9 +236,8 @@ impl<P: Planner> RuntimeLoop<P> {
                             if self.trace {
                                 // Task 265 (secrets): tool results can
                                 // carry bodies/secrets — log length only.
-                                let result_len = serde_json::to_string(&value)
-                                    .map(|s| s.len())
-                                    .unwrap_or(0);
+                                let result_len =
+                                    serde_json::to_string(&value).map(|s| s.len()).unwrap_or(0);
                                 info!(
                                     "[Runtime] Tool '{}' succeeded ({} chars)",
                                     tool_name, result_len
@@ -223,7 +252,11 @@ impl<P: Planner> RuntimeLoop<P> {
                             step.tool_result = Some(value);
                         }
                         crate::agents::tool_supervisor_v2::ToolResult::RetryableError(err) => {
-                            warn!("[Runtime] Tool '{}' retryable error: {}", tool_name, err.message());
+                            warn!(
+                                "[Runtime] Tool '{}' retryable error: {}",
+                                tool_name,
+                                err.message()
+                            );
                             state.last_tool_result = Some(serde_json::json!({
                                 "error": err.message(),
                                 "retryable": true
@@ -231,7 +264,11 @@ impl<P: Planner> RuntimeLoop<P> {
                             step.error = Some(err.message().to_string());
                         }
                         crate::agents::tool_supervisor_v2::ToolResult::FatalError(err) => {
-                            warn!("[Runtime] Tool '{}' fatal error: {}", tool_name, err.message());
+                            warn!(
+                                "[Runtime] Tool '{}' fatal error: {}",
+                                tool_name,
+                                err.message()
+                            );
                             state.halt(&format!("Tool failed: {}", err.message()));
                             step.error = Some(err.message().to_string());
                             step.halted = true;
@@ -244,7 +281,9 @@ impl<P: Planner> RuntimeLoop<P> {
                     if self.trace {
                         debug!("[Runtime] LLMCall step (prompt_len={})", prompt.len());
                     }
-                    state.messages.push(format!("LLM called with prompt: {}", prompt));
+                    state
+                        .messages
+                        .push(format!("LLM called with prompt: {}", prompt));
                     step.llm_prompt = Some(prompt);
                 }
             }
@@ -265,8 +304,10 @@ impl<P: Planner> RuntimeLoop<P> {
             }
         }
 
-        info!("[Runtime] Agent run completed. Halted={}, steps={}",
-              state.halted, state.step_count);
+        info!(
+            "[Runtime] Agent run completed. Halted={}, steps={}",
+            state.halted, state.step_count
+        );
 
         state
     }
@@ -324,10 +365,19 @@ mod tests {
         assert_eq!(runtime.runtime_trace.steps.len(), 2);
         // ...AND the bad call was rejected before execution — never ran.
         let first = &runtime.runtime_trace.steps[0];
-        let err = first.error.as_ref().expect("rejected step should carry an error");
-        assert!(err.contains("Rule layer rejected"), "unexpected error: {err}");
+        let err = first
+            .error
+            .as_ref()
+            .expect("rejected step should carry an error");
+        assert!(
+            err.contains("Rule layer rejected"),
+            "unexpected error: {err}"
+        );
         assert!(err.contains("delete_everything"), "unexpected error: {err}");
-        assert!(first.tool_result.is_none(), "rejected call must not execute");
+        assert!(
+            first.tool_result.is_none(),
+            "rejected call must not execute"
+        );
     }
 
     #[tokio::test]

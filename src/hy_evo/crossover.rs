@@ -64,14 +64,10 @@ impl CrossoverEngine {
         let mut child = WorkflowGenome::new();
 
         // Take prefix from A
-        for i in 0..split_a {
-            child.nodes.push(a.nodes[i].clone());
-        }
+        child.nodes.extend(a.nodes[..split_a].iter().cloned());
 
         // Take suffix from B
-        for i in split_b..b.nodes.len() {
-            child.nodes.push(b.nodes[i].clone());
-        }
+        child.nodes.extend(b.nodes[split_b..].iter().cloned());
 
         self.rebuild_edges(&mut child);
 
@@ -95,19 +91,13 @@ impl CrossoverEngine {
         let mut child = WorkflowGenome::new();
 
         // Prefix from A
-        for i in 0..start_a {
-            child.nodes.push(a.nodes[i].clone());
-        }
+        child.nodes.extend(a.nodes[..start_a].iter().cloned());
 
         // Middle from B
-        for i in start_b..end_b {
-            child.nodes.push(b.nodes[i].clone());
-        }
+        child.nodes.extend(b.nodes[start_b..end_b].iter().cloned());
 
         // Suffix from A
-        for i in end_a..a.nodes.len() {
-            child.nodes.push(a.nodes[i].clone());
-        }
+        child.nodes.extend(a.nodes[end_a..].iter().cloned());
 
         self.rebuild_edges(&mut child);
 

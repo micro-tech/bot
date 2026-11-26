@@ -20,8 +20,7 @@ pub const DEFAULT_DAILY_API_CAP_USD: f64 = 5.00;
 
 /// Operator override for the daily API cap, set once at startup from
 /// `[router] daily_api_cap_usd`. Non-positive values are ignored (default wins).
-static API_CAP_OVERRIDE_USD: std::sync::Mutex<Option<f64>> =
-    std::sync::Mutex::new(None);
+static API_CAP_OVERRIDE_USD: std::sync::Mutex<Option<f64>> = std::sync::Mutex::new(None);
 
 /// Set the daily API spend cap (USD) from config.
 pub fn set_daily_api_cap_usd(v: f64) {
@@ -191,8 +190,7 @@ fn load_state() -> SpendState {
     }
     // ...then the pre-236 legacy format (date -> backend -> flat f64):
     // migrate USD into DaySpend, token counts start at zero.
-    if let Ok(legacy) = serde_json::from_str::<HashMap<String, HashMap<String, f64>>>(&raw)
-    {
+    if let Ok(legacy) = serde_json::from_str::<HashMap<String, HashMap<String, f64>>>(&raw) {
         let mut state = SpendState::default();
         for (day, backends) in legacy {
             for (backend, usd) in backends {
@@ -455,7 +453,11 @@ mod tests {
         set_cap_block_on_exceed(true);
         // THEN the cap trips with Err:
         let err = check_api_allowed(&LLMBackend::Gemini).expect_err("cap should trip");
-        assert!(err.contains("cap"), "message should mention the cap: {}", err);
+        assert!(
+            err.contains("cap"),
+            "message should mention the cap: {}",
+            err
+        );
         reset_for_tests();
         let _ = std::fs::remove_file(&p);
     }

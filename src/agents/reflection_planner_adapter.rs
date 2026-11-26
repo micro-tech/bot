@@ -52,21 +52,19 @@ where
         // Trigger reflection on a schedule (or when we have history)
         let should_reflect = self.reflection_interval > 0
             && state.step_count > 0
-            && (state.step_count % self.reflection_interval == 0);
+            && state.step_count.is_multiple_of(self.reflection_interval);
 
-        if should_reflect {
-            if let Some(reflection_text) = self.inner.reflect(state).await {
-                // Parse the reflection text for signals that we should replan
-                if self.should_replan(&reflection_text) {
-                    return PlannerOutput::Replan {
-                        new_goal_focus: self.extract_focus(&reflection_text),
-                        reasoning: Some(reflection_text),
-                    };
-                }
-
-                // Otherwise attach the reflection as reasoning to the existing decision
-                decision = self.attach_reasoning(decision, reflection_text);
+        if should_reflect && let Some(reflection_text) = self.inner.reflect(state).await {
+            // Parse the reflection text for signals that we should replan
+            if self.should_replan(&reflection_text) {
+                return PlannerOutput::Replan {
+                    new_goal_focus: self.extract_focus(&reflection_text),
+                    reasoning: Some(reflection_text),
+                };
             }
+
+            // Otherwise attach the reflection as reasoning to the existing decision
+            decision = self.attach_reasoning(decision, reflection_text);
         }
 
         decision

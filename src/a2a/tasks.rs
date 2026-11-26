@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-use super::types::{now_rfc3339, Artifact, Message, Task, TaskState, TaskStatus};
+use super::types::{Artifact, Message, Task, TaskState, TaskStatus, now_rfc3339};
 
 /// A task plus its runtime bookkeeping.
 pub struct StoredTask {

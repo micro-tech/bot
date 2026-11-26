@@ -123,10 +123,10 @@ fn split_command_segments(command: &str) -> Vec<String> {
                     if qc == '"' {
                         break;
                     }
-                    if qc == '\\' {
-                        if let Some(esc) = chars.next() {
-                            current.push(esc);
-                        }
+                    if qc == '\\'
+                        && let Some(esc) = chars.next()
+                    {
+                        current.push(esc);
                     }
                 }
             }
@@ -198,9 +198,8 @@ fn check_shell_argv0(command: &str) -> Result<(), String> {
             a == "--recursive"
                 || (a.starts_with('-')
                     && !a.starts_with("--")
-                    && a.get(1..).is_some_and(|flags| {
-                        flags.chars().any(|c| c == 'r' || c == 'R')
-                    }))
+                    && a.get(1..)
+                        .is_some_and(|flags| flags.chars().any(|c| c == 'r' || c == 'R')))
         });
         if recursive {
             for target in args.iter().filter(|a| !a.starts_with('-')) {

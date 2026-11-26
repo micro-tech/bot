@@ -78,6 +78,12 @@ impl HeartbeatState {
     }
 }
 
+impl Default for HeartbeatState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentState {
     pub fn new() -> Self {
         let now = Instant::now();
@@ -118,5 +124,11 @@ impl AgentState {
         self.error = Some(msg.clone());
         self.set_mode(AgentMode::Error);
         log_to_file(&format!("Agent error: {}", msg));
+    }
+}
+
+impl Default for AgentState {
+    fn default() -> Self {
+        Self::new()
     }
 }

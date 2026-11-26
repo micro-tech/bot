@@ -135,10 +135,10 @@ fn is_lan_ipv4(addr: &str) -> bool {
     if addr.strip_prefix("10.").is_some_and(|r| !r.is_empty()) {
         return true;
     }
-    if let Some(rest) = addr.strip_prefix("172.") {
-        if let Some(second) = rest.split('.').next().and_then(|s| s.parse::<u8>().ok()) {
-            return (16..=31).contains(&second);
-        }
+    if let Some(rest) = addr.strip_prefix("172.")
+        && let Some(second) = rest.split('.').next().and_then(|s| s.parse::<u8>().ok())
+    {
+        return (16..=31).contains(&second);
     }
     false
 }

@@ -210,7 +210,10 @@ mod tests {
         // Bare JSON (no fence) is accepted; garbage and a response
         // with no JSON at all are rejected.
         let bare = "{\"id\": \"helix-ctx-v1\", \"version\": \"1.0.0\"}";
-        assert_eq!(parse_context_draft_response(bare).unwrap().id, "helix-ctx-v1");
+        assert_eq!(
+            parse_context_draft_response(bare).unwrap().id,
+            "helix-ctx-v1"
+        );
         assert!(parse_context_draft_response("not json at all").is_err());
         assert!(parse_context_draft_response("```json\n{\"id\": 1}\n```").is_err());
     }

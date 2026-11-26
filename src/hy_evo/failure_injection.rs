@@ -6,7 +6,9 @@ pub struct FailureInjector {
 
 impl FailureInjector {
     pub fn new(rate: f64) -> Self {
-        Self { failure_rate: rate.clamp(0.0, 1.0) }
+        Self {
+            failure_rate: rate.clamp(0.0, 1.0),
+        }
     }
 
     pub fn should_fail(&self) -> bool {

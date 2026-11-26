@@ -95,8 +95,7 @@ impl PlanNode {
     /// Count how many nodes are still pending or in-progress.
     pub fn open_count(&self) -> usize {
         let self_open = matches!(self.status, PlanStatus::Pending | PlanStatus::InProgress);
-        self_open as usize
-            + self.children.iter().map(|c| c.open_count()).sum::<usize>()
+        self_open as usize + self.children.iter().map(|c| c.open_count()).sum::<usize>()
     }
 
     /// Mark this node (and optionally children) as completed.
@@ -150,15 +149,14 @@ impl GoalTree {
     /// Advance focus to the first pending child of the current node (if any).
     /// Returns true if focus changed.
     pub fn advance_to_first_pending_child(&mut self) -> bool {
-        if let Some(root) = &mut self.root {
-            if let Some(current_id) = &self.current_focus_id {
-                if let Some(current) = root.find_mut(current_id) {
-                    for child in &current.children {
-                        if child.status == PlanStatus::Pending {
-                            self.current_focus_id = Some(child.id.clone());
-                            return true;
-                        }
-                    }
+        if let Some(root) = &mut self.root
+            && let Some(current_id) = &self.current_focus_id
+            && let Some(current) = root.find_mut(current_id)
+        {
+            for child in &current.children {
+                if child.status == PlanStatus::Pending {
+                    self.current_focus_id = Some(child.id.clone());
+                    return true;
                 }
             }
         }
@@ -167,16 +165,15 @@ impl GoalTree {
 
     /// Mark the current focus node as completed and move focus upward or to siblings.
     pub fn complete_current(&mut self, result: Option<String>) -> bool {
-        if let Some(root) = &mut self.root {
-            if let Some(id) = &self.current_focus_id {
-                if let Some(node) = root.find_mut(id) {
-                    node.mark_completed(result);
-                    // Try to move focus to a sibling or parent
-                    // (simplified: just clear for now — a real impl would search upward)
-                    self.current_focus_id = None;
-                    return true;
-                }
-            }
+        if let Some(root) = &mut self.root
+            && let Some(id) = &self.current_focus_id
+            && let Some(node) = root.find_mut(id)
+        {
+            node.mark_completed(result);
+            // Try to move focus to a sibling or parent
+            // (simplified: just clear for now — a real impl would search upward)
+            self.current_focus_id = None;
+            return true;
         }
         false
     }

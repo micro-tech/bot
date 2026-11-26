@@ -51,15 +51,27 @@ pub struct GateCheck {
 
 impl GateCheck {
     fn pass(name: &str, detail: &str) -> Self {
-        Self { name: name.to_string(), status: CheckStatus::Pass, detail: detail.to_string() }
+        Self {
+            name: name.to_string(),
+            status: CheckStatus::Pass,
+            detail: detail.to_string(),
+        }
     }
 
     fn fail(name: &str, detail: &str) -> Self {
-        Self { name: name.to_string(), status: CheckStatus::Fail, detail: detail.to_string() }
+        Self {
+            name: name.to_string(),
+            status: CheckStatus::Fail,
+            detail: detail.to_string(),
+        }
     }
 
     fn pending_human(name: &str, detail: &str) -> Self {
-        Self { name: name.to_string(), status: CheckStatus::PendingHuman, detail: detail.to_string() }
+        Self {
+            name: name.to_string(),
+            status: CheckStatus::PendingHuman,
+            detail: detail.to_string(),
+        }
     }
 }
 
@@ -72,8 +84,7 @@ pub fn review_gate_checklist(
     audit: &AuditReport,
     cfg: &crate::self_improve::SelfImproveConfig,
 ) -> Vec<GateCheck> {
-    let report: Option<EvalReport> =
-        serde_json::from_value(proposal.eval_report_json.clone()).ok();
+    let report: Option<EvalReport> = serde_json::from_value(proposal.eval_report_json.clone()).ok();
     let new_lines: usize = proposal
         .diff_files
         .iter()
@@ -94,10 +105,16 @@ pub fn review_gate_checklist(
             checks.push(GateCheck::fail("unit-tests-green", "subset ran zero tests"));
         }
         Some(_) => {
-            checks.push(GateCheck::fail("unit-tests-green", "subset has failing test(s)"));
+            checks.push(GateCheck::fail(
+                "unit-tests-green",
+                "subset has failing test(s)",
+            ));
         }
         None => {
-            checks.push(GateCheck::fail("unit-tests-green", "no eval report on proposal"));
+            checks.push(GateCheck::fail(
+                "unit-tests-green",
+                "no eval report on proposal",
+            ));
         }
     }
 
@@ -118,7 +135,10 @@ pub fn review_gate_checklist(
     {
         checks.push(GateCheck::pass(
             "bounded-subset-green",
-            &format!("subset ran; diff of {new_lines} lines within the {}-line cap", cfg.max_diff_lines),
+            &format!(
+                "subset ran; diff of {new_lines} lines within the {}-line cap",
+                cfg.max_diff_lines
+            ),
         ));
     } else {
         checks.push(GateCheck::fail("bounded-subset-green", "subset never ran"));
@@ -133,7 +153,9 @@ pub fn review_gate_checklist(
                 "eval_set_approved is false (D5 gate closed)",
             ));
         }
-        Some(r) if !r.eval_set_results.is_empty() && r.eval_set_results.iter().all(|t| t.passed) => {
+        Some(r)
+            if !r.eval_set_results.is_empty() && r.eval_set_results.iter().all(|t| t.passed) =>
+        {
             checks.push(GateCheck::pass(
                 "eval-set-green",
                 &format!("{} eval set test(s) passed", r.eval_set_results.len()),
@@ -143,16 +165,25 @@ pub fn review_gate_checklist(
             checks.push(GateCheck::fail("eval-set-green", "eval set ran zero tests"));
         }
         Some(_) => {
-            checks.push(GateCheck::fail("eval-set-green", "eval set has failing test(s)"));
+            checks.push(GateCheck::fail(
+                "eval-set-green",
+                "eval set has failing test(s)",
+            ));
         }
         None => {
-            checks.push(GateCheck::fail("eval-set-green", "no eval report on proposal"));
+            checks.push(GateCheck::fail(
+                "eval-set-green",
+                "no eval report on proposal",
+            ));
         }
     }
 
     // 4. Audit clean.
     if audit_outcome(audit) == AuditOutcome::Clean {
-        checks.push(GateCheck::pass("audit-clean", "no secret hits, no sensitive paths"));
+        checks.push(GateCheck::pass(
+            "audit-clean",
+            "no secret hits, no sensitive paths",
+        ));
     } else {
         checks.push(GateCheck::fail(
             "audit-clean",
@@ -162,7 +193,10 @@ pub fn review_gate_checklist(
 
     // Promotion itself (the evaluator's verdict) is a machine check.
     if proposal.promoted && proposal.eval_passed {
-        checks.push(GateCheck::pass("promoted", "evaluator promoted the proposal"));
+        checks.push(GateCheck::pass(
+            "promoted",
+            "evaluator promoted the proposal",
+        ));
     } else {
         checks.push(GateCheck::fail(
             "promoted",
@@ -201,18 +235,34 @@ mod tests {
         EvalReport {
             passed: subset_pass && eval_pass,
             promoted: subset_pass && eval_pass,
-            promotion_reason: if subset_pass && eval_pass { "ok".to_string() } else { "x".to_string() },
+            promotion_reason: if subset_pass && eval_pass {
+                "ok".to_string()
+            } else {
+                "x".to_string()
+            },
             subset_results: vec![TestResult {
                 name: "a::b".to_string(),
                 passed: subset_pass,
-                detail: if subset_pass { "ok".to_string() } else { "FAILED".to_string() },
+                detail: if subset_pass {
+                    "ok".to_string()
+                } else {
+                    "FAILED".to_string()
+                },
             }],
             eval_set_results: vec![TestResult {
                 name: "eval1".to_string(),
                 passed: eval_pass,
-                detail: if eval_pass { "ok".to_string() } else { "FAILED".to_string() },
+                detail: if eval_pass {
+                    "ok".to_string()
+                } else {
+                    "FAILED".to_string()
+                },
             }],
-            diff_stat: DiffStat { files_changed: 1, new_lines: 10, old_lines: 2 },
+            diff_stat: DiffStat {
+                files_changed: 1,
+                new_lines: 10,
+                old_lines: 2,
+            },
             runtime_ms: 1234,
         }
     }
@@ -243,14 +293,18 @@ mod tests {
     }
 
     fn cfg_open() -> crate::self_improve::SelfImproveConfig {
-        let mut cfg = crate::self_improve::SelfImproveConfig::default();
-        cfg.pr_opening = true;
-        cfg.eval_set_approved = true;
-        cfg
+        crate::self_improve::SelfImproveConfig {
+            pr_opening: true,
+            eval_set_approved: true,
+            ..Default::default()
+        }
     }
 
     fn check_named<'a>(checks: &'a [GateCheck], name: &str) -> &'a GateCheck {
-        checks.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("missing check {name}"))
+        checks
+            .iter()
+            .find(|c| c.name == name)
+            .unwrap_or_else(|| panic!("missing check {name}"))
     }
 
     #[test]
@@ -261,12 +315,30 @@ mod tests {
         let p = proposal_with(report(true, true), true, true);
         let checks = review_gate_checklist(&p, &AuditReport::default(), &cfg_open());
         assert!(all_machine_checks_pass(&checks));
-        assert_eq!(check_named(&checks, "john-read").status, CheckStatus::PendingHuman);
-        assert_eq!(check_named(&checks, "john-merge-tap").status, CheckStatus::PendingHuman);
-        assert_eq!(check_named(&checks, "unit-tests-green").status, CheckStatus::Pass);
-        assert_eq!(check_named(&checks, "bounded-subset-green").status, CheckStatus::Pass);
-        assert_eq!(check_named(&checks, "eval-set-green").status, CheckStatus::Pass);
-        assert_eq!(check_named(&checks, "audit-clean").status, CheckStatus::Pass);
+        assert_eq!(
+            check_named(&checks, "john-read").status,
+            CheckStatus::PendingHuman
+        );
+        assert_eq!(
+            check_named(&checks, "john-merge-tap").status,
+            CheckStatus::PendingHuman
+        );
+        assert_eq!(
+            check_named(&checks, "unit-tests-green").status,
+            CheckStatus::Pass
+        );
+        assert_eq!(
+            check_named(&checks, "bounded-subset-green").status,
+            CheckStatus::Pass
+        );
+        assert_eq!(
+            check_named(&checks, "eval-set-green").status,
+            CheckStatus::Pass
+        );
+        assert_eq!(
+            check_named(&checks, "audit-clean").status,
+            CheckStatus::Pass
+        );
         assert_eq!(check_named(&checks, "promoted").status, CheckStatus::Pass);
     }
 
@@ -275,10 +347,16 @@ mod tests {
         let p = proposal_with(report(false, true), false, false);
         let checks = review_gate_checklist(&p, &AuditReport::default(), &cfg_open());
         assert!(!all_machine_checks_pass(&checks));
-        assert_eq!(check_named(&checks, "unit-tests-green").status, CheckStatus::Fail);
+        assert_eq!(
+            check_named(&checks, "unit-tests-green").status,
+            CheckStatus::Fail
+        );
         assert_eq!(check_named(&checks, "promoted").status, CheckStatus::Fail);
         // The human checks are still PendingHuman, never Fail.
-        assert_eq!(check_named(&checks, "john-read").status, CheckStatus::PendingHuman);
+        assert_eq!(
+            check_named(&checks, "john-read").status,
+            CheckStatus::PendingHuman
+        );
     }
 
     #[test]
@@ -288,17 +366,25 @@ mod tests {
         cfg.eval_set_approved = false;
         let checks = review_gate_checklist(&p, &AuditReport::default(), &cfg);
         assert!(!all_machine_checks_pass(&checks));
-        assert_eq!(check_named(&checks, "eval-set-green").status, CheckStatus::Fail);
+        assert_eq!(
+            check_named(&checks, "eval-set-green").status,
+            CheckStatus::Fail
+        );
     }
 
     #[test]
     fn dirty_audit_fails_audit_check() {
         let p = proposal_with(report(true, true), true, true);
         let mut audit = AuditReport::default();
-        audit.sensitive_paths.push("sensitive-path:src/security.rs".to_string());
+        audit
+            .sensitive_paths
+            .push("sensitive-path:src/security.rs".to_string());
         let checks = review_gate_checklist(&p, &audit, &cfg_open());
         assert!(!all_machine_checks_pass(&checks));
-        assert_eq!(check_named(&checks, "audit-clean").status, CheckStatus::Fail);
+        assert_eq!(
+            check_named(&checks, "audit-clean").status,
+            CheckStatus::Fail
+        );
     }
 
     #[test]
@@ -307,20 +393,32 @@ mod tests {
         p.eval_report_json = serde_json::Value::Null;
         let checks = review_gate_checklist(&p, &AuditReport::default(), &cfg_open());
         assert!(!all_machine_checks_pass(&checks));
-        assert_eq!(check_named(&checks, "unit-tests-green").status, CheckStatus::Fail);
-        assert_eq!(check_named(&checks, "eval-set-green").status, CheckStatus::Fail);
+        assert_eq!(
+            check_named(&checks, "unit-tests-green").status,
+            CheckStatus::Fail
+        );
+        assert_eq!(
+            check_named(&checks, "eval-set-green").status,
+            CheckStatus::Fail
+        );
     }
 
     #[test]
     fn over_cap_diff_fails_bounded_subset() {
         let mut p = proposal_with(report(true, true), true, true);
-        let big = (0..501).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+        let big = (0..501)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
         p.diff_files = vec![crate::self_improve::evaluator::DiffFile {
             path: "src/a.rs".to_string(),
             content: big,
         }];
         let checks = review_gate_checklist(&p, &AuditReport::default(), &cfg_open());
         assert!(!all_machine_checks_pass(&checks));
-        assert_eq!(check_named(&checks, "bounded-subset-green").status, CheckStatus::Fail);
+        assert_eq!(
+            check_named(&checks, "bounded-subset-green").status,
+            CheckStatus::Fail
+        );
     }
 }

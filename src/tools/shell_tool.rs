@@ -287,10 +287,18 @@ fn spawn_and_wait(
     // Drain pipes on threads: a chatty child must never block on full pipes.
     let mut out_pipe = child.stdout.take();
     let mut err_pipe = child.stderr.take();
-    let out_handle =
-        std::thread::spawn(move || out_pipe.as_mut().map(|p| drain_capped(p, cap)).unwrap_or_default());
-    let err_handle =
-        std::thread::spawn(move || err_pipe.as_mut().map(|p| drain_capped(p, cap)).unwrap_or_default());
+    let out_handle = std::thread::spawn(move || {
+        out_pipe
+            .as_mut()
+            .map(|p| drain_capped(p, cap))
+            .unwrap_or_default()
+    });
+    let err_handle = std::thread::spawn(move || {
+        err_pipe
+            .as_mut()
+            .map(|p| drain_capped(p, cap))
+            .unwrap_or_default()
+    });
 
     // Wait with timeout.
     let start = Instant::now();
@@ -350,7 +358,9 @@ fn spawn_and_wait(
             use std::os::unix::process::ExitStatusExt;
             match status.signal() {
                 Some(sig) => report.push_str(&format!("\n[exit: killed by signal {}]\n", sig)),
-                None => report.push_str(&format!("\n[exit: code {}]\n", status.code().unwrap_or(-1))),
+                None => {
+                    report.push_str(&format!("\n[exit: code {}]\n", status.code().unwrap_or(-1)))
+                }
             }
         }
         #[cfg(not(unix))]
@@ -432,17 +442,14 @@ mod tests {
     #[test]
     fn resolve_workdir_defaults_to_base() {
         let cfg = ShellConfig::default();
-        let base = std::env::current_dir()
-            .unwrap()
-            .canonicalize()
-            .unwrap();
+        let base = std::env::current_dir().unwrap().canonicalize().unwrap();
         assert_eq!(resolve_workdir(&cfg, None).unwrap(), base);
         assert_eq!(resolve_workdir(&cfg, Some("")).unwrap(), base);
     }
 
     #[test]
     fn drain_capped_truncates_and_reports() {
-        let data = vec![b'x'; 100];
+        let data = [b'x'; 100];
         let (buf, truncated) = drain_capped(&mut &data[..], 10);
         assert_eq!(buf.len(), 10);
         assert!(truncated);
@@ -478,13 +485,8 @@ mod tests {
             let workdir = resolve_workdir(&cfg, None).unwrap();
             let start = Instant::now();
             // Grandchild sleep: only a process-group kill gets this promptly.
-            let out = spawn_and_wait(
-                "sleep 30 & wait",
-                &workdir,
-                Duration::from_secs(2),
-                1024,
-            )
-            .expect("spawn works");
+            let out = spawn_and_wait("sleep 30 & wait", &workdir, Duration::from_secs(2), 1024)
+                .expect("spawn works");
             let elapsed = start.elapsed();
             assert!(out.contains("TIMEOUT"), "got: {}", out);
             assert!(

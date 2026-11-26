@@ -70,18 +70,18 @@ impl LocalLLMClient {
 }
 
 pub mod explorer_impl; // Concrete implementation with parallel execution
-pub mod fallback;        // 159.6 fallback
-pub mod integration;     // 159.5 planner hook
+pub mod fallback; // 159.6 fallback
+pub mod integration; // 159.5 planner hook
 
 /// Convenience helper: returns true if the query looks like it would benefit from repo context.
 pub fn needs_repo_context(natural_language: &str) -> bool {
     let lower = natural_language.to_lowercase();
-    lower.contains("file") ||
-    lower.contains("code") ||
-    lower.contains("function") ||
-    lower.contains("module") ||
-    lower.contains("search") ||
-    lower.contains("where is") ||
-    lower.contains("find ") ||
-    lower.contains("implementation")
+    lower.contains("file")
+        || lower.contains("code")
+        || lower.contains("function")
+        || lower.contains("module")
+        || lower.contains("search")
+        || lower.contains("where is")
+        || lower.contains("find ")
+        || lower.contains("implementation")
 }
