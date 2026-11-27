@@ -585,6 +585,44 @@ async fn run_subagent(
         crate::persona::subagent_tool_definitions(role_hint)
     };
 
+    // Task 390: fail-closed guard + diagnostic logging. The Nov 26/27
+    // nightly reports failed because the sub-agent claimed no task was
+    // provided; composition is verified to carry the task, but if it
+    // ever does not (a future refactor, a bad role file), refuse
+    // loudly instead of spawning a confused sub-agent. Log the prompt
+    // shape so a recurrence is diagnosable from the Helix log.
+    if !composed.user.contains(task) {
+        log::error!(
+            "sub-agent spawn refused (task {}): composed user message lacks the task text (task_chars={}, user_chars={}, system_chars={})",
+            task_id,
+            task.chars().count(),
+            composed.user.chars().count(),
+            composed
+                .system
+                .as_ref()
+                .map(|s| s.chars().count())
+                .unwrap_or(0)
+        );
+        return Err(format!(
+            "sub-agent spawn refused: composed prompt missing task text (task {task_id})"
+        ));
+    }
+    let tool_count = tools.as_array().map(|a| a.len()).unwrap_or(0);
+    log::info!(
+        "sub-agent spawn (task {}): backend={:?} role={} task_chars={} user_chars={} system_chars={} tools={}",
+        task_id,
+        backend,
+        role_hint,
+        task.chars().count(),
+        composed.user.chars().count(),
+        composed
+            .system
+            .as_ref()
+            .map(|s| s.chars().count())
+            .unwrap_or(0),
+        tool_count
+    );
+
     match backend {
         LLMBackend::LocalOllama | LLMBackend::LanOllama => {
             let ep = resolve_ollama_endpoint(backend)?;
