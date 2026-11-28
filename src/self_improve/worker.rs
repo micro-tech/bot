@@ -117,6 +117,11 @@ pub fn ensure_loop_worker_persona(rt_dir: &Path) -> Result<PathBuf, String> {
 /// The worker brief for one cycle (task 282.1). The handler (task 281)
 /// fills in the cycle's worst signal; the worker returns a structured
 /// proposal — it writes nothing itself.
+///
+/// M30 (task 417): the signal is the filtered view of genuine recent
+/// errors (`cycle_error_signal` in `crate::cpu`) — the distinct error
+/// lines, deduped by message body — not the worst file by raw error
+/// count, so routine log chatter cannot dominate the brief.
 pub fn build_loop_brief(signal: &str) -> String {
     format!(
         "Helix self-improvement loop worker (Phase 1, proposal-only). Worst signal this cycle: {signal}. Investigate read-only with your tools (repo, logs, notes, status only — you cannot write files, run shell commands, send mail, or spawn sub-agents). Return a proposal with exactly these fields: problem_statement, trace (the failing test name OR the metric key behind this signal — REQUIRED, an exact key, never free-text hearsay), diff_description (what would change; no branch yet), proving_test (the test that would prove the fix). You write no files and change nothing; the handler records your proposal."

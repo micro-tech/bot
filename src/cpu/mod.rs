@@ -560,7 +560,10 @@ where
     ///    EXACTLY ONE worker via `dispatch_spawn` with the draft
     ///    backend and the cycle budget as its timeout. A healthy cycle
     ///    dispatches nobody — no Gemini call is burned when there is
-    ///    nothing to fix.
+    ///    nothing to fix. The error signal names the distinct genuine
+    ///    recent errors (M30, task 417), not the worst file by raw
+    ///    count; the counts-only rule in step 2 governs the ledger,
+    ///    not this ephemeral brief.
     /// 5. On return: a timed-out cycle abandons cleanly (no partial
     ///    proposal, `cycle_timeout` recorded); a parseable report goes
     ///    through the budget gate (task 283) — a violation aborts the
@@ -643,22 +646,19 @@ where
             return;
         }
         // 4. One worker, only on a failing signal.
-        let signal = if inputs.error_total > 0 {
-            let worst = inputs
-                .error_by_file
-                .iter()
-                .max_by_key(|(_, c)| c.errors)
-                .map(|(p, c)| format!("{p} ({} genuine recent errors)", c.errors))
-                .unwrap_or_else(|| "error log".to_string());
-            Some(format!(
-                "{} genuine recent errors, worst file: {}",
-                inputs.error_total, worst
-            ))
-        } else if new_restarts > 0 {
-            Some(format!("{} restarts detected", new_restarts))
-        } else {
-            None
-        };
+        // M30 (task 417): the error signal names the distinct genuine
+        // recent errors (`cycle_error_signal`), not the worst file by
+        // raw error count — routine chatter no longer dominates the
+        // brief. `findings.recent` is used only for this ephemeral
+        // dispatch brief; CycleInputs and the ledger entry still carry
+        // counts only (step 2 above).
+        let signal = cycle_error_signal(&findings).or_else(|| {
+            if new_restarts > 0 {
+                Some(format!("{} restarts detected", new_restarts))
+            } else {
+                None
+            }
+        });
         let Some(signal) = signal else {
             self.write_self_improve_entry(&rt, &cfg, inputs);
             log_to_file("self_improve: healthy cycle: no worker dispatched");
@@ -2080,6 +2080,80 @@ fn check_error_logs_in(paths: &[std::path::PathBuf], now: chrono::NaiveDateTime)
     findings
 }
 
+/// M30 (task 417): build the self-improve cycle signal from a filtered
+/// view of genuine recent errors, not the worst file by raw error count.
+///
+/// `findings.recent` already holds only genuine recent errors (the
+/// task-293/312 chatter exclusions run in `is_counted_error_line`), so
+/// the brief names WHAT is failing — the distinct error lines, deduped
+/// by message body so one repeating error does not dominate — instead
+/// of "worst file X has N errors", which lets a high-volume log drown
+/// the brief. Returns `None` when there are no genuine recent errors.
+pub fn cycle_error_signal(findings: &ErrorFindings) -> Option<String> {
+    if findings.total == 0 {
+        return None;
+    }
+    // Dedupe recent lines by message body (strip the leading
+    // `[timestamp] ` prefix) and count occurrences, most frequent first.
+    // `sort_by_key` is stable, so ties keep first-seen (most recent) order.
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for line in &findings.recent {
+        let body = error_body(line);
+        if let Some(entry) = counts.iter_mut().find(|(b, _)| b == &body) {
+            entry.1 += 1;
+        } else {
+            counts.push((body, 1));
+        }
+    }
+    counts.sort_by_key(|a| std::cmp::Reverse(a.1));
+    if counts.is_empty() {
+        // Defensive: total > 0 but no recent lines (should not happen —
+        // recent is built from the same counted lines). Fall back to the
+        // per-file counts so the worker still gets a signal.
+        let worst = findings
+            .files
+            .iter()
+            .max_by_key(|(_, n, _)| *n)
+            .map(|(p, n, _)| format!("{p} ({n} genuine recent errors)"))
+            .unwrap_or_else(|| "error log".to_string());
+        return Some(format!(
+            "{} genuine recent errors across {} file(s); worst file: {}",
+            findings.total,
+            findings.files.len(),
+            worst
+        ));
+    }
+    let top: Vec<String> = counts
+        .iter()
+        .take(3)
+        .map(|(body, k)| {
+            let body = crate::utils::truncate_str(body, 120);
+            if *k > 1 {
+                format!("{body} (×{k})")
+            } else {
+                body.to_string()
+            }
+        })
+        .collect();
+    Some(format!(
+        "{} genuine recent errors across {} file(s). Most frequent: {}",
+        findings.total,
+        findings.files.len(),
+        top.join("; ")
+    ))
+}
+
+/// The message body of a log line: the text after the leading
+/// `[YYYY-MM-DD HH:MM:SS AM/PM] ` timestamp prefix, trimmed. Lines
+/// without that prefix return trimmed as-is.
+fn error_body(line: &str) -> String {
+    let line = line.trim();
+    match line.strip_prefix('[').and_then(|r| r.split_once(']')) {
+        Some((_, body)) => body.trim().to_string(),
+        None => line.to_string(),
+    }
+}
+
 /// The nighttime code-write autonomy gate (task 202.3, granted 2026-10-04).
 #[derive(Debug, PartialEq, Eq)]
 pub enum FixDecision {
@@ -3264,6 +3338,101 @@ mod nightly_tests {
             fix_autonomy_decision(true, findings.total, true),
             FixDecision::ProposeOnly("no logged errors to fix")
         );
+    }
+
+    // M30 (task 417): the worker brief is built from the filtered view
+    // of genuine recent errors, not the worst file by raw count — so
+    // routine chatter cannot dominate the brief.
+    #[tokio::test]
+    async fn cycle_error_signal_names_genuine_errors_not_chatter() {
+        let (_cpu, dir) = test_cpu();
+        let log_dir = dir.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let recent = chrono::Local::now().format("%Y-%m-%d %I:%M:%S %p");
+        let path = log_dir.join("error_log.md");
+        std::fs::write(
+            &path,
+            format!(
+                "[{recent}] CPU routine_run: Support mailbox watch (SYSADMIN-01)\n\
+                 [{recent}] ERROR: disk write failed\n\
+                 [{recent}] error-log review: 2 error lines\n\
+                 [{recent}] Failed to publish message to bus: closed\n"
+            ),
+        )
+        .unwrap();
+
+        let findings = check_error_logs_in(&[path], chrono::Local::now().naive_local());
+        let signal = cycle_error_signal(&findings).expect("genuine errors must yield a signal");
+
+        assert_eq!(findings.total, 2);
+        assert!(signal.contains("disk write failed"), "signal: {signal}");
+        assert!(
+            signal.contains("Failed to publish message to bus: closed"),
+            "signal: {signal}"
+        );
+        assert!(!signal.contains("routine_run"), "signal: {signal}");
+        assert!(!signal.contains("error-log review"), "signal: {signal}");
+        assert!(!signal.contains("worst file"), "signal: {signal}");
+    }
+
+    // M30 (task 417): one repeating error is named once with its count,
+    // not once per occurrence — a single noisy failure cannot crowd out
+    // the other genuine errors.
+    #[tokio::test]
+    async fn cycle_error_signal_dedupes_repeated_errors() {
+        let (_cpu, dir) = test_cpu();
+        let log_dir = dir.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let recent = chrono::Local::now().format("%Y-%m-%d %I:%M:%S %p");
+        let path = log_dir.join("error_log.md");
+        std::fs::write(
+            &path,
+            format!(
+                "[{recent}] ERROR: disk write failed\n\
+                 [{recent}] ERROR: disk write failed\n\
+                 [{recent}] ERROR: disk write failed\n\
+                 [{recent}] [AgentState] HALTED: watchdog tripped\n"
+            ),
+        )
+        .unwrap();
+
+        let findings = check_error_logs_in(&[path], chrono::Local::now().naive_local());
+        let signal = cycle_error_signal(&findings).expect("genuine errors must yield a signal");
+
+        assert_eq!(findings.total, 4);
+        assert_eq!(
+            signal.matches("disk write failed").count(),
+            1,
+            "signal: {signal}"
+        );
+        assert!(
+            signal.contains("disk write failed (×3)"),
+            "signal: {signal}"
+        );
+        assert!(signal.contains("watchdog tripped"), "signal: {signal}");
+    }
+
+    // M30 (task 417): a chatter-only log yields no signal — the loop
+    // stays disarmed instead of dispatching a worker on routine noise.
+    #[tokio::test]
+    async fn cycle_error_signal_none_when_no_genuine_errors() {
+        let (_cpu, dir) = test_cpu();
+        let log_dir = dir.join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let recent = chrono::Local::now().format("%Y-%m-%d %I:%M:%S %p");
+        let path = log_dir.join("error_log.md");
+        std::fs::write(
+            &path,
+            format!(
+                "[{recent}] CPU routine_run: Support mailbox watch (SYSADMIN-01)\n\
+                 [{recent}] error-log review: 0 error lines\n"
+            ),
+        )
+        .unwrap();
+
+        let findings = check_error_logs_in(&[path], chrono::Local::now().naive_local());
+        assert_eq!(findings.total, 0);
+        assert!(cycle_error_signal(&findings).is_none());
     }
 
     // Task 276: rotation caps the file at the bound and archives the

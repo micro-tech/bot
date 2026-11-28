@@ -31,6 +31,7 @@ mod self_improve;
 mod skills;
 mod ssh;
 mod support_watch;
+mod task_list; // M28 (task 415): task-list validator
 mod tools;
 mod utils;
 mod voice;

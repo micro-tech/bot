@@ -65,3 +65,6 @@ jobs:
       - name: Validate task list JSON
         shell: bash
         run: python -m json.tool .zed/task_list.json > /dev/null
+
+      - name: Validate task list rules (M28)
+        run: cargo test --test validate_task_list

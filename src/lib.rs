@@ -29,6 +29,7 @@ pub mod self_improve; // tasks 277+: self-improving loop (Phase 0 config first)
 pub mod skills;
 pub mod ssh;
 pub mod support_watch; // task 256: SYSADMIN-01 adaptive support-mail poll loop
+pub mod task_list; // M28 (task 415): task-list validator
 pub mod tools;
 pub mod utils;
 pub mod voice; // task 267/268: voice-box TTS/STT integration // tasks 350/360: Firefox + mini-browser installer hook (APT repo, config section, dirs)
