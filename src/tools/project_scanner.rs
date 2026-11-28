@@ -75,7 +75,7 @@ pub fn scan_project(
             ) {
                 Ok(res) => res,
                 Err(e) => {
-                    eprintln!(
+                    log::error!(
                         "[project_scanner] SSH scan failed: {}. Using local fallback if possible.",
                         e
                     );
@@ -101,7 +101,7 @@ pub fn scan_project(
         #[cfg(not(feature = "ssh"))]
         {
             // SSH feature disabled — fall back to local or give clear error
-            eprintln!(
+            log::error!(
                 "[project_scanner] Protocol 'ssh' requested for '{}' but 'ssh' feature is not enabled. \
                  Build with: cargo build --features ssh",
                 project.name
@@ -126,9 +126,10 @@ pub fn scan_project(
         }
     } else {
         // smb / http stubs
-        eprintln!(
+        log::error!(
             "[project_scanner] Protocol '{}' for project '{}' not fully implemented yet (stub).",
-            protocol, project.name
+            protocol,
+            project.name
         );
         if Path::new(&effective_path).exists() {
             walk_local_directory(

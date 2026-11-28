@@ -386,7 +386,7 @@ impl EvalLock {
             if !stale {
                 return Err("another evaluation is already running (max-1-worktree)".to_string());
             }
-            eprintln!("self_improve: eval lock stale (>24h), replacing");
+            log::error!("self_improve: eval lock stale (>24h), replacing");
             let _ = std::fs::remove_file(&path);
         }
         std::fs::write(
@@ -428,7 +428,7 @@ pub fn sweep_stale_worktrees(root: &Path, now_ms: u64, max_age_ms: u64) -> Vec<S
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
         if now_ms.saturating_sub(mtime_ms) > max_age_ms && std::fs::remove_dir_all(&path).is_ok() {
-            eprintln!("self_improve: swept stale worktree {}", path.display());
+            log::error!("self_improve: swept stale worktree {}", path.display());
             removed.push(path.display().to_string());
         }
     }
@@ -489,10 +489,10 @@ pub fn evaluate_proposal(
     // Runs on every exit path after creation.
     let cleanup = |git: &Git, name: &str, branch: &str, keep_branch: bool| {
         if let Err(e) = git.remove_worktree(name) {
-            eprintln!("self_improve: worktree cleanup failed for {name}: {e}");
+            log::error!("self_improve: worktree cleanup failed for {name}: {e}");
         }
         if !keep_branch && let Err(e) = git.delete_branch(branch) {
-            eprintln!("self_improve: branch cleanup failed for {branch}: {e}");
+            log::error!("self_improve: branch cleanup failed for {branch}: {e}");
         }
     };
     // Apply: read old lines first (for the stat), then write.
@@ -638,14 +638,14 @@ pub fn evaluate_oldest_proposal(
         return Ok(None);
     };
     if record.diff_files.is_empty() {
-        eprintln!(
+        log::error!(
             "self_improve: proposal {} has no diff files; skipping evaluation",
             record.signature
         );
         return Ok(None);
     }
     if !repo.join(".git").exists() {
-        eprintln!(
+        log::error!(
             "self_improve: repo {} is not a git checkout; skipping evaluation",
             repo.display()
         );

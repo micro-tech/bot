@@ -6421,7 +6421,7 @@
       "id": 406,
       "title": "M16: Persona frontmatter offsets assume \\n; CRLF files parse wrong",
       "description": "Persona frontmatter offsets assume \\n; CRLF files parse wrong. Where: src/persona.rs:112-126 (agents/loop-worker.md is CRLF in the Windows checkout, so the body starts with a stray -\\r\\n). Fix: split_inclusive('\\n') with real lengths, or normalise line endings.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "406.1 Parse persona frontmatter with split_inclusive('\\n') using real lengths, or normalise line endings first, so CRLF files do not leave a stray -\\r\\n at the start of the body.",
@@ -6430,13 +6430,13 @@
         {
           "id": 406.1,
           "title": "Error checking: CRLF persona files parse to the same body as LF files — no stray \\r",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 406.2,
           "title": "Cargo test coverage: CRLF frontmatter offsets",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             406.1
           ]
@@ -6444,7 +6444,7 @@
         {
           "id": 406.3,
           "title": "Documentation: persona frontmatter line-ending handling",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             406.2
           ]
@@ -6455,7 +6455,7 @@
       "id": 407,
       "title": "M17: Web UI error view is blind (reads the dead runtime log path)",
       "description": "Web UI error view is blind (reads the dead runtime log path). Where: src/io/web_server/mod.rs:148 (reads <runtime>/logs/error_log.md); src/utils.rs:15 (writes go to ~/.helix/logs/error_log.md). Fix: point the web UI error view at the HOME log path, or point log_to_file at the runtime logs dir — pick one canonical error-log location and use it everywhere. Note: Task 326 fixed the restart signal by writing the boot marker to the runtime logs dir; the error-log write path is unchanged, so the web UI error view is still blind. The loop's own error signal is not affected — check_error_logs reads both paths.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "407.1 Pick one canonical error-log location and use it everywhere: either point the web UI error view at the HOME log path (~/.helix/logs/error_log.md) or point log_to_file at the runtime logs dir — do not leave the two paths split.",
@@ -6464,13 +6464,13 @@
         {
           "id": 407.1,
           "title": "Error checking: one canonical error-log location — writes and the web UI view agree",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 407.2,
           "title": "Cargo test coverage: written errors appear in the web UI error view",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             407.1
           ]
@@ -6478,7 +6478,7 @@
         {
           "id": 407.3,
           "title": "Documentation: canonical error-log location",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             407.2
           ]
@@ -6489,7 +6489,7 @@
       "id": 408,
       "title": "M18: 255 println! in production code",
       "description": "255 println! in production code. Where: across src/ (excluding tests); the WS chat arm alone prints the prompt preview, bus routing, and publish confirmations; src/main.rs:529 fires once per streamed token. Fix: production logging should go through log:: so it is filterable and does not pollute the journal. This is also the same stdout the restart marker was lost in (now fixed by 326 for the marker, but the noise remains).",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "408.1 Replace println! in production code with log:: macros at appropriate levels so output is filterable and does not pollute the journal (starting with the WS chat arm and the per-token print in src/main.rs:529).",
@@ -6498,13 +6498,13 @@
         {
           "id": 408.1,
           "title": "Error checking: production output goes through log:: — no println! outside tests",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 408.2,
           "title": "Cargo test coverage: no println! in src/ outside tests; log levels filterable",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             408.1
           ]
@@ -6512,7 +6512,7 @@
         {
           "id": 408.3,
           "title": "Documentation: logging policy (log:: in production, println! only in tests)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             408.2
           ]
@@ -6523,7 +6523,7 @@
       "id": 409,
       "title": "M19: require_okf_write_token is a copy-paste duplicate of require_web_token",
       "description": "require_okf_write_token is a copy-paste duplicate of require_web_token. Where: src/io/web_server/auth.rs (identical bodies; comment says \"can be separate token in future\"). Fix: extract a shared helper or delete one before they drift. Note: PR #44 deduped mod.rs vs auth.rs (126 lines removed from mod.rs) — that is a different duplication from this within-auth.rs copy-paste.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "409.1 Extract a shared helper for the token check used by both require_okf_write_token and require_web_token, or delete one of them, so the two cannot drift apart.",
@@ -6532,13 +6532,13 @@
         {
           "id": 409.1,
           "title": "Error checking: shared token helper — both paths reject/accept identically, no drift",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 409.2,
           "title": "Cargo test coverage: both token paths behave identically after dedupe",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             409.1
           ]
@@ -6546,7 +6546,7 @@
         {
           "id": 409.3,
           "title": "Documentation: auth token helpers (shared implementation)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             409.2
           ]
@@ -6557,7 +6557,7 @@
       "id": 410,
       "title": "M20: agent-client-protocol 5.0.0; crates.io latest is 5.1.0",
       "description": "agent-client-protocol 5.0.0; crates.io latest is 5.1.0. Where: Cargo.toml:35. Fix: bump to 5.1.0 (not 5.0.0 — that is what Helix is already on). One minor behind, days after the 37-dep update (task 317) landed. Fold it into the next dep pass rather than doing it alone.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "410.1 Bump agent-client-protocol from 5.0.0 to 5.1.0 in Cargo.toml, folded into the next dependency pass; verify the build and tests still pass and note any API changes.",
@@ -6566,13 +6566,13 @@
         {
           "id": 410.1,
           "title": "Error checking: bump compiles cleanly; any API changes handled, not papered over",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 410.2,
           "title": "Cargo test coverage: full suite green on agent-client-protocol 5.1.0",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             410.1
           ]
@@ -6580,7 +6580,7 @@
         {
           "id": 410.3,
           "title": "Documentation: CHANGELOG entry for the dependency bump",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             410.2
           ]

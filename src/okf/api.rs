@@ -138,9 +138,10 @@ pub async fn okf_webhook(
         .to_string();
     let action = payload["action"].as_str().unwrap_or("changed").to_string();
 
-    println!(
+    log::debug!(
         "[OKF Webhook] Received notification for bundle '{}' - action: {}",
-        bundle_id, action
+        bundle_id,
+        action
     );
 
     // For now, if auto_reload is enabled, trigger a reload.
@@ -150,7 +151,7 @@ pub async fn okf_webhook(
     if librarian.config.auto_reload() {
         match librarian.load_from_remote().await {
             Ok(v) if v.is_valid => {
-                println!("[OKF] Auto-reloaded bundle after webhook");
+                log::info!("[OKF] Auto-reloaded bundle after webhook");
                 Json(json!({
                     "status": "reloaded",
                     "bundle_id": bundle_id,

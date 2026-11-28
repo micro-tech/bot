@@ -10,7 +10,7 @@ impl OtelExporter {
     }
 
     pub fn export_trace(&self, trace_id: &str, data: &str) {
-        println!("📡 Exporting trace {} to {}: {}", trace_id, self.endpoint, data);
+        log::debug!("📡 Exporting trace {} to {}: {}", trace_id, self.endpoint, data);
         // In real implementation: send to OTLP endpoint
     }
 }

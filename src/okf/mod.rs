@@ -151,7 +151,7 @@ pub fn start_okf_poller() -> Option<tokio::task::JoinHandle<()>> {
         let debounce = Duration::from_secs(20);
         let mut last_reload_attempt = std::time::Instant::now() - debounce; // allow first run soon
 
-        println!(
+        log::info!(
             "[OKF] Background poller started (interval: {:?})",
             poll_interval
         );
@@ -171,7 +171,7 @@ pub fn start_okf_poller() -> Option<tokio::task::JoinHandle<()>> {
                 continue;
             }
 
-            println!(
+            log::debug!(
                 "[OKF 165 Poller] Polling remote OKF server for bundle updates (interval: {:?})...",
                 poll_interval
             );
@@ -182,7 +182,7 @@ pub fn start_okf_poller() -> Option<tokio::task::JoinHandle<()>> {
                     last_reload_attempt = std::time::Instant::now();
 
                     if validation.is_valid {
-                        println!(
+                        log::info!(
                             "[OKF 165 Poller] ✅ Hot-reload #{} complete. Tools: {}, Knowledge: {}",
                             guard.reload_count,
                             guard.registry.tool_count(),
@@ -191,9 +191,10 @@ pub fn start_okf_poller() -> Option<tokio::task::JoinHandle<()>> {
                     } else {
                         guard.last_reload_error =
                             Some(format!("Validation failed: {:?}", validation.errors));
-                        eprintln!(
+                        log::error!(
                             "[OKF 165 Poller] Reload #{} validation failed: {:?}",
-                            guard.reload_count, validation.errors
+                            guard.reload_count,
+                            validation.errors
                         );
                     }
                 }
@@ -201,7 +202,7 @@ pub fn start_okf_poller() -> Option<tokio::task::JoinHandle<()>> {
                     guard.last_reload_error = Some(e.clone());
                     // Throttle error logging
                     if last_reload_attempt.elapsed() > Duration::from_secs(120) {
-                        eprintln!("[OKF 165 Poller] Remote fetch error: {}", e);
+                        log::error!("[OKF 165 Poller] Remote fetch error: {}", e);
                     }
                 }
             }
@@ -291,7 +292,7 @@ impl OkfLibrarian {
                     self.last_reload_ms = Some(crate::utils::now_ms());
 
                     // 165: Rich hot-reload logging
-                    println!(
+                    log::info!(
                         "[OKF 165 Hot-Reload] ✅ Bundle updated\n  \
                          ID: {} ({} → {})\n  \
                          Version: {} → {}\n  \
@@ -316,19 +317,20 @@ impl OkfLibrarian {
                     // TODO(165 future): Notify running agents here
                     // e.g. broadcast a "okf_tools_updated" bus message
                 } else {
-                    eprintln!(
+                    log::error!(
                         "[OKF 165 Hot-Reload] ❌ Validation failed for bundle '{}' v{}",
-                        manifest.id, manifest.version
+                        manifest.id,
+                        manifest.version
                     );
                     for err in &validation.errors {
-                        eprintln!("  - {}", err);
+                        log::error!("  - {}", err);
                     }
                 }
 
                 Ok(validation)
             }
             Err(e) if e == "NOT_MODIFIED" => {
-                println!("[OKF 165] No changes detected (ETag matched) — skipping hot-reload");
+                log::debug!("[OKF 165] No changes detected (ETag matched) — skipping hot-reload");
                 Ok(ValidationResult {
                     is_valid: true,
                     errors: vec![],
@@ -336,7 +338,7 @@ impl OkfLibrarian {
                 })
             }
             Err(e) => {
-                eprintln!("[OKF 165 Hot-Reload] Remote fetch error: {}", e);
+                log::error!("[OKF 165 Hot-Reload] Remote fetch error: {}", e);
                 Err(e)
             }
         }

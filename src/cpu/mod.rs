@@ -452,7 +452,7 @@ where
 
     /// Dispatch a fired routine to its handler.
     pub async fn handle_routine_run(&mut self, routine_id: &str, routine_name: &str) {
-        println!("[CPU] routine_run: {} ({})", routine_name, routine_id);
+        log::debug!("[CPU] routine_run: {} ({})", routine_name, routine_id);
         log_to_file(&format!(
             "CPU routine_run: {} ({})",
             routine_name, routine_id
@@ -958,7 +958,7 @@ where
             report.facts_added,
             self.runtime_dir.join("memory/consolidated.md").display()
         );
-        println!("[CPU] {}", msg);
+        log::debug!("[CPU] {}", msg);
         log_to_file(&msg);
         self.nightly_report("Memory consolidation", &msg);
     }
@@ -1553,7 +1553,7 @@ where
 
     /// Handle an LLM response coming back on the bus.
     pub fn handle_llm_response(&mut self, msg: Message) -> Result<(), String> {
-        println!("[CPU] Received llm_response from {}", msg.from);
+        log::debug!("[CPU] Received llm_response from {}", msg.from);
 
         let payload: serde_json::Value = serde_json::from_str(&msg.data).unwrap_or_else(|e| {
             let err = format!("Failed to parse LLM response payload: {}", e);
@@ -1565,7 +1565,7 @@ where
         let correlation_id = payload["correlation_id"].as_u64().unwrap_or(0);
         let text = payload["msg"].as_str().unwrap_or("").to_string();
 
-        println!(
+        log::debug!(
             "[CPU] Forwarding response to web_interface ({} chars)",
             text.len()
         );
@@ -1585,7 +1585,7 @@ where
 
         match self.bus.publish(ui_msg) {
             Ok(()) => {
-                println!("[CPU] Successfully forwarded LLM response to web_interface");
+                log::debug!("[CPU] Successfully forwarded LLM response to web_interface");
                 debug!("CPU forwarded LLM response to UI");
                 Ok(())
             }
@@ -1850,7 +1850,7 @@ where
                 };
                 let result = self.skills.call(&skill_name, &args).await;
                 if let crate::hy_evo::node::NodeResult::Error(e) = result {
-                    eprintln!("Error running skill: {}", e);
+                    log::error!("Error running skill: {}", e);
                 }
             }
 
@@ -1860,13 +1860,13 @@ where
 
             Instruction::PlanNextSteps => {
                 // Real planning logic
-                println!("[CPU] Planning next steps using planning module");
+                log::debug!("[CPU] Planning next steps using planning module");
                 log_to_file("CPU: Planning next steps");
             }
 
             Instruction::ReflectOnLastStep => {
                 // Real reflection logic
-                println!("[CPU] Reflecting on last step");
+                log::debug!("[CPU] Reflecting on last step");
                 log_to_file("CPU: Reflecting on last execution step");
             }
 

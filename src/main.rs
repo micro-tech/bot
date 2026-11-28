@@ -49,6 +49,14 @@ async fn main() {
     //   (Config parse/shape errors are deliberately NOT logged: their
     //   Display echoes the offending file line.)
     //
+    // M18 (tasks 406-410 batch 4): the daemon's `println!` /
+    // `eprintln!` are all converted to `log::` — the only prints left
+    // in production code are the CLI-output sites above plus the
+    // standalone bins, the TUI inspector, and the installer-shared
+    // helpers. Enforced by the `no_println_in_daemon_code` test in
+    // `src/lib.rs` (allowlist + count baseline 112); if it fails on a
+    // file you edited, convert the print to `log::`.
+    //
     // Task 265: sink the `log` facade before anything that logs. The ACP
     // branch below returns early, so init must come first, not in
     // run_helix(). env_logger writes to stderr, so the ACP JSON-RPC
@@ -526,7 +534,7 @@ async fn run_helix() {
                             std::time::SystemTime::now(),
                         );
                         if crate::utils::is_heartbeat_missed(stale, hb_interval) {
-                            eprintln!(
+                            log::error!(
                                 "Heartbeat watchdog: MISSED BEAT — last beat {:?} (threshold {}s)",
                                 stale
                                     .map(|s| format!("{}s ago", s))
@@ -549,7 +557,7 @@ async fn run_helix() {
                 });
             }
             Err(e) => {
-                eprintln!(
+                log::error!(
                     "Heartbeat: Cpu construction failed ({}); heartbeat disabled, reactive paths unaffected",
                     e
                 );
@@ -573,10 +581,10 @@ async fn run_helix() {
 
         tokio::spawn(async move {
             let mut rx = bus_clone.subscribe("cpu");
-            println!("CPU response forwarder started (subscribed to 'cpu')");
+            log::info!("CPU response forwarder started (subscribed to 'cpu')");
 
             while let Some(msg) = rx.recv().await {
-                println!(
+                log::debug!(
                     "[CPU-Forwarder] received message to cpu | from='{}' data_preview='{}'",
                     msg.from,
                     crate::utils::truncate_str(&msg.data, 120)
@@ -595,7 +603,7 @@ async fn run_helix() {
                         .to_string();
 
                     if text.is_empty() {
-                        println!("[CPU-Forwarder] llm_response but no text, skipping");
+                        log::debug!("[CPU-Forwarder] llm_response but no text, skipping");
                         continue;
                     }
 
@@ -641,7 +649,7 @@ async fn run_helix() {
                     }
 
                     let _ = bus_clone.publish(ui_msg);
-                    println!(
+                    log::debug!(
                         "[CPU-Forwarder] ✅ Forwarded LLM response from {} ({} chars) to web_interface",
                         display_from,
                         text.len()
@@ -707,7 +715,7 @@ async fn run_helix() {
                         crate::io::ollama::keepalive::preload_model(&preload_url, &preload_model)
                             .await
                     {
-                        println!("Ollama preload warning (model '{}'): {}", preload_model, e);
+                        log::warn!("Ollama preload warning (model '{}'): {}", preload_model, e);
                     }
                 });
             }
@@ -718,7 +726,7 @@ async fn run_helix() {
             );
 
             while let Some(msg) = rx.recv().await {
-                println!(
+                log::debug!(
                     "[{}] 📥 RECEIVED message from='{}'  preview='{}'",
                     topic,
                     msg.from,
@@ -727,7 +735,7 @@ async fn run_helix() {
 
                 // Only handle chat requests
                 if msg.data.contains("\"type\":\"chat_request\"") {
-                    println!("[{}] ✅ Processing chat_request...", topic);
+                    log::debug!("[{}] ✅ Processing chat_request...", topic);
                     let _ = crate::io::ollama::handle_ollama_message(
                         msg,
                         &bus_clone,
@@ -737,7 +745,7 @@ async fn run_helix() {
                     )
                     .await;
                 } else {
-                    println!("[{}] (ignoring non-chat message)", topic);
+                    log::debug!("[{}] (ignoring non-chat message)", topic);
                 }
             }
         });
@@ -764,7 +772,7 @@ async fn run_helix() {
 
         tokio::spawn(async move {
             let mut rx = bus_clone.subscribe("gemini");
-            println!(
+            log::info!(
                 "Gemini listener started (subscribed to 'gemini', model={})",
                 gemini_model
             );
@@ -799,7 +807,7 @@ async fn run_helix() {
                 });
             tokio::spawn(async move {
                 if let Err(e) = crate::ssh::start_ssh_server(ssh_cfg, config_dir).await {
-                    eprintln!("SSH server failed to start: {}", e);
+                    log::error!("SSH server failed to start: {}", e);
                 }
             });
         }
@@ -828,10 +836,10 @@ async fn run_helix() {
     crate::agents::subagent_registry::set_runtime_dir(rt_dir.clone());
     match crate::agents::subagent_registry::load_registry() {
         (crate::agents::subagent_registry::RegistryLoad::Loaded, n) => {
-            println!("subagent_registry: restored {n} past sub-agents");
+            log::info!("subagent_registry: restored {n} past sub-agents");
         }
         (crate::agents::subagent_registry::RegistryLoad::Corrupt, _) => {
-            eprintln!("subagent_registry: persisted registry corrupt, starting empty");
+            log::error!("subagent_registry: persisted registry corrupt, starting empty");
         }
         _ => {}
     }
@@ -842,7 +850,7 @@ async fn run_helix() {
     tokio::spawn(async {
         match crate::persona::ensure_persona_file(None).await {
             Ok(p) if p.extension().and_then(|x| x.to_str()) == Some("pending") => {
-                println!(
+                log::info!(
                     "persona: drafted initial agent.md -> {} (awaiting /persona approve)",
                     p.display()
                 );
@@ -864,6 +872,6 @@ async fn run_helix() {
         crate::io::web_server::start_web_server(bus, port, config_str, web_config_path, routines)
             .await
     {
-        eprintln!("Failed to start web server: {}", e);
+        log::error!("Failed to start web server: {}", e);
     }
 }

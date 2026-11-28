@@ -6,6 +6,6 @@ use crate::bus::Bus;
 pub async fn start_unix_socket(bus: Bus, config: SocketConfig) {
     let server = UnixSocketServer::new(config, bus);
     if let Err(e) = server.run().await {
-        eprintln!("UNIX socket server failed: {}", e);
+        log::error!("UNIX socket server failed: {}", e);
     }
 }

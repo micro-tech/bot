@@ -32,7 +32,7 @@ rcgen = "0.14.10"
 tower = "0.5.3"
 futures-util = { version = "0.3.34", features = ["sink"] }
 tokio-util = { version = "0.7.20", features = ["compat"] }
-agent-client-protocol = "5.0.0"
+agent-client-protocol = "5.1.0" # M20: bumped from 5.0.0 (crates.io latest 5.x at the time of the bump)
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 toml = "1.2.1"

@@ -38,6 +38,23 @@ pub fn constant_time_token_eq(provided: &str, expected: &str) -> bool {
     provided.as_bytes().ct_eq(expected.as_bytes()).into()
 }
 
+/// Extract a `Bearer <token>` (or lowercase `bearer `) credential from
+/// request headers. M19: shared by `http_token_ok` and
+/// `require_okf_write_token` so the two token paths cannot drift apart
+/// (the extraction was copy-pasted in both). The two middlewares stay
+/// separate on purpose: the OKF path accepts EITHER the web token or
+/// grok-cli's OKF `auth_token` (task 208), and collapsing them into one
+/// single-token check would break grok-cli OKF writes.
+fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| {
+            s.strip_prefix("Bearer ")
+                .or_else(|| s.strip_prefix("bearer "))
+        })
+}
+
 /// Check an HTTP request's token against the configured web token.
 /// `Authorization: Bearer <token>` (or lowercase `bearer `) or
 /// `X-Web-Token: <token>` are accepted.
@@ -46,13 +63,7 @@ pub fn http_token_ok(token: &str, headers: &HeaderMap) -> bool {
     if token.is_empty() {
         return true;
     }
-    let bearer = headers
-        .get(AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| {
-            s.strip_prefix("Bearer ")
-                .or_else(|| s.strip_prefix("bearer "))
-        });
+    let bearer = bearer_token(headers);
     let x_token = headers.get("X-Web-Token").and_then(|v| v.to_str().ok());
     bearer
         .or(x_token)
@@ -95,14 +106,7 @@ pub async fn require_okf_write_token(
     if http_token_ok(&auth.web_token, req.headers()) {
         return Ok(next.run(req).await);
     }
-    let bearer = req
-        .headers()
-        .get(AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| {
-            s.strip_prefix("Bearer ")
-                .or_else(|| s.strip_prefix("bearer "))
-        });
+    let bearer = bearer_token(req.headers());
     if !auth.okf_token.is_empty()
         && bearer.is_some_and(|b| constant_time_token_eq(b, &auth.okf_token))
     {
@@ -185,6 +189,76 @@ mod tests {
         headers.insert("authorization", "bearer s3cret".parse().unwrap());
         assert!(http_token_ok("s3cret", &headers));
         assert!(!http_token_ok("other", &headers));
+    }
+
+    #[test]
+    fn bearer_token_extraction_shared_by_both_paths() {
+        // M19: the helper both token paths use — Bearer, lowercase
+        // bearer, missing header, and a non-Bearer scheme.
+        let mut headers = HeaderMap::new();
+        assert_eq!(bearer_token(&headers), None);
+        headers.insert("authorization", "Bearer s3cret".parse().unwrap());
+        assert_eq!(bearer_token(&headers), Some("s3cret"));
+        headers.insert("authorization", "bearer s3cret".parse().unwrap());
+        assert_eq!(bearer_token(&headers), Some("s3cret"));
+        headers.insert("authorization", "Basic abc".parse().unwrap());
+        assert_eq!(bearer_token(&headers), None);
+    }
+
+    #[tokio::test]
+    async fn okf_write_token_accepts_either_token() {
+        // M19: both token paths behave identically after the dedupe —
+        // the OKF middleware accepts the web token OR the OKF token
+        // (task 208 dual-token), rejects anything else, and honors
+        // lowercase `bearer ` on the OKF path too (shared helper).
+        use axum::{Router, routing::get};
+        use tower::ServiceExt;
+        async fn ok() -> &'static str {
+            "ok"
+        }
+        let auth = OkfWriteAuth {
+            web_token: Arc::new("web-secret".to_string()),
+            okf_token: "okf-secret".to_string(),
+        };
+        let app = Router::new()
+            .route("/x", get(ok))
+            .layer(axum::middleware::from_fn_with_state(
+                auth,
+                require_okf_write_token,
+            ));
+        let get = |auth_header: Option<&str>| {
+            let mut b = axum::http::Request::builder().uri("/x");
+            if let Some(h) = auth_header {
+                b = b.header("authorization", h);
+            }
+            b.body(axum::body::Body::empty()).unwrap()
+        };
+        let resp = app
+            .clone()
+            .oneshot(get(Some("Bearer web-secret")))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = app
+            .clone()
+            .oneshot(get(Some("Bearer okf-secret")))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = app
+            .clone()
+            .oneshot(get(Some("bearer okf-secret")))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let resp = app
+            .clone()
+            .oneshot(get(Some("Bearer wrong")))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        let resp = app.oneshot(get(None)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]

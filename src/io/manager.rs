@@ -40,32 +40,32 @@ impl IOManager {
     /// Uses a single thread that polls all receivers in a round-robin fashion.
     /// This avoids the need to clone Receivers.
     pub fn start(&mut self) {
-        println!("IO Manager started - polling all receivers...");
+        log::info!("IO Manager started - polling all receivers...");
 
         // Simple polling loop (blocking)
         // In production this should run in a dedicated thread or use async
         loop {
             // Poll Ollama
             if let Ok(msg) = self.ollama_rx.try_recv() {
-                println!("IO: Routing to Ollama from {}", msg.from);
+                log::debug!("IO: Routing to Ollama from {}", msg.from);
                 Self::handle_ollama_message(msg);
             }
 
             // Poll Web Interface
             if let Ok(msg) = self.web_rx.try_recv() {
-                println!("IO: Routing to Web from {}", msg.from);
+                log::debug!("IO: Routing to Web from {}", msg.from);
                 Self::handle_web_message(msg);
             }
 
             // Poll Terminal
             if let Ok(msg) = self.terminal_rx.try_recv() {
-                println!("IO: Routing to Terminal from {}", msg.from);
+                log::debug!("IO: Routing to Terminal from {}", msg.from);
                 Self::handle_terminal_message(msg);
             }
 
             // Poll Gemini
             if let Ok(msg) = self.gemini_rx.try_recv() {
-                println!("IO: Routing to Gemini from {}", msg.from);
+                log::debug!("IO: Routing to Gemini from {}", msg.from);
                 Self::handle_gemini_message(msg);
             }
 

@@ -336,11 +336,11 @@ impl RoutineRegistry {
             .and_then(|data| serde_json::from_str::<Vec<Routine>>(&data).ok());
         let mut reg = match routines {
             Some(rs) => {
-                println!("cron: loaded {} routines from {}", rs.len(), path.display());
+                log::info!("cron: loaded {} routines from {}", rs.len(), path.display());
                 Self { path, routines: rs }
             }
             None => {
-                println!("cron: seeding default routines at {}", path.display());
+                log::info!("cron: seeding default routines at {}", path.display());
                 Self {
                     path,
                     routines: default_routines(),
@@ -355,7 +355,7 @@ impl RoutineRegistry {
         let mut added = 0;
         for default in default_routines() {
             if !reg.routines.iter().any(|r| r.id == default.id) {
-                println!("cron: adding new default routine '{}'", default.id);
+                log::info!("cron: adding new default routine '{}'", default.id);
                 reg.routines.push(default);
                 added += 1;
             }
@@ -364,7 +364,7 @@ impl RoutineRegistry {
             reg.refresh_next_runs(crate::utils::now_ms());
         }
         if let Err(e) = reg.save() {
-            eprintln!("cron: failed to persist routines: {}", e);
+            log::error!("cron: failed to persist routines: {}", e);
         }
         reg
     }
@@ -383,7 +383,7 @@ impl RoutineRegistry {
             match parse_schedule(&r.schedule) {
                 Ok(sched) => r.next_run_ms = Some(next_run_after(sched, now_ms)),
                 Err(e) => {
-                    eprintln!("cron: routine '{}' has {}", r.id, e);
+                    log::error!("cron: routine '{}' has {}", r.id, e);
                     r.next_run_ms = None;
                 }
             }
@@ -403,7 +403,7 @@ impl RoutineRegistry {
         }
         let updated = self.routines[idx].clone();
         if let Err(e) = self.save() {
-            eprintln!("cron: failed to persist toggle: {}", e);
+            log::error!("cron: failed to persist toggle: {}", e);
         }
         Some(updated)
     }
@@ -490,7 +490,7 @@ impl RoutineRegistry {
         self.routines.push(r.clone());
         self.refresh_next_runs(crate::utils::now_ms());
         if let Err(e) = self.save() {
-            eprintln!("cron: failed to persist new routine: {}", e);
+            log::error!("cron: failed to persist new routine: {}", e);
         }
         Ok(self
             .routines
@@ -544,7 +544,7 @@ impl RoutineRegistry {
         self.refresh_next_runs(crate::utils::now_ms());
         let updated = self.routines[idx].clone();
         if let Err(e) = self.save() {
-            eprintln!("cron: failed to persist routine update: {}", e);
+            log::error!("cron: failed to persist routine update: {}", e);
         }
         Ok(updated)
     }
@@ -555,7 +555,7 @@ impl RoutineRegistry {
         self.routines.retain(|r| r.id != id);
         let removed = self.routines.len() != before;
         if removed && let Err(e) = self.save() {
-            eprintln!("cron: failed to persist routine delete: {}", e);
+            log::error!("cron: failed to persist routine delete: {}", e);
         }
         removed
     }
@@ -591,7 +591,7 @@ impl RoutineRegistry {
         if !fired.is_empty()
             && let Err(e) = self.save()
         {
-            eprintln!("cron: failed to persist fired routines: {}", e);
+            log::error!("cron: failed to persist fired routines: {}", e);
         }
         fired
     }
@@ -628,8 +628,10 @@ pub fn spawn_scheduler(bus: Arc<Bus>, registry: Arc<RwLock<RoutineRegistry>>) {
                     timestamp: crate::utils::now_ms(),
                 };
                 match bus.publish(msg) {
-                    Ok(_) => println!("cron: fired routine '{}' ({})", r.name, r.id),
-                    Err(e) => eprintln!("cron: failed to publish routine_run for {}: {}", r.id, e),
+                    Ok(_) => log::info!("cron: fired routine '{}' ({})", r.name, r.id),
+                    Err(e) => {
+                        log::error!("cron: failed to publish routine_run for {}: {}", r.id, e)
+                    }
                 }
             }
         }

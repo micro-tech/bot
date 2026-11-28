@@ -109,10 +109,10 @@ fn append_to_disk(turn: &ChatTurn) {
     {
         Ok(mut f) => {
             if let Err(e) = writeln!(f, "{}", line) {
-                eprintln!("[chat_history] failed to append to {}: {}", path, e);
+                log::error!("[chat_history] failed to append to {}: {}", path, e);
             }
         }
-        Err(e) => eprintln!("[chat_history] failed to open {}: {}", path, e),
+        Err(e) => log::error!("[chat_history] failed to open {}: {}", path, e),
     }
 }
 
@@ -136,7 +136,7 @@ pub fn load_from_disk() {
                 let user = v["user"].as_str().unwrap_or("").to_string();
                 let assistant = v["assistant"].as_str().unwrap_or("").to_string();
                 if user.trim().is_empty() {
-                    eprintln!("[chat_history] line {}: empty user, skipping", i + 1);
+                    log::error!("[chat_history] line {}: empty user, skipping", i + 1);
                     continue;
                 }
                 turns.push_back(ChatTurn { user, assistant });
@@ -145,7 +145,7 @@ pub fn load_from_disk() {
                 }
             }
             Err(e) => {
-                eprintln!("[chat_history] line {}: corrupt, skipping ({})", i + 1, e);
+                log::error!("[chat_history] line {}: corrupt, skipping ({})", i + 1, e);
             }
         }
     }
@@ -168,7 +168,7 @@ pub fn load_from_disk() {
             }
         }
         if let Some(e) = first_err {
-            eprintln!(
+            log::error!(
                 "[chat_history] compaction write failed ({e}) — history may be lost on restart"
             );
         }

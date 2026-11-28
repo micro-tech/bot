@@ -47,7 +47,7 @@ impl CpuExecutor {
                     }
                     NodeResult::Error(e) => {
                         let error_msg = format!("Error reading memory for key {}: {:?}", key, e);
-                        eprintln!("{}", error_msg);
+                        log::error!("{}", error_msg);
                         log_to_file(&error_msg);
                         NodeResult::Error(error_msg)
                     }
@@ -67,7 +67,7 @@ impl CpuExecutor {
                     }
                     NodeResult::Error(e) => {
                         let error_msg = format!("Error writing memory for key {}: {:?}", key, e);
-                        eprintln!("{}", error_msg);
+                        log::error!("{}", error_msg);
                         log_to_file(&error_msg);
                         NodeResult::Error(error_msg)
                     }
@@ -79,7 +79,7 @@ impl CpuExecutor {
                 match result {
                     NodeResult::Error(e) => {
                         let error_msg = format!("Error running skill {}: {:?}", name, e);
-                        eprintln!("{}", error_msg);
+                        log::error!("{}", error_msg);
                         log_to_file(&error_msg);
                         NodeResult::Error(error_msg)
                     }
@@ -132,7 +132,7 @@ impl CpuExecutor {
                     }
                     NodeResult::Error(e) => {
                         let error_msg = format!("Error updating belief for key {}: {:?}", key, e);
-                        eprintln!("{}", error_msg);
+                        log::error!("{}", error_msg);
                         log_to_file(&error_msg);
                         NodeResult::Error(error_msg)
                     }

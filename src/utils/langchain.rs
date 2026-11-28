@@ -1,4 +1,4 @@
 //! LangChain stub (Task 100)
 pub fn langchain() {
-    println!("LangChain running");
+    log::debug!("LangChain running");
 }

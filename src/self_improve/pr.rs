@@ -329,7 +329,7 @@ pub fn deliver_promoted_proposal(
             let push = git.push_branch(&worktree, &head_branch);
             // Always remove the temp worktree, push or not.
             if let Err(e) = git.remove_worktree(&wt_name) {
-                eprintln!("self_improve: push worktree cleanup failed for {wt_name}: {e}");
+                log::error!("self_improve: push worktree cleanup failed for {wt_name}: {e}");
             }
             push?;
             let id = backend.open_pr(&payload)?;

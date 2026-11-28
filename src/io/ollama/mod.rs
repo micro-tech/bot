@@ -391,10 +391,10 @@ pub async fn handle_ollama_message(
     // One `/api/tags` round trip (amortized over PROBE_TTL) covers both the
     // reachability check and the model-availability check that used to cost
     // 2–3 sequential round trips per turn.
-    println!("[ollama_{}] probing {} ...", backend_name, base_url);
+    log::debug!("[ollama_{}] probing {} ...", backend_name, base_url);
     match probe_ollama(base_url).await {
         OllamaProbe::Healthy(models) => {
-            println!("[ollama_{}] Ollama reachable ✅", backend_name);
+            log::info!("[ollama_{}] Ollama reachable ✅", backend_name);
             if !model_in_list(&models, model) {
                 let list = if models.is_empty() {
                     "  (no models found — run `ollama pull <model>` first)".to_string()
@@ -417,7 +417,7 @@ pub async fn handle_ollama_message(
                 return None;
             }
             info!("Model '{}' is available in Ollama ✅", model);
-            println!("[ollama_{}] model '{}' exists ✅", backend_name, model);
+            log::info!("[ollama_{}] model '{}' exists ✅", backend_name, model);
         }
         OllamaProbe::Unreachable => {
             let err = format!(
@@ -439,9 +439,10 @@ pub async fn handle_ollama_message(
                 "Could not verify Ollama health/model availability ({}). Proceeding — may get a 404.",
                 e
             );
-            println!(
+            log::debug!(
                 "[ollama_{}] probe inconclusive ({}), proceeding anyway",
-                backend_name, e
+                backend_name,
+                e
             );
         }
     }

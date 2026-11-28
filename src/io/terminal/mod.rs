@@ -17,7 +17,7 @@ pub fn handle_terminal_message(message: Message, _bus: &mut Bus) {
 /// Starts the terminal interface.
 pub fn start_terminal(_bus: &mut Bus) {
     // Placeholder implementation
-    println!("Starting Terminal Interface");
+    log::info!("Starting Terminal Interface");
 }
 
 #[cfg(test)]

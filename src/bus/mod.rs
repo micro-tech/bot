@@ -67,7 +67,7 @@ impl Bus {
         let subscribers = Arc::new(Mutex::new(Vec::<Subscriber>::new()));
         let subs_clone = Arc::clone(&subscribers);
         thread::spawn(move || {
-            println!("[Bus] Router thread started");
+            log::info!("[Bus] Router thread started");
             while let Ok(message) = receiver.recv() {
                 // Task 239: recover from poison instead of killing the router thread.
                 let subs_guard = subs_clone.lock().unwrap_or_else(|e| e.into_inner());
@@ -83,13 +83,14 @@ impl Bus {
                     // preview — bus data is untrusted content, so the
                     // eprintln! above (routing metadata only) is the
                     // whole report; no duplicate, no preview.
-                    eprintln!(
+                    log::error!(
                         "[Bus] ⚠️ NO SUBSCRIBER for destination: '{}' (from='{}')",
-                        message.to, message.from
+                        message.to,
+                        message.from
                     );
                 }
             }
-            println!("[Bus] Router thread exited");
+            log::info!("[Bus] Router thread exited");
         });
         Self {
             sender,

@@ -3,9 +3,9 @@ use crate::hy_evo::engine::HyEvoEngine;
 use crate::hy_evo::reflection::ReflectionLlm;
 
 pub fn visualize<L: ReflectionLlm + Send + Sync>(engine: &HyEvoEngine<L>) {
-    println!("=== Evolution Visualization ===");
+    log::debug!("=== Evolution Visualization ===");
     for genome in &engine.population {
-        println!(
+        log::debug!(
             "ID: {} | Score: {:.2} | Nodes: {}",
             genome.id,
             genome.score,

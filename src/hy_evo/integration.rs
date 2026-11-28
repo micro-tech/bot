@@ -87,7 +87,7 @@ impl<L: ReflectionLlm + Send + Sync> HyEvoIntegration<L> {
 
     /// Store reflection records (you can extend this later)
     fn store_reflection(&self, reflection: ReflectionRecord) -> anyhow::Result<()> {
-        println!("[HyEvo Reflection] {}", reflection.summary);
+        log::debug!("[HyEvo Reflection] {}", reflection.summary);
         Ok(())
     }
 }

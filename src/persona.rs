@@ -96,8 +96,15 @@ pub fn persona_path(role: Option<&str>) -> Option<PathBuf> {
 /// Split `---`-fenced YAML frontmatter off the top of a persona file.
 /// Returns (body, tools). Only the `tools` key is machine-read; everything
 /// else in the frontmatter is ignored. Supports inline (`tools: [a, b]`)
-/// and dash-list forms.
+/// and dash-list forms. Line endings are normalised (CRLF -> LF, M16),
+/// so a CRLF persona file parses to the same body as its LF twin.
 fn split_frontmatter(text: &str) -> (String, Option<Vec<String>>) {
+    // M16: normalise CRLF -> LF first. `str::lines()` strips a trailing
+    // `\r` from each line, so byte offsets computed from `line.len() + 1`
+    // drift by one per line on CRLF files and the body starts mid-fence
+    // (a stray `-\r\n` — seen on agents/loop-worker.md, CRLF in the
+    // Windows checkout). Normalising makes CRLF and LF parse identically.
+    let text = text.replace("\r\n", "\n");
     let mut lines = text.lines();
     let first = lines.next().unwrap_or("");
     if first.trim() != "---" {
@@ -870,6 +877,28 @@ mod tests {
         let (body, tools) = split_frontmatter("---\nmood: grumpy\n---\nHello");
         assert_eq!(tools, None);
         assert_eq!(body, "Hello");
+    }
+
+    #[test]
+    fn crlf_frontmatter_parses_like_lf() {
+        // M16: a CRLF persona file must parse to the same body/tools as
+        // its LF twin — no stray `-\r\n` at the start of the body.
+        let lf = "---\ntools: [a, b]\n---\nHello";
+        let crlf = "---\r\ntools: [a, b]\r\n---\r\nHello";
+        let (body_lf, tools_lf) = split_frontmatter(lf);
+        let (body_crlf, tools_crlf) = split_frontmatter(crlf);
+        assert_eq!(body_crlf, body_lf);
+        assert_eq!(body_crlf, "Hello");
+        assert_eq!(tools_crlf, tools_lf);
+        assert!(!body_crlf.contains('\r'));
+        // Dash-list form, CRLF:
+        let (body, tools) = split_frontmatter("---\r\ntools:\r\n  - a\r\n  - b\r\n---\r\nHello");
+        assert_eq!(body, "Hello");
+        assert_eq!(tools, Some(vec!["a".to_string(), "b".to_string()]));
+        // No frontmatter, CRLF prose passes through normalised:
+        let (body, tools) = split_frontmatter("# Just prose\r\nSecond line");
+        assert_eq!(tools, None);
+        assert_eq!(body, "# Just prose\nSecond line");
     }
 
     #[test]

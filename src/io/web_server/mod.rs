@@ -1309,16 +1309,16 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                         }
                         let _ = state.msg_tx.send(agent_status_snapshot(&state));
 
-                        println!("[WEB] === SENDING BUS MESSAGE ===");
-                        println!("[WEB]   to: {}", bus_dest);
-                        println!("[WEB]   from: web_interface");
-                        println!("[WEB]   type: chat_request");
-                        println!(
+                        log::debug!("[WEB] === SENDING BUS MESSAGE ===");
+                        log::debug!("[WEB]   to: {}", bus_dest);
+                        log::debug!("[WEB]   from: web_interface");
+                        log::debug!("[WEB]   type: chat_request");
+                        log::debug!(
                             "[WEB]   prompt preview: {}",
                             crate::utils::truncate_str(&chat_msg, 100)
                         );
 
-                        println!("[WEB]   to: {}", bus_dest);
+                        log::debug!("[WEB]   to: {}", bus_dest);
 
                         let bus_msg = Message {
                             to: bus_dest.clone(),
@@ -1331,15 +1331,16 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
                             .to_string(),
                             timestamp: correlation_id,
                         };
-                        println!("[WEB] Publishing bus message now...");
+                        log::debug!("[WEB] Publishing bus message now...");
                         let _ = state.bus.publish(bus_msg);
 
-                        println!(
+                        log::debug!(
                             "[WEB] Routing to bus_dest='{}'  (llm was '{}')",
-                            bus_dest, llm
+                            bus_dest,
+                            llm
                         );
                         info!("Routing chat to bus destination: {}", bus_dest);
-                        println!(
+                        log::debug!(
                             "[WEB] Bus publish done for correlation_id={}",
                             correlation_id
                         );
@@ -1894,13 +1895,24 @@ async fn clear_error_log(State(state): State<AppState>) -> impl IntoResponse {
     .into_response()
 }
 
-async fn serve_error_log(State(state): State<AppState>) -> impl IntoResponse {
-    let path = &state.logging.error_log;
-    if !std::path::Path::new(path).exists() {
-        let _ = std::fs::write(path, "[INIT] Error log created\n");
+/// GET /logs/error — the web UI error view.
+///
+/// M17: the view reads the CANONICAL error log — the HOME path
+/// (`~/.helix/logs/error_log.md`) that `log_to_file` writes to. It used
+/// to read `state.logging.error_log` (the runtime-relative
+/// `logs/error_log.md`), which nothing writes to, so the view was blind
+/// (1 line on the R630) while the real stream grew elsewhere.
+/// `clear_error_log` still clears BOTH paths (the runtime file is a
+/// legacy stale file); `check_error_logs` (the loop's own signal) also
+/// reads both. The `LoggingConfig.error_log` field is retained as config
+/// surface for the legacy runtime path.
+async fn serve_error_log() -> impl IntoResponse {
+    let path = error_log_path();
+    if !path.exists() {
+        let _ = std::fs::write(&path, "[INIT] Error log created\n");
     }
     let content =
-        fs::read_to_string(path).unwrap_or_else(|_| "error_log.md not found or empty".to_string());
+        fs::read_to_string(&path).unwrap_or_else(|_| "error_log.md not found or empty".to_string());
     Html(format!(
         "<pre style='white-space:pre-wrap;'>{}</pre>",
         html_escape(&content)
@@ -4612,5 +4624,34 @@ mod tests {
         server.abort();
         let _ = std::fs::remove_file(&routines_path);
         let _ = std::fs::remove_file(&config_path);
+    }
+
+    #[tokio::test]
+    async fn error_view_shows_written_errors() {
+        // M17: an error written via log_to_file must be visible in the
+        // web UI error view (serve_error_log). The marker is unique per
+        // run so a stale line from an earlier run cannot false-pass.
+        // NOTE: this appends one line to the real HOME error log
+        // (~/.helix/logs/error_log.md) — the sandbox file, not the
+        // R630's; the line is clearly marked as a test marker.
+        use axum::response::IntoResponse;
+        let marker = format!(
+            "M17-TEST-MARKER-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        crate::utils::log_to_file(&marker);
+        let resp = serve_error_log().await.into_response();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let text = String::from_utf8_lossy(&body);
+        assert!(
+            text.contains(&marker),
+            "error view must show the line log_to_file just wrote; got: {}",
+            &text[..text.len().min(300)]
+        );
     }
 }

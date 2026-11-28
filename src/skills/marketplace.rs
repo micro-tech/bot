@@ -33,9 +33,10 @@ impl SkillMarketplace {
 
     /// Publish a new skill to the marketplace
     pub fn publish(&mut self, meta: SkillMetadata) {
-        println!(
+        log::debug!(
             "📦 Published skill to marketplace: {} v{}",
-            meta.name, meta.version
+            meta.name,
+            meta.version
         );
         self.skills.insert(meta.name.clone(), meta);
     }

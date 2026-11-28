@@ -89,7 +89,7 @@ pub(crate) fn error_log_path() -> PathBuf {
             // old code paid this on every log line).
             if let Err(e) = fs::create_dir_all(&log_dir) {
                 // Can't log this yet, but we tried
-                eprintln!("Failed to create log dir {:?}: {}", log_dir, e);
+                log::error!("Failed to create log dir {:?}: {}", log_dir, e);
             }
 
             log_dir.join("error_log.md")

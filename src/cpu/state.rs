@@ -71,7 +71,7 @@ impl HeartbeatState {
     /// Called by the heartbeat loop and by `Cpu::handle_heartbeat`;
     /// never takes the Cpu lock.
     pub fn handle_heartbeat(&mut self) {
-        println!("Handling heartbeat: Tick {}", self.tick_count);
+        log::debug!("Handling heartbeat: Tick {}", self.tick_count);
         self.tick_count += 1;
         self.last_heartbeat = Instant::now();
         self.uptime = self.start_time.elapsed();
