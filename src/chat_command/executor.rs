@@ -54,7 +54,9 @@ pub const READ_COMMANDS: &[&str] = &["cat", "head", "tail", "grep"];
 /// flags need extra handling for grep (see the loop): `-e`/`--regexp`
 /// supply the pattern (see [`PATTERN_FLAGS`]), and `-n`/`-c`/`-s` are
 /// BOOLEAN for grep (--line-number/--count/--no-messages) even though
-/// they take a value for head/tail.
+/// they take a value for head/tail. Same for cat: `-n`/`-A`/`-e`/`-s`
+/// are BOOLEAN for cat (--number/--show-all/--show-ends/
+/// --squeeze-blank) even though they take a value for other commands.
 const VALUE_FLAGS: &[&str] = &[
     "-n",
     "--lines",
@@ -381,7 +383,10 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
     // `PATTERN_FLAGS` and `is_attached_pattern`. And for grep,
     // `-n`/`-c`/`-s` are boolean (--line-number/--count/
     // --no-messages), so they do NOT skip the next argument — the
-    // next argument is the pattern. `check_path_value` is tested
+    // next argument is the pattern. Same for cat: `-n`/`-A`/`-e`/`-s`
+    // are boolean (--number/--show-all/--show-ends/--squeeze-blank),
+    // so they do NOT skip the next argument — the next argument is a
+    // file to read. `check_path_value` is tested
     // before the flag screen so a value that itself starts with `-`
     // (e.g. `-f -e`) is still path-checked, not mistaken for a flag.
     if READ_COMMANDS.contains(&first.as_str()) {
@@ -412,8 +417,15 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
                     // the "pattern" (`grep -n root /etc/shadow`
                     // bypass, same class as the `-e` finding). For
                     // head/tail they DO take a value, so the skip
-                    // only lifts for grep.
-                    if !(first == "grep" && matches!(arg.as_str(), "-n" | "-c" | "-s")) {
+                    // only lifts for grep. Same for cat: `-n`/`-A`/
+                    // `-e`/`-s` are BOOLEAN (--number/--show-all/
+                    // --show-ends/--squeeze-blank), so the next
+                    // argument is a file, not a value to skip
+                    // (`cat -n /etc/shadow` bypass, reviewer
+                    // finding, M5 follow-up, BLOCKING).
+                    if !(first == "grep" && matches!(arg.as_str(), "-n" | "-c" | "-s"))
+                        && !(first == "cat" && matches!(arg.as_str(), "-n" | "-A" | "-e" | "-s"))
+                    {
                         skip_value = true;
                     }
                     if first == "grep" && PATTERN_FLAGS.contains(&arg.as_str()) {
@@ -967,6 +979,41 @@ mod tests {
         // with pattern `"foo"`.
         assert!(check_local_command(&argv(&["grep", "-efoo", "/etc/hostname"])).is_ok());
         assert!(check_local_command(&argv(&["grep", "-efailed", "/var/log/syslog"])).is_ok());
+    }
+
+    #[test]
+    fn cat_boolean_flags_do_not_skip_path() {
+        // Reviewer finding (M5 follow-up, BLOCKING): `-n`/`-A`/`-e`/`-s`
+        // are BOOLEAN for cat (--number/--show-all/--show-ends/
+        // --squeeze-blank) but the shared VALUE_FLAGS list treats them
+        // as value-taking, so the file was skipped as the flag's value
+        // and never path-checked. `cat -n /etc/shadow` passed the gate
+        // while real cat printed the file with line numbers — the same
+        // class as the grep `-n`/`-c`/`-s` carve-out, and `cat -n` is
+        // a form people actually type.
+        for words in [
+            vec!["cat", "-n", "/etc/shadow"],
+            vec!["cat", "-e", "/etc/shadow"],
+            vec!["cat", "-s", "/etc/shadow"],
+            vec!["cat", "-A", "/etc/shadow"],
+        ] {
+            assert!(
+                check_local_command(&argv(&words)).is_err(),
+                "{words:?} must be rejected"
+            );
+        }
+        // An allowlisted file passes with each boolean flag.
+        for words in [
+            vec!["cat", "-n", "/etc/hostname"],
+            vec!["cat", "-e", "/etc/hostname"],
+            vec!["cat", "-s", "/etc/hostname"],
+            vec!["cat", "-A", "/etc/hostname"],
+        ] {
+            assert!(
+                check_local_command(&argv(&words)).is_ok(),
+                "{words:?} must be allowed"
+            );
+        }
     }
 
     #[test]
