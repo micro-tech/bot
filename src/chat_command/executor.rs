@@ -202,6 +202,39 @@ fn attached_path_value(arg: &str) -> Option<&str> {
     None
 }
 
+/// The path value carried by a short-flag CLUSTER containing `f`
+/// (`-if FILE`, `-ifFILE`, `-nf /etc/shadow`): the remainder of the
+/// token after `f` when attached, or `None` when `f` is the last char
+/// and the value is the next argument. Returns `None` when the token
+/// is not such a cluster. Mirrors `is_follow_flag`'s cluster walk.
+/// A leading `f` (`-f`, `-fFILE`) is NOT handled here — the exact
+/// `PATH_VALUE_FLAGS` match and `attached_path_value` own those —
+/// so this only fires when `f` is buried in the cluster. Only
+/// `PATH_VALUE_FLAGS` (`-f`) needs this; `VALUE_FLAGS` values aren't
+/// paths. Without it, `-if` matched no exact entry, fell through as
+/// an inert flag, and its value was eaten as grep's inline pattern,
+/// so `grep -if /etc/shadow` passed the gate while the child opened
+/// `/etc/shadow` (reviewer finding, M5 follow-up, BLOCKING).
+fn cluster_f_value(arg: &str) -> Option<Option<&str>> {
+    if !arg.starts_with('-') || arg.starts_with("--") {
+        return None;
+    }
+    // Walk the chars after the dash (char_indices, so a multi-byte
+    // flag char before `f` can't misalign the slice); skip the first
+    // flag char, which the exact/attached forms own.
+    let mut chars = arg[1..].char_indices();
+    if chars.next()?.1 == 'f' {
+        return None;
+    }
+    for (i, c) in chars {
+        if c == 'f' {
+            let after = &arg[1 + i + 1..];
+            return Some(if after.is_empty() { None } else { Some(after) });
+        }
+    }
+    None
+}
+
 /// What a run produced. `stdout`/`stderr` are lossy-UTF-8 decodes of
 /// the bytes captured (capped per stream at the caller's cap).
 #[derive(Debug, Clone)]
@@ -285,8 +318,10 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
     // value after a `PATH_VALUE_FLAGS` flag (`grep -f patterns.txt`)
     // IS a path and is checked — and once `-f` is seen the pattern
     // comes from that file, so later positionals are files to search,
-    // not the pattern. `check_path_value` is tested before the flag
-    // screen so a value that itself starts with `-` (e.g. `-f -e`)
+    // not the pattern. The same holds for a short-flag cluster
+    // containing `f` (`grep -if patterns.txt`, `grep -ifpatterns.txt`)
+    // — see `cluster_f_value`. `check_path_value` is tested before the
+    // flag screen so a value that itself starts with `-` (e.g. `-f -e`)
     // is still path-checked, not mistaken for a flag.
     if READ_COMMANDS.contains(&first.as_str()) {
         let mut saw_pattern = false;
@@ -319,6 +354,24 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
                         return Err(format!(
                             "rejected: `{first}` may not read `{value}` (outside the read allowlist)"
                         ));
+                    }
+                    if first == "grep" {
+                        saw_pattern = true;
+                    }
+                } else if let Some(clustered) = cluster_f_value(arg) {
+                    // A short-flag cluster containing `f` (`-if FILE`,
+                    // `-ifFILE`): the `f` carries the pattern file just
+                    // like a bare `-f` — attached remainder is checked
+                    // now, a trailing `f` takes the next argument.
+                    match clustered {
+                        Some(value) => {
+                            if !is_allowed_read_path(value) {
+                                return Err(format!(
+                                    "rejected: `{first}` may not read `{value}` (outside the read allowlist)"
+                                ));
+                            }
+                        }
+                        None => check_path_value = true,
                     }
                     if first == "grep" {
                         saw_pattern = true;
@@ -731,6 +784,42 @@ mod tests {
         assert!(check_local_command(&argv(&["grep", "-f/etc/shadow"])).is_err());
         assert!(check_local_command(&argv(&["grep", "--file=/etc/shadow"])).is_err());
         assert!(check_local_command(&argv(&["grep", "-f/etc/hostname", "/etc/hostname"])).is_ok());
+    }
+
+    #[test]
+    fn grep_pattern_file_in_flag_cluster_is_path_checked() {
+        // Reviewer finding (M5 follow-up, BLOCKING): a short-flag
+        // cluster containing `f` (`-if`, `-nf`, `-qf`) slipped past
+        // the gate — the token matched no exact flag entry and
+        // `attached_path_value` only handles a leading `-f`, so
+        // `/etc/shadow` was eaten as the inline pattern and never
+        // path-checked. The cluster's `f` carries the pattern file
+        // just like a bare `-f`.
+        for words in [
+            vec!["grep", "-if", "/etc/shadow"],
+            vec!["grep", "-nf", "/etc/shadow"],
+            vec!["grep", "-qf", "/etc/shadow"],
+            vec!["grep", "-if/etc/shadow"],
+            vec!["grep", "-nf", "/etc/shadow", "/etc/hostname"],
+        ] {
+            assert!(
+                check_local_command(&argv(&words)).is_err(),
+                "{words:?} must be rejected"
+            );
+        }
+        // An allowlisted pattern file via a cluster passes, and with
+        // -f the pattern comes from the file, so a positional is a
+        // file to search and is checked too.
+        assert!(
+            check_local_command(&argv(&["grep", "-if", "/etc/hostname", "/etc/hostname"])).is_ok()
+        );
+        assert!(check_local_command(&argv(&["grep", "-if/etc/hostname", "/etc/hostname"])).is_ok());
+        assert!(
+            check_local_command(&argv(&["grep", "-if", "/etc/hostname", "config.toml"])).is_err(),
+            "a file searched via a -f cluster is not a pattern"
+        );
+        // A legitimate cluster without `f` still works.
+        assert!(check_local_command(&argv(&["grep", "-in", "root", "/etc/hostname"])).is_ok());
     }
 
     #[test]
