@@ -20,4 +20,4 @@ pub use health::HealthStore;
 pub use route::route;
 pub use user_override::OverrideStore;
 
-pub use spend::{check_api_allowed, note_api_call};
+pub use spend::{check_api_allowed, note_api_call, reserve_api_spend};

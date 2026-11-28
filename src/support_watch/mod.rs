@@ -27,10 +27,10 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use chrono_tz::Tz;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 
 pub use config::SupportConfig;
-pub use state::{MAX_DRAFT_ATTEMPTS, WatchMode, WatchState};
+pub use state::{MAX_DRAFT_ATTEMPTS, StateLoad, WatchMode, WatchState};
 
 /// Backend pinned for support reply drafting (task 258).
 ///
@@ -370,7 +370,26 @@ pub fn poll_new_mail() -> Vec<IncomingMail> {
         debug!("support_watch: disabled in [support]; skipping tick");
         return Vec::new();
     }
-    let mut state = WatchState::load(&rt);
+    // Task 402 (M12): a corrupt state.json must never read as "nothing
+    // seen" — that is the reply-all shape (the whole fetched batch looks
+    // new and gets drafted). Quarantine it at once, log loudly, and mark
+    // the fetched batch seen WITHOUT drafting (below).
+    let (mut state, load_status) = WatchState::load_status(&rt);
+    let state_was_corrupt = load_status == StateLoad::Corrupt;
+    if state_was_corrupt {
+        match WatchState::quarantine(&rt) {
+            Some(dest) => error!(
+                "support_watch: state.json is CORRUPT; quarantined to {}. \
+                 The current batch will be marked seen without drafting.",
+                dest.display()
+            ),
+            None => error!(
+                "support_watch: state.json is CORRUPT and could not be \
+                 quarantined; the current batch will still be marked seen \
+                 without drafting."
+            ),
+        }
+    }
     let now_ms = crate::utils::now_ms();
 
     if !should_check(now_ms, &state, &cfg) {
@@ -401,6 +420,25 @@ pub fn poll_new_mail() -> Vec<IncomingMail> {
     let raw = crate::tools::execute(&tools.check, &serde_json::json!({"limit": 50}));
     let messages = parse_mail_list(&raw);
     let ids: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
+
+    // Task 402 (M12): the state file was corrupt. The batch is
+    // acknowledged (seen, so it is never treated as new again) but NOT
+    // drafted — zero replies go out for it. This is the whole point: a
+    // corrupt file must not turn into a reply-all.
+    if state_was_corrupt {
+        state.mark_seen_quietly(&ids);
+        state.last_check_ms = Some(now_ms);
+        if let Err(e) = state.save(&rt) {
+            warn!("support_watch: failed to persist state: {e}");
+        }
+        error!(
+            "support_watch: corrupt state — marked {} fetched message(s) seen \
+             without drafting (no replies sent for this batch)",
+            ids.len()
+        );
+        return Vec::new();
+    }
+
     let fresh_ids = state.note_seen(&ids);
 
     // Review B2: re-drive previously-seen but still-unhandled messages
@@ -816,6 +854,86 @@ mod tests {
         let st = WatchState::load(&dir);
         assert_eq!(st.unhandled_count(), 0);
         assert!(!st.draft_attempts.contains_key("r1"));
+
+        crate::mcp_client::clear_test_overrides();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn corrupt_state_file_produces_zero_drafts_and_quarantines() {
+        // Task 402 (M12): a corrupt state.json must never read as "nothing
+        // seen" — that is the reply-all shape. The batch is quarantined,
+        // marked seen WITHOUT drafting, and zero messages come out.
+        let _lock = crate::tools::subagent_tool::test_env_lock();
+        let dir = std::env::temp_dir().join("helix-support-watch-test-corrupt-poll");
+        let _ = std::fs::remove_dir_all(&dir);
+        override_runtime_dir_for_tests(dir.clone());
+        crate::mcp_client::clear_test_overrides();
+        crate::mcp_client::override_tool_definitions_for_tests(vec![
+            serde_json::json!({"type":"function","function":{"name":"mcp__mail__check_inbox"}}),
+            serde_json::json!({"type":"function","function":{"name":"mcp__mail__send_message"}}),
+        ]);
+        // GIVEN a corrupt state file and two messages in the mailbox:
+        std::fs::create_dir_all(dir.join("support_watch")).unwrap();
+        std::fs::write(WatchState::state_path(&dir), "not json{{{").unwrap();
+        crate::mcp_client::stub_try_execute_for_tests(
+            "mcp__mail__check_inbox",
+            r#"[{"id":"c1","from":"a@example.com","subject":"one","body":"b1"},{"id":"c2","from":"b@example.com","subject":"two","body":"b2"}]"#,
+        );
+
+        // WHEN the poll runs,
+        // THEN zero messages come out (nothing to draft or reply to):
+        let out = poll_new_mail();
+        assert!(
+            out.is_empty(),
+            "corrupt state must produce zero drafts, got {} message(s)",
+            out.len()
+        );
+
+        // AND the corrupt file was quarantined aside (bytes preserved).
+        // (A fresh state.json is re-saved by the poll, so the path exists
+        // again — what matters is the corrupt bytes live in the quarantine
+        // file and the fresh file carries the seen batch, not the corrupt
+        // one.)
+        let support_dir = dir.join("support_watch");
+        let quarantined: Vec<_> = std::fs::read_dir(&support_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with("state.json.corrupt-"))
+            .collect();
+        assert_eq!(
+            quarantined.len(),
+            1,
+            "one quarantine file: {:?}",
+            quarantined
+        );
+        assert_eq!(
+            std::fs::read_to_string(support_dir.join(&quarantined[0])).unwrap(),
+            "not json{{{",
+            "quarantine must preserve the corrupt bytes"
+        );
+
+        // AND the batch is marked seen (a re-sighting is not "new") but
+        // nothing is unhandled, so no draft will ever be driven for it:
+        let mut st = WatchState::load(&dir);
+        assert_eq!(st.unhandled_count(), 0);
+        assert!(st.note_seen(&["c1".into(), "c2".into()]).is_empty());
+
+        // AND the next poll (same mailbox) still yields nothing new.
+        // (Clear last_check so the cadence gate lets the poll through —
+        // the corrupt path never ran record_check, so the mode is still
+        // NormalDay with a 15/30-minute cadence.)
+        {
+            let mut st = WatchState::load(&dir);
+            st.last_check_ms = None;
+            st.save(&dir).unwrap();
+        }
+        crate::mcp_client::stub_try_execute_for_tests(
+            "mcp__mail__check_inbox",
+            r#"[{"id":"c1","from":"a@example.com","subject":"one","body":"b1"},{"id":"c2","from":"b@example.com","subject":"two","body":"b2"}]"#,
+        );
+        assert!(poll_new_mail().is_empty());
 
         crate::mcp_client::clear_test_overrides();
         let _ = std::fs::remove_dir_all(&dir);

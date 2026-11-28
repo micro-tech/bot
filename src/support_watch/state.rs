@@ -3,6 +3,13 @@
 //! Lives at `<runtime_dir>/support_watch/state.json` so restarts don't lose
 //! the cadence position or the set of already-seen message ids. Included in
 //! `scripts/backup-state.sh` (task 256.4).
+//!
+//! Corruption handling (task 402, M12): a state file that exists but does
+//! not parse is CORRUPT, not empty. `load_status` reports it; the watcher
+//! quarantines the file (`state.json.corrupt-<ms>`), logs loudly, and marks
+//! the fetched batch seen WITHOUT drafting (`mark_seen_quietly`) — a corrupt
+//! file must never read as "nothing seen", which is the reply-all shape
+//! (the whole fetched batch looks new and gets a reply drafted to each).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -64,6 +71,17 @@ pub struct WatchState {
     pub draft_attempts: HashMap<String, u32>,
 }
 
+/// Outcome of loading the state file. `Missing` (first run) and
+/// `Corrupt` (unparseable) both yield a fresh default — a bad state
+/// file must never wedge the watcher — but only `Corrupt` needs the
+/// quarantine + mark-seen treatment (task 402).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StateLoad {
+    Ok,
+    Missing,
+    Corrupt,
+}
+
 impl WatchState {
     pub fn unhandled_count(&self) -> usize {
         self.unhandled_ids.len()
@@ -104,17 +122,65 @@ impl WatchState {
         }
     }
 
+    /// Record ids as seen WITHOUT making them unhandled — no drafts will
+    /// ever be driven for them. Used when the state file was corrupt (task
+    /// 402): the batch is acknowledged so it is never treated as new, but
+    /// nothing is drafted from it. (A corrupt file must never turn into a
+    /// reply-all: `note_seen` would put the whole batch in `unhandled_ids`,
+    /// and the watcher would draft a reply to every one of them.)
+    pub fn mark_seen_quietly(&mut self, ids: &[String]) {
+        for id in ids {
+            if !self.seen_ids.contains(id) {
+                self.seen_ids.push(id.clone());
+            }
+        }
+        while self.seen_ids.len() > MAX_SEEN_IDS {
+            self.seen_ids.remove(0);
+        }
+        if let Some(last) = ids.last() {
+            self.last_seen_uid = Some(last.clone());
+        }
+    }
+
     pub fn state_path(runtime_dir: &Path) -> PathBuf {
         runtime_dir.join("support_watch").join("state.json")
     }
 
+    /// Load from disk, reporting whether the file was fine, missing, or
+    /// corrupt. Missing/corrupt both yield a fresh default.
+    pub fn load_status(runtime_dir: &Path) -> (Self, StateLoad) {
+        let path = Self::state_path(runtime_dir);
+        match std::fs::read_to_string(&path) {
+            Err(_) => (Self::default(), StateLoad::Missing),
+            Ok(s) => match serde_json::from_str::<Self>(&s) {
+                Ok(st) => (st, StateLoad::Ok),
+                Err(_) => (Self::default(), StateLoad::Corrupt),
+            },
+        }
+    }
+
+    /// Quarantine a corrupt state file: rename `state.json` to
+    /// `state.json.corrupt-<epoch-ms>` so the corruption is preserved for
+    /// inspection and can never be re-read as an empty `seen_ids`.
+    /// Returns the quarantine path, or `None` if there was no file.
+    pub fn quarantine(runtime_dir: &Path) -> Option<PathBuf> {
+        let path = Self::state_path(runtime_dir);
+        if !path.exists() {
+            return None;
+        }
+        let dest = path.with_extension(format!("json.corrupt-{}", crate::utils::now_ms()));
+        match std::fs::rename(&path, &dest) {
+            Ok(()) => Some(dest),
+            Err(_) => None,
+        }
+    }
+
     /// Load from disk; missing/corrupt file yields a fresh default (a bad
     /// state file must never wedge the watcher — it just re-polls).
+    /// Prefer `load_status` when the caller needs to know the file was
+    /// corrupt (task 402).
     pub fn load(runtime_dir: &Path) -> Self {
-        std::fs::read_to_string(Self::state_path(runtime_dir))
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+        Self::load_status(runtime_dir).0
     }
 
     /// Persist. Errors are returned for the caller to log, never panicked.
@@ -167,6 +233,65 @@ mod tests {
         assert_eq!(st.unhandled_count(), 0);
         assert_eq!(st.mode, WatchMode::NormalDay);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_status_distinguishes_missing_corrupt_and_ok() {
+        let dir = std::env::temp_dir().join("helix-support-watch-test-load-status");
+        let _ = std::fs::remove_dir_all(&dir);
+        // Missing file -> Missing.
+        let (_, status) = WatchState::load_status(&dir);
+        assert_eq!(status, StateLoad::Missing);
+        // Corrupt file -> Corrupt.
+        std::fs::create_dir_all(dir.join("support_watch")).unwrap();
+        std::fs::write(WatchState::state_path(&dir), "not json{{{").unwrap();
+        let (_, status) = WatchState::load_status(&dir);
+        assert_eq!(status, StateLoad::Corrupt);
+        // Valid file -> Ok.
+        let mut st = WatchState::default();
+        st.note_seen(&["a".into()]);
+        st.save(&dir).unwrap();
+        let (back, status) = WatchState::load_status(&dir);
+        assert_eq!(status, StateLoad::Ok);
+        assert_eq!(back.unhandled_count(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn quarantine_moves_corrupt_file_aside() {
+        let dir = std::env::temp_dir().join("helix-support-watch-test-quarantine");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("support_watch")).unwrap();
+        std::fs::write(WatchState::state_path(&dir), "not json{{{").unwrap();
+        // WHEN quarantined,
+        let dest = WatchState::quarantine(&dir).expect("quarantine path");
+        // THEN the original is gone, the corrupt bytes are preserved aside,
+        // and a fresh load sees a missing file (not a corrupt one):
+        assert!(!WatchState::state_path(&dir).exists());
+        assert!(dest.exists());
+        assert_eq!(std::fs::read_to_string(&dest).unwrap(), "not json{{{");
+        let (_, status) = WatchState::load_status(&dir);
+        assert_eq!(status, StateLoad::Missing);
+        // AND quarantining again (nothing there) is a no-op:
+        assert_eq!(WatchState::quarantine(&dir), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mark_seen_quietly_never_creates_unhandled() {
+        let mut st = WatchState::default();
+        // GIVEN a batch marked seen quietly (corrupt-state path):
+        st.mark_seen_quietly(&["a".into(), "b".into()]);
+        // THEN the ids are seen (a re-sighting is not "new") but nothing
+        // is unhandled, so no draft will ever be driven for them:
+        assert_eq!(st.unhandled_count(), 0);
+        assert!(st.note_seen(&["a".into(), "b".into()]).is_empty());
+        assert_eq!(st.last_seen_uid.as_deref(), Some("b"));
+        // AND the seen cap still applies:
+        for i in 0..(MAX_SEEN_IDS + 10) {
+            st.mark_seen_quietly(&[format!("x{}", i)]);
+        }
+        assert_eq!(st.seen_ids.len(), MAX_SEEN_IDS);
     }
 
     #[test]

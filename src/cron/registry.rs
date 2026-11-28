@@ -146,44 +146,64 @@ pub fn schedule_display(sched: Schedule) -> String {
     }
 }
 
-/// Next occurrence of `sched` strictly after `from_ms` (epoch millis).
-/// Daily jobs use the machine's local timezone.
-pub fn next_run_after(sched: Schedule, from_ms: u64) -> u64 {
-    match sched {
-        Schedule::Every { secs } => from_ms.saturating_add(secs.saturating_mul(1000)),
-        Schedule::Daily { hour, min } => {
-            use chrono::{Local, TimeZone};
-            let from = Local
-                .timestamp_millis_opt(from_ms as i64)
-                .single()
-                .unwrap_or_else(Local::now);
-            let today = from
-                .date_naive()
-                .and_hms_opt(hour, min, 0)
-                .and_then(|naive| {
-                    Local
-                        .from_local_datetime(&naive)
-                        .single()
-                        .map(|dt| dt.timestamp_millis() as u64)
-                });
-            match today {
-                Some(t) if t > from_ms => t,
-                _ => {
-                    // Tomorrow at HH:MM.
-                    let tomorrow = from.date_naive() + chrono::Duration::days(1);
-                    tomorrow
-                        .and_hms_opt(hour, min, 0)
-                        .and_then(|naive| {
-                            Local
-                                .from_local_datetime(&naive)
-                                .single()
-                                .map(|dt| dt.timestamp_millis() as u64)
-                        })
-                        .unwrap_or_else(|| from_ms.saturating_add(86_400_000))
-                }
+/// Local time `HH:MM` on `date` as epoch millis, in timezone `tz`.
+/// DST-aware (task 404, M14): on a fall-back overlap the EARLIEST
+/// occurrence wins; on a spring-forward gap the time does not exist, so
+/// roll forward to the next valid minute (02:00 -> 03:00) instead of
+/// skipping the day. Returns None only when no valid minute is found
+/// within 3 hours (DST gaps are 1 hour, so this should not happen).
+fn daily_at<Tz: chrono::TimeZone>(
+    tz: &Tz,
+    date: chrono::NaiveDate,
+    hour: u32,
+    min: u32,
+) -> Option<u64> {
+    let mut naive = date.and_hms_opt(hour, min, 0)?;
+    for _ in 0..180 {
+        match tz.from_local_datetime(&naive) {
+            chrono::LocalResult::Single(dt) => return Some(dt.timestamp_millis() as u64),
+            chrono::LocalResult::Ambiguous(earliest, _) => {
+                return Some(earliest.timestamp_millis() as u64);
+            }
+            chrono::LocalResult::None => {
+                naive += chrono::Duration::minutes(1);
             }
         }
     }
+    None
+}
+
+/// Next occurrence of `sched` strictly after `from_ms` (epoch millis),
+/// in timezone `tz`. The testable core of `next_run_after`: tests pin
+/// `tz` to `America/New_York` for DST cases (the sandbox runs UTC).
+fn next_run_after_in<Tz: chrono::TimeZone>(tz: &Tz, sched: Schedule, from_ms: u64) -> u64 {
+    match sched {
+        Schedule::Every { secs } => from_ms.saturating_add(secs.saturating_mul(1000)),
+        Schedule::Daily { hour, min } => {
+            let from = tz
+                .timestamp_millis_opt(from_ms as i64)
+                .single()
+                .unwrap_or_else(|| tz.from_utc_datetime(&chrono::Utc::now().naive_utc()));
+            // Today at HH:MM, if it is still ahead (daily_at rolls a
+            // spring-forward gap forward, so the 02:00 job fires at 03:00
+            // on that day instead of being skipped).
+            if let Some(t) = daily_at(tz, from.date_naive(), hour, min)
+                && t > from_ms
+            {
+                return t;
+            }
+            // Tomorrow at HH:MM.
+            let tomorrow = from.date_naive() + chrono::Duration::days(1);
+            daily_at(tz, tomorrow, hour, min).unwrap_or_else(|| from_ms.saturating_add(86_400_000))
+        }
+    }
+}
+
+/// Next occurrence of `sched` strictly after `from_ms` (epoch millis).
+/// Daily jobs use the machine's local timezone.
+pub fn next_run_after(sched: Schedule, from_ms: u64) -> u64 {
+    use chrono::Local;
+    next_run_after_in(&Local, sched, from_ms)
 }
 
 // ── Registry ────────────────────────────────────────────────────────────────
@@ -328,12 +348,38 @@ fn default_routines() -> Vec<Routine> {
 
 impl RoutineRegistry {
     /// Load from `path`, seeding John's hartbeat.md jobs when the file is
-    /// missing or unreadable. Jobs due while the bot was offline are skipped
+    /// missing. A file that EXISTS but does not parse is corrupt, not
+    /// missing: it is quarantined (`routines.json.corrupt-<ms>`) and logged
+    /// loudly instead of silently reseeded (task 404, M14 — the old code
+    /// reseeded and then `save()` overwrote the corrupt file, losing user
+    /// routines). Jobs due while the bot was offline are skipped
     /// (next run is the next future occurrence) — no catch-up in v1.
     pub fn load_or_seed(path: PathBuf) -> Self {
-        let routines = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|data| serde_json::from_str::<Vec<Routine>>(&data).ok());
+        let routines = match std::fs::read_to_string(&path) {
+            Ok(data) => match serde_json::from_str::<Vec<Routine>>(&data) {
+                Ok(rs) => Some(rs),
+                Err(e) => {
+                    let dest =
+                        path.with_extension(format!("json.corrupt-{}", crate::utils::now_ms()));
+                    match std::fs::rename(&path, &dest) {
+                        Ok(()) => eprintln!(
+                            "cron: routines file {} is corrupt ({}); quarantined to {}; seeding defaults",
+                            path.display(),
+                            e,
+                            dest.display()
+                        ),
+                        Err(re) => eprintln!(
+                            "cron: routines file {} is corrupt ({}) and could not be quarantined ({}); seeding defaults",
+                            path.display(),
+                            e,
+                            re
+                        ),
+                    }
+                    None
+                }
+            },
+            Err(_) => None, // missing file: normal first-run seed
+        };
         let mut reg = match routines {
             Some(rs) => {
                 println!("cron: loaded {} routines from {}", rs.len(), path.display());
@@ -567,18 +613,38 @@ impl RoutineRegistry {
             std::fs::create_dir_all(parent)?;
         }
         let data = serde_json::to_string_pretty(&self.routines).map_err(std::io::Error::other)?;
-        std::fs::write(&self.path, data)
+        // Task 404 (M14): atomic rewrite — temp file + rename, as
+        // support_watch/state.rs already does. A crash mid-write used to
+        // corrupt the registry, and load_or_seed then silently reseeded
+        // it, losing user routines.
+        let tmp = self.path.with_extension("json.tmp");
+        std::fs::write(&tmp, data)?;
+        std::fs::rename(&tmp, &self.path)?;
+        Ok(())
     }
 
     /// Fire every enabled routine whose next run has passed. Returns the
     /// fired routines; run times are advanced and persisted.
+    ///
+    /// Task 404 (M14): a routine with no next run (`next_run_ms == None` —
+    /// e.g. its schedule is unparseable) is DISABLED, not due. The old
+    /// code treated `None` as due on every tick, so a bad schedule fired
+    /// every minute forever.
     pub fn fire_due(&mut self, now_ms: u64) -> Vec<Routine> {
         let mut fired = Vec::new();
         for r in &mut self.routines {
             if !r.enabled {
                 continue;
             }
-            let due = r.next_run_ms.map(|n| n <= now_ms).unwrap_or(true);
+            let due = match r.next_run_ms {
+                Some(n) => n <= now_ms,
+                // No next run: unparseable schedule (refresh_next_runs
+                // already logged the parse failure when it set None) or
+                // never scheduled. Disabled until a human fixes the
+                // schedule — never due on every tick. (No log here: the
+                // scheduler ticks every minute and this would spam.)
+                None => false,
+            };
             if !due {
                 continue;
             }
@@ -1025,6 +1091,155 @@ mod registry_tests {
             .unwrap()
             .timestamp_millis() as u64;
         assert_eq!(next, expected);
+    }
+
+    #[test]
+    fn unparseable_schedule_is_disabled_not_due_every_tick() {
+        // Task 404 (M14): a routine whose schedule cannot parse must be
+        // disabled, not due on every tick (the old code fired it every
+        // minute forever: next_run_ms None meant "due").
+        let (mut reg, path) = empty_reg("bad_schedule_disabled.json");
+        reg.routines.push(Routine {
+            id: "bad".to_string(),
+            name: "Bad".to_string(),
+            schedule: "sometimes".to_string(),
+            enabled: true,
+            last_run_ms: None,
+            next_run_ms: None,
+            agent_role: String::new(),
+            task: String::new(),
+            backend: default_routine_backend(),
+        });
+        // refresh_next_runs (as load_or_seed runs it) leaves next_run_ms None:
+        reg.refresh_next_runs(crate::utils::now_ms());
+        assert!(reg.list()[0].next_run_ms.is_none());
+        // AND fire_due never fires it, no matter how many ticks pass:
+        let now = crate::utils::now_ms();
+        assert!(reg.fire_due(now).is_empty());
+        assert!(reg.fire_due(now + 60_000).is_empty());
+        assert!(reg.fire_due(now + 3_600_000).is_empty());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn daily_job_fires_across_spring_forward_gap() {
+        // Task 404 (M14): on spring-forward day 02:00 does not exist, so
+        // the seeded 02:00 job used to be skipped entirely (`.single()`
+        // returns None on the gap). It must roll forward to the next valid
+        // minute instead. Pinned to America/New_York: spring forward 2026
+        // is March 8, 02:00 -> 03:00 EDT.
+        use chrono::TimeZone;
+        let tz = chrono_tz::America::New_York;
+        // 2026-03-08 01:00 EST, an hour before the gap:
+        let from = tz
+            .with_ymd_and_hms(2026, 3, 8, 1, 0, 0)
+            .single()
+            .unwrap()
+            .timestamp_millis() as u64;
+        let next = next_run_after_in(&tz, Schedule::Daily { hour: 2, min: 0 }, from);
+        // THEN it fires at 03:00 EDT the same day — not tomorrow:
+        let expected = tz
+            .with_ymd_and_hms(2026, 3, 8, 3, 0, 0)
+            .single()
+            .unwrap()
+            .timestamp_millis() as u64;
+        assert_eq!(next, expected);
+    }
+
+    #[test]
+    fn daily_job_fires_at_first_occurrence_on_fall_back() {
+        // Task 404 (M14): on fall-back day 02:00 happens twice, so
+        // `.single()` returns None on the overlap and the job used to be
+        // skipped. It must fire at the FIRST occurrence. Fall back 2026
+        // is November 1, 02:00 EDT then 02:00 EST.
+        use chrono::TimeZone;
+        let tz = chrono_tz::America::New_York;
+        // 2026-11-01 00:30 EDT, before the overlap:
+        let from = tz
+            .with_ymd_and_hms(2026, 11, 1, 0, 30, 0)
+            .single()
+            .unwrap()
+            .timestamp_millis() as u64;
+        let next = next_run_after_in(&tz, Schedule::Daily { hour: 2, min: 0 }, from);
+        // THEN it fires at the first 02:00 (EDT), not tomorrow:
+        let expected = tz
+            .with_ymd_and_hms(2026, 11, 1, 2, 0, 0)
+            .earliest()
+            .unwrap()
+            .timestamp_millis() as u64;
+        assert_eq!(next, expected);
+    }
+
+    #[test]
+    fn corrupt_registry_is_quarantined_not_silently_reseeded() {
+        // Task 404 (M14): a routines file that exists but does not parse
+        // is corrupt, not missing — quarantine it (bytes preserved) and
+        // log loudly instead of silently reseeding and overwriting it.
+        let path = tmp_path("corrupt_quarantine.json");
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(&path, "[[[ not json").unwrap();
+        // WHEN loaded,
+        let reg = RoutineRegistry::load_or_seed(path.clone());
+        // THEN the defaults are seeded (the bot still works):
+        assert!(
+            reg.list()
+                .iter()
+                .any(|r| r.id == "nightly_memory_consolidation")
+        );
+        // AND the corrupt bytes live in a quarantine file (not overwritten):
+        let parent = path.parent().unwrap();
+        let quarantined: Vec<_> = std::fs::read_dir(parent)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with("corrupt_quarantine.json.corrupt-"))
+            .collect();
+        assert_eq!(
+            quarantined.len(),
+            1,
+            "one quarantine file: {:?}",
+            quarantined
+        );
+        let qpath = parent.join(&quarantined[0]);
+        assert_eq!(std::fs::read_to_string(&qpath).unwrap(), "[[[ not json");
+        // AND the routines file itself now holds valid routines again:
+        let data = std::fs::read_to_string(&path).unwrap();
+        let back: Vec<Routine> = serde_json::from_str(&data).expect("reseeded file must parse");
+        assert!(!back.is_empty());
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&qpath);
+    }
+
+    #[test]
+    fn save_is_atomic_and_leaves_no_temp_file() {
+        // Task 404 (M14): save() writes temp + rename, so a crash
+        // mid-write cannot corrupt the registry. After a save there must
+        // be no temp file left behind and the file must parse.
+        let (mut reg, path) = empty_reg("atomic_save.json");
+        reg.routines.push(Routine {
+            id: "atomic".to_string(),
+            name: "Atomic".to_string(),
+            schedule: "every 1h".to_string(),
+            enabled: true,
+            last_run_ms: None,
+            next_run_ms: None,
+            agent_role: String::new(),
+            task: String::new(),
+            backend: default_routine_backend(),
+        });
+        reg.save().expect("save");
+        // THEN no temp file remains:
+        let tmp = path.with_extension("json.tmp");
+        assert!(
+            !tmp.exists(),
+            "temp file must be renamed away, not left behind"
+        );
+        // AND the file parses as valid routines:
+        let data = std::fs::read_to_string(&path).unwrap();
+        let back: Vec<Routine> = serde_json::from_str(&data).expect("saved file must parse");
+        assert_eq!(back.len(), 1);
+        assert_eq!(back[0].id, "atomic");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

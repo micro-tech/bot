@@ -1532,10 +1532,14 @@ pub mod llm {
 
         /// Low-level call to the Ollama `/api/generate` endpoint.
         async fn call_ollama(&self, prompt: &str) -> anyhow::Result<String> {
+            // Task 405 (M15): no backends is an error, never a panic.
+            // A HyEvo cycle with no Ollama configured used to die on
+            // `.expect("No Ollama backends configured")` instead of
+            // reporting the misconfiguration.
             let backend = self
                 .router
                 .default()
-                .expect("No Ollama backends configured");
+                .ok_or_else(|| anyhow::anyhow!("No Ollama backends configured"))?;
 
             let url = format!("{}/api/generate", backend.url);
             let model = backend.model.clone();
@@ -1637,6 +1641,62 @@ pub mod llm {
                     crate::hy_evo::node::NodeResult::Error(format!("Summarize failed: {}", e))
                 }
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::OllamaLlm;
+        use super::OllamaRouter;
+        use crate::hy_evo::reflection::ReflectionLlm;
+        use std::sync::Arc;
+
+        #[tokio::test]
+        async fn no_backends_configured_returns_error_not_panic() {
+            // Task 405 (M15): a HyEvo cycle with no Ollama configured
+            // used to die on `.expect("No Ollama backends configured")`.
+            // It must report the misconfiguration as an error instead.
+            super::super::ensure_crypto_provider();
+            let llm = OllamaLlm::new(Arc::new(OllamaRouter::new()));
+            let err = llm
+                .evolve_code("feedback", "code")
+                .await
+                .expect_err("no backends must be an error, not a panic or success");
+            assert!(
+                err.to_string().contains("No Ollama backends configured"),
+                "error must name the problem: {}",
+                err
+            );
+        }
+
+        #[tokio::test]
+        async fn unreachable_ollama_endpoint_returns_error_not_hang() {
+            // Task 405 (M15): the client is the shared one with a 5 s
+            // connect timeout and a 300 s request timeout (not
+            // `Client::new()`, which has no timeout at all), so a dead
+            // Ollama endpoint fails instead of stalling a HyEvo cycle
+            // forever. The test uses a refused loopback port (127.0.0.1
+            // is in the sandbox's no_proxy list, so the request goes
+            // direct and fails fast): a literal blackhole IP would route
+            // through the sandbox egress proxy, which swallows the
+            // connect timeout and hangs past any test-side backstop.
+            // The timeout itself lives in the shared client
+            // (`build_client`, 5 s connect / 300 s request); this test
+            // proves the call surfaces the failure as an error.
+            super::super::ensure_crypto_provider();
+            let mut router = OllamaRouter::new();
+            router.add_backend("http://127.0.0.1:1".to_string(), "llama3.2".to_string());
+            let llm = OllamaLlm::new(Arc::new(router));
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                llm.evolve_code("feedback", "code"),
+            )
+            .await;
+            let result = result.expect("unreachable endpoint must resolve within 30 s");
+            assert!(
+                result.is_err(),
+                "unreachable endpoint must error, not hang or succeed"
+            );
         }
     }
 }

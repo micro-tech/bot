@@ -6251,7 +6251,7 @@
       "id": 401,
       "title": "M11: Vector memory: no cap or dedupe; each add_fact rewrites the whole pretty JSON and fsyncs",
       "description": "Vector memory: no cap or dedupe; each add_fact rewrites the whole pretty JSON and fsyncs. Where: src/memory/vector.rs:204-220, :289-301. Fix: cap/evict, append-only records. O(n) per insert (768-float vectors, full rewrite + fsync each time).",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "401.1 Cap the vector store and evict old entries, with dedupe so the same fact is not stored twice. 401.2 Move to append-only records so add_fact does not rewrite the whole pretty JSON and fsync on every insert.",
@@ -6260,13 +6260,13 @@
         {
           "id": 401.1,
           "title": "Error checking: vector store cap and eviction cannot lose the newest facts or corrupt the file",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 401.2,
           "title": "Cargo test coverage: cap/eviction, dedupe, append-only insert",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             401.1
           ]
@@ -6274,7 +6274,7 @@
         {
           "id": 401.3,
           "title": "Documentation: vector memory cap, eviction, dedupe, and append-only record format",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             401.2
           ]
@@ -6285,7 +6285,7 @@
       "id": 402,
       "title": "M12: Corrupt support_watch/state.json → with auto_send, replies to all 50 fetched mails",
       "description": "Corrupt support_watch/state.json → with auto_send, replies to all 50 fetched mails. Where: src/support_watch/state.rs:113-118 (corrupt file → empty seen_ids). Fix: quarantine the file, mark the current batch as seen without drafting, log loudly. This is the same shape as the task-312 spam-send event — the watcher now has auto_send = true in the live config, so the blast radius is real. Note: the Nov 24 support bounce loop is stopped (auto_send=false, email reports deactivated); this task fixes the underlying corrupt-state hazard so it cannot recur.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "402.1 On a corrupt state.json, quarantine the file instead of treating it as empty seen_ids. 402.2 Mark the current batch as seen without drafting any replies, and log loudly so the corruption is visible.",
@@ -6294,13 +6294,13 @@
         {
           "id": 402.1,
           "title": "Error checking: corrupt state.json is quarantined and the batch marked seen without drafting — never an empty seen_ids",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 402.2,
           "title": "Cargo test coverage: corrupt state file produces zero drafts and a loud log line",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             402.1
           ]
@@ -6308,7 +6308,7 @@
         {
           "id": 402.3,
           "title": "Documentation: support_watch state corruption handling (quarantine, mark-seen, log)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             402.2
           ]
@@ -6319,7 +6319,7 @@
       "id": 403,
       "title": "M13: Spend: thoughtsTokenCount ignored; check and record are separate steps (race); day key is UTC",
       "description": "Spend: thoughtsTokenCount ignored; check and record are separate steps (race); day key is UTC. Where: src/router/spend.rs:69-70, :100-111, :141, :226/:269. Fix: count thinking tokens (they are billed); reserve before the call; use a local-day key. Prices look stale (inference, not verified).",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "403.1 Count thoughtsTokenCount in spend (thinking tokens are billed). 403.2 Reserve the spend before the call instead of checking and recording as separate steps, closing the race. 403.3 Use a local-day key instead of UTC for the daily bucket.",
@@ -6328,13 +6328,13 @@
         {
           "id": 403.1,
           "title": "Error checking: spend reservation is atomic — check and record cannot race; thinking tokens counted",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 403.2,
           "title": "Cargo test coverage: thinking-token counting, reservation race, local-day key",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             403.1
           ]
@@ -6342,7 +6342,7 @@
         {
           "id": 403.3,
           "title": "Documentation: spend accounting (thinking tokens, reservation, local-day buckets)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             403.2
           ]
@@ -6353,7 +6353,7 @@
       "id": 404,
       "title": "M14: Cron robustness: None treated as due, DST gaps, non-atomic rewrite",
       "description": "Cron robustness: None treated as due, DST gaps, non-atomic rewrite. Where: src/cron/registry.rs:546 (next_run_ms == None, unparseable schedule, treated as due on every tick); :163, :177 (.single() returns None on DST gaps/overlaps, so the seeded 02:00 daily job is skipped on spring-forward day); :535 (non-atomic rewrite every minute — a crash mid-write corrupts the file, and load_or_seed silently reseeds, losing user routines). Fix: treat None as disabled; .earliest() or roll forward to the next valid minute; temp file + rename (as support_watch/state.rs already does).",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "404.1 Treat a None next_run_ms or unparseable schedule as disabled, not due on every tick. 404.2 Use .earliest() or roll forward to the next valid minute so DST gaps/overlaps do not skip the seeded 02:00 daily job on spring-forward day. 404.3 Rewrite the registry atomically via temp file + rename (as support_watch/state.rs already does) so a crash mid-write cannot corrupt it, and do not silently reseed on load.",
@@ -6362,13 +6362,13 @@
         {
           "id": 404.1,
           "title": "Error checking: unparseable schedules are disabled, not due every tick; registry rewrite is atomic",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 404.2,
           "title": "Cargo test coverage: DST spring-forward, unparseable schedule, crash mid-write",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             404.1
           ]
@@ -6376,7 +6376,7 @@
         {
           "id": 404.3,
           "title": "Documentation: cron registry scheduling, DST handling, and atomic persistence",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             404.2
           ]
@@ -6387,7 +6387,7 @@
       "id": 405,
       "title": "M15: Ollama HyEvo/planner client has no timeout and .expect()s",
       "description": "Ollama HyEvo/planner client has no timeout and .expect()s. Where: src/io/ollama/mod.rs:1222, :1232 (Client::new() with no timeout, plus .expect(\"No Ollama backends configured\")). Fix: shared_client() and return an error.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "405.1 Use shared_client() with a timeout for the HyEvo/planner Ollama client instead of Client::new() with no timeout. 405.2 Return an error instead of .expect(\"No Ollama backends configured\") when no backends are configured.",
@@ -6396,13 +6396,13 @@
         {
           "id": 405.1,
           "title": "Error checking: no-backends-configured returns an error, never panics; client has a timeout",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 405.2,
           "title": "Cargo test coverage: no backends returns error; hung endpoint times out",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             405.1
           ]
@@ -6410,7 +6410,7 @@
         {
           "id": 405.3,
           "title": "Documentation: Ollama HyEvo/planner client timeouts and error handling",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             405.2
           ]

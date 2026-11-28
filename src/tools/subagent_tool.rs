@@ -281,7 +281,12 @@ fn prepare_backend(spec: &SpawnSpec) -> Result<LLMBackend, String> {
             .to_string());
     }
     // Spend gate for paid backends (hook for task 217's policy).
-    if let Err(msg) = crate::router::check_api_allowed(&backend) {
+    // Task 403 (M13): reserve, don't just check — the reservation holds
+    // the estimated cost against the cap until the backend records the
+    // actual, so two concurrent spawns cannot both pass the check and
+    // overspend. Called exactly once per spawn (the auto ladder above
+    // only *checks* candidates; reserving there would double-count).
+    if let Err(msg) = crate::router::reserve_api_spend(&backend) {
         return Err(format!("spawn_subagent refused: {}", msg));
     }
     Ok(backend)

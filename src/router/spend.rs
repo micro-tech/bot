@@ -9,6 +9,15 @@
 //! The counter persists to a small JSON state file so a restart doesn't
 //! reset the day's spend. The on-disk format grew in task 236 (per-backend
 //! token counts); legacy `date -> backend -> f64` files are auto-migrated.
+//!
+//! Task 403 (M13) — three fixes:
+//! - Thinking tokens count: Gemini's `thoughtsTokenCount` is billed (at the
+//!   output rate) and is folded into `completion_tokens`.
+//! - Reservation: the pre-call gate (`reserve_api_spend`) atomically checks
+//!   the cap AND reserves the estimated cost, so two concurrent spawns
+//!   cannot both pass the check and overspend. The post-call record settles
+//!   the reservation against the actual cost.
+//! - The day bucket is the operator's LOCAL day, not UTC.
 
 use crate::router::LLMBackend;
 use std::collections::HashMap;
@@ -96,6 +105,10 @@ fn metered_cost_usd(backend: &LLMBackend, usage: &TokenUsage) -> Option<f64> {
 
 /// Extract token counts from a Gemini `generateContent` response.
 /// Returns None when `usageMetadata` is absent (caller falls back to estimate).
+///
+/// Task 403 (M13): `thoughtsTokenCount` is counted too — thinking tokens
+/// are billed (at the output rate, per Google's pricing), so they belong in
+/// `completion_tokens`. Ignoring them under-priced every thinking call.
 pub fn parse_gemini_usage(v: &serde_json::Value) -> Option<TokenUsage> {
     let meta = v.get("usageMetadata")?;
     Some(TokenUsage {
@@ -106,7 +119,11 @@ pub fn parse_gemini_usage(v: &serde_json::Value) -> Option<TokenUsage> {
         completion_tokens: meta
             .get("candidatesTokenCount")
             .and_then(|x| x.as_u64())
-            .unwrap_or(0),
+            .unwrap_or(0)
+            + meta
+                .get("thoughtsTokenCount")
+                .and_then(|x| x.as_u64())
+                .unwrap_or(0),
     })
 }
 
@@ -131,13 +148,34 @@ struct DaySpend {
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 struct SpendState {
-    /// "YYYY-MM-DD" (UTC) -> backend name -> spend detail.
+    /// "YYYY-MM-DD" (local day, task 403) -> backend name -> spend detail.
     days: HashMap<String, HashMap<String, DaySpend>>,
+    /// USD reserved by in-flight paid calls against today's cap (task 403).
+    /// In-memory only — never persisted (`serde(skip)`): a reservation
+    /// lives only between the pre-call check and the post-call record, and
+    /// a restart must not resurrect a stale one.
+    #[serde(skip)]
+    reserved_usd: f64,
+    /// Local day the reservation belongs to (`serde(skip)`). A reservation
+    /// made before midnight must not count against the new day's cap.
+    #[serde(skip)]
+    reserved_day: String,
 }
 
 impl SpendState {
+    /// Local-day bucket key ("YYYY-MM-DD"). Task 403 (M13): the day is the
+    /// operator's local day, not UTC — a UTC bucket split John's evening
+    /// spend across two days and reset the cap at 19:00/20:00 local.
     fn today_key() -> String {
-        chrono::Utc::now().format("%Y-%m-%d").to_string()
+        chrono::Local::now().format("%Y-%m-%d").to_string()
+    }
+
+    /// Drop a stale reservation (made on a previous local day).
+    fn refresh_reserved_day(&mut self) {
+        if self.reserved_day != Self::today_key() {
+            self.reserved_usd = 0.0;
+            self.reserved_day = Self::today_key();
+        }
     }
 
     fn backend_key(backend: &LLMBackend) -> &'static str {
@@ -224,6 +262,14 @@ fn tracker() -> &'static Mutex<SpendState> {
 fn record(backend: &LLMBackend, usd: f64, usage: TokenUsage) {
     let lock = tracker();
     let mut state = lock.lock().unwrap_or_else(|e| e.into_inner());
+    state.refresh_reserved_day();
+    // Settle the reservation this call made at check time (task 403):
+    // the estimate held the cap while the call was in flight; the actual
+    // cost replaces it now. Saturating — a record without a prior reserve
+    // (a direct backend call that skipped the gate) releases nothing.
+    if let Some(est) = est_cost_per_call(backend) {
+        state.reserved_usd = (state.reserved_usd - est).max(0.0);
+    }
     let day = state.day_mut(backend);
     day.usd += usd;
     day.prompt_tokens += usage.prompt_tokens;
@@ -239,6 +285,32 @@ fn record(backend: &LLMBackend, usd: f64, usage: TokenUsage) {
         usd,
         total,
     );
+}
+
+/// Projected paid spend if one more estimated call is made: committed
+/// today + in-flight reservations + one estimate. The cap is judged
+/// against this number (task 403), never against committed spend alone.
+fn projected_total(state: &SpendState, backend: &LLMBackend) -> f64 {
+    state.paid_total_today() + state.reserved_usd + est_cost_per_call(backend).unwrap_or(0.0)
+}
+
+/// Shared over-cap verdict: Err in block mode, warn-and-continue otherwise.
+fn over_cap_verdict(projected: f64, cap: f64, reserved: f64) -> Result<(), String> {
+    let msg = format!(
+        "Daily API spend cap reached (${:.2} of ${:.2} today, ${:.2} reserved).",
+        projected, cap, reserved
+    );
+    if cap_block_on_exceed() {
+        return Err(format!(
+            "{} Paid backends are paused until tomorrow. The job can run on a local backend instead, or raise [router] daily_api_cap_usd.",
+            msg
+        ));
+    }
+    log::warn!(
+        "{} Continuing (warn mode). Set [router] cap_block_on_exceed = true to block instead.",
+        msg
+    );
+    Ok(())
 }
 
 /// Record one backend call with REAL token counts (task 236).
@@ -260,34 +332,52 @@ pub fn note_api_call(backend: &LLMBackend) {
     record(backend, cost, TokenUsage::default());
 }
 
-/// Check whether a paid backend may be used right now.
+/// Check whether a paid backend may be used right now, without reserving.
 /// Default posture (task 236): WARN + log when the cap is hit, continue.
 /// With `[router] cap_block_on_exceed = true`: Err, blocking the call.
 /// Local backends are always allowed.
+/// Task 403 (M13): the verdict counts in-flight reservations too, so a
+/// backend that is reserved-to-the-cap reads as over cap. This is a pure
+/// check — the reservation itself happens in `reserve_api_spend`, which
+/// `prepare_backend` calls exactly once per spawn (the auto ladder may
+/// check several backends before settling on one; reserving in the check
+/// would double-count).
 pub fn check_api_allowed(backend: &LLMBackend) -> Result<(), String> {
     if est_cost_per_call(backend).is_none() {
         return Ok(()); // local backends are always allowed
     }
     let cap = daily_api_cap_usd();
     let lock = tracker();
-    let state = lock.lock().unwrap_or_else(|e| e.into_inner());
-    let total = state.paid_total_today();
-    if total >= cap {
-        let msg = format!(
-            "Daily API spend cap reached (${:.2} of ${:.2} today).",
-            total, cap
-        );
-        if cap_block_on_exceed() {
-            return Err(format!(
-                "{} Paid backends are paused until tomorrow. The job can run on a local backend instead, or raise [router] daily_api_cap_usd.",
-                msg
-            ));
-        }
-        log::warn!(
-            "{} Continuing (warn mode). Set [router] cap_block_on_exceed = true to block instead.",
-            msg
-        );
+    let mut state = lock.lock().unwrap_or_else(|e| e.into_inner());
+    state.refresh_reserved_day();
+    let projected = projected_total(&state, backend);
+    if projected >= cap {
+        return over_cap_verdict(projected, cap, state.reserved_usd);
     }
+    Ok(())
+}
+
+/// Atomically check the cap AND reserve the estimated cost (task 403).
+/// This is the pre-call gate: `prepare_backend` calls it once per spawn.
+/// Before this, check and record were separate steps — two concurrent
+/// calls could both pass the check and both record, overspending the cap.
+/// The reservation holds the estimate against the cap until
+/// `note_api_usage` / `note_api_call` settles the actual cost.
+pub fn reserve_api_spend(backend: &LLMBackend) -> Result<(), String> {
+    if est_cost_per_call(backend).is_none() {
+        return Ok(()); // local backends are always allowed, nothing to reserve
+    }
+    let cap = daily_api_cap_usd();
+    let estimate = est_cost_per_call(backend).unwrap_or(0.0);
+    let lock = tracker();
+    let mut state = lock.lock().unwrap_or_else(|e| e.into_inner());
+    state.refresh_reserved_day();
+    let projected = projected_total(&state, backend);
+    if projected >= cap {
+        return over_cap_verdict(projected, cap, state.reserved_usd);
+    }
+    state.reserved_usd += estimate;
+    save_state(&state);
     Ok(())
 }
 
@@ -332,6 +422,10 @@ pub fn reset_for_tests() {
     let lock = tracker();
     let mut state = lock.lock().unwrap_or_else(|e| e.into_inner());
     *state = SpendState::default();
+    // Reservations are in-memory (serde skip), so the default above
+    // already zeroes them; set the day explicitly for clarity.
+    state.reserved_usd = 0.0;
+    state.reserved_day = SpendState::today_key();
     save_state(&state);
     if let Ok(mut g) = API_CAP_OVERRIDE_USD.lock() {
         *g = None;
@@ -482,6 +576,104 @@ mod tests {
     }
 
     #[test]
+    fn parse_gemini_usage_counts_thinking_tokens() {
+        // Task 403 (M13): thinking tokens are billed (at the output rate),
+        // so they belong in completion_tokens — ignoring them under-priced
+        // every thinking call.
+        // GIVEN usageMetadata with a thoughtsTokenCount:
+        let v = serde_json::json!({
+            "usageMetadata": {
+                "promptTokenCount": 100,
+                "candidatesTokenCount": 50,
+                "thoughtsTokenCount": 1000
+            }
+        });
+        // WHEN parsed:
+        let u = parse_gemini_usage(&v).expect("should parse");
+        // THEN prompt is exact and completion includes the thinking tokens:
+        assert_eq!(u.prompt_tokens, 100);
+        assert_eq!(u.completion_tokens, 50 + 1000);
+
+        // AND the thinking tokens are actually priced (not just counted):
+        let g = lock();
+        let _p = with_test_file(&g);
+        note_api_usage(&LLMBackend::Gemini, u);
+        let spent = paid_spent_today_usd();
+        let expected = (100.0 * 0.10 + 1050.0 * 0.40) / 1_000_000.0;
+        assert!(
+            (spent - expected).abs() < 1e-9,
+            "spent={} expected={}",
+            spent,
+            expected
+        );
+    }
+
+    #[test]
+    fn concurrent_reserves_cannot_overspend_the_cap() {
+        // Task 403 (M13): the race — two concurrent spawns both passing
+        // the check and both recording. The reservation closes it: the
+        // second reserve sees the first one's estimate held against the cap.
+        let g = lock();
+        let _p = with_test_file(&g);
+        // GIVEN a cap that fits exactly one estimated Gemini call ($0.02)
+        // plus a hair, and a second call that would push it over:
+        set_daily_api_cap_usd(0.03);
+        set_cap_block_on_exceed(true);
+        // WHEN the first call reserves:
+        assert!(reserve_api_spend(&LLMBackend::Gemini).is_ok());
+        // THEN a second concurrent reserve is refused (0.02 reserved +
+        // 0.02 estimate = 0.04 > 0.03):
+        let err =
+            reserve_api_spend(&LLMBackend::Gemini).expect_err("second reserve must be refused");
+        assert!(
+            err.contains("cap"),
+            "message should mention the cap: {}",
+            err
+        );
+        // AND settling the first call (actual cost lands) frees the
+        // reservation, so a later call can proceed:
+        note_api_usage(
+            &LLMBackend::Gemini,
+            TokenUsage {
+                prompt_tokens: 100,
+                completion_tokens: 50,
+            },
+        );
+        assert!(reserve_api_spend(&LLMBackend::Gemini).is_ok());
+        reset_for_tests();
+    }
+
+    #[test]
+    fn record_without_reserve_does_not_underflow_reservation() {
+        // A direct backend call that skips the gate still records fine —
+        // settling releases nothing (saturating) instead of underflowing.
+        let g = lock();
+        let _p = with_test_file(&g);
+        note_api_usage(
+            &LLMBackend::Gemini,
+            TokenUsage {
+                prompt_tokens: 100,
+                completion_tokens: 50,
+            },
+        );
+        assert!(paid_spent_today_usd() > 0.0);
+        // AND a later reserve still works (reservation state is sane):
+        assert!(reserve_api_spend(&LLMBackend::Gemini).is_ok());
+        reset_for_tests();
+    }
+
+    #[test]
+    fn day_key_is_the_local_day_not_utc() {
+        // Task 403 (M13): the bucket follows the operator's local day.
+        // (A UTC key split John's evening spend across two days and reset
+        // the cap at 19:00/20:00 local.)
+        assert_eq!(
+            SpendState::today_key(),
+            chrono::Local::now().format("%Y-%m-%d").to_string()
+        );
+    }
+
+    #[test]
     fn parse_ollama_usage_handles_present_and_absent_counts() {
         // GIVEN a response with eval counts:
         let v = serde_json::json!({"prompt_eval_count": 200, "eval_count": 75});
@@ -514,9 +706,10 @@ mod tests {
     fn legacy_state_file_migrates_usd() {
         let g = lock();
         let p = with_test_file(&g);
-        // GIVEN a pre-236 state file (date -> backend -> flat f64):
+        // GIVEN a pre-236 state file (date -> backend -> flat f64), keyed
+        // by the LOCAL day (task 403: the bucket is local, not UTC):
         let legacy = serde_json::json!({
-            chrono::Utc::now().format("%Y-%m-%d").to_string(): {"gemini": 0.06}
+            chrono::Local::now().format("%Y-%m-%d").to_string(): {"gemini": 0.06}
         });
         std::fs::write(&p, serde_json::to_string(&legacy).unwrap()).unwrap();
         // WHEN loaded:

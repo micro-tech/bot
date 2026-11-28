@@ -8,6 +8,14 @@
 //! If no embedding model is reachable, search degrades HONESTLY to
 //! keyword/substring scoring and logs a warning — never silent dummy vectors.
 //! (The old `dummy_embed` ranked by string length. It is gone.)
+//!
+//! Storage (task 401, M11): the file is JSON Lines — one record per line,
+//! appended on every insert, so `add_fact` never rewrites the whole file.
+//! Records are `{"kind":"fact", ...}` or `{"kind":"tombstone","id":N}`.
+//! The store is capped at [`MAX_FACTS`] facts (oldest evicted first, with a
+//! tombstone line so the eviction survives a reload) and deduped by text
+//! (adding the same text twice returns the existing id). Legacy files
+//! holding a single pretty JSON array are migrated to JSONL on first load.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -18,6 +26,24 @@ use std::time::{Duration, Instant};
 use crate::memory::manager::durable_write_json;
 
 pub const VECTOR_FACTS_FILE: &str = "vector_facts.json";
+
+/// Maximum facts retained. Bounds memory and the facts file; the oldest
+/// fact is evicted (with a tombstone record) when the cap is reached.
+/// 768-float embeddings are ~3 KB each in memory, so 1000 facts is a
+/// few MB — generous for a memory aid, small enough to stay fast.
+pub const MAX_FACTS: usize = 1000;
+
+/// Compact the file when tombstones reach this count — keeps the log from
+/// growing forever once the store sits at the cap (every insert evicts one).
+const COMPACT_TOMBSTONE_THRESHOLD: usize = 1000;
+
+/// One line of the JSONL facts file.
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum FactRecord {
+    Fact(Fact),
+    Tombstone { id: u32 },
+}
 
 fn facts_file() -> PathBuf {
     PathBuf::from(
@@ -148,6 +174,9 @@ impl Embedder for OllamaEmbedder {
 pub struct VectorMemory {
     facts: HashMap<u32, Fact>,
     next_id: u32,
+    /// Text -> id, for O(1) dedupe (task 401). Kept in sync with `facts`
+    /// on insert, evict, and load; a text is stored at most once.
+    text_index: HashMap<String, u32>,
     embedder: Box<dyn Embedder + Send + Sync>,
     /// Persistence target; `None` = memory-only (tests).
     file: Option<PathBuf>,
@@ -172,36 +201,107 @@ impl VectorMemory {
         Self {
             facts: HashMap::new(),
             next_id: 0,
+            text_index: HashMap::new(),
             embedder,
             file,
         }
     }
 
+    /// Insert one fact loaded from disk: dedupes by text (first copy wins)
+    /// and advances `next_id` past it.
+    fn insert_loaded(&mut self, fact: Fact) {
+        if self.text_index.contains_key(&fact.text) {
+            return; // pre-dedupe file held the same text twice; keep the first
+        }
+        self.next_id = self.next_id.max(fact.id + 1);
+        self.text_index.insert(fact.text.clone(), fact.id);
+        self.facts.insert(fact.id, fact);
+    }
+
+    /// Drop one fact loaded from disk (tombstone record).
+    fn remove_loaded(&mut self, id: u32) {
+        if let Some(fact) = self.facts.remove(&id) {
+            self.text_index.remove(&fact.text);
+        }
+    }
+
     /// Load persisted facts from `path` (missing/corrupt -> empty, warn).
+    /// Reads the JSONL record format (task 401); a legacy file holding a
+    /// single pretty JSON array is migrated to JSONL on first load.
     pub fn load_from(path: &Path) -> Self {
         let mut mem = Self::with_embedder(
             Box::new(OllamaEmbedder::from_env()),
             Some(path.to_path_buf()),
         );
-        match fs::read_to_string(path) {
-            Ok(content) if !content.trim().is_empty() => {
-                match serde_json::from_str::<Vec<Fact>>(&content) {
-                    Ok(facts) => {
-                        for fact in facts {
-                            mem.next_id = mem.next_id.max(fact.id + 1);
-                            mem.facts.insert(fact.id, fact);
-                        }
+        let content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => return mem, // missing file -> empty
+        };
+        if content.trim().is_empty() {
+            return mem;
+        }
+        // Legacy format: a single pretty JSON array of facts. Parse it,
+        // then rewrite the file as JSONL once so later appends are clean.
+        if content.trim_start().starts_with('[') {
+            match serde_json::from_str::<Vec<Fact>>(&content) {
+                Ok(facts) => {
+                    for fact in facts {
+                        mem.insert_loaded(fact);
                     }
-                    Err(e) => log::warn!(
-                        "vector facts file {} is corrupt ({}); starting empty",
-                        path.display(),
-                        e
-                    ),
+                    mem.enforce_cap_and_compact();
+                    mem.compact_file();
                 }
+                Err(e) => log::warn!(
+                    "vector facts file {} is corrupt ({}); starting empty",
+                    path.display(),
+                    e
+                ),
             }
-            _ => {}
+            return mem;
+        }
+        // JSONL: one record per line.
+        let mut tombstones = 0usize;
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            match serde_json::from_str::<FactRecord>(line) {
+                Ok(FactRecord::Fact(f)) => mem.insert_loaded(f),
+                Ok(FactRecord::Tombstone { id }) => {
+                    tombstones += 1;
+                    mem.remove_loaded(id);
+                }
+                Err(e) => log::warn!(
+                    "vector facts file {} has an unreadable line ({}); skipping it",
+                    path.display(),
+                    e
+                ),
+            }
+        }
+        // Enforce the cap (a pre-cap file may hold more) and compact when
+        // tombstones dominate, so the log does not grow forever.
+        let over_cap = mem.enforce_cap_and_compact();
+        if over_cap || tombstones >= COMPACT_TOMBSTONE_THRESHOLD {
+            mem.compact_file();
         }
         mem
+    }
+
+    /// Evict the oldest facts until the store is at the cap. Returns true
+    /// when anything was evicted (caller rewrites the file compacted).
+    /// Eviction never touches the newest facts.
+    fn enforce_cap_and_compact(&mut self) -> bool {
+        let mut evicted = false;
+        while self.facts.len() > MAX_FACTS {
+            if let Some(&oldest) = self.facts.keys().min() {
+                self.remove_loaded(oldest);
+                evicted = true;
+            } else {
+                break;
+            }
+        }
+        evicted
     }
 
     /// Production constructor: disk-backed at the configured path.
@@ -210,20 +310,32 @@ impl VectorMemory {
     }
 
     pub fn add_fact(&mut self, text: String) -> u32 {
+        // Dedupe: the same text is already stored — return its id, no write.
+        if let Some(&id) = self.text_index.get(&text) {
+            return id;
+        }
         // Empty embedding = "no embedding available"; search() treats it
         // honestly via the keyword path instead of faking a vector.
         let embedding = self.embedder.embed(&text).unwrap_or_default();
+        // Cap: evict the oldest fact first. The eviction is a tombstone
+        // line (append-only), so the newest facts are never lost and the
+        // store stays bounded without a rewrite.
+        if self.facts.len() >= MAX_FACTS
+            && let Some(&oldest) = self.facts.keys().min()
+        {
+            self.remove_loaded(oldest);
+            self.append_record(&FactRecord::Tombstone { id: oldest });
+        }
         let id = self.next_id;
-        self.facts.insert(
-            id,
-            Fact {
-                id,
-                text,
-                embedding,
-            },
-        );
         self.next_id += 1;
-        self.persist();
+        let fact = Fact {
+            id,
+            text: text.clone(),
+            embedding,
+        };
+        self.facts.insert(id, fact.clone());
+        self.text_index.insert(text, id);
+        self.append_record(&FactRecord::Fact(fact));
         id
     }
 
@@ -292,29 +404,68 @@ impl VectorMemory {
             .collect()
     }
 
-    /// Rewrite the whole facts file durably (write temp + rename + fsync).
-    /// Facts are low-frequency writes; durability beats incremental appends.
-    fn persist(&self) {
-        if let Some(path) = &self.file {
-            let facts: Vec<&Fact> = self.facts.values().collect();
-            match serde_json::to_vec_pretty(&facts) {
-                Ok(bytes) => {
-                    if let Err(e) = durable_write_json(path, &bytes) {
-                        log::error!(
-                            "failed to persist vector facts to {}: {}",
-                            path.display(),
-                            e
-                        );
-                    }
-                }
-                Err(e) => log::error!("failed to serialize vector facts: {}", e),
+    /// Append one JSONL record to the facts file: one line + file sync,
+    /// O(1) bytes per insert. The old path rewrote the whole pretty JSON
+    /// and fsynced it on every insert — O(n) per fact.
+    fn append_record(&self, record: &FactRecord) {
+        let Some(path) = &self.file else {
+            return;
+        };
+        let line = match serde_json::to_string(record) {
+            Ok(l) => l,
+            Err(e) => {
+                log::error!("failed to serialize vector fact record: {}", e);
+                return;
             }
+        };
+        use std::io::Write;
+        match std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            Ok(mut f) => {
+                if let Err(e) = writeln!(f, "{}", line).and_then(|_| f.sync_all()) {
+                    log::error!("failed to append vector fact to {}: {}", path.display(), e);
+                }
+            }
+            Err(e) => log::error!("failed to open vector facts file {}: {}", path.display(), e),
+        }
+    }
+
+    /// Rewrite the facts file from scratch as JSONL (live facts only, in
+    /// id order). Used for the one-time legacy migration and for compaction
+    /// when tombstones dominate — NOT on the insert path.
+    fn compact_file(&self) {
+        let Some(path) = &self.file else {
+            return;
+        };
+        let mut facts: Vec<&Fact> = self.facts.values().collect();
+        facts.sort_by_key(|f| f.id);
+        let mut bytes = Vec::new();
+        for fact in facts {
+            if let Ok(line) = serde_json::to_string(&FactRecord::Fact((*fact).clone())) {
+                bytes.extend_from_slice(line.as_bytes());
+                bytes.push(b'\n');
+            }
+        }
+        if let Err(e) = durable_write_json(path, &bytes) {
+            log::error!(
+                "failed to compact vector facts to {}: {}",
+                path.display(),
+                e
+            );
         }
     }
 
     #[cfg(test)]
     fn fact_count(&self) -> usize {
         self.facts.len()
+    }
+
+    #[cfg(test)]
+    fn contains_text(&self, text: &str) -> bool {
+        self.text_index.contains_key(text)
     }
 }
 
@@ -437,6 +588,164 @@ mod tests {
         let results = reloaded.search("my pet", 2);
         assert!(results[0].contains("dog"));
 
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn duplicate_fact_is_deduped() {
+        // GIVEN a fact already stored:
+        let mut mem = VectorMemory::with_embedder(Box::new(two_topic_embedder()), None);
+        let first = mem.add_fact("the dog barked".to_string());
+
+        // WHEN the same text is added again,
+        // THEN the existing id comes back and nothing is stored twice:
+        let second = mem.add_fact("the dog barked".to_string());
+        assert_eq!(first, second);
+        assert_eq!(mem.fact_count(), 1);
+
+        // AND a disk-backed repeat does not append a second line:
+        let path = std::env::temp_dir().join(format!(
+            "helix-vector-test-{}-dedupe.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let mut disk =
+            VectorMemory::with_embedder(Box::new(two_topic_embedder()), Some(path.clone()));
+        disk.add_fact("the dog barked".to_string());
+        disk.add_fact("the dog barked".to_string());
+        let lines = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            lines.lines().count(),
+            1,
+            "duplicate must not append a second record: {:?}",
+            lines
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn store_evicts_oldest_at_cap_and_stays_evicted_after_reload() {
+        // GIVEN a disk-backed memory filled past the cap:
+        let path =
+            std::env::temp_dir().join(format!("helix-vector-test-{}-cap.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        {
+            let mut mem =
+                VectorMemory::with_embedder(Box::new(two_topic_embedder()), Some(path.clone()));
+            for i in 0..(MAX_FACTS + 2) {
+                mem.add_fact(format!("fact number {}", i));
+            }
+            // THEN the store holds exactly the cap, newest facts kept:
+            assert_eq!(mem.fact_count(), MAX_FACTS);
+            assert!(
+                !mem.contains_text("fact number 0"),
+                "oldest fact must be evicted"
+            );
+            assert!(
+                !mem.contains_text("fact number 1"),
+                "second-oldest fact must be evicted too"
+            );
+            assert!(
+                mem.contains_text(&format!("fact number {}", MAX_FACTS + 1)),
+                "newest fact must survive"
+            );
+        }
+        // AND a reload keeps the cap (evicted facts stay evicted):
+        let reloaded = VectorMemory::load_from(&path);
+        assert_eq!(reloaded.fact_count(), MAX_FACTS);
+        assert!(!reloaded.contains_text("fact number 0"));
+        assert!(reloaded.contains_text(&format!("fact number {}", MAX_FACTS + 1)));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn add_fact_appends_instead_of_rewriting() {
+        // GIVEN a disk-backed memory with one fact:
+        let path = std::env::temp_dir().join(format!(
+            "helix-vector-test-{}-append.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let mut mem =
+            VectorMemory::with_embedder(Box::new(two_topic_embedder()), Some(path.clone()));
+        mem.add_fact("the dog barked".to_string());
+        let after_first = std::fs::read_to_string(&path).unwrap();
+
+        // WHEN a second fact is added,
+        // THEN the file grows by appending — the first record is untouched:
+        mem.add_fact("rust ownership".to_string());
+        let after_second = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            after_second.starts_with(&after_first),
+            "second insert must append, not rewrite:\nbefore: {:?}\nafter: {:?}",
+            after_first,
+            after_second
+        );
+        assert_eq!(after_second.lines().count(), 2);
+        // AND every line is a valid JSONL record:
+        for line in after_second.lines() {
+            let rec: FactRecord = serde_json::from_str(line).expect("line must parse");
+            assert!(matches!(rec, FactRecord::Fact(_)));
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn legacy_array_file_migrates_to_jsonl() {
+        // GIVEN a pre-401 file (a single pretty JSON array):
+        let path = std::env::temp_dir().join(format!(
+            "helix-vector-test-{}-legacy.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(
+            &path,
+            r#"[{"id":0,"text":"the dog barked","embedding":[1.0,0.0]},{"id":1,"text":"rust ownership","embedding":[0.0,1.0]}]"#,
+        )
+        .unwrap();
+
+        // WHEN loaded,
+        // THEN the facts survive and the file is now JSONL:
+        let mem = VectorMemory::load_from(&path);
+        assert_eq!(mem.fact_count(), 2);
+        let migrated = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            !migrated.trim_start().starts_with('['),
+            "legacy array must be migrated, got: {:?}",
+            migrated
+        );
+        assert_eq!(migrated.lines().count(), 2);
+
+        // AND a later insert appends cleanly onto the migrated file:
+        let mut mem = mem;
+        mem.embedder = Box::new(two_topic_embedder());
+        mem.add_fact("new fact here".to_string());
+        assert_eq!(mem.fact_count(), 3);
+        let reloaded = VectorMemory::load_from(&path);
+        assert_eq!(reloaded.fact_count(), 3);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn tombstone_lines_are_applied_on_load() {
+        // GIVEN a JSONL file with two facts and a tombstone for one:
+        let path = std::env::temp_dir().join(format!(
+            "helix-vector-test-{}-tombstone.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(
+            &path,
+            "{\"kind\":\"fact\",\"id\":0,\"text\":\"the dog barked\",\"embedding\":[1.0,0.0]}\n\
+             {\"kind\":\"fact\",\"id\":1,\"text\":\"rust ownership\",\"embedding\":[0.0,1.0]}\n\
+             {\"kind\":\"tombstone\",\"id\":0}\n",
+        )
+        .unwrap();
+
+        // WHEN loaded, THEN only the live fact remains:
+        let mut mem = VectorMemory::load_from(&path);
+        assert_eq!(mem.fact_count(), 1);
+        assert_eq!(mem.search("rust", 5), vec!["rust ownership".to_string()]);
         let _ = std::fs::remove_file(&path);
     }
 
