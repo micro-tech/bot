@@ -251,19 +251,42 @@ fn join_drain(handle: std::thread::JoinHandle<(Vec<u8>, bool)>) -> (Vec<u8>, boo
     }
 }
 
-/// Run `command` via `/bin/sh -c` in `workdir`, waiting up to `timeout`.
+/// Build the shell command for this platform (M5, task 395).
+/// Unix: `/bin/sh -c <command>`. Windows: `cmd /C <command>`
+/// (`cmd.exe` ships with every Windows 11; `/bin/sh` does not exist
+/// there, so the old unconditional `/bin/sh` failed outright).
+fn build_shell_command(command: &str) -> Command {
+    #[cfg(unix)]
+    {
+        let mut cmd = Command::new("/bin/sh");
+        cmd.arg("-c").arg(command);
+        cmd
+    }
+    #[cfg(not(unix))]
+    {
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/C").arg(command);
+        cmd
+    }
+}
+
+/// Run `command` via a shell in `workdir`, waiting up to `timeout`.
 /// The child gets its own process group so a timeout kills the whole tree.
 /// stdin is /dev/null (no TTY — interactive prompts fail fast).
+/// M5 (task 395): Unix uses `/bin/sh -c`; Windows uses `cmd /C`
+/// (the old code spawned `/bin/sh` unconditionally, which does not
+/// exist on Windows 11, so the tool failed outright there). The timeout
+/// path kills the child directly on Windows (`child.kill()`); a Job
+/// Object for whole-tree kill on Windows is a follow-up (it needs the
+/// `windows` crate, not currently a dependency).
 fn spawn_and_wait(
     command: &str,
     workdir: &Path,
     timeout: Duration,
     cap: usize,
 ) -> std::io::Result<String> {
-    let mut cmd = Command::new("/bin/sh");
-    cmd.arg("-c")
-        .arg(command)
-        .current_dir(workdir)
+    let mut cmd = build_shell_command(command);
+    cmd.current_dir(workdir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -282,6 +305,10 @@ fn spawn_and_wait(
     }
 
     let mut child = cmd.spawn()?;
+    // `pid` is only read by the Unix `kill_tree` call below; on
+    // Windows the timeout path uses `child.kill()` instead, so
+    // binding it unconditionally trips `-D unused-variables`.
+    #[cfg(unix)]
     let pid = child.id();
 
     // Drain pipes on threads: a chatty child must never block on full pipes.
@@ -313,6 +340,7 @@ fn spawn_and_wait(
             None => {
                 if start.elapsed() >= timeout {
                     timed_out = true;
+                    #[cfg(unix)]
                     kill_tree(pid);
                     #[cfg(not(unix))]
                     let _ = child.kill();
@@ -445,6 +473,33 @@ mod tests {
         let base = std::env::current_dir().unwrap().canonicalize().unwrap();
         assert_eq!(resolve_workdir(&cfg, None).unwrap(), base);
         assert_eq!(resolve_workdir(&cfg, Some("")).unwrap(), base);
+    }
+
+    // M5 (task 395): the shell binary is platform-specific — /bin/sh
+    // on Unix, cmd /C on Windows. Assert the current platform picks
+    // the right one (this test runs on the host platform).
+    #[test]
+    fn build_shell_command_uses_platform_shell() {
+        let cmd = build_shell_command("echo hi");
+        let program = cmd.get_program().to_string_lossy().to_string();
+        #[cfg(unix)]
+        assert!(
+            program.ends_with("/bin/sh") || program == "/bin/sh",
+            "got: {program}"
+        );
+        #[cfg(not(unix))]
+        assert!(
+            program.eq_ignore_ascii_case("cmd") || program.to_lowercase().ends_with("cmd.exe"),
+            "got: {program}"
+        );
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+        #[cfg(unix)]
+        assert_eq!(args, vec!["-c", "echo hi"]);
+        #[cfg(not(unix))]
+        assert_eq!(args, vec!["/C", "echo hi"]);
     }
 
     #[test]

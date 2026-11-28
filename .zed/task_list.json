@@ -5911,7 +5911,7 @@
       "id": 391,
       "title": "M1: WS connection spawns OS thread + bus subscriber never removed",
       "description": "Each WS connection spawns an OS thread and a bus subscriber that is never removed. Where: src/io/web_server/mod.rs:1012-1013 + src/bus/mod.rs:88-94. Fix: one subscriber at startup, fan out via broadcast, add Bus::unsubscribe. Subscribers grow with every reconnect (worse on Starlink), and with N tabs every message is duplicated N times.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "391.1 One subscriber at startup that fans out to all WS connections via broadcast, instead of one subscriber per connection. 391.2 Add Bus::unsubscribe and remove the subscriber when a WS connection closes, so reconnects do not accumulate subscribers. 391.3 Verify no message duplication with N tabs and repeated reconnects.",
@@ -5920,13 +5920,13 @@
         {
           "id": 391.1,
           "title": "Error checking: subscriber lifecycle — unsubscribe on WS close, no leaked subscriber on abrupt disconnect",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 391.2,
           "title": "Cargo test coverage: reconnect loop does not grow subscribers; N tabs receive each message once",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             391.1
           ]
@@ -5934,7 +5934,7 @@
         {
           "id": 391.3,
           "title": "Documentation: bus subscriber lifecycle (one startup subscriber, broadcast fan-out, unsubscribe on close)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             391.2
           ]
@@ -5945,7 +5945,7 @@
       "id": 392,
       "title": "M2: Config parse failure silently drops auth_token and sets tls_enabled: true",
       "description": "Config parse failure silently drops auth_token (auth off) and sets tls_enabled: true. Where: src/io/web_server/mod.rs:190 (unwrap_or_else fallback, contradicting the serde default). Fix: log the error. Read [web] from a toml::Value or make the tables #[serde(default)].",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "392.1 Log the config parse error instead of silently falling back, so a bad [web] section is visible. 392.2 Read [web] from a toml::Value or make the tables #[serde(default)] so a parse failure cannot silently drop auth_token or flip tls_enabled.",
@@ -5954,13 +5954,13 @@
         {
           "id": 392.1,
           "title": "Error checking: log config parse failures; no silent fallback that drops auth_token or flips tls_enabled",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 392.2,
           "title": "Cargo test coverage: malformed [web] section keeps auth_token and tls_enabled; error is surfaced",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             392.1
           ]
@@ -5968,7 +5968,7 @@
         {
           "id": 392.3,
           "title": "Documentation: [web] config parsing and fallback behaviour",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             392.2
           ]
@@ -5979,7 +5979,7 @@
       "id": 393,
       "title": "M3: Prompt-injection wrapper and shingle handling",
       "description": "Prompt-injection wrapper and shingle handling. Where: src/security.rs:142 (content containing </untrusted-data> closes the wrapper early); src/security.rs:83, :87 (shingles only cover the first 2000 chars; eviction from a plain HashSet removes shingles still needed by a newer duplicate). Fix: escape or neutralise the delimiters inside content; raise or remove the shingle cap, and reference-count shingles.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "393.1 Escape or neutralise the </untrusted-data> delimiter inside content so it cannot close the wrapper early. 393.2 Raise or remove the shingle cap and reference-count shingles so eviction does not remove shingles still needed by a newer duplicate; cover the full content, not just the first 2000 chars.",
@@ -5988,13 +5988,13 @@
         {
           "id": 393.1,
           "title": "Error checking: delimiter escaping is fail-closed — embedded delimiters cannot close the wrapper",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 393.2,
           "title": "Cargo test coverage: embedded-delimiter content and long-content shingle retention",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             393.1
           ]
@@ -6002,7 +6002,7 @@
         {
           "id": 393.3,
           "title": "Documentation: prompt-injection wrapper delimiters and shingle retention rules",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             393.2
           ]
@@ -6013,7 +6013,7 @@
       "id": 394,
       "title": "M4: Web UI hardening (stored XSS, hardcoded WS port, voice body limit, cert SANs)",
       "description": "Web UI hardening (four small items, one subsystem). Where: src/io/web_server/static/index.html:1571 (stored XSS — supportEsc does not escape \\, so a crafted inbound-email to breaks out of the inline onclick; d.id is not escaped); :1630 (WS URL hardcodes :8443); src/io/web_server/mod.rs:2172 (10 MB voice limit unreachable — axum's default 2 MB body limit applies first); src/io/web_server/mod.rs:315, :2311 (agent card advertises 127.0.0.1 / 0.0.0.0, but the cert only covers localhost). Fix: use addEventListener + dataset with no inline handlers; use location.host for the WS URL; DefaultBodyLimit::max(10 MiB) on the voice route; add IP SANs and make the public URL configurable.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "394.1 Replace inline onclick handlers with addEventListener + dataset, and escape \\ and d.id in supportEsc so a crafted inbound-email address cannot break out (stored XSS). 394.2 Build the WS URL from location.host instead of hardcoding :8443. 394.3 Set DefaultBodyLimit::max(10 MiB) on the voice route so the 10 MB limit is reachable past axum's default 2 MB body limit. 394.4 Add IP SANs to the cert and make the public URL configurable instead of advertising 127.0.0.1 / 0.0.0.0.",
@@ -6022,13 +6022,13 @@
         {
           "id": 394.1,
           "title": "Error checking: supportEsc escapes backslash and id; no inline handlers for untrusted email content",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 394.2,
           "title": "Cargo test coverage: crafted email address cannot break out; WS URL and voice body limit behave",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             394.1
           ]
@@ -6036,7 +6036,7 @@
         {
           "id": 394.3,
           "title": "Documentation: web UI hardening (event handlers, WS URL, voice limit, cert SANs / public URL)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             394.2
           ]
@@ -6047,7 +6047,7 @@
       "id": 395,
       "title": "M5: Shell tool and chat-command executor: Windows + allowlist gaps",
       "description": "Shell tool and chat-command executor: Windows + allowlist gaps. Where: src/tools/shell_tool.rs:231 (Command::new(\"/bin/sh\") — unusable on Windows 11); src/chat_command/executor.rs:26 (allowlisted hostname can set the hostname as root; cat/grep/tail can read .env, config.toml, ~/.ssh; tail -f hangs the tick). Fix: cfg(windows) branch using cmd /C or powershell -NoProfile -Command + Job Object; arg-less hostname, directory allowlist, reject -f. Note: Task 306 (ASUS allowlist + tests) is done — but that is the ASUS-side allowlist, not these executor arg-validation gaps.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "395.1 Add a cfg(windows) branch for the shell tool using cmd /C or powershell -NoProfile -Command + Job Object, instead of /bin/sh. 395.2 Harden the chat-command executor allowlist: arg-less hostname, a directory allowlist so cat/grep/tail cannot read .env, config.toml or ~/.ssh, and reject -f so tail -f cannot hang the tick.",
@@ -6056,13 +6056,13 @@
         {
           "id": 395.1,
           "title": "Error checking: executor rejects disallowed args and paths; Windows shell branch fails cleanly, not by spawning /bin/sh",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 395.2,
           "title": "Cargo test coverage: hostname arg-less, directory allowlist, tail -f rejected, Windows shell branch",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             395.1
           ]
@@ -6070,7 +6070,7 @@
         {
           "id": 395.3,
           "title": "Documentation: shell tool and chat-command executor allowlist rules (Windows + Unix)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             395.2
           ]

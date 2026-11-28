@@ -5,7 +5,7 @@ use crate::utils::error_log_path;
 use axum::{
     Router,
     extract::{
-        Multipart, Path as AxumPath, State, WebSocketUpgrade,
+        DefaultBodyLimit, Multipart, Path as AxumPath, State, WebSocketUpgrade,
         ws::{Message as WsMessage, WebSocket},
     },
     http::{HeaderMap, StatusCode, Uri, header, uri::Authority},
@@ -68,6 +68,46 @@ struct AppState {
     /// the 5-minute TTL sweep if the backend never answers). Drives the
     /// per-backend working/idle indicator in the agent_status snapshot.
     inflight: Arc<Mutex<HashMap<u64, (String, u64)>>>,
+    /// M1 (task 391): once-guard for the single bus→broadcast forwarder
+    /// (see ensure_web_bus_forwarder). Exactly one forwarder per AppState,
+    /// ever — the old code spawned one per WS connection, each subscribing
+    /// to the bus and never unsubscribing, so subscribers grew with every
+    /// reconnect. The guard is per-AppState (not a process static) because
+    /// tests build their own Bus/AppState per test.
+    bus_forwarder_once: Arc<std::sync::OnceLock<()>>,
+}
+
+impl AppState {
+    /// Install the single bus→broadcast forwarder for "web_interface"
+    /// (M1, task 391), exactly once per AppState. Called from
+    /// start_web_server (production startup) AND from handle_ws (so it
+    /// also exists when a Router is built without start_web_server, as
+    /// tests do). The subscription is made synchronously inside the
+    /// once-guard, before this returns, so a bus publish from handle_ws
+    /// later in the same connection cannot race the forwarder's first
+    /// poll. The forwarding loop unsubscribes if it ever exits.
+    fn ensure_web_bus_forwarder(&self) {
+        let bus = self.bus.clone();
+        let msg_tx = self.msg_tx.clone();
+        let inflight = self.inflight.clone();
+        let backends_json = self.backends_json.clone();
+        self.bus_forwarder_once.get_or_init(|| {
+            let (mut rx, sub_id) = bus.subscribe_with_id("web_interface");
+            let bus_for_unsub = bus.clone();
+            tokio::spawn(async move {
+                while let Some(msg) = rx.recv().await {
+                    let (out, dirty) = bridge_out_message(&msg, &inflight);
+                    if dirty {
+                        let _ = msg_tx.send(build_agent_status(&backends_json, &inflight));
+                    }
+                    if let Some(out) = out {
+                        let _ = msg_tx.send(out);
+                    }
+                }
+                bus_for_unsub.unsubscribe(sub_id);
+            });
+        });
+    }
 }
 
 // ── Config structs ────────────────────────────────────────────────────────────
@@ -82,6 +122,9 @@ struct Config {
     #[allow(dead_code)]
     helix: HelixConfig,
     ollama: Vec<OllamaConfig>,
+    // M2 (task 392): a missing [web] table gets defaults instead of
+    // failing the whole parse (which used to silently drop auth_token).
+    #[serde(default)]
     web: WebConfig,
     #[allow(dead_code)]
     heartbeat: HeartbeatConfig,
@@ -110,7 +153,10 @@ struct OllamaConfig {
 struct WebConfig {
     // Schema-only: the bind port arrives via the start_web_server() argument,
     // resolved by main.rs from the live config file — not from this parse.
+    // M2 (task 392): a default so a [web] table without `port` still
+    // deserializes (needed for the per-section salvage in parse_config).
     #[allow(dead_code)]
+    #[serde(default = "default_port")]
     port: u16,
     #[serde(default)]
     tls_enabled: bool,
@@ -127,6 +173,31 @@ struct WebConfig {
     /// Empty = no auth (startup warns loudly).
     #[serde(default)]
     auth_token: String,
+    /// Public base URL advertised in the A2A agent card (M4, task 394).
+    /// When set, the card uses this instead of scheme://bind:port — the
+    /// bind address (127.0.0.1 / 0.0.0.0) is not a connectable URL and
+    /// is not covered by the self-signed cert (which covers localhost).
+    /// Empty = derive from bind (loopback/wildcard bind → localhost).
+    #[serde(default)]
+    public_url: String,
+}
+
+impl Default for WebConfig {
+    fn default() -> Self {
+        Self {
+            port: default_port(),
+            tls_enabled: true,
+            cert_path: default_cert_path(),
+            key_path: default_key_path(),
+            bind: default_bind(),
+            auth_token: String::new(),
+            public_url: String::new(),
+        }
+    }
+}
+
+fn default_port() -> u16 {
+    8443
 }
 
 fn default_bind() -> String {
@@ -183,6 +254,51 @@ impl Default for LoggingConfig {
     }
 }
 
+/// Parse the raw TOML config string into [`Config`].
+///
+/// M2 (task 392): the old code fell back to hardcoded defaults on ANY
+/// parse error — silently dropping `auth_token` (auth off) and forcing
+/// `tls_enabled: true`. A typo in an unrelated section (e.g. `[ollama]`)
+/// must not disable auth. So:
+/// 1. A full-parse failure is logged LOUDLY (stderr + log file), never silent.
+/// 2. The `[web]` table is salvaged separately from a `toml::Value`
+///    parse, so a bad section elsewhere cannot nuke the web settings.
+/// 3. Only when the `[web]` table itself is unusable do we fall back to
+///    `WebConfig::default()` — and that fallback is logged too.
+fn parse_config(config_str: &str) -> Config {
+    match toml::from_str::<Config>(config_str) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!(
+                "[web] ERROR: config parse failed ({e}); salvaging [web] per-section — a bad config must never silently disable auth"
+            );
+            log::error!("config parse failed ({e}); salvaging [web] per-section");
+            let web = toml::from_str::<toml::Value>(config_str)
+                .ok()
+                .and_then(|v| v.get("web").cloned())
+                .and_then(|w| w.try_into::<WebConfig>().ok())
+                .unwrap_or_else(|| {
+                    eprintln!(
+                        "[web] ERROR: [web] table unusable too; using defaults (auth_token empty — auth OFF, startup will warn)"
+                    );
+                    log::error!("[web] table unusable; using WebConfig defaults (auth off)");
+                    WebConfig::default()
+                });
+            Config {
+                helix: HelixConfig {
+                    name: "Helix".to_string(),
+                },
+                ollama: vec![],
+                web,
+                heartbeat: HeartbeatConfig {
+                    interval_seconds: 300,
+                },
+                logging: LoggingConfig::default(),
+            }
+        }
+    }
+}
+
 // ── Server entry-point ────────────────────────────────────────────────────────
 
 pub async fn start_web_server(
@@ -200,25 +316,9 @@ pub async fn start_web_server(
     } else {
         config_path
     };
-    // Parse config (with defaults)
-    let parsed_cfg: Config = toml::from_str(&config_str).unwrap_or_else(|_| Config {
-        helix: HelixConfig {
-            name: "Helix".to_string(),
-        },
-        ollama: vec![],
-        web: WebConfig {
-            port: 8443,
-            tls_enabled: true,
-            cert_path: default_cert_path(),
-            key_path: default_key_path(),
-            bind: default_bind(),
-            auth_token: String::new(),
-        },
-        heartbeat: HeartbeatConfig {
-            interval_seconds: 300,
-        },
-        logging: LoggingConfig::default(),
-    });
+    // Parse config (with defaults). M2 (task 392): a parse failure must
+    // never silently drop auth_token (auth off) — see parse_config.
+    let parsed_cfg: Config = parse_config(&config_str);
 
     let tls_enabled = parsed_cfg.web.tls_enabled;
     let cert_path = &parsed_cfg.web.cert_path;
@@ -256,7 +356,7 @@ pub async fn start_web_server(
 
     // Ensure certificates exist (generate self-signed if missing)
     if tls_enabled {
-        ensure_certificates(cert_path, key_path)?;
+        ensure_certificates(cert_path, key_path, bind_ip)?;
     }
 
     // Build backend list...
@@ -326,7 +426,7 @@ pub async fn start_web_server(
     // same middleware as the other mutating endpoints. Tasks execute on the
     // same agent loop as ACP (one loop, multiple protocol surfaces).
     let scheme = if tls_enabled { "https" } else { "http" };
-    let a2a_base_url = format!("{}://{}:{}", scheme, bind_ip, port);
+    let a2a_base_url = agent_card_base_url(&parsed_cfg.web.public_url, scheme, bind_ip, port);
     let a2a_max_steps = crate::config::acp::AcpConfig::load_from_toml(&config_str).max_steps;
     let a2a_state = crate::a2a::A2aState::new(a2a_base_url, a2a_max_steps);
     let a2a_public = Router::new()
@@ -393,6 +493,7 @@ pub async fn start_web_server(
         auth_token,
         routines,
         inflight: Arc::new(Mutex::new(HashMap::new())),
+        bus_forwarder_once: Arc::new(std::sync::OnceLock::new()),
     };
 
     // Task 230: sub-agent registry → WS status re-broadcast. Installed once
@@ -407,6 +508,18 @@ pub async fn start_web_server(
                 .send(agent_status_snapshot(&listener_state));
         }));
     }
+
+    // M1 (task 391): ONE bus subscription for "web_interface", installed
+    // once via the AppState once-guard (not per-connection), fanning out
+    // to all WS clients via the broadcast channel. The old code spawned
+    // a bus_forward_task per WS connection, each subscribing to the bus
+    // and never unsubscribing — subscribers grew with every reconnect
+    // (worse on Starlink), and with N tabs each bus message was bridged
+    // N times into the broadcast, so every client received it N times.
+    // One forwarder: one subscription, one copy per message. The same
+    // guard is also consulted by handle_ws, so the forwarder exists even
+    // when a Router is built without start_web_server (tests do that).
+    state.ensure_web_bus_forwarder();
 
     // Task 230: reap in-flight entries whose backend never answered (5-minute
     // TTL), so a lost response can't wedge a backend on "working" forever.
@@ -437,6 +550,16 @@ pub async fn start_web_server(
     // Task 240: mutating / auth-gated endpoints live on a protected sub-router
     // with require_web_token middleware, instead of inline http_token_ok
     // checks in each handler (eliminates the forgotten-check bug class).
+    // M4 (task 394): voice uploads are up to 10 MB (MAX_UPLOAD_BYTES in
+    // voice_transcribe), but axum's default body limit is 2 MB — a 10 MB
+    // upload was rejected before the handler ever ran. The voice routes
+    // carry DefaultBodyLimit::max(10 MiB) so the 10 MB limit is reachable.
+    // The sub-router merges into `protected` before its route_layer, so
+    // the voice endpoints stay behind require_web_token.
+    let voice = Router::new()
+        .route("/api/voice/speak", post(voice_speak))
+        .route("/api/voice/transcribe", post(voice_transcribe))
+        .layer(DefaultBodyLimit::max(10 * 1024 * 1024));
     let protected = Router::new()
         .route("/logs/chat/clear", post(clear_chat_log))
         .route("/logs/error/clear", post(clear_error_log))
@@ -450,8 +573,7 @@ pub async fn start_web_server(
         .route("/support/discard", post(support_discard))
         // Tasks 267/268: voice-box proxy endpoints (browser -> Helix ->
         // voice box), auth-gated like the rest of this router.
-        .route("/api/voice/speak", post(voice_speak))
-        .route("/api/voice/transcribe", post(voice_transcribe))
+        .merge(voice)
         // Task 275: non-sensitive voice UI knobs (hotkey, autoplay default).
         .route("/api/voice/config", get(voice_config))
         // Tasks 350/355: minimal 2FA affordance — one-shot screenshot +
@@ -814,6 +936,13 @@ fn bridge_out_message(
 }
 
 async fn handle_ws(socket: WebSocket, state: AppState) {
+    // M1 (task 391): make sure the single bus→broadcast forwarder is
+    // running. In production start_web_server already installed it, but
+    // a Router built without start_web_server (tests) would otherwise
+    // have no forwarder, and the bus replies handle_ws publishes (e.g.
+    // config_status errors) would never reach the client.
+    state.ensure_web_bus_forwarder();
+
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
     // Subscribe to the CPU→Web broadcast channel
@@ -910,27 +1039,14 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
         }
     });
 
-    // 6. Bus → WebSocket forwarder (H6/task 383: the bus is now
-    // tokio::sync::mpsc, so this subscribes and recv().await's directly —
-    // the std::thread bridge this replaced existed only because std recv()
-    // blocked a runtime worker).
-    let bus_clone = state.bus.clone();
-    let msg_tx_clone = state.msg_tx.clone();
-    let inflight_bridge = state.inflight.clone();
-    let backends_bridge = state.backends_json.clone();
-    let msg_tx_bridge = state.msg_tx.clone();
-    let bus_forward_task = tokio::spawn(async move {
-        let mut rx = bus_clone.subscribe("web_interface");
-        while let Some(msg) = rx.recv().await {
-            let (out, dirty) = bridge_out_message(&msg, &inflight_bridge);
-            if dirty {
-                let _ = msg_tx_bridge.send(build_agent_status(&backends_bridge, &inflight_bridge));
-            }
-            if let Some(out) = out {
-                let _ = msg_tx_clone.send(out);
-            }
-        }
-    });
+    // 6. Bus → WebSocket forwarder: M1 (task 391) moved this to a SINGLE
+    // forwarder installed once at startup (start_web_server), which bridges
+    // bus "web_interface" messages into the broadcast channel. The old
+    // per-connection forwarder subscribed to the bus on every WS connect
+    // and never unsubscribed (leaked subscribers), and bridged each bus
+    // message once per connection (N tabs = N copies). WS clients now
+    // receive bus traffic through their broadcast subscription (step 5's
+    // `recv`), with no per-connection bus subscription at all.
 
     // 7. No longer needed — CPU already publishes to "web_interface" which
     //    the bus_forward_task above now correctly handles.
@@ -1623,7 +1739,6 @@ async fn handle_ws(socket: WebSocket, state: AppState) {
     }
 
     recv_task.abort();
-    bus_forward_task.abort();
     cpu_forward_task.abort();
 }
 
@@ -2405,6 +2520,30 @@ async fn ops_restart(State(_state): State<AppState>) -> impl IntoResponse {
     Json(json!({"status": "restart_initiated", "via": via})).into_response()
 }
 
+/// Base URL advertised in the A2A agent card (M4, task 394).
+/// When `[web] public_url` is set, it wins — the operator knows the URL
+/// clients actually use. Otherwise the bind address is used, except a
+/// loopback (127.0.0.1) or wildcard (0.0.0.0) bind advertises
+/// `localhost` instead: 0.0.0.0 is not a connectable address, and the
+/// self-signed cert covers localhost (plus 127.0.0.1 as an IP SAN).
+fn agent_card_base_url(
+    public_url: &str,
+    scheme: &str,
+    bind_ip: std::net::IpAddr,
+    port: u16,
+) -> String {
+    let trimmed = public_url.trim().trim_end_matches('/');
+    if !trimmed.is_empty() {
+        return trimmed.to_string();
+    }
+    let host = if bind_ip.is_loopback() || bind_ip.is_unspecified() {
+        "localhost".to_string()
+    } else {
+        bind_ip.to_string()
+    };
+    format!("{}://{}:{}", scheme, host, port)
+}
+
 /// Returns true if a file exists AND contains valid PEM data (not a placeholder).
 fn is_valid_pem(path: &str, expected_header: &str) -> bool {
     std::fs::read_to_string(path)
@@ -2414,7 +2553,19 @@ fn is_valid_pem(path: &str, expected_header: &str) -> bool {
 
 /// Generate self-signed certificate + key if they are missing or contain
 /// placeholder content (not real PEM data).
-fn ensure_certificates(cert_path: &str, key_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+/// M4 (task 394): the cert covers `localhost` AND the loopback IP
+/// (127.0.0.1) AND the bind IP when it is a real address — the old
+/// localhost-only cert did not cover the 127.0.0.1 / 0.0.0.0 the agent
+/// card advertised, so TLS verification failed for IP-based clients.
+/// The wildcard bind (0.0.0.0) is not a SAN — it is not an address a
+/// client connects to. NOTE: regenerating only happens when the cert
+/// is missing/invalid; an existing cert keeps its old SANs until it
+/// is deleted and regenerated.
+fn ensure_certificates(
+    cert_path: &str,
+    key_path: &str,
+    bind_ip: std::net::IpAddr,
+) -> Result<(), Box<dyn std::error::Error>> {
     let cert_ok = is_valid_pem(cert_path, "-----BEGIN CERTIFICATE-----");
     let key_ok = is_valid_pem(key_path, "-----BEGIN");
 
@@ -2425,7 +2576,16 @@ fn ensure_certificates(cert_path: &str, key_path: &str) -> Result<(), Box<dyn st
     log::info!("TLS cert/key missing or invalid — generating self-signed certificate");
 
     let key_pair = rcgen::KeyPair::generate()?;
-    let params = rcgen::CertificateParams::new(vec!["localhost".to_string()])?;
+    let mut params = rcgen::CertificateParams::new(vec!["localhost".to_string()])?;
+    let localhost_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1));
+    params
+        .subject_alt_names
+        .push(rcgen::SanType::IpAddress(localhost_ip));
+    if bind_ip != localhost_ip && !bind_ip.is_unspecified() {
+        params
+            .subject_alt_names
+            .push(rcgen::SanType::IpAddress(bind_ip));
+    }
     let cert = params.self_signed(&key_pair)?;
 
     std::fs::write(cert_path, cert.pem())?;
@@ -2771,6 +2931,78 @@ mod tests {
             toml::from_str("port = 8443\nbind = \"0.0.0.0\"\nauth_token = \"s3cret\"").unwrap();
         assert_eq!(cfg.bind, "0.0.0.0");
         assert_eq!(cfg.auth_token, "s3cret");
+    }
+
+    // ── M2 (task 392): config parse must not silently drop auth ──────────
+
+    #[test]
+    fn test_parse_config_salvages_web_when_other_section_is_bad() {
+        // GIVEN a config whose [ollama] section is malformed (bad type)
+        // but whose [web] section is good and carries an auth token:
+        let cfg_str = "[helix]\nname = \"Helix\"\n\n\
+                       [ollama]\nname = 123\n\n\
+                       [web]\nport = 8443\ntls_enabled = false\nauth_token = \"s3cret\"\n";
+        // WHEN parsed:
+        let cfg = parse_config(cfg_str);
+        // THEN the [web] settings survive — auth is NOT silently dropped:
+        assert_eq!(cfg.web.auth_token, "s3cret");
+        assert!(!cfg.web.tls_enabled);
+    }
+
+    #[test]
+    fn test_parse_config_bad_web_falls_back_to_defaults() {
+        // GIVEN a config whose [web] table itself is malformed:
+        let cfg_str = "[helix]\nname = \"Helix\"\n\n\
+                       [web]\nport = \"not-a-number\"\n";
+        // WHEN parsed:
+        let cfg = parse_config(cfg_str);
+        // THEN we fall back to defaults (auth off, TLS on) without panicking:
+        assert!(cfg.web.auth_token.is_empty());
+        assert!(cfg.web.tls_enabled);
+    }
+
+    #[test]
+    fn test_parse_config_valid_config_parses_whole() {
+        // GIVEN a fully valid config:
+        let cfg_str = "[helix]\nname = \"Helix\"\n\n\
+                       [web]\nport = 8443\ntls_enabled = true\nauth_token = \"tok123\"\nbind = \"0.0.0.0\"\n";
+        // WHEN parsed:
+        let cfg = parse_config(cfg_str);
+        // THEN everything is as configured:
+        assert_eq!(cfg.web.auth_token, "tok123");
+        assert!(cfg.web.tls_enabled);
+        assert_eq!(cfg.web.bind, "0.0.0.0");
+    }
+
+    // ── M4 (task 394): agent card URL ─────────────────────────────────────
+
+    #[test]
+    fn test_agent_card_base_url_prefers_public_url() {
+        // GIVEN a configured public URL, it wins over the bind address.
+        let url = agent_card_base_url(
+            "https://helix.example.com:8443/",
+            "https",
+            "0.0.0.0".parse().unwrap(),
+            8443,
+        );
+        assert_eq!(url, "https://helix.example.com:8443");
+    }
+
+    #[test]
+    fn test_agent_card_base_url_loopback_and_wildcard_use_localhost() {
+        // GIVEN no public URL and a loopback or wildcard bind, the card
+        // advertises localhost (cert-valid, and 0.0.0.0 is not connectable).
+        let loopback = agent_card_base_url("", "https", "127.0.0.1".parse().unwrap(), 8443);
+        assert_eq!(loopback, "https://localhost:8443");
+        let wildcard = agent_card_base_url("", "http", "0.0.0.0".parse().unwrap(), 8080);
+        assert_eq!(wildcard, "http://localhost:8080");
+    }
+
+    #[test]
+    fn test_agent_card_base_url_specific_ip_is_used() {
+        // GIVEN a specific LAN bind IP and no public URL, the IP is used.
+        let url = agent_card_base_url("", "https", "192.168.1.168".parse().unwrap(), 8443);
+        assert_eq!(url, "https://192.168.1.168:8443");
     }
 
     // ── config redaction (task 184) ─────────────────────────────────────────
@@ -3462,6 +3694,7 @@ mod tests {
             auth_token: auth_token.to_string(),
             routines,
             inflight: Arc::new(Mutex::new(HashMap::new())),
+            bus_forwarder_once: Arc::new(std::sync::OnceLock::new()),
         };
         Router::new()
             .route("/ops/update", post(ops_update))
@@ -3706,6 +3939,7 @@ mod tests {
             auth_token: String::new(),
             routines,
             inflight: Arc::new(Mutex::new(HashMap::new())),
+            bus_forwarder_once: Arc::new(std::sync::OnceLock::new()),
         }
     }
 
@@ -4147,6 +4381,7 @@ mod tests {
             auth_token: WS_AUTH_TOKEN.to_string(),
             routines,
             inflight: Arc::new(Mutex::new(HashMap::new())),
+            bus_forwarder_once: Arc::new(std::sync::OnceLock::new()),
         };
         (state, routines_path, config_path)
     }

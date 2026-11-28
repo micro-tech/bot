@@ -1823,12 +1823,19 @@
             // Read-only endpoints (/support/status, /support/drafts) need no
             // token; the mutating ones go through opsFetch (401 → token
             // prompt), and the backend gates them with require_web_token.
+            // M4 (task 394): escape single-quote and backslash too. The
+            // old version left them raw, so a crafted inbound-email `to`
+            // (or draft id) could break out of an inline onclick string
+            // (stored XSS). Escaping them also makes supportEsc safe for
+            // data-* attributes (single- and double-quoted alike).
             function supportEsc(t) {
                 return String(t == null ? "" : t)
                     .replace(/&/g, "&amp;")
                     .replace(/</g, "&lt;")
                     .replace(/>/g, "&gt;")
-                    .replace(/"/g, "&quot;");
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;")
+                    .replace(/\\/g, "&#92;");
             }
 
             function supportFmtTime(ms) {
@@ -1840,6 +1847,22 @@
                 const statusEl = document.getElementById("support-status-line");
                 const draftsEl = document.getElementById("support-drafts");
                 const badge = document.getElementById("support-unhandled-badge");
+                // M4 (task 394): one delegated listener for the support
+                // draft buttons (data-support-action / data-id / data-to).
+                // Attached once to the container (which survives innerHTML
+                // re-renders); the buttons carry no inline handlers.
+                if (draftsEl && !draftsEl.dataset.supportListener) {
+                    draftsEl.dataset.supportListener = "1";
+                    draftsEl.addEventListener("click", (event) => {
+                        const btn = event.target.closest("[data-support-action]");
+                        if (!btn || btn.disabled) return;
+                        supportAction(
+                            btn.dataset.supportAction,
+                            btn.dataset.id,
+                            btn.dataset.to,
+                        );
+                    });
+                }
                 try {
                     const [sr, dr] = await Promise.all([
                         fetch("/support/status").then((r) => r.json()),
@@ -1872,14 +1895,21 @@
                             .map((d) => {
                                 const actionable =
                                     d.status === "pending" || d.status === "approved";
+                                // M4 (task 394): no inline onclick — the
+                                // action/id/to ride in data-* attributes and
+                                // a delegated listener (attached once below)
+                                // dispatches them. The old inline handlers
+                                // interpolated d.id unescaped and d.to with
+                                // only quote-escaping, so a crafted inbound
+                                // email address could break out (stored XSS).
                                 const btns = actionable
-                                    ? '<button onclick="supportAction(\'approve\', \'' + d.id + '\')" ' +
+                                    ? '<button data-support-action="approve" data-id="' + supportEsc(d.id) + '" ' +
                                       (d.status !== "pending" ? "disabled" : "") +
                                       ">Approve</button> " +
-                                      '<button onclick="supportAction(\'send\', \'' + d.id + '\', \'' + supportEsc(d.to).replace(/'/g, "\\'") + '\')" ' +
+                                      '<button data-support-action="send" data-id="' + supportEsc(d.id) + '" data-to="' + supportEsc(d.to) + '" ' +
                                       (d.status !== "approved" ? "disabled" : "") +
                                       ">Send</button> " +
-                                      '<button onclick="supportAction(\'discard\', \'' + d.id + '\')">Discard</button>'
+                                      '<button data-support-action="discard" data-id="' + supportEsc(d.id) + '">Discard</button>'
                                     : "";
                                 return (
                                     '<div class="support-draft">' +
@@ -1934,8 +1964,11 @@
             function connectWS() {
                 const protocol =
                     location.protocol === "https:" ? "wss:" : "ws:";
+                // M4 (task 394): use location.host (hostname + port) so
+                // the socket follows whatever port the page was served on,
+                // instead of hardcoding :8443.
                 ws = new WebSocket(
-                    protocol + "//" + location.hostname + ":8443/ws",
+                    protocol + "//" + location.host + "/ws",
                 );
                 ws.onopen = () => {
                     console.log("WS connected");

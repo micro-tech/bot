@@ -41,6 +41,110 @@ pub const LOCAL_ALLOWLIST: &[&str] = &[
 /// (`restart`, `stop`, `enable`, ...) is rejected.
 pub const SYSTEMCTL_READ_ONLY: &[&str] = &["status", "is-active", "show", "list-units"];
 
+/// Commands that take file paths to read. Their path arguments are
+/// confined to [`ALLOWED_READ_ROOTS`] (M5, task 395) — see
+/// [`is_allowed_read_path`].
+pub const READ_COMMANDS: &[&str] = &["cat", "head", "tail", "grep"];
+
+/// Directory roots under which file-reading commands may read. System
+/// diagnostics live here (`/etc/hostname`, `/var/log/*`, `/proc/*`).
+/// The Helix working directory itself is NOT an allowed root — its
+/// `config.toml` and `.env` hold secrets — only its `logs/` subdir is
+/// (resolved at call time from the current directory).
+fn allowed_read_roots() -> Vec<std::path::PathBuf> {
+    let mut roots = vec![
+        std::path::PathBuf::from("/etc"),
+        std::path::PathBuf::from("/var/log"),
+        std::path::PathBuf::from("/proc"),
+        std::path::PathBuf::from("/sys"),
+    ];
+    if let Ok(cwd) = std::env::current_dir() {
+        roots.push(cwd.join("logs"));
+    }
+    roots
+}
+
+/// File names that are never readable via the executor, wherever they
+/// live — they hold secrets (auth token, env credentials).
+fn is_sensitive_file_name(name: &str) -> bool {
+    matches!(name, ".env" | "config.toml")
+}
+
+/// Whether `path` may be read by a file-reading command (M5, task 395).
+/// Fail-closed: a path is allowed only when it resolves (symlinks
+/// followed, so a link inside an allowed root cannot smuggle out a
+/// secret) under an allowed root, AND its file name is not sensitive,
+/// AND no path component is `.ssh` (keys live there). A path that
+/// cannot be resolved is checked lexically against the same rules.
+pub fn is_allowed_read_path(path: &str) -> bool {
+    let p = std::path::Path::new(path);
+    // Sensitive names are rejected wherever they live.
+    if let Some(name) = p.file_name().and_then(|n| n.to_str())
+        && is_sensitive_file_name(name)
+    {
+        return false;
+    }
+    if p.components()
+        .any(|c| matches!(c, std::path::Component::Normal(n) if n == ".ssh"))
+    {
+        return false;
+    }
+    // Resolve symlinks when the file exists; otherwise normalise
+    // lexically against the current directory.
+    let resolved: std::path::PathBuf = if let Ok(canon) = std::fs::canonicalize(p) {
+        canon
+    } else {
+        let base = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let joined = if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            base.join(p)
+        };
+        // Lexical normalisation (no symlink resolution): collapse `.`
+        // and `..` without touching the filesystem.
+        let mut out = std::path::PathBuf::new();
+        for comp in joined.components() {
+            match comp {
+                std::path::Component::ParentDir => {
+                    out.pop();
+                }
+                std::path::Component::CurDir => {}
+                other => out.push(other.as_os_str()),
+            }
+        }
+        out
+    };
+    // The resolved path must itself be clean (a symlink could have
+    // pointed at a sensitive name or an .ssh dir).
+    if let Some(name) = resolved.file_name().and_then(|n| n.to_str())
+        && is_sensitive_file_name(name)
+    {
+        return false;
+    }
+    if resolved
+        .components()
+        .any(|c| matches!(c, std::path::Component::Normal(n) if n == ".ssh"))
+    {
+        return false;
+    }
+    allowed_read_roots()
+        .iter()
+        .any(|root| resolved.starts_with(root))
+}
+
+/// Whether `arg` is a `tail -f`-style follow flag (M5, task 395).
+/// Covers `-f`, `--follow`, and short-flag clusters containing `f`
+/// (`-fn`, `-nf`). A follow would hang the tick forever.
+fn is_follow_flag(arg: &str) -> bool {
+    if arg == "-f" || arg == "--follow" {
+        return true;
+    }
+    if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 1 {
+        return arg[1..].contains('f');
+    }
+    false
+}
+
 /// What a run produced. `stdout`/`stderr` are lossy-UTF-8 decodes of
 /// the bytes captured (capped per stream at the caller's cap).
 #[derive(Debug, Clone)]
@@ -100,6 +204,39 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
                 ));
             }
             None => return Err("rejected: `systemctl` needs a read-only subcommand".to_string()),
+        }
+    }
+    // M5 (task 395): `hostname` with an argument SETS the hostname
+    // (as root) — the read-only form takes no arguments.
+    if first == "hostname" && argv.len() > 1 {
+        return Err(
+            "rejected: `hostname` takes no arguments (with an argument it sets the hostname)"
+                .to_string(),
+        );
+    }
+    // M5 (task 395): `tail -f` follows forever and hangs the tick.
+    if first == "tail" && argv[1..].iter().any(|a| is_follow_flag(a)) {
+        return Err("rejected: `tail -f` (follow) would hang the tick".to_string());
+    }
+    // M5 (task 395): file-reading commands are confined to the
+    // directory allowlist, so they cannot read .env, config.toml, or
+    // ~/.ssh. For grep the first non-flag argument is the pattern,
+    // not a file; for cat/head/tail every non-flag argument is a file.
+    if READ_COMMANDS.contains(&first.as_str()) {
+        let mut saw_pattern = false;
+        for arg in &argv[1..] {
+            if arg.starts_with('-') {
+                continue;
+            }
+            if first == "grep" && !saw_pattern {
+                saw_pattern = true;
+                continue;
+            }
+            if !is_allowed_read_path(arg) {
+                return Err(format!(
+                    "rejected: `{first}` may not read `{arg}` (outside the read allowlist)"
+                ));
+            }
         }
     }
     Ok(())
@@ -369,6 +506,67 @@ mod tests {
                 "{words:?} must be rejected"
             );
         }
+    }
+
+    // ── M5 (task 395): executor arg validation ───────────────────────────
+
+    #[test]
+    fn hostname_with_argument_is_rejected() {
+        // `hostname newname` SETS the hostname (as root) — the read-only
+        // form takes no arguments.
+        assert!(check_local_command(&argv(&["hostname"])).is_ok());
+        assert!(check_local_command(&argv(&["hostname", "newname"])).is_err());
+    }
+
+    #[test]
+    fn tail_follow_is_rejected() {
+        // `tail -f` follows forever and hangs the tick.
+        for words in [
+            vec!["tail", "-f", "/etc/hostname"],
+            vec!["tail", "--follow", "/etc/hostname"],
+            vec!["tail", "-fn", "5", "/etc/hostname"],
+        ] {
+            assert!(
+                check_local_command(&argv(&words)).is_err(),
+                "{words:?} must be rejected"
+            );
+        }
+        // Plain tail of an allowed file is fine.
+        assert!(check_local_command(&argv(&["tail", "/etc/hostname"])).is_ok());
+    }
+
+    #[test]
+    fn read_commands_cannot_read_secrets() {
+        // .env, config.toml, and anything under .ssh are off-limits,
+        // however the path is spelled (absolute, relative, via ..).
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        for words in [
+            vec!["cat", ".env"],
+            vec!["cat", "config.toml"],
+            vec!["cat", "/home/cobble/helix/.env"],
+            vec!["cat", "/home/cobble/helix/config.toml"],
+            vec!["cat", "~/.ssh/id_rsa"],
+            vec!["cat", &format!("{home}/.ssh/id_rsa")],
+            vec!["grep", "token", ".env"],
+            vec!["grep", "token", "config.toml"],
+            vec!["tail", "/home/cobble/.ssh/known_hosts"],
+            vec!["head", "logs/../config.toml"],
+        ] {
+            assert!(
+                check_local_command(&argv(&words)).is_err(),
+                "{words:?} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn read_commands_allow_system_files() {
+        // System diagnostics stay readable: /etc/hostname is the
+        // existing test's path, and /var/log is the log root.
+        assert!(check_local_command(&argv(&["cat", "/etc/hostname"])).is_ok());
+        assert!(check_local_command(&argv(&["grep", "root", "/etc/hostname"])).is_ok());
+        // But paths outside the allowlist (e.g. /tmp) are not.
+        assert!(check_local_command(&argv(&["cat", "/tmp/somefile"])).is_err());
     }
 
     #[test]

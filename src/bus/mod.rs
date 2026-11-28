@@ -22,12 +22,20 @@ pub struct Message {
 }
 
 /// Bus system to route messages between components.
-/// One subscriber: (component name, channel sender).
-type Subscriber = (String, tokio::sync::mpsc::UnboundedSender<Message>);
+/// One subscriber: a unique id, a component name, and a channel sender.
+/// M1 (task 391): the id exists so a subscriber can be REMOVED again —
+/// the old tuple had no identity, so per-connection subscribers could
+/// never be unsubscribed and accumulated forever.
+struct Subscriber {
+    id: u64,
+    component: String,
+    tx: tokio::sync::mpsc::UnboundedSender<Message>,
+}
 
 pub struct Bus {
     sender: Sender<Message>,
-    subscribers: Arc<Mutex<Vec<Subscriber>>>, // List of subscribers (component name, channel sender)
+    subscribers: Arc<Mutex<Vec<Subscriber>>>, // List of subscribers (id, component name, channel sender)
+    next_id: Arc<std::sync::atomic::AtomicU64>,
 }
 
 // H6 (task 383): subscribers are now tokio::sync::mpsc receivers. The old
@@ -72,8 +80,8 @@ impl Bus {
                 // Task 239: recover from poison instead of killing the router thread.
                 let subs_guard = subs_clone.lock().unwrap_or_else(|e| e.into_inner());
                 let mut delivered = false;
-                for (component, sub_sender) in subs_guard.iter() {
-                    if component == &message.to && sub_sender.send(message.clone()).is_ok() {
+                for sub in subs_guard.iter() {
+                    if sub.component == message.to && sub.tx.send(message.clone()).is_ok() {
                         delivered = true;
                     }
                 }
@@ -94,17 +102,59 @@ impl Bus {
         Self {
             sender,
             subscribers,
+            next_id: Arc::new(std::sync::atomic::AtomicU64::new(1)),
         }
     }
 
     /// Allows a component to subscribe to messages destined for it.
     pub fn subscribe(&self, component_name: &str) -> tokio::sync::mpsc::UnboundedReceiver<Message> {
+        self.subscribe_with_id(component_name).0
+    }
+
+    /// Subscribe and return the subscription id alongside the receiver.
+    /// M1 (task 391): the id is what [`Bus::unsubscribe`] removes — use
+    /// this when the subscriber has a bounded lifetime (e.g. the single
+    /// web-interface forwarder installed at startup).
+    pub fn subscribe_with_id(
+        &self,
+        component_name: &str,
+    ) -> (tokio::sync::mpsc::UnboundedReceiver<Message>, u64) {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let id = self
+            .next_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.subscribers.lock().unwrap().push(Subscriber {
+            id,
+            component: component_name.to_string(),
+            tx,
+        });
+        (rx, id)
+    }
+
+    /// Remove a subscriber by id. Returns true when one was removed.
+    /// M1 (task 391): without this, every subscriber lived forever — each
+    /// WS reconnect added one and the router kept delivering to dead ones.
+    pub fn unsubscribe(&self, id: u64) -> bool {
+        let mut guard = self.subscribers.lock().unwrap();
+        let before = guard.len();
+        guard.retain(|sub| sub.id != id);
+        guard.len() < before
+    }
+
+    /// Number of live subscribers (all components). Test/support hook —
+    /// M1 (task 391): proves reconnects no longer accumulate subscribers.
+    pub fn subscriber_count(&self) -> usize {
+        self.subscribers.lock().unwrap().len()
+    }
+
+    /// Number of live subscribers for one component.
+    pub fn subscriber_count_for(&self, component_name: &str) -> usize {
         self.subscribers
             .lock()
             .unwrap()
-            .push((component_name.to_string(), tx));
-        rx
+            .iter()
+            .filter(|sub| sub.component == component_name)
+            .count()
     }
 
     /// Publishes a message to the bus, logging the transaction.
@@ -149,6 +199,7 @@ impl Clone for Bus {
         Self {
             sender: self.sender.clone(),
             subscribers: Arc::clone(&self.subscribers),
+            next_id: Arc::clone(&self.next_id),
         }
     }
 }
@@ -207,5 +258,50 @@ mod tests {
         let got = tokio::time::timeout(Duration::from_secs(5), rx2.recv()).await;
         assert!(got.is_ok(), "published message must arrive");
         assert_eq!(got.unwrap().expect("channel open").data, "hello");
+    }
+
+    // ── M1 (task 391): subscribers must be removable ─────────────────────
+
+    #[tokio::test]
+    async fn unsubscribe_removes_subscriber_and_stops_delivery() {
+        let bus = Bus::new();
+        let (mut rx, id) = bus.subscribe_with_id("web_interface");
+        assert_eq!(bus.subscriber_count_for("web_interface"), 1);
+
+        // Delivery works while subscribed.
+        bus.publish(Message {
+            to: "web_interface".into(),
+            from: "test".into(),
+            data: "one".into(),
+            timestamp: 0,
+        })
+        .unwrap();
+        let got = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await;
+        assert_eq!(got.unwrap().expect("channel open").data, "one");
+
+        // Unsubscribe removes it; a second call reports nothing removed.
+        assert!(bus.unsubscribe(id));
+        assert!(!bus.unsubscribe(id));
+        assert_eq!(bus.subscriber_count_for("web_interface"), 0);
+
+        // And the plain subscribe() still works (existing callers unchanged).
+        let _rx2 = bus.subscribe("web_interface");
+        assert_eq!(bus.subscriber_count_for("web_interface"), 1);
+    }
+
+    #[tokio::test]
+    async fn reconnect_cycles_do_not_accumulate_subscribers() {
+        // GIVEN a bus, WHEN a subscriber is created and removed repeatedly
+        // (the WS reconnect cycle), THEN the count returns to its baseline
+        // instead of growing by one per reconnect.
+        let bus = Bus::new();
+        assert_eq!(bus.subscriber_count(), 0);
+        for _ in 0..10 {
+            let (rx, id) = bus.subscribe_with_id("web_interface");
+            assert_eq!(bus.subscriber_count(), 1);
+            drop(rx);
+            assert!(bus.unsubscribe(id));
+            assert_eq!(bus.subscriber_count(), 0);
+        }
     }
 }
