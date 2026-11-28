@@ -15,7 +15,8 @@ mod tests {
 mod tests {
     #[test]
     fn unix_socket_tests_skipped_on_windows() {
-        // Placeholder so the test suite still passes on Windows
-        assert!(true);
+        // Placeholder so the test suite still passes on Windows.
+        // (No assertion: `assert!(true)` trips
+        // `-D clippy::assertions-on-constants` on this target.)
     }
 }
