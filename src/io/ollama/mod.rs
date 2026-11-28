@@ -1275,11 +1275,23 @@ mod tests {
 
     // ── model discovery ───────────────────────────────────────────────────────
 
+    /// A port that is guaranteed closed: bind one, read it, drop the
+    /// listener. M25: the old tests assumed port 19999 is never open,
+    /// which is an environment assumption, not a fact.
+    fn closed_port() -> u16 {
+        std::net::TcpListener::bind("127.0.0.1:0")
+            .expect("bind for a closed port")
+            .local_addr()
+            .expect("listener addr")
+            .port()
+    }
+
     #[tokio::test]
     async fn test_fetch_available_models_unreachable() {
         ensure_crypto_provider();
         // Should return an Err, not panic, when Ollama is not running.
-        let result = fetch_available_models("http://127.0.0.1:19999").await;
+        let url = format!("http://127.0.0.1:{}", closed_port());
+        let result = fetch_available_models(&url).await;
         assert!(result.is_err(), "Expected Err when Ollama is unreachable");
     }
 
@@ -1287,7 +1299,8 @@ mod tests {
     async fn test_check_model_exists_unreachable() {
         ensure_crypto_provider();
         // Should return Err (not panic) when Ollama is not reachable.
-        let result = check_model_exists("http://127.0.0.1:19999", "llama3.2").await;
+        let url = format!("http://127.0.0.1:{}", closed_port());
+        let result = check_model_exists(&url, "llama3.2").await;
         assert!(result.is_err(), "Expected Err when Ollama is unreachable");
     }
 
@@ -1296,9 +1309,10 @@ mod tests {
     #[tokio::test]
     async fn test_health_check_unreachable_port() {
         ensure_crypto_provider();
-        // Port 19999 should never be open in a normal test environment.
-        let result = check_ollama_health("http://127.0.0.1:19999").await;
-        assert!(!result, "Port 19999 should be unreachable");
+        // The port is closed by construction (see closed_port).
+        let url = format!("http://127.0.0.1:{}", closed_port());
+        let result = check_ollama_health(&url).await;
+        assert!(!result, "closed port should be unreachable");
     }
 
     #[tokio::test]
@@ -1324,11 +1338,13 @@ mod tests {
     async fn test_probe_cache_unreachable_and_invalidate() {
         ensure_crypto_provider();
         // Dead port → Unreachable; invalidate() must not panic and the
-        // re-probe must also report Unreachable.
-        let p1 = probe_ollama("http://127.0.0.1:19999").await;
+        // re-probe must also report Unreachable. One URL for both probes
+        // (the probe result is cached per URL).
+        let url = format!("http://127.0.0.1:{}", closed_port());
+        let p1 = probe_ollama(&url).await;
         assert!(matches!(p1, OllamaProbe::Unreachable));
-        invalidate_ollama_probe("http://127.0.0.1:19999");
-        let p2 = probe_ollama("http://127.0.0.1:19999").await;
+        invalidate_ollama_probe(&url);
+        let p2 = probe_ollama(&url).await;
         assert!(matches!(p2, OllamaProbe::Unreachable));
     }
 
@@ -1462,7 +1478,7 @@ mod tests {
     //   cargo test -- --ignored test_handle_ollama_live
     //
     #[tokio::test]
-    #[ignore]
+    #[ignore = "needs a live Ollama at localhost:11434"]
     async fn test_handle_ollama_live() {
         let bus = Arc::new(Bus::new());
         let _rx = bus.subscribe("test_sender");

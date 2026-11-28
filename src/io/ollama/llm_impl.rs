@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "needs a live Ollama at localhost:11434"]
     async fn test_generate_live() {
         let llm = OllamaLlmImpl::new("http://localhost:11434", "llama3.2");
         let result = llm.generate("Say hello in one word.").await;
@@ -182,7 +182,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "needs a live Ollama at localhost:11434"]
     async fn test_chat_live() {
         let llm = OllamaLlmImpl::new("http://localhost:11434", "llama3.2");
         let messages = vec![json!({"role": "user", "content": "What is 2+2?"})];

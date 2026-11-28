@@ -301,7 +301,7 @@ mod tests {
     // Requires the binary on PATH (or MCP_TEST_SERVER set) AND Google OAuth
     // credentials; tools/list itself needs no auth, but the binary must run.
     #[tokio::test]
-    #[ignore]
+    #[ignore = "needs the real google-mcp server binary and Google OAuth credentials"]
     async fn live_list_tools_against_google_mcp() {
         let command = std::env::var("MCP_TEST_SERVER").unwrap_or_else(|_| "google-mcp".into());
         let mut mgr = McpManager::new(McpConfig {

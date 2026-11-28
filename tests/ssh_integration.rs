@@ -1,6 +1,6 @@
 //! Live SSH interop test: real OpenSSH client against the Helix russh server.
 //!
-//! Spins up `start_ssh_server` on 127.0.0.1:2229 with a temp authorized_keys,
+//! Spins up `start_ssh_server` on 127.0.0.1 (a free port) with a temp authorized_keys,
 //! then drives it with the system `ssh` binary:
 //! 1. Authorized key → exec works, output + exit code come back.
 //! 2. Denylisted command (`rm -rf /`) → blocked by the task-191 run_shell
@@ -36,11 +36,21 @@ fn gen_keypair(dir: &std::path::Path, name: &str) -> (PathBuf, String) {
     (priv_path, pub_line)
 }
 
-fn ssh_config(dir: &std::path::Path, ak_rel: &str) -> (SshConfig, PathBuf) {
+/// A free port: bind one, read it, drop the listener. M25: the old test
+/// hard-coded 2229/2230, which collide with anything already listening.
+fn free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .expect("bind for a free port")
+        .local_addr()
+        .expect("listener addr")
+        .port()
+}
+
+fn ssh_config(dir: &std::path::Path, ak_rel: &str, port: u16) -> (SshConfig, PathBuf) {
     let cfg = SshConfig {
         enabled: true,
         bind: "127.0.0.1".to_string(),
-        port: 2229,
+        port,
         authorized_keys: Some(ak_rel.to_string()),
         host_key: Some("ssh_host_key".to_string()),
         max_sessions: 4,
@@ -89,6 +99,18 @@ async fn wait_for_port(port: u16) {
 async fn ssh_exec_authorized_key_works_and_policy_blocks() {
     // NOTE: one test function, sequential steps — the shell config OnceLock
     // is process-wide, so parallel tests would race its initialization.
+    // M25: skip gracefully when OpenSSH is not on PATH, instead of
+    // panicking in gen_keypair's .expect. (Both commands exit at once
+    // with no arguments, so this is just an existence probe.)
+    let have_ssh = std::process::Command::new("ssh").output().is_ok()
+        && std::process::Command::new("ssh-keygen").output().is_ok();
+    if !have_ssh {
+        eprintln!("skipping live SSH test: OpenSSH (ssh/ssh-keygen) not on PATH");
+        return;
+    }
+
+    let port = free_port();
+    let port_str = port.to_string();
     let dir = std::env::temp_dir().join(format!("helix-ssh-live-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     // [shell] must be enabled or the SSH server fails closed. Point the
@@ -107,15 +129,15 @@ async fn ssh_exec_authorized_key_works_and_policy_blocks() {
     std::fs::create_dir_all(dir.join("ssh")).unwrap();
     std::fs::write(dir.join("ssh").join("test_authorized_keys"), &pub_line).unwrap();
 
-    let (cfg, config_dir) = ssh_config(&dir, "test_authorized_keys");
+    let (cfg, config_dir) = ssh_config(&dir, "test_authorized_keys", port);
     tokio::spawn(async move {
         let _ = helix::ssh::start_ssh_server(cfg, config_dir).await;
     });
-    wait_for_port(2229).await;
+    wait_for_port(port).await;
 
     // 1. Authorized key: exec works.
     let out = std::process::Command::new("ssh")
-        .args(ssh_args(&key_path, "2229", Some("echo hello-ssh-live")))
+        .args(ssh_args(&key_path, &port_str, Some("echo hello-ssh-live")))
         .stdin(Stdio::null())
         .output()
         .expect("ssh run");
@@ -134,7 +156,7 @@ async fn ssh_exec_authorized_key_works_and_policy_blocks() {
 
     // 2. Denylisted command is blocked by the run_shell policy (one path).
     let out = std::process::Command::new("ssh")
-        .args(ssh_args(&key_path, "2229", Some("rm -rf /")))
+        .args(ssh_args(&key_path, &port_str, Some("rm -rf /")))
         .stdin(Stdio::null())
         .output()
         .expect("ssh run");
@@ -149,7 +171,7 @@ async fn ssh_exec_authorized_key_works_and_policy_blocks() {
     // 3. Wrong key is rejected.
     let (wrong_key, _) = gen_keypair(&dir, "id_wrong");
     let out = std::process::Command::new("ssh")
-        .args(ssh_args(&wrong_key, "2229", Some("echo nope")))
+        .args(ssh_args(&wrong_key, &port_str, Some("echo nope")))
         .stdin(Stdio::null())
         .output()
         .expect("ssh run");
@@ -163,10 +185,12 @@ async fn ssh_exec_authorized_key_works_and_policy_blocks() {
 
     // 4. Fail closed without keys: refuses to start AND does not bind.
     // (Shell is enabled here; the refusal comes from the keys check.)
+    // M25: a free port, not the old hard-coded 2230.
+    let closed_port = free_port();
     let cfg = SshConfig {
         enabled: true,
         bind: "127.0.0.1".to_string(),
-        port: 2230,
+        port: closed_port,
         authorized_keys: Some("does-not-exist".to_string()),
         host_key: Some("ssh_host_key".to_string()),
         ..SshConfig::default()
@@ -176,7 +200,7 @@ async fn ssh_exec_authorized_key_works_and_policy_blocks() {
         .unwrap_err();
     assert!(err.contains("fail-closed"), "got: {}", err);
     assert!(
-        tokio::net::TcpStream::connect(("127.0.0.1", 2230))
+        tokio::net::TcpStream::connect(("127.0.0.1", closed_port))
             .await
             .is_err(),
         "fail-closed server must not bind"

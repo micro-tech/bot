@@ -1419,7 +1419,7 @@ mod tests {
     // Run on the R630 after the install (task 356/357):
     //   cargo test -- --ignored browser_real_smoke
     #[tokio::test]
-    #[ignore]
+    #[ignore = "needs a real headless Firefox; run on the R630 (task 356/357)"]
     async fn browser_real_smoke() {
         // GIVEN a real headless Firefox (installed by task 360) and the
         // manager able to download geckodriver:

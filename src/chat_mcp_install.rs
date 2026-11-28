@@ -39,6 +39,14 @@ pub const HUB_URL: &str = "https://chat.micro-tech.xyz";
 /// Long-poll watch timeout. Matches the live R630 config.
 pub const WATCH_TIMEOUT_SECS: u32 = 30;
 
+/// Binary suffix on Windows (`.exe`), empty elsewhere (M25, task 413).
+/// Both the built binary under `target/release/` and the installed
+/// `bin_path` carry it, so a Windows install points at `chat-mcp.exe`.
+#[cfg(windows)]
+pub const EXE_SUFFIX: &str = ".exe";
+#[cfg(not(windows))]
+pub const EXE_SUFFIX: &str = "";
+
 /// What `ensure_chat_mcp_config` did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigOutcome {
@@ -88,7 +96,8 @@ pub fn home_dir_for_user(user: &str) -> PathBuf {
 pub fn layout_for_user(user: &str, primary_runtime_dir: &str) -> ChatMcpLayout {
     let home_dir = home_dir_for_user(user);
     ChatMcpLayout {
-        bin_path: home_dir.join(".local/bin/chat-mcp"),
+        // M25: the installed binary carries EXE_SUFFIX on Windows.
+        bin_path: home_dir.join(format!(".local/bin/chat-mcp{}", EXE_SUFFIX)),
         config_dir: home_dir.join(".config/chat-mcp"),
         config_path: home_dir.join(".config/chat-mcp/config.toml"),
         helix_config_path: Path::new(primary_runtime_dir).join("config.toml"),
@@ -320,7 +329,8 @@ pub fn build_and_install_binary(source_dir: &Path, bin_path: &Path) -> Result<()
             snippet.trim()
         ));
     }
-    let built = source_dir.join("target/release/chat-mcp");
+    // M25: the built binary carries EXE_SUFFIX on Windows.
+    let built = source_dir.join(format!("target/release/chat-mcp{}", EXE_SUFFIX));
     if !built.exists() {
         return Err(format!(
             "chat-mcp: build succeeded but {} is missing",

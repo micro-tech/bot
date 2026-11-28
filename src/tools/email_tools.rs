@@ -376,6 +376,9 @@ mod tests {
 
     #[test]
     fn test_send_email_no_smtp_queues_to_outbox() {
+        // M23: shared env lock — these remove_var calls race with any
+        // parallel test that reads SMTP_*.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::remove_var("SMTP_HOST");
             std::env::remove_var("SMTP_USER");
@@ -395,6 +398,8 @@ mod tests {
 
     #[test]
     fn test_check_inbox_no_config() {
+        // M23: shared env lock (see test_send_email_no_smtp_queues_to_outbox).
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::remove_var("IMAP_HOST");
             std::env::remove_var("IMAP_USER");
@@ -406,6 +411,8 @@ mod tests {
 
     #[test]
     fn test_read_email_no_config() {
+        // M23: shared env lock (see test_send_email_no_smtp_queues_to_outbox).
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::remove_var("IMAP_HOST");
             std::env::remove_var("IMAP_USER");

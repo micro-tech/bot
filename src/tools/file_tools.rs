@@ -1105,7 +1105,15 @@ mod tests {
 
     #[test]
     fn test_read_log_rejects_non_logs_prefix() {
-        let result = read_log(&json!({"log_file": "/etc/passwd"}));
+        // M25: an absolute path outside logs/ on this platform — "/etc"
+        // is not absolute on Windows (no drive), so read_log would treat
+        // it as relative and return "Error reading" instead of the
+        // security error. temp_dir() is absolute everywhere.
+        let outside = std::env::temp_dir()
+            .join("passwd")
+            .to_string_lossy()
+            .into_owned();
+        let result = read_log(&json!({"log_file": outside}));
         assert!(result.contains("Security error"), "got: {}", result);
     }
 
@@ -1150,7 +1158,18 @@ mod tests {
 
     #[test]
     fn test_repo_read_rejects_absolute_outside_repo() {
-        let result = repo_read(&json!({"path": "/etc/passwd"}));
+        // M25: an absolute path outside the repo on this platform (see
+        // test_read_log_rejects_non_logs_prefix). The file must EXIST: the
+        // original /etc/passwd existed, so the rejection fired; a missing
+        // file fails with ENOENT before the path check is reached.
+        let outside = std::env::temp_dir().join("passwd");
+        std::fs::write(&outside, "probe").expect("write probe");
+        let _cleanup = Cleanup::new({
+            let outside = outside.clone();
+            move || _ = std::fs::remove_file(&outside)
+        });
+        let outside = outside.to_string_lossy().into_owned();
+        let result = repo_read(&json!({"path": outside}));
         assert!(
             result.contains("escapes the allowed directory"),
             "absolute escape must be rejected, got: {}",

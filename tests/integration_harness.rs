@@ -1,6 +1,23 @@
 //! Integration Test Harness for Bot (Task 122)
 //!
 //! Fully automated end-to-end test suite that exercises all major subsystems.
+//!
+//! M25 (task 413) — test portability rules. Tests must pass on Unix and
+//! Windows, and must not depend on the machine they run on:
+//! - Unix-only tests (spawning `/bin/sh`, Unix paths, Unix tools) go
+//!   behind `#[cfg(unix)]`; Windows-only expectations behind `#[cfg(windows)]`.
+//! - Never hard-code `/tmp` — use `std::env::temp_dir()` (on Windows
+//!   `/tmp` resolves to a drive-relative `I:\tmp\...` path).
+//! - Never assume a port is free or closed — bind port 0 and use the
+//!   port you got (for a closed port, bind it and then drop it).
+//! - Never `sleep` a fixed time and then assert — wait for the condition
+//!   with a deadline (`recv_timeout`, or a poll loop), so a slow machine
+//!   does not flake the test.
+//! - `#[ignore]` must carry a reason: `#[ignore = "needs a live Ollama
+//!   at localhost:11434"]`, never a bare `#[ignore]`.
+//! - External tools (`ssh`, `ssh-keygen`) must be probed for and the test
+//!   skipped gracefully when absent, never `.expect()`-panicked.
+//! - Env-mutating tests take the shared `test_env_lock` (M23, task 411).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -91,14 +108,27 @@ impl TestContext {
             timestamp: helix::utils::now_ms(),
         };
 
+        // Snapshot the received count first: delivery is observed as the
+        // count rising above this, so a publish to a topic nobody listens
+        // to still waits out the full deadline (as before).
+        let before = self.metrics.lock().unwrap().messages_received;
         self.bus.publish(msg).map_err(|e| anyhow::anyhow!(e))?;
         {
             let mut m = self.metrics.lock().unwrap();
             m.messages_published += 1;
         }
 
-        // Give router time to deliver
-        tokio::time::sleep(Duration::from_millis(wait_ms)).await;
+        // M25: wait for delivery (the counter rising), not a fixed sleep —
+        // the old sleep-then-assert was a timing assumption. Returns early
+        // once delivery is observed; waits out the deadline when nobody
+        // listens to this topic.
+        let deadline = std::time::Instant::now() + Duration::from_millis(wait_ms);
+        while std::time::Instant::now() < deadline {
+            if self.metrics.lock().unwrap().messages_received > before {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
         Ok(())
     }
 

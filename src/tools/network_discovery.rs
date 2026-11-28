@@ -565,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "needs raw-socket permission for the ping binary (blocked in the sandbox)"]
     fn ping_sweep_real_binary_finds_localhost() {
         // Needs raw-socket permission for the ping binary — blocked in
         // the sandbox (SOCK_RAW: Operation not permitted), so ignored

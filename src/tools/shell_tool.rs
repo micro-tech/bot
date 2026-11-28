@@ -423,7 +423,11 @@ mod tests {
     #[test]
     fn resolve_workdir_rejects_absolute_by_default() {
         let cfg = ShellConfig::default();
-        let err = resolve_workdir(&cfg, Some("/etc")).unwrap_err();
+        // M25: an absolute path on this platform — "/etc" is not absolute
+        // on Windows (no drive), so it would take the join branch instead
+        // of the "not allowed" branch. temp_dir() is absolute everywhere.
+        let abs = std::env::temp_dir().to_string_lossy().into_owned();
+        let err = resolve_workdir(&cfg, Some(&abs)).unwrap_err();
         assert!(err.contains("not allowed"), "got: {}", err);
     }
 
@@ -460,6 +464,9 @@ mod tests {
 
     /// Live spawn tests: enabled config is injected via a temp config file.
     /// These run the real `/bin/sh` path (timeout, caps, process-group kill).
+    /// M25: Unix-only — there is no /bin/sh on Windows, and the commands
+    /// (`sleep`, `yes`, `read`, `setsid`) are Unix tools.
+    #[cfg(unix)]
     mod live {
         use super::*;
 

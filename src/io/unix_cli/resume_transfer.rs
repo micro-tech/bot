@@ -40,9 +40,17 @@ mod tests {
     #[test]
     fn test_resume_offset_roundtrip() {
         init_resume_state();
-        set_offset("/tmp/test.bin", 12345);
-        assert_eq!(get_offset("/tmp/test.bin"), 12345);
-        clear_resume("/tmp/test.bin");
-        assert_eq!(get_offset("/tmp/test.bin"), 0);
+        // M25: temp_dir(), not a hard-coded /tmp. NOTE: this module is
+        // currently not wired into the crate (no `mod unix_cli`
+        // declaration), so this test does not run — the fix is preventive,
+        // for whenever the module is wired in.
+        let p = std::env::temp_dir()
+            .join("helix-resume-test.bin")
+            .to_string_lossy()
+            .into_owned();
+        set_offset(&p, 12345);
+        assert_eq!(get_offset(&p), 12345);
+        clear_resume(&p);
+        assert_eq!(get_offset(&p), 0);
     }
 }

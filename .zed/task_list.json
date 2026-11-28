@@ -6591,7 +6591,7 @@
       "id": 411,
       "title": "M23: Test env races: two mutexes for HELIX_SPEND_FILE, plus unlocked unsafe remove_var",
       "description": "Test env races: two mutexes for HELIX_SPEND_FILE, plus unlocked unsafe remove_var. Where: src/router/spend.rs:352 (its own TEST_LOCK) vs src/tools/subagent_tool.rs:762-805 and src/io/llm_gemini/mod.rs:700-767 (use subagent_tool::test_env_lock()); src/io/llm_gemini/mod.rs:590, :601 (SAFETY comment claims \"single-threaded test,\" but cargo runs tests on parallel threads; unsound under edition 2024 alongside any other env reader). Fix: one lock for all env-mutating tests (or add the serial_test crate with a named key); take test_env_lock() in the Gemini tests.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "411.1 Use one lock for all env-mutating tests — either consolidate on subagent_tool::test_env_lock() (removing the separate TEST_LOCK in spend.rs) or add the serial_test crate with a named key. 411.2 Take test_env_lock() in the Gemini tests (src/io/llm_gemini/mod.rs) so the unsafe remove_var is actually guarded.",
@@ -6600,13 +6600,13 @@
         {
           "id": 411.1,
           "title": "Error checking: one lock guards all env mutation — no unlocked remove_var under parallel test threads",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 411.2,
           "title": "Cargo test coverage: env-mutating tests stable under repeated parallel runs",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             411.1
           ]
@@ -6614,7 +6614,7 @@
         {
           "id": 411.3,
           "title": "Documentation: test env-mutation locking rule (one lock / serial_test key)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             411.2
           ]
@@ -6625,7 +6625,7 @@
       "id": 412,
       "title": "M24: Network resilience is not tested",
       "description": "Network resilience is not tested. Where: no test simulates a connect timeout, a mid-stream disconnect, 429/503 with Retry-After, or retry exhaustion. Fix: mockito (already a dev-dependency) with delayed responses, plus a TCP listener that accepts and then drops the connection. Assert the backoff schedule, the total deadline, and the no-replay-of-tools property (H4). Given the production gaps (H3–H5), this is the most valuable test area to add.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "412.1 Add network-resilience tests with mockito (already a dev-dependency): delayed responses for connect timeouts, a TCP listener that accepts then drops the connection for mid-stream disconnects, and 429/503 with Retry-After. 412.2 Assert the backoff schedule, the total deadline, and the no-replay-of-tools property (H4), plus retry exhaustion.",
@@ -6634,13 +6634,13 @@
         {
           "id": 412.1,
           "title": "Error checking: timeouts, disconnects, and 429/503 are handled without hanging or replaying tools",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 412.2,
           "title": "Cargo test coverage: connect timeout, mid-stream disconnect, 429/503 Retry-After, retry exhaustion, backoff schedule, total deadline",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             412.1
           ]
@@ -6648,7 +6648,7 @@
         {
           "id": 412.3,
           "title": "Documentation: network resilience behaviour (backoff, deadline, no-replay-of-tools)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             412.2
           ]
@@ -6659,7 +6659,7 @@
       "id": 413,
       "title": "M25: Test portability and hygiene (Unix assumptions, hardcoded /tmp, sleep sync, undocumented #[ignore], ssh_integration)",
       "description": "Test portability and hygiene (Unix assumptions, hardcoded /tmp, sleep sync, undocumented #[ignore], ssh_integration). Where: src/tools/shell_tool.rs:379, :423-494 (live tests spawn /bin/sh; /etc is not absolute on Windows); src/tools/file_tools.rs:514 (expects an \"escapes\" error for /etc/passwd, but Windows returns \"Error reading\"); src/chat_mcp_install.rs:327 (binary name without .exe); src/router/spend.rs:362, src/persona.rs:734, :747, src/io/unix_cli/resume_transfer.rs:43 (hard-coded /tmp — on Windows resolves to I:\\tmp\\...); tests/scenarios/bus_tests.rs:26, :48, tests/integration_harness.rs:94 (sleep 30–50 ms then assert); src/io/ollama/mod.rs:1032-1081 (assumes port 19999 is closed); src/io/ollama/llm_impl.rs:169, :179 (undocumented #[ignore], need a live Ollama); tests/ssh_integration.rs:32, :45, :172 (.expect panics if ssh-keygen is missing; ports 2229/2230 hard-coded). Fix: cfg(unix) gates / Windows-specific expectations; std::env::temp_dir() or tempfile as a dev-dependency; wait on channels with recv_timeout, and use a port the test binds and then drops; #[ignore = \"needs Ollama at localhost:11434\"]; bind port 0 and skip gracefully when OpenSSH is not on PATH, or #[ignore = \"needs OpenSSH client\"].",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "413.1 Gate Unix-only tests with cfg(unix) and give Windows-specific expectations where the behaviour differs (/etc/passwd error text, binary name .exe). 413.2 Replace hard-coded /tmp with std::env::temp_dir() or tempfile, replace sleep-then-assert with recv_timeout on channels, and bind a port then drop it instead of assuming 19999 is closed. 413.3 Document the #[ignore]s (needs Ollama at localhost:11434) and make ssh_integration bind port 0 and skip gracefully when OpenSSH is not on PATH (or #[ignore = \"needs OpenSSH client\"]).",
@@ -6668,13 +6668,13 @@
         {
           "id": 413.1,
           "title": "Error checking: platform-specific tests are gated or skip gracefully — no hard failure on Windows for Unix-only assumptions",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 413.2,
           "title": "Cargo test coverage: temp_dir, recv_timeout waits, port-0 binding, documented #[ignore]s, ssh_integration skip",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             413.1
           ]
@@ -6682,7 +6682,7 @@
         {
           "id": 413.3,
           "title": "Documentation: test portability rules (cfg gates, temp_dir, documented ignores)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             413.2
           ]
@@ -6693,7 +6693,7 @@
       "id": 414,
       "title": "M26: CRLF shell scripts and no .gitattributes",
       "description": "CRLF shell scripts and no .gitattributes. Where: push.sh, scripts/backup-state.sh (CRLF on disk); no .gitattributes. Fix: add a .gitattributes containing *.sh text eol=lf (the one justified exception to the CRLF rule in AGENTS.md). If either script is copied (not cloned) to the Linux host, set -euo pipefail\\r fails and the nightly backup dies.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "414.1 Add a .gitattributes containing *.sh text eol=lf. 414.2 Normalise push.sh and scripts/backup-state.sh to LF on disk so a copy (not clone) to the Linux host does not fail on set -euo pipefail\\r.",
@@ -6702,13 +6702,13 @@
         {
           "id": 414.1,
           "title": "Error checking: shell scripts have LF endings enforced by .gitattributes — a copy to Linux cannot fail on \\r",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 414.2,
           "title": "Cargo test coverage: line-ending check for *.sh (or a CI check)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             414.1
           ]
@@ -6716,7 +6716,7 @@
         {
           "id": 414.3,
           "title": "Documentation: .gitattributes policy for shell scripts",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             414.2
           ]

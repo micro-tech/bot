@@ -684,7 +684,9 @@ mod tests {
     #[test]
     fn test_call_gemini_sync_no_key() {
         // Without a real API key this should return an Err, not panic.
-        // SAFETY: single-threaded test; no other threads read this env var concurrently.
+        // M23: take the shared env lock — removing GEMINI_API_KEY while
+        // another test reads it is a data race under edition 2024.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe { std::env::remove_var("GEMINI_API_KEY") };
         let result = call_gemini_sync("hello");
         assert!(
@@ -694,8 +696,17 @@ mod tests {
     }
 
     #[tokio::test]
+    // M23: the shared env lock is a std MutexGuard held across the await
+    // below, on purpose — the handler reads GEMINI_API_KEY inside the
+    // awaited call, so the guard must cover it or another test could set
+    // the key mid-call. Safe: the lock is test-only, the awaited call
+    // fails fast with no key (no network, no lock re-entry), and no other
+    // test can block the runtime while this one awaits.
+    #[allow(clippy::await_holding_lock)]
     async fn test_handle_gemini_no_key() {
         use crate::bus::Bus;
+        // M23: shared env lock (see test_call_gemini_sync_no_key).
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe { std::env::remove_var("GEMINI_API_KEY") };
         let bus = Arc::new(Bus::new());
         let _rx = bus.subscribe("web_interface");

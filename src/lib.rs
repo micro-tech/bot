@@ -71,4 +71,61 @@ mod tests {
         // `cargo test --lib init_logging -- --nocapture`.
         log::info!("init_logging test marker — logger is live");
     }
+
+    /// M26 (task 414): shell scripts must have LF endings, enforced by
+    /// `.gitattributes`. A CRLF script copied (not cloned) to the Linux
+    /// host fails on `set -euo pipefail\r`, killing the nightly backup.
+    /// This test scans every `*.sh` in the repo for CR bytes and asserts
+    /// the `.gitattributes` rule is present, so a CRLF script can never
+    /// land silently.
+    #[test]
+    fn shell_scripts_have_lf_endings() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let attrs = std::fs::read_to_string(root.join(".gitattributes"))
+            .expect(".gitattributes must exist (M26)");
+        assert!(
+            attrs.lines().any(|l| {
+                let l = l.trim();
+                l.starts_with("*.sh") && l.contains("eol=lf")
+            }),
+            ".gitattributes must contain a `*.sh ... eol=lf` rule, got:\n{}",
+            attrs
+        );
+        let mut files = Vec::new();
+        collect_sh_files(root, &mut files);
+        assert!(
+            !files.is_empty(),
+            "no *.sh files found — the test is vacuous"
+        );
+        let mut crlf: Vec<String> = Vec::new();
+        for f in &files {
+            let bytes = std::fs::read(f).unwrap_or_else(|e| panic!("cannot read {:?}: {}", f, e));
+            if bytes.contains(&b'\r') {
+                crlf.push(f.display().to_string());
+            }
+        }
+        assert!(
+            crlf.is_empty(),
+            "shell scripts with CRLF endings (must be LF — see .gitattributes):\n{}",
+            crlf.join("\n")
+        );
+    }
+
+    fn collect_sh_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if path.is_dir() {
+                if !name.starts_with('.') && name != "target" {
+                    collect_sh_files(&path, out);
+                }
+            } else if name.ends_with(".sh") {
+                out.push(path);
+            }
+        }
+    }
 }

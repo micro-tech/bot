@@ -1,0 +1,4 @@
+# Shell scripts must use LF endings even on Windows checkouts: a CRLF
+# script copied (not cloned) to the Linux host fails on
+# `set -euo pipefail\r`, killing the nightly backup (M26, task 414).
+*.sh text eol=lf

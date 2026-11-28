@@ -655,6 +655,18 @@ async fn run_subagent(
 
 // Serialize env-mutating tests across modules: they share process-global
 // env vars (HELIX_SUBAGENT_TEST_STUB, HELIX_SPEND_FILE, ...).
+//
+// M23 (task 411) — THE env-mutation rule: this is the ONE lock for all
+// env-mutating tests in the crate. Any test that calls `std::env::set_var`
+// or `std::env::remove_var` must hold this lock for its whole duration,
+// because env mutation is process-global and `unsafe` under edition 2024:
+// a parallel test reading any var races with it. Do NOT create a second
+// module-private lock — `spend.rs` used to have its own `TEST_LOCK`, and
+// it could not serialize against mutations in other modules. If a test
+// only needs the lock through a helper, use one of the locked helpers
+// (`with_clean_history`, `with_test_file`, `with_env`) — they all take
+// this lock. Enforced by the `no_unlocked_env_mutation_in_tests` scan
+// test in the `tests` module below.
 #[cfg(test)]
 static TEST_LOCK: OnceLock<std::sync::Mutex<()>> = OnceLock::new();
 #[cfg(test)]
@@ -982,5 +994,291 @@ mod tests {
             "stub run should leave a Done record"
         );
         crate::agents::subagent_registry::reset_for_tests();
+    }
+
+    // ── M23: env-mutation lock enforcement ──────────────────────────────
+
+    /// M23 (task 411): no env mutation in test code without the shared lock.
+    ///
+    /// Scans every `src/**/*.rs` file for `set_var(`/`remove_var(` inside
+    /// test code (`mod tests` blocks, or a whole file named `tests.rs`),
+    /// and asserts the enclosing test fn holds `test_env_lock` — directly,
+    /// via a locked helper (`with_clean_history`, `with_test_file`,
+    /// `with_env`), or by receiving the guard as a `&MutexGuard`
+    /// parameter. A new env-mutating test that forgets the lock fails here
+    /// instead of flaking under parallel test threads.
+    #[test]
+    fn no_unlocked_env_mutation_in_tests() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        collect_rs_files(&root, &mut files);
+        assert!(!files.is_empty(), "no .rs files found under {:?}", root);
+        let mut violations: Vec<String> = Vec::new();
+        for file in &files {
+            let text = std::fs::read_to_string(file)
+                .unwrap_or_else(|e| panic!("cannot read {:?}: {}", file, e));
+            scan_file_for_unlocked_env(file, &text, &mut violations);
+        }
+        assert!(
+            violations.is_empty(),
+            "env-mutating tests without test_env_lock (M23):\n{}",
+            violations.join("\n")
+        );
+    }
+
+    fn collect_rs_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if path.is_dir() {
+                if !name.starts_with('.') && name != "target" {
+                    collect_rs_files(&path, out);
+                }
+            } else if name.ends_with(".rs") {
+                out.push(path);
+            }
+        }
+    }
+
+    /// Strip string literals, char literals and comments (replaced by
+    /// spaces, newlines kept) so brace counting and keyword matching see
+    /// only real code. Line numbers are preserved.
+    fn strip_strings_and_comments(src: &str) -> String {
+        #[derive(PartialEq)]
+        enum St {
+            Normal,
+            Str,
+            Char,
+            LineComment,
+            BlockComment,
+        }
+        let mut out = String::with_capacity(src.len());
+        let mut st = St::Normal;
+        let mut chars = src.chars().peekable();
+        while let Some(c) = chars.next() {
+            match st {
+                St::Normal => match c {
+                    '"' => {
+                        st = St::Str;
+                        out.push(' ');
+                    }
+                    '/' => match chars.peek() {
+                        Some('/') => {
+                            chars.next();
+                            st = St::LineComment;
+                            out.push(' ');
+                            out.push(' ');
+                        }
+                        Some('*') => {
+                            chars.next();
+                            st = St::BlockComment;
+                            out.push(' ');
+                            out.push(' ');
+                        }
+                        _ => out.push(c),
+                    },
+                    '\'' => {
+                        // Char literal only if it looks like 'x' / '\n' /
+                        // '\'' — otherwise it is a lifetime, left alone.
+                        let mut probe = chars.clone();
+                        let ok = match probe.next() {
+                            Some('\\') => {
+                                let _ = probe.next();
+                                probe.next() == Some('\'')
+                            }
+                            Some(_) => probe.next() == Some('\''),
+                            None => false,
+                        };
+                        if ok {
+                            st = St::Char;
+                            out.push(' ');
+                        } else {
+                            out.push(c);
+                        }
+                    }
+                    _ => out.push(c),
+                },
+                St::Str => {
+                    if c == '\\' {
+                        chars.next();
+                        out.push(' ');
+                        out.push(' ');
+                    } else if c == '"' {
+                        st = St::Normal;
+                        out.push(' ');
+                    } else {
+                        out.push(if c == '\n' { '\n' } else { ' ' });
+                    }
+                }
+                St::Char => {
+                    if c == '\\' {
+                        chars.next();
+                        out.push(' ');
+                        out.push(' ');
+                    } else if c == '\'' {
+                        st = St::Normal;
+                        out.push(' ');
+                    } else {
+                        out.push(if c == '\n' { '\n' } else { ' ' });
+                    }
+                }
+                St::LineComment => {
+                    if c == '\n' {
+                        st = St::Normal;
+                        out.push('\n');
+                    } else {
+                        out.push(' ');
+                    }
+                }
+                St::BlockComment => {
+                    if c == '*' && chars.peek() == Some(&'/') {
+                        chars.next();
+                        st = St::Normal;
+                        out.push(' ');
+                        out.push(' ');
+                    } else {
+                        out.push(if c == '\n' { '\n' } else { ' ' });
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// The `fn` name on a definition line, if any (`fn`, `async fn`,
+    /// `pub fn`, `pub(crate) fn`).
+    fn fn_name_on_line(line: &str) -> Option<String> {
+        let mut t = line.trim_start();
+        // Strip qualifiers in any order: pub, pub(...), async, const, unsafe.
+        loop {
+            if let Some(rest) = t.strip_prefix("pub") {
+                t = rest.trim_start();
+                if t.starts_with('(') {
+                    // Skip the (...) group.
+                    let mut depth = 0;
+                    let mut cut = None;
+                    for (i, c) in t.char_indices() {
+                        match c {
+                            '(' => depth += 1,
+                            ')' => {
+                                depth -= 1;
+                                if depth == 0 {
+                                    cut = Some(i + 1);
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    t = t[cut?..].trim_start();
+                }
+                continue;
+            }
+            if let Some(rest) = t.strip_prefix("async") {
+                t = rest.trim_start();
+                continue;
+            }
+            if let Some(rest) = t.strip_prefix("const") {
+                t = rest.trim_start();
+                continue;
+            }
+            if let Some(rest) = t.strip_prefix("unsafe") {
+                t = rest.trim_start();
+                continue;
+            }
+            break;
+        }
+        let rest = t.strip_prefix("fn ")?;
+        let name: String = rest
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        if name.is_empty() { None } else { Some(name) }
+    }
+
+    /// Enclosing fns of `idx` (innermost first): walk upward tracking the
+    /// brace balance; a `fn` line encloses `idx` when the braces between
+    /// it and `idx` are net-open (its body has not closed yet).
+    fn enclosing_fns(lines: &[&str], idx: usize) -> Vec<(String, usize)> {
+        let mut out = Vec::new();
+        let mut net: i32 = 0;
+        let mut j = idx as i32;
+        while j >= 0 {
+            let line = lines[j as usize];
+            let opens = line.matches('{').count() as i32;
+            let closes = line.matches('}').count() as i32;
+            net += closes - opens;
+            if let Some(name) = fn_name_on_line(line)
+                && net < 0
+            {
+                out.push((name, j as usize));
+            }
+            j -= 1;
+        }
+        out
+    }
+
+    fn scan_file_for_unlocked_env(
+        file: &std::path::Path,
+        text: &str,
+        violations: &mut Vec<String>,
+    ) {
+        let cleaned = strip_strings_and_comments(text);
+        let lines: Vec<&str> = cleaned.lines().collect();
+        let whole_file_is_tests = file.file_name().map(|n| n == "tests.rs").unwrap_or(false);
+        // Brace depth before each line.
+        let mut depth_before: Vec<i32> = Vec::with_capacity(lines.len());
+        let mut depth: i32 = 0;
+        for line in &lines {
+            depth_before.push(depth);
+            depth += line.matches('{').count() as i32;
+            depth -= line.matches('}').count() as i32;
+        }
+        // Active `mod tests {` scope: (entry depth, start line).
+        let mut tests_scope: Option<(i32, usize)> = None;
+        for (idx, line) in lines.iter().enumerate() {
+            if let Some((entry, _)) = tests_scope
+                && !whole_file_is_tests
+                && depth_before[idx] <= entry
+            {
+                tests_scope = None;
+            }
+            if line.contains("mod tests") && line.contains('{') {
+                tests_scope = Some((depth_before[idx], idx));
+            }
+            let in_tests = whole_file_is_tests || tests_scope.is_some();
+            if !in_tests {
+                continue;
+            }
+            if !(line.contains("set_var(") || line.contains("remove_var(")) {
+                continue;
+            }
+            let chain = enclosing_fns(&lines, idx);
+            let locked = chain.iter().any(|(_, start)| {
+                let segment = lines[*start..=idx].join("\n");
+                segment.contains("test_env_lock")
+                    || segment.contains("with_clean_history")
+                    || segment.contains("with_test_file")
+                    || segment.contains("with_env(")
+                    || lines[*start].contains("MutexGuard")
+            });
+            if !locked {
+                let fname = chain
+                    .first()
+                    .map(|(n, _)| n.clone())
+                    .unwrap_or_else(|| "<top level>".to_string());
+                violations.push(format!(
+                    "{}:{} in fn `{}`: {}",
+                    file.display(),
+                    idx + 1,
+                    fname,
+                    line.trim()
+                ));
+            }
+        }
     }
 }

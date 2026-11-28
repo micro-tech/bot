@@ -309,10 +309,17 @@ pub fn read_keep_alive_secs() -> u64 {
 mod tests {
     use super::*;
 
+    // M23 (task 411): every test in this module that touches the
+    // environment takes the shared test_env_lock first. Env mutation is
+    // process-global and unsafe under edition 2024; without the lock a
+    // parallel test reading OLLAMA_PRELOAD / OLLAMA_KEEP_ALIVE_SECS (or
+    // any other var) races with the set/remove here.
+
     // ── config helper tests ───────────────────────────────────────────────────
 
     #[test]
     fn test_read_preload_flag_defaults_true_when_absent() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::remove_var("OLLAMA_PRELOAD");
         }
@@ -324,6 +331,7 @@ mod tests {
 
     #[test]
     fn test_read_preload_flag_false() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::set_var("OLLAMA_PRELOAD", "false");
         }
@@ -335,6 +343,7 @@ mod tests {
 
     #[test]
     fn test_read_preload_flag_false_uppercase() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::set_var("OLLAMA_PRELOAD", "FALSE");
         }
@@ -346,6 +355,7 @@ mod tests {
 
     #[test]
     fn test_read_preload_flag_true_explicit() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::set_var("OLLAMA_PRELOAD", "true");
         }
@@ -357,6 +367,7 @@ mod tests {
 
     #[test]
     fn test_read_preload_flag_garbage_defaults_true() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::set_var("OLLAMA_PRELOAD", "yes_please");
         }
@@ -371,6 +382,7 @@ mod tests {
 
     #[test]
     fn test_read_keep_alive_secs_default_when_absent() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::remove_var("OLLAMA_KEEP_ALIVE_SECS");
         }
@@ -379,6 +391,7 @@ mod tests {
 
     #[test]
     fn test_read_keep_alive_secs_custom_value() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "120");
         }
@@ -390,6 +403,7 @@ mod tests {
 
     #[test]
     fn test_read_keep_alive_secs_invalid_falls_back_to_default() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "not_a_number");
         }
@@ -401,6 +415,7 @@ mod tests {
 
     #[test]
     fn test_read_keep_alive_secs_zero_disables() {
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe {
             std::env::set_var("OLLAMA_KEEP_ALIVE_SECS", "0");
         }
@@ -438,14 +453,25 @@ mod tests {
 
     // ── network resilience tests (unreachable host → verify no panic / no hang) ─
 
+    /// A port that is guaranteed closed: bind one, read it, drop the
+    /// listener. M25: the old test assumed port 19999 is never open.
+    fn closed_port() -> u16 {
+        std::net::TcpListener::bind("127.0.0.1:0")
+            .expect("bind for a closed port")
+            .local_addr()
+            .expect("listener addr")
+            .port()
+    }
+
     #[tokio::test]
     async fn test_preload_model_unreachable_returns_err() {
-        // Port 19999 is never open in a normal test environment.
+        // The port is closed by construction (see closed_port).
         // Verifies: returns Err, does not panic, does not hang indefinitely.
         // (The lib test harness doesn't install a rustls crypto provider;
         // the binary does it in main(). Without this, build_client panics.)
         crate::io::ollama::ensure_crypto_provider();
-        let result = preload_model("http://127.0.0.1:19999", "test_model").await;
+        let url = format!("http://127.0.0.1:{}", closed_port());
+        let result = preload_model(&url, "test_model").await;
         assert!(
             result.is_err(),
             "Expected Err when Ollama is unreachable, got Ok"
@@ -455,10 +481,8 @@ mod tests {
     #[tokio::test]
     async fn test_spawn_keepalive_task_zero_interval_is_noop() {
         // interval = 0 → returns immediately without spawning — must not panic.
-        spawn_keepalive_task(
-            "http://127.0.0.1:19999".to_string(),
-            "test_model".to_string(),
-            0,
-        );
+        // (The URL is never contacted; closed_port just avoids the magic 19999.)
+        let url = format!("http://127.0.0.1:{}", closed_port());
+        spawn_keepalive_task(url, "test_model".to_string(), 0);
     }
 }

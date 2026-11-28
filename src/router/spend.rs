@@ -344,21 +344,21 @@ pub fn reset_for_tests() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex as StdMutex;
-
-    // Serialize these tests: they share the process-global spend tracker
-    // and the HELIX_SPEND_FILE env var.
-    static TEST_LOCK: OnceLock<StdMutex<()>> = OnceLock::new();
-    fn lock() -> std::sync::MutexGuard<'static, ()> {
-        TEST_LOCK
-            .get_or_init(|| StdMutex::new(()))
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-    }
+    // Serialize these tests through the shared env lock
+    // (crate::tools::subagent_tool::test_env_lock): they share the
+    // process-global spend tracker and the HELIX_SPEND_FILE env var, and
+    // a module-private lock cannot serialize against env mutations in
+    // other modules (M23, task 411).
 
     fn with_test_file(_guard: &std::sync::MutexGuard<'static, ()>) -> String {
-        let p = format!("/tmp/helix_spend_test_{}.json", std::process::id());
-        // SAFETY: tests in this module hold TEST_LOCK; no other thread reads this var concurrently here.
+        // M25: temp_dir(), not a hard-coded /tmp — on Windows /tmp
+        // resolves to a drive-relative I:\tmp\... path.
+        let p = std::env::temp_dir()
+            .join(format!("helix_spend_test_{}.json", std::process::id()))
+            .to_string_lossy()
+            .into_owned();
+        // SAFETY: tests in this module hold the shared test_env_lock; no
+        // other thread mutates env concurrently here.
         unsafe { std::env::set_var("HELIX_SPEND_FILE", &p) };
         let _ = std::fs::remove_file(&p);
         reset_for_tests();
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn local_backends_are_free_and_always_allowed() {
-        let g = lock();
+        let g = crate::tools::subagent_tool::test_env_lock();
         let _p = with_test_file(&g);
         note_api_call(&LLMBackend::LocalOllama);
         note_api_call(&LLMBackend::LanOllama);
@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn gemini_metered_usage_prices_real_tokens() {
-        let g = lock();
+        let g = crate::tools::subagent_tool::test_env_lock();
         let _p = with_test_file(&g);
         // GIVEN 10k input + 5k output tokens at $0.10/$0.40 per Mtok:
         let usage = TokenUsage {
@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn gemini_estimate_fallback_when_no_usage_data() {
-        let g = lock();
+        let g = crate::tools::subagent_tool::test_env_lock();
         let _p = with_test_file(&g);
         // GIVEN a call with no token data (old caller path):
         note_api_call(&LLMBackend::Gemini);
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn metered_beats_estimate_when_both_possible() {
-        let g = lock();
+        let g = crate::tools::subagent_tool::test_env_lock();
         let _p = with_test_file(&g);
         // GIVEN one metered call and one estimated call:
         note_api_usage(
@@ -439,7 +439,7 @@ mod tests {
 
     #[test]
     fn cap_warns_by_default_and_blocks_when_configured() {
-        let g = lock();
+        let g = crate::tools::subagent_tool::test_env_lock();
         let p = with_test_file(&g);
         // GIVEN spend over the cap:
         set_daily_api_cap_usd(0.05);
@@ -495,7 +495,7 @@ mod tests {
 
     #[test]
     fn usage_summary_reports_per_backend_tokens() {
-        let g = lock();
+        let g = crate::tools::subagent_tool::test_env_lock();
         let _p = with_test_file(&g);
         note_api_usage(
             &LLMBackend::Gemini,
@@ -512,7 +512,7 @@ mod tests {
 
     #[test]
     fn legacy_state_file_migrates_usd() {
-        let g = lock();
+        let g = crate::tools::subagent_tool::test_env_lock();
         let p = with_test_file(&g);
         // GIVEN a pre-236 state file (date -> backend -> flat f64):
         let legacy = serde_json::json!({
@@ -530,7 +530,7 @@ mod tests {
 
     #[test]
     fn spend_persists_across_reload() {
-        let g = lock();
+        let g = crate::tools::subagent_tool::test_env_lock();
         let p = with_test_file(&g);
         note_api_usage(
             &LLMBackend::Gemini,

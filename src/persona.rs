@@ -798,7 +798,9 @@ mod tests {
     fn revision_rate_limiter_refuses_second_write_within_hour() {
         let _l = dir_lock();
         reset_revision_guards();
-        let path = PathBuf::from("/tmp/helix-persona-test-rate/agent.md");
+        // M25: temp_dir(), not a hard-coded /tmp — on Windows /tmp
+        // resolves to a drive-relative I:\tmp\... path.
+        let path = std::env::temp_dir().join("helix-persona-test-rate/agent.md");
         // GIVEN one recorded revision,
         assert!(note_revision(&path).is_ok());
         // WHEN a second revision is proposed within the hour,
@@ -811,7 +813,7 @@ mod tests {
         let _l = dir_lock();
         reset_revision_guards();
         set_self_author_enabled(true);
-        let a = PathBuf::from("/tmp/helix-persona-test-trip/a.md");
+        let a = std::env::temp_dir().join("helix-persona-test-trip/a.md");
         // GIVEN two proposals for the same file with the limiter reset
         // between them (simulating a limiter bypass — defense in depth),
         assert!(note_revision(&a).is_ok());
@@ -1066,7 +1068,10 @@ mod tests {
     fn stub_draft_writes_pending_not_live() {
         let _l = dir_lock();
         let _d = use_temp_dir("stubdraft");
-        // SAFETY: serialized by dir_lock; stub only affects this process.
+        // M23: the shared env lock, not just dir_lock — dir_lock serializes
+        // the persona directory, but HELIX_PERSONA_TEST_STUB is
+        // process-global env; only test_env_lock serializes env mutation.
+        let _tl = crate::tools::subagent_tool::test_env_lock();
         unsafe { std::env::set_var("HELIX_PERSONA_TEST_STUB", "1") };
         set_self_author_enabled(true);
         let rt = tokio::runtime::Runtime::new().unwrap();
