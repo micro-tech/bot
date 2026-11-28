@@ -15,10 +15,10 @@ pub mod manager;
 pub mod naming;
 
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use log::{debug, warn};
 use serde_json::Value;
-use tokio::sync::Mutex as TokioMutex;
 
 use crate::config::mcp::McpConfig;
 use manager::McpManager;
@@ -47,7 +47,21 @@ pub fn set_config_path(p: std::path::PathBuf) {
 static MCP_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 /// Global connection manager, created on first use when MCP is enabled.
-static MCP_MANAGER: OnceLock<std::sync::Arc<TokioMutex<McpManager>>> = OnceLock::new();
+/// An `Arc<McpManager>` (not a mutex): the manager's maps are behind
+/// short-held interior locks that are never held across network I/O
+/// (task 397 / M7), so no global lock is ever held across a call and a
+/// hung server cannot block other servers.
+static MCP_MANAGER: OnceLock<std::sync::Arc<McpManager>> = OnceLock::new();
+
+/// Bridge timeout for a whole `tool_definitions` fetch (all servers).
+/// The per-server connect (30 s) + list (30 s) timeouts normally fire
+/// first; this bounds the aggregate so a multi-server fetch cannot stall
+/// a caller indefinitely.
+const DEFS_TIMEOUT: Duration = Duration::from_secs(120);
+/// Bridge timeout for a single `try_execute` call. The manager's own
+/// CALL_TIMEOUT (120 s) normally fires first with the clean error; this
+/// is the backstop that guarantees the worker thread is released.
+const CALL_BRIDGE_TIMEOUT: Duration = Duration::from_secs(150);
 
 fn load_config_from(path: &std::path::Path) -> McpConfig {
     match std::fs::read_to_string(path) {
@@ -169,7 +183,8 @@ fn runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
-/// Drive an MCP future to completion from synchronous code.
+/// Drive an MCP future to completion from synchronous code, bounded by
+/// `timeout`.
 ///
 /// `tools::execute()` / `tools::tool_definitions()` are called from both
 /// plain sync code and async contexts (axum handlers, the Ollama tool loop).
@@ -178,18 +193,30 @@ fn runtime() -> &'static tokio::runtime::Runtime {
 /// runtime, which is exactly where `execute()` usually runs. Instead we keep
 /// one dedicated runtime for MCP and enter it with `block_on` when there is
 /// no ambient runtime, or `block_in_place` when there is one.
-fn bridge<F, T>(fut: F) -> T
+///
+/// The timeout (task 397 / M7) is the backstop that actually cancels a hung
+/// call: `tokio::time::timeout` drops the future when it fires, so the
+/// worker thread is released instead of leaking forever (the old bridge
+/// had no timeout, so a hung call held the thread — and the global manager
+/// mutex — indefinitely). The MCP child itself is NOT killed (see
+/// mcp_handler docs — a real kill is a follow-up).
+fn bridge<F, T>(fut: F, timeout: Duration) -> Result<T, String>
 where
     F: std::future::Future<Output = T>,
 {
     let rt = runtime();
+    let timed = async move {
+        tokio::time::timeout(timeout, fut)
+            .await
+            .map_err(|_| format!("mcp: operation timed out after {timeout:?}"))
+    };
     match tokio::runtime::Handle::try_current() {
-        Ok(_handle) => tokio::task::block_in_place(|| rt.block_on(fut)),
-        Err(_) => rt.block_on(fut),
+        Ok(_handle) => tokio::task::block_in_place(|| rt.block_on(timed)),
+        Err(_) => rt.block_on(timed),
     }
 }
 
-fn manager() -> Option<std::sync::Arc<TokioMutex<McpManager>>> {
+fn manager() -> Option<std::sync::Arc<McpManager>> {
     if !is_enabled() {
         // debug!, not warn!: this fires on every tool_definitions() /
         // try_execute() call while MCP is off, and off is the normal
@@ -201,13 +228,16 @@ fn manager() -> Option<std::sync::Arc<TokioMutex<McpManager>>> {
     }
     Some(
         MCP_MANAGER
-            .get_or_init(|| std::sync::Arc::new(TokioMutex::new(McpManager::new(config().clone()))))
+            .get_or_init(|| std::sync::Arc::new(McpManager::new(config().clone())))
             .clone(),
     )
 }
 
 /// Ollama-style tool definitions for every MCP tool (empty when disabled).
 /// Results are cached after the first fetch; servers are spawned lazily.
+/// A bridge timeout returns an empty list (and a warning) rather than
+/// stalling the caller — the manager's per-server timeouts normally fire
+/// first, and an empty fetch is not cached, so the next call retries.
 pub fn tool_definitions() -> Vec<Value> {
     #[cfg(test)]
     if let Some(d) = TEST_DEFS_OVERRIDE.lock().unwrap().clone() {
@@ -217,10 +247,13 @@ pub fn tool_definitions() -> Vec<Value> {
         Some(m) => m,
         None => return Vec::new(),
     };
-    bridge(async move {
-        let mut guard = mgr.lock().await;
-        guard.tool_definitions().await
-    })
+    match bridge(async move { mgr.tool_definitions().await }, DEFS_TIMEOUT) {
+        Ok(defs) => defs,
+        Err(e) => {
+            warn!("{e}");
+            Vec::new()
+        }
+    }
 }
 
 /// Try to execute an MCP tool.
@@ -241,16 +274,23 @@ pub fn try_execute(name: &str, args: &Value) -> Option<String> {
     let (server, tool) = naming::parse(name)?;
     let mgr = manager()?;
     let args = args.clone();
-    Some(bridge(async move {
-        let mut guard = mgr.lock().await;
-        match guard.call_tool(&server, &tool, &args).await {
-            Ok(out) => out,
-            Err(e) => {
-                warn!("{e}");
-                e
-            }
+    let name = name.to_string();
+    match bridge(
+        async move { mgr.call_tool(&server, &tool, &args).await },
+        CALL_BRIDGE_TIMEOUT,
+    ) {
+        Ok(Ok(out)) => Some(out),
+        Ok(Err(e)) => {
+            warn!("{e}");
+            Some(e)
         }
-    }))
+        Err(e) => {
+            // Bridge timeout: the call was actually cancelled (task 397 /
+            // M7) — report it as a failure, not a silent fall-through.
+            warn!("{e}");
+            Some(format!("mcp: call to '{name}' timed out"))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -272,6 +312,31 @@ mod tests {
         clear_test_overrides();
         override_config_for_tests(McpConfig::default());
         guard
+    }
+
+    #[test]
+    fn bridge_timeout_cancels_hung_future() {
+        // Task 397 / M7: a future that never completes must be cancelled
+        // at the timeout (the worker thread is released), not awaited
+        // forever. The old bridge had no timeout, so a hung call leaked
+        // the thread indefinitely.
+        let start = std::time::Instant::now();
+        let out: Result<(), String> = bridge(
+            async { std::future::pending::<()>().await },
+            Duration::from_millis(100),
+        );
+        assert!(out.is_err(), "hung future must time out");
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "bridge must return promptly on timeout, took {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn bridge_returns_fast_future() {
+        let out: Result<u32, String> = bridge(async { 42 }, Duration::from_secs(5));
+        assert_eq!(out, Ok(42));
     }
 
     #[test]

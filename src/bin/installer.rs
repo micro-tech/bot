@@ -16,6 +16,19 @@ mod browser_install;
 mod chat_mcp_install;
 
 fn main() {
+    // The installer is Linux-only (systemd service, /etc/helix, chown).
+    // On Windows `id` does not exist, so the old code re-executed via
+    // `sudo` — recursing under Win11 sudo, or panicking without it
+    // (task 398 / M8). Fail cleanly instead: on Windows, run Helix from
+    // source (cargo run) or under WSL2.
+    #[cfg(windows)]
+    {
+        eprintln!(
+            "Helix installer runs on Linux only: it installs a systemd service under /etc/helix. On Windows, run Helix from source (cargo run) or under WSL2."
+        );
+        std::process::exit(1);
+    }
+
     let args: Vec<String> = env::args().collect();
 
     // ─────────────────────────────────────────────────────────────────────
@@ -24,6 +37,8 @@ fn main() {
     // This prompts the user ONCE for the sudo password instead of
     // triggering repeated Polkit dialogs for every systemctl call.
     // ─────────────────────────────────────────────────────────────────────
+    // Unix only: on Windows main() already exited above (task 398 / M8).
+    #[cfg(unix)]
     if !is_root() {
         println!("Not running as root — requesting sudo privileges...");
         println!("  (You should only be prompted for your password once.)\n");
@@ -52,6 +67,9 @@ fn main() {
 
 /// Returns true if the current process is running as root (uid 0).
 /// Uses the `id -u` command so we don't need extra crates.
+/// Unix only (task 398 / M8): on Windows main() exits before this is
+/// ever called, so the `id` command is never attempted there.
+#[cfg(unix)]
 fn is_root() -> bool {
     Command::new("id")
         .arg("-u")
@@ -468,7 +486,9 @@ fn install() {
 
 /// Back up `dest` to `<dest>.bak-<unix-epoch>` before it gets overwritten.
 /// Prints where the backup went. No-op when `dest` doesn't exist yet (fresh
-/// install) — there's nothing to lose.
+/// install) — there's nothing to lose. Old backups are pruned (task 398 /
+/// M8): without pruning, every reinstall adds another `.bak-*` and they
+/// pile up forever.
 fn backup_existing(dest: &Path) {
     if !dest.exists() {
         return;
@@ -480,12 +500,76 @@ fn backup_existing(dest: &Path) {
     let backup_name = format!("{}.bak-{}", dest.display(), epoch);
     let backup = Path::new(&backup_name);
     match fs::copy(dest, backup) {
-        Ok(_) => println!("Backed up {} -> {}", dest.display(), backup.display()),
+        Ok(_) => {
+            println!("Backed up {} -> {}", dest.display(), backup.display());
+            prune_backups(dest);
+        }
         Err(e) => eprintln!(
             "WARNING: could not back up {}: {} — proceeding with overwrite",
             dest.display(),
             e
         ),
+    }
+}
+
+/// Keep the newest `MAX_BACKUPS` `<dest>.bak-*` files and delete the rest
+/// (task 398 / M8). The epoch suffix sorts chronologically, so the newest
+/// are the lexicographically largest names. Best-effort: a failed delete
+/// only warns.
+const MAX_BACKUPS: usize = 3;
+
+fn prune_backups(dest: &Path) {
+    let Some(parent) = dest.parent() else {
+        return;
+    };
+    let Some(file_name) = dest.file_name().and_then(|n| n.to_str()) else {
+        return;
+    };
+    let prefix = format!("{}.bak-", file_name);
+    let Ok(entries) = fs::read_dir(parent) else {
+        return;
+    };
+    let mut backups: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with(&prefix))
+                .unwrap_or(false)
+        })
+        .collect();
+    backups.sort();
+    if backups.len() <= MAX_BACKUPS {
+        return;
+    }
+    for old in &backups[..backups.len() - MAX_BACKUPS] {
+        if let Err(e) = fs::remove_file(old) {
+            eprintln!(
+                "WARNING: could not prune old backup {}: {}",
+                old.display(),
+                e
+            );
+        }
+    }
+}
+
+/// True for files that hold secrets (`.env` API keys, the TLS private
+/// key). These are written with mode 0600 (task 398 / M8) instead of the
+/// process umask — the installer runs as root, so the default umask
+/// would leave them world-readable.
+fn is_secret_file(name: &str) -> bool {
+    name == ".env" || name == "key.pem"
+}
+
+/// Restrict a just-written secret file to owner-only access (Unix).
+/// No-op on non-Unix (Windows ACLs are out of scope here) and
+/// best-effort: a failure only warns, it never fails the install.
+#[cfg(unix)]
+fn set_secret_mode(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    if let Err(e) = fs::set_permissions(path, fs::Permissions::from_mode(0o600)) {
+        eprintln!("WARNING: could not set 0600 on {}: {}", path.display(), e);
     }
 }
 
@@ -514,7 +598,15 @@ fn safe_copy_to_both(name: &str, src: &Path, primary_runtime_dir: &str) {
 
         backup_existing(&dest);
         match fs::copy(src, &dest) {
-            Ok(_) => println!("Copied {} -> {}", name, dest.display()),
+            Ok(_) => {
+                println!("Copied {} -> {}", name, dest.display());
+                // Task 398 / M8: secrets (.env, key.pem) get owner-only
+                // perms instead of the process umask.
+                if is_secret_file(name) {
+                    #[cfg(unix)]
+                    set_secret_mode(&dest);
+                }
+            }
             Err(e) => eprintln!(
                 "WARNING: failed to copy {} -> {}: {}",
                 name,
@@ -532,7 +624,15 @@ fn safe_write_to_both(name: &str, data: &[u8], primary_runtime_dir: &str) {
         let dest = Path::new(dest_dir).join(name);
         backup_existing(&dest);
         match fs::write(&dest, data) {
-            Ok(_) => println!("Wrote {} -> {}", name, dest.display()),
+            Ok(_) => {
+                println!("Wrote {} -> {}", name, dest.display());
+                // Task 398 / M8: secrets (.env, key.pem) get owner-only
+                // perms instead of the process umask.
+                if is_secret_file(name) {
+                    #[cfg(unix)]
+                    set_secret_mode(&dest);
+                }
+            }
             Err(e) => eprintln!("WARNING: failed to write {}: {}", dest.display(), e),
         }
     }
@@ -570,36 +670,53 @@ fn set_ownership(path: &str, user: &str, group: &str) {
 // ---------------------------------------------------------------------------
 
 fn generate_self_signed_certs(source_dir: &Path, primary_runtime_dir: &str) {
-    let tmp_cert = "/tmp/helix_cert.pem";
-    let tmp_key = "/tmp/helix_key.pem";
+    // Private temp dir (task 398 / M8): the old fixed /tmp/helix_*.pem
+    // paths are world-readable by default and collide across installs.
+    // A per-process dir with mode 0700 holds the key while it exists,
+    // and is removed when this function returns (both branches).
+    let tmp_dir = std::env::temp_dir().join(format!("helix-install-{}", std::process::id()));
+    if let Err(e) = fs::create_dir_all(&tmp_dir) {
+        eprintln!(
+            "WARNING: could not create temp dir {}: {} — writing placeholder cert files.",
+            tmp_dir.display(),
+            e
+        );
+        let placeholder = b"# Placeholder - replace with a real TLS certificate\n";
+        safe_write_to_both("cert.pem", placeholder, primary_runtime_dir);
+        safe_write_to_both("key.pem", placeholder, primary_runtime_dir);
+        return;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&tmp_dir, fs::Permissions::from_mode(0o700));
+    }
+    let tmp_cert = tmp_dir.join("helix_cert.pem");
+    let tmp_key = tmp_dir.join("helix_key.pem");
 
     let status = Command::new("openssl")
-        .args([
-            "req",
-            "-x509",
-            "-newkey",
-            "rsa:2048",
-            "-keyout",
-            tmp_key,
-            "-out",
-            tmp_cert,
-            "-days",
-            "3650",
-            "-nodes",
-            "-subj",
-            "/CN=localhost/O=AgentOS/C=US",
-        ])
+        .arg("req")
+        .arg("-x509")
+        .arg("-newkey")
+        .arg("rsa:2048")
+        .arg("-keyout")
+        .arg(&tmp_key)
+        .arg("-out")
+        .arg(&tmp_cert)
+        .arg("-days")
+        .arg("3650")
+        .arg("-nodes")
+        .arg("-subj")
+        .arg("/CN=localhost/O=AgentOS/C=US")
         .status();
 
     match status {
         Ok(s) if s.success() => {
-            safe_copy_to_both("cert.pem", Path::new(tmp_cert), primary_runtime_dir);
-            safe_copy_to_both("key.pem", Path::new(tmp_key), primary_runtime_dir);
+            safe_copy_to_both("cert.pem", &tmp_cert, primary_runtime_dir);
+            safe_copy_to_both("key.pem", &tmp_key, primary_runtime_dir);
             // Save back so future installs can copy instead of regenerating.
-            let _ = fs::copy(tmp_cert, source_dir.join("cert.pem"));
-            let _ = fs::copy(tmp_key, source_dir.join("key.pem"));
-            let _ = fs::remove_file(tmp_cert);
-            let _ = fs::remove_file(tmp_key);
+            let _ = fs::copy(&tmp_cert, source_dir.join("cert.pem"));
+            let _ = fs::copy(&tmp_key, source_dir.join("key.pem"));
             println!("Self-signed TLS certificate generated (valid 10 years).");
             println!("  Replace with a real cert when deploying publicly.");
         }
@@ -614,6 +731,8 @@ fn generate_self_signed_certs(source_dir: &Path, primary_runtime_dir: &str) {
             safe_write_to_both("key.pem", placeholder, primary_runtime_dir);
         }
     }
+    // Best-effort cleanup of the private temp dir (both branches).
+    let _ = fs::remove_dir_all(&tmp_dir);
 }
 
 // ---------------------------------------------------------------------------

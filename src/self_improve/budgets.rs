@@ -88,14 +88,25 @@ pub fn proposals_this_week(proposals: &[ProposalRecord], now_ms: u64) -> usize {
         .count()
 }
 
-/// Open proposals for one signature ("proposed", "evaluating", "queued").
+/// The statuses that count as "open" for the duplicate guard (task 399 / M9).
+/// ONE shared constant: budgets.rs (`open_for_signature`) and worker.rs
+/// (intake's open count) must agree, or a proposal in `evaluated` or
+/// `needs-human-review` is treated as open in one place and closed in the
+/// other, and a duplicate slips through. Terminal statuses ("promoted",
+/// "declined", "withdrawn") are NOT open.
+pub const OPEN_STATUSES: [&str; 5] = [
+    "proposed",
+    "evaluating",
+    "evaluated",
+    "queued",
+    "needs-human-review",
+];
+
+/// Open proposals for one signature (any status in [`OPEN_STATUSES`]).
 pub fn open_for_signature(proposals: &[ProposalRecord], signature: &str) -> usize {
     proposals
         .iter()
-        .filter(|p| {
-            p.signature == signature
-                && matches!(p.status.as_str(), "proposed" | "evaluating" | "queued")
-        })
+        .filter(|p| p.signature == signature && OPEN_STATUSES.contains(&p.status.as_str()))
         .count()
 }
 
@@ -330,6 +341,56 @@ mod tests {
         assert!(
             check_proposal_allowed(&failed_6, "sig-b", &cfg(), now).is_ok(),
             "a changed signature bypasses the failed-eval cooldown"
+        );
+    }
+
+    #[test]
+    fn evaluated_and_needs_human_review_block_duplicates() {
+        // Task 399 / M9: "evaluated" and "needs-human-review" are open
+        // statuses — a proposal in either must block a duplicate for the
+        // same signature (the old budgets set counted only proposed /
+        // evaluating / queued, so duplicates slipped through here while
+        // the worker counted them open). Terminal statuses must not block.
+        let now = 100 * WEEK_MS;
+        for status in ["evaluated", "needs-human-review"] {
+            let proposals = vec![proposal("sig-a", status, now - 1000, now - 1000)];
+            assert_eq!(
+                check_proposal_allowed(&proposals, "sig-a", &cfg(), now),
+                Err(BudgetBlock::SignatureOpen {
+                    signature: "sig-a".to_string()
+                }),
+                "status {status} must count as open"
+            );
+            assert_eq!(open_for_signature(&proposals, "sig-a"), 1);
+        }
+        for status in ["promoted", "withdrawn"] {
+            let proposals = vec![proposal("sig-a", status, now - 1000, now - 1000)];
+            assert!(
+                check_proposal_allowed(&proposals, "sig-a", &cfg(), now).is_ok(),
+                "terminal status {status} must not block a new proposal"
+            );
+            assert_eq!(open_for_signature(&proposals, "sig-a"), 0);
+        }
+        // "declined" is terminal for the open-status count (0), but it has
+        // its own 30-day cooldown (default) — a recent decline blocks via
+        // DeclinedCooldown, not via SignatureOpen. An old decline blocks
+        // via neither.
+        let recent_decline = vec![proposal("sig-a", "declined", now - 1000, now - 1000)];
+        assert_eq!(open_for_signature(&recent_decline, "sig-a"), 0);
+        assert!(matches!(
+            check_proposal_allowed(&recent_decline, "sig-a", &cfg(), now),
+            Err(BudgetBlock::DeclinedCooldown { .. })
+        ));
+        let old_decline = vec![proposal(
+            "sig-a",
+            "declined",
+            now - 31 * DAY_MS,
+            now - 31 * DAY_MS,
+        )];
+        assert_eq!(open_for_signature(&old_decline, "sig-a"), 0);
+        assert!(
+            check_proposal_allowed(&old_decline, "sig-a", &cfg(), now).is_ok(),
+            "a decline older than the cooldown must not block a new proposal"
         );
     }
 

@@ -815,16 +815,26 @@ pub fn repo_grep(args: &Value) -> String {
 
 // ── OKF / Cross-Machine Project Mapping Tools ────────────────────────────────
 
+/// Hard cap on scan depth (task 396 / M6). The caller-supplied `max_depth`
+/// is clamped to this, so a model passing a huge depth cannot walk the
+/// whole filesystem.
+const SCAN_MAX_DEPTH: usize = 10;
+
 /// Scans a directory (recursively, limited depth) and returns a structured snapshot.
 /// Useful for feeding into Mermaid diagram generation or OKF knowledge bundles.
 ///
+/// Confinement (task 396 / M6): the base path is resolved inside the
+/// repository root (the process working directory) — an absolute path
+/// outside the root is rejected, and symlinks are listed, never followed,
+/// so a link pointing outside the tree cannot leak its target's contents.
+///
 /// Args:
-///   path: base directory (relative or absolute — be careful with absolute)
-///   max_depth: optional, default 4
+///   path: base directory, relative to the repo root or absolute inside it
+///   max_depth: optional, default 4, clamped to SCAN_MAX_DEPTH (10)
 ///   include_hidden: optional, default false
 pub fn scan_directory(args: &Value) -> String {
     let base_path = args["path"].as_str().unwrap_or(".");
-    let max_depth = args["max_depth"].as_u64().unwrap_or(4) as usize;
+    let max_depth = (args["max_depth"].as_u64().unwrap_or(4) as usize).min(SCAN_MAX_DEPTH);
     let include_hidden = args["include_hidden"].as_bool().unwrap_or(false);
 
     let mut tree = Vec::new();
@@ -857,12 +867,33 @@ pub fn scan_directory(args: &Value) -> String {
                     continue;
                 }
 
-                let is_dir = path.is_dir();
+                let is_dir = entry
+                    .file_type()
+                    .map(|f| f.is_dir())
+                    .unwrap_or_else(|_| path.is_dir());
                 let rel_path = path
                     .strip_prefix(dir)
                     .unwrap_or(&path)
                     .to_string_lossy()
                     .to_string();
+
+                // Never follow symlinks (task 396 / M6): entry.file_type()
+                // does not follow links, unlike path.is_dir() / metadata().
+                // A link is listed as a leaf with its target; its target's
+                // contents are never walked, even when it points outside
+                // the tree.
+                if entry.file_type().map(|f| f.is_symlink()).unwrap_or(false) {
+                    let target = fs::read_link(&path)
+                        .map(|t| t.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    tree.push(serde_json::json!({
+                        "type": "symlink",
+                        "name": name,
+                        "path": rel_path,
+                        "target": target
+                    }));
+                    continue;
+                }
 
                 if is_dir {
                     *dir_count += 1;
@@ -889,16 +920,26 @@ pub fn scan_directory(args: &Value) -> String {
                         "type": "file",
                         "name": name,
                         "path": rel_path,
-                        "size": entry.metadata().map(|m| m.len()).unwrap_or(0)
+                        // symlink_metadata: never follows a link (the
+                        // symlink branch above already filtered links out,
+                        // so this equals metadata() here — explicit is safer).
+                        "size": fs::symlink_metadata(&path).map(|m| m.len()).unwrap_or(0)
                     }));
                 }
             }
         }
     }
 
-    let start = std::path::Path::new(base_path);
+    // Confine to the repo root (task 396 / M6): rejects absolute paths
+    // outside the tree (e.g. "/") and `..` / symlink escapes
+    // (resolve_inside canonicalizes, like repo_read above).
+    let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let start = match resolve_inside(&root, base_path) {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
     walk(
-        start,
+        &start,
         0,
         max_depth,
         include_hidden,
@@ -1162,6 +1203,110 @@ mod tests {
     fn test_repo_read_missing_is_error_not_panic() {
         let result = repo_read(&json!({"path": "no_such_file_xyz.rs"}));
         assert!(result.contains("Error reading"), "got: {}", result);
+    }
+
+    // ── scan_directory confinement (task 396 / M6) ───────────────────────
+
+    /// Unique scratch dir under target/ (inside the repo root, so
+    /// resolve_inside accepts it; target/ is gitignored). Mirrors the
+    /// chat_mcp_install fixture pattern.
+    fn scan_test_dir(tag: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = PathBuf::from("target").join(format!(
+            "test-tmp-scan-{}-{}-{}",
+            tag,
+            std::process::id(),
+            nanos
+        ));
+        fs::create_dir_all(&dir).expect("create scan test dir");
+        dir
+    }
+
+    #[test]
+    fn test_scan_directory_rejects_absolute_outside_root() {
+        // "/" is outside the repo root; the old code would list the
+        // whole filesystem from it.
+        let result = scan_directory(&json!({"path": "/"}));
+        assert!(
+            result.contains("escapes the allowed directory"),
+            "absolute escape must be rejected, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_scan_directory_rejects_parent_escape() {
+        let result = scan_directory(&json!({"path": "../.."}));
+        assert!(
+            result.contains("escapes the allowed directory"),
+            "parent escape must be rejected, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_scan_directory_clamps_depth() {
+        let dir = scan_test_dir("depth");
+        let dir_str = dir.to_string_lossy().to_string();
+        let _cleanup = Cleanup::new(|| _ = fs::remove_dir_all(&dir));
+        // Shallow file (depth 0) + a marker 12 levels down.
+        fs::write(dir.join("shallow.txt"), "shallow").unwrap();
+        let mut deep = dir.clone();
+        for i in 1..=12 {
+            deep = deep.join(format!("d{}", i));
+        }
+        fs::create_dir_all(&deep).unwrap();
+        fs::write(deep.join("deep.txt"), "deep").unwrap();
+        // Ask for far more depth than the cap: the result must clamp.
+        let out = scan_directory(&json!({"path": dir_str, "max_depth": 100}));
+        let v: Value = serde_json::from_str(&out).expect("scan result must be JSON");
+        assert_eq!(
+            v["max_depth"], 10,
+            "max_depth must clamp to SCAN_MAX_DEPTH, got: {out}"
+        );
+        assert!(
+            out.contains("shallow.txt"),
+            "shallow file must appear, got: {out}"
+        );
+        assert!(
+            !out.contains("deep.txt"),
+            "file at depth 12 must be clamped out, got: {out}"
+        );
+    }
+
+    #[test]
+    fn test_scan_directory_symlink_not_followed() {
+        // Unix-only; skipped elsewhere.
+        #[cfg(unix)]
+        {
+            let dir = scan_test_dir("symlink");
+            let dir_str = dir.to_string_lossy().to_string();
+            let _cleanup = Cleanup::new(|| _ = fs::remove_dir_all(&dir));
+            let link = dir.join("link");
+            if std::os::unix::fs::symlink("/etc", &link).is_err() {
+                return; // cannot create symlinks here — skip
+            }
+            let out = scan_directory(&json!({"path": dir_str}));
+            let v: Value = serde_json::from_str(&out).expect("scan result must be JSON");
+            let tree = v["tree"].as_array().expect("tree must be an array");
+            assert_eq!(
+                tree.len(),
+                1,
+                "only the link itself must appear, got: {out}"
+            );
+            assert_eq!(
+                tree[0]["type"], "symlink",
+                "link must be typed symlink, got: {out}"
+            );
+            assert_eq!(tree[0]["name"], "link");
+            assert!(
+                !out.contains("passwd"),
+                "symlink target contents must not leak, got: {out}"
+            );
+        }
     }
 
     // ── Artifact tools (tasks 335, 338) ─────────────────────────────────────

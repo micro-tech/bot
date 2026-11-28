@@ -13,10 +13,13 @@
 //!   rejection naming the problem and executes nothing.
 //! - The call runs in the tick (sync) within the `time` budget
 //!   (default 60 s). The budget bounds how long the tick WAITS for
-//!   the call — it does NOT kill the MCP server child. The executor
-//!   (`mcp_client`) has no kill handle, so a runaway call keeps
-//!   running in the background while the tick moves on (its result
-//!   is dropped). A real kill is a follow-up, not this build.
+//!   the call — it does NOT kill the MCP server child. Since task 397
+//!   (M7) the `mcp_client` bridge bounds the worker itself (150 s
+//!   backstop): a timed-out call is actually cancelled and the worker
+//!   thread is released, holding no manager lock — but the child
+//!   process is not killed, so a runaway call keeps running in the
+//!   background while the tick moves on (its result is dropped). A
+//!   real kill is a follow-up, not this build.
 //!
 //! The read-tool allowlist is a static table of tool names confirmed
 //! in-repo (task_handler's `GMAIL_READ_TOOLS`, the security allowlist).
@@ -101,7 +104,9 @@ pub enum McpCallOutcome {
     /// MCP error (classified by the caller via `is_tool_error`).
     Completed(Option<String>),
     /// The wait exceeded the budget. The worker thread keeps running
-    /// (the child is NOT killed — see module docs); the tick moves on.
+    /// briefly (the child is NOT killed — see module docs) but is now
+    /// bounded by the `mcp_client` bridge timeout (task 397 / M7), so
+    /// it is released instead of leaking forever; the tick moves on.
     TimedOut,
 }
 
@@ -109,7 +114,9 @@ pub enum McpCallOutcome {
 /// Returns `Completed` with `f`'s output, or `TimedOut` when the
 /// budget expires first. The worker is NOT killed on timeout — it
 /// finishes in the background and its result is dropped (the channel
-/// send fails silently once the receiver is gone).
+/// send fails silently once the receiver is gone) — but since task 397
+/// (M7) the `mcp_client` bridge bounds the worker's life, so it is
+/// released instead of leaking indefinitely holding the manager lock.
 fn call_with_timeout<F>(f: F, budget: Duration) -> McpCallOutcome
 where
     F: FnOnce() -> Option<String> + Send + 'static,

@@ -193,14 +193,6 @@ pub struct ProposalRecord {
     pub notes: Vec<String>,
 }
 
-const OPEN_STATUSES: [&str; 5] = [
-    "proposed",
-    "evaluating",
-    "evaluated",
-    "queued",
-    "needs-human-review",
-];
-
 /// The set of traces intake accepts (R3). Metric keys come from the
 /// latest ledger entry's live signals; test names come from prior
 /// accepted proposals (the ledger carries counts, not test names).
@@ -357,7 +349,10 @@ pub fn intake_proposal(
     let proposals_this_week = prior.iter().filter(|p| p.created_at >= week_ago).count();
     let open_for_signature = prior
         .iter()
-        .filter(|p| p.signature == signature && OPEN_STATUSES.contains(&p.status.as_str()))
+        .filter(|p| {
+            p.signature == signature
+                && crate::self_improve::budgets::OPEN_STATUSES.contains(&p.status.as_str())
+        })
         .count();
     let record = ProposalRecord {
         problem_statement: proposal.problem_statement,
@@ -610,6 +605,27 @@ mod tests {
             "seed must never overwrite an existing persona file"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn intake_open_statuses_match_budgets() {
+        // Task 399 / M9: intake counts a proposal open exactly when the
+        // shared budgets::OPEN_STATUSES says so (intake references the
+        // constant directly — no local copy). Pin the set here so a future
+        // edit that narrows it fails in both modules' tests.
+        let open = crate::self_improve::budgets::OPEN_STATUSES;
+        for s in [
+            "proposed",
+            "evaluating",
+            "evaluated",
+            "queued",
+            "needs-human-review",
+        ] {
+            assert!(open.contains(&s), "{s} must be an open status");
+        }
+        for s in ["promoted", "declined", "withdrawn"] {
+            assert!(!open.contains(&s), "{s} must not be an open status");
+        }
     }
 
     #[test]

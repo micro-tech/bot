@@ -461,12 +461,12 @@ fn static_tool_definitions() -> &'static Vec<Value> {
                 "type": "function",
                 "function": {
                     "name": "scan_directory",
-                    "description": "Recursively scan a directory tree and return a structured JSON snapshot. Use this to feed project structure into Mermaid diagram generation or OKF knowledge bundles. Supports cross-machine file change tracking.",
+                    "description": "Recursively scan a directory tree and return a structured JSON snapshot. Use this to feed project structure into Mermaid diagram generation or OKF knowledge bundles. Supports cross-machine file change tracking. The path is confined to the repository root (absolute paths outside it are rejected), depth is capped at 10, and symlinks are listed, never followed.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "path": { "type": "string", "description": "Base directory to scan (e.g. '.', 'src', 'C:/Users/you/projects')" },
-                            "max_depth": { "type": "integer", "description": "Maximum recursion depth (default 4)" },
+                            "path": { "type": "string", "description": "Base directory to scan, relative to the repo root or absolute inside it (e.g. '.', 'src')" },
+                            "max_depth": { "type": "integer", "description": "Maximum recursion depth (default 4, capped at 10)" },
                             "include_hidden": { "type": "boolean", "description": "Include dotfiles and hidden dirs (default false)" }
                         },
                         "required": ["path"]

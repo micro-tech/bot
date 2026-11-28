@@ -39,6 +39,34 @@ pub const HUB_URL: &str = "https://chat.micro-tech.xyz";
 /// Long-poll watch timeout. Matches the live R630 config.
 pub const WATCH_TIMEOUT_SECS: u32 = 30;
 
+/// Binary suffix for the chat-mcp executable on this platform (task 398 /
+/// M8). Windows builds produce `chat-mcp.exe`; the name check and the
+/// installed path must honour it, or the installer looks for a binary
+/// that never exists.
+#[cfg(windows)]
+pub const EXE_SUFFIX: &str = ".exe";
+/// Binary suffix for the chat-mcp executable on this platform (task 398 /
+/// M8). Windows builds produce `chat-mcp.exe`; the name check and the
+/// installed path must honour it, or the installer looks for a binary
+/// that never exists.
+#[cfg(not(windows))]
+pub const EXE_SUFFIX: &str = "";
+
+/// Render `path` as a TOML string value (task 398 / M8). A Windows path in
+/// a TOML basic string turns `\U` (e.g. `C:\Users\...`) into an invalid
+/// escape and corrupts the config. A literal string (`'...'`) takes
+/// backslashes verbatim, so it is the default; a path containing a
+/// literal `'` (vanishingly rare) falls back to a basic string with
+/// backslashes escaped.
+fn toml_path_string(path: &Path) -> String {
+    let s = path.to_string_lossy();
+    if !s.contains('\'') {
+        format!("'{}'", s)
+    } else {
+        format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+    }
+}
+
 /// What `ensure_chat_mcp_config` did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigOutcome {
@@ -88,7 +116,7 @@ pub fn home_dir_for_user(user: &str) -> PathBuf {
 pub fn layout_for_user(user: &str, primary_runtime_dir: &str) -> ChatMcpLayout {
     let home_dir = home_dir_for_user(user);
     ChatMcpLayout {
-        bin_path: home_dir.join(".local/bin/chat-mcp"),
+        bin_path: home_dir.join(format!(".local/bin/chat-mcp{}", EXE_SUFFIX)),
         config_dir: home_dir.join(".config/chat-mcp"),
         config_path: home_dir.join(".config/chat-mcp/config.toml"),
         helix_config_path: Path::new(primary_runtime_dir).join("config.toml"),
@@ -98,11 +126,13 @@ pub fn layout_for_user(user: &str, primary_runtime_dir: &str) -> ChatMcpLayout {
 
 /// The `[[mcp.servers]]` block for chat-mcp, matching the schema in
 /// `src/config/mcp.rs` (`name` + `command`; chat-mcp takes no args and
-/// reads its config file over stdio).
+/// reads its config file over stdio). The command is a TOML literal
+/// string (task 398 / M8): a Windows path in a basic string corrupts
+/// the config with an invalid `\U` escape.
 pub fn chat_server_block(bin_path: &Path) -> String {
     format!(
-        "[[mcp.servers]]\nname = \"chat\"\ncommand = \"{}\"\n",
-        bin_path.display()
+        "[[mcp.servers]]\nname = \"chat\"\ncommand = {}\n",
+        toml_path_string(bin_path)
     )
 }
 
@@ -239,6 +269,92 @@ pub fn ensure_chat_mcp_config(
     Ok(ConfigOutcome::Created)
 }
 
+/// Timeout for one git operation attempt (clone/pull), in seconds.
+const GIT_TIMEOUT_SECS: u64 = 120;
+/// Retries after a failed git operation (timeout or non-zero exit).
+const GIT_RETRIES: usize = 1;
+
+/// Run `git` with the given args in `cwd`, never prompting for
+/// credentials, with a slow-transfer abort and a hard timeout (task 398 /
+/// M8). The old code ran git with no timeout and no retry, so a hung
+/// remote or a credential prompt stalled the installer forever.
+/// Retries once on failure; returns the captured output on success.
+fn run_git(args: &[&str], cwd: Option<&Path>) -> Result<std::process::Output, String> {
+    let mut last_err = String::new();
+    for attempt in 0..=GIT_RETRIES {
+        match run_git_once(args, cwd) {
+            Ok(out) if out.status.success() => return Ok(out),
+            Ok(out) => {
+                last_err = format!(
+                    "git {} exited {}: {}",
+                    args.join(" "),
+                    out.status.code().unwrap_or(-1),
+                    String::from_utf8_lossy(&out.stderr).trim()
+                );
+            }
+            Err(e) => last_err = e,
+        }
+        if attempt < GIT_RETRIES {
+            eprintln!(
+                "chat-mcp: git attempt {} failed ({}), retrying once",
+                attempt + 1,
+                last_err
+            );
+        }
+    }
+    Err(last_err)
+}
+
+/// One git attempt, bounded by GIT_TIMEOUT_SECS. `GIT_TERMINAL_PROMPT=0`
+/// stops credential prompts, and `http.lowSpeedLimit/Time` aborts a
+/// stalled transfer. Spawns with piped output and polls `try_wait`;
+/// on timeout the child is killed. (Pipe-buffer deadlock is not a
+/// concern here: git clone/pull of this small repo with piped stderr
+/// emits only a few KB — no progress meter without a TTY.)
+fn run_git_once(args: &[&str], cwd: Option<&Path>) -> Result<std::process::Output, String> {
+    let mut cmd = Command::new("git");
+    // -c flags must come before the subcommand.
+    cmd.args([
+        "-c",
+        "http.lowSpeedLimit=1000",
+        "-c",
+        "http.lowSpeedTime=30",
+    ]);
+    cmd.args(args);
+    cmd.env("GIT_TERMINAL_PROMPT", "0");
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("chat-mcp: failed to execute git: {e}"))?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(GIT_TIMEOUT_SECS);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_status)) => {
+                // Exited: reap the child and drain the pipes.
+                return child
+                    .wait_with_output()
+                    .map_err(|e| format!("chat-mcp: failed to read git output: {e}"));
+            }
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!(
+                        "chat-mcp: git {} timed out after {GIT_TIMEOUT_SECS}s",
+                        args.join(" ")
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(e) => return Err(format!("chat-mcp: failed to wait for git: {e}")),
+        }
+    }
+}
+
 /// Resolve the chat-mcp source checkout. An existing checkout (a dir with a
 /// `Cargo.toml`) is reused; when it is a git checkout, a fast-forward pull
 /// is attempted but a pull failure only warns and the existing source is
@@ -248,18 +364,12 @@ pub fn ensure_chat_mcp_config(
 pub fn resolve_source_dir(preferred: &Path, repo_url: &str) -> Result<PathBuf, String> {
     if preferred.join("Cargo.toml").exists() {
         if preferred.join(".git").exists() {
-            let out = Command::new("git")
-                .args(["-C", &preferred.to_string_lossy(), "pull", "--ff-only"])
-                .output();
-            match out {
-                Ok(o) if o.status.success() => {}
-                Ok(o) => eprintln!(
-                    "chat-mcp: WARNING: git pull in {} failed ({}), using existing source",
-                    preferred.display(),
-                    String::from_utf8_lossy(&o.stderr).trim()
-                ),
+            // Timeout + retry + no credential prompt (task 398 / M8); a
+            // pull failure only warns and the existing source is used.
+            match run_git(&["pull", "--ff-only"], Some(preferred)) {
+                Ok(_) => {}
                 Err(e) => eprintln!(
-                    "chat-mcp: WARNING: could not run git pull in {}: {}, using existing source",
+                    "chat-mcp: WARNING: git pull in {} failed ({}), using existing source",
                     preferred.display(),
                     e
                 ),
@@ -271,15 +381,13 @@ pub fn resolve_source_dir(preferred: &Path, repo_url: &str) -> Result<PathBuf, S
         fs::create_dir_all(parent)
             .map_err(|e| format!("chat-mcp: cannot create {}: {}", parent.display(), e))?;
     }
-    let status = Command::new("git")
-        .args(["clone", repo_url, &preferred.to_string_lossy()])
-        .status()
-        .map_err(|e| format!("chat-mcp: failed to execute git clone: {e}"))?;
-    if !status.success() {
+    let out = run_git(&["clone", repo_url, &preferred.to_string_lossy()], None)?;
+    if !out.status.success() {
         return Err(format!(
-            "chat-mcp: git clone {repo_url} into {} failed (exit {})",
+            "chat-mcp: git clone {repo_url} into {} failed (exit {}): {}",
             preferred.display(),
-            status.code().unwrap_or(-1)
+            out.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&out.stderr).trim()
         ));
     }
     if !preferred.join("Cargo.toml").exists() {
@@ -320,7 +428,7 @@ pub fn build_and_install_binary(source_dir: &Path, bin_path: &Path) -> Result<()
             snippet.trim()
         ));
     }
-    let built = source_dir.join("target/release/chat-mcp");
+    let built = source_dir.join(format!("target/release/chat-mcp{}", EXE_SUFFIX));
     if !built.exists() {
         return Err(format!(
             "chat-mcp: build succeeded but {} is missing",
@@ -467,8 +575,33 @@ mod tests {
         let out = append_chat_server(HELIX_WITH_GOOGLE, bin).expect("must append");
         assert_eq!(count_occurrences(&out, "[mcp]"), 1, "header not duplicated");
         assert_eq!(count_occurrences(&out, "name = \"chat\""), 1);
-        assert!(out.contains("command = \"/home/cobble/.local/bin/chat-mcp\""));
+        // Task 398 / M8: the command is a TOML literal string now.
+        assert!(out.contains("command = '/home/cobble/.local/bin/chat-mcp'"));
         assert!(has_chat_server(&out));
+    }
+
+    #[test]
+    fn block_windows_path_round_trips_as_literal_string() {
+        // Task 398 / M8: a Windows path in a TOML basic string turns
+        // `\U` (C:\Users\...) into an invalid escape and corrupts the
+        // config. The block must use a literal string, and the emitted
+        // text must parse as valid TOML with the path intact.
+        let bin = Path::new(r"C:\Users\johnm\.local\bin\chat-mcp.exe");
+        let block = chat_server_block(bin);
+        assert!(
+            block.contains(r"command = 'C:\Users\johnm\.local\bin\chat-mcp.exe'"),
+            "Windows path must be a TOML literal string, got: {block}"
+        );
+        let parsed: toml::Value = toml::from_str(&block).expect("block must be valid TOML");
+        let cmd = parsed
+            .get("mcp")
+            .and_then(|m| m.get("servers"))
+            .and_then(|s| s.as_array())
+            .and_then(|a| a.first())
+            .and_then(|t| t.get("command"))
+            .and_then(|c| c.as_str())
+            .expect("command must be a string");
+        assert_eq!(cmd, r"C:\Users\johnm\.local\bin\chat-mcp.exe");
     }
 
     #[test]

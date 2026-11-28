@@ -6081,7 +6081,7 @@
       "id": 396,
       "title": "M6: scan_directory accepts any absolute path with unbounded depth and follows symlinks",
       "description": "scan_directory accepts any absolute path with unbounded depth and follows symlinks. Where: src/tools/file_tools.rs:224-225. Fix: resolve_inside, clamp depth, use symlink_metadata. It can currently list the whole filesystem.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "396.1 Confine scan_directory with resolve_inside so it cannot escape the allowed root. 396.2 Clamp the traversal depth and use symlink_metadata so symlinks are not followed out of the tree.",
@@ -6090,13 +6090,13 @@
         {
           "id": 396.1,
           "title": "Error checking: scan_directory rejects paths outside the root and symlinks escaping it",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 396.2,
           "title": "Cargo test coverage: outside-root path, depth clamp, symlink escape",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             396.1
           ]
@@ -6104,7 +6104,7 @@
         {
           "id": 396.3,
           "title": "Documentation: scan_directory confinement (resolve_inside, depth clamp, symlink handling)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             396.2
           ]
@@ -6115,7 +6115,7 @@
       "id": 397,
       "title": "M7: MCP client resilience: global mutex, no timeouts, no reconnect",
       "description": "MCP client resilience: global mutex, no timeouts, no reconnect. Where: src/mcp_client/mod.rs:246, src/mcp_client/manager.rs:111 (global MCP mutex held across call_tool, up to 120 s; list_all_tools has no timeout; dead servers never reconnected; an empty defs_cache is cached forever); src/chat_command/mcp_handler.rs:117-127 (on timeout, the worker thread leaks and keeps holding the MCP mutex). Fix: per-server locks or clone Peer; timeouts; reconnect on transport error; use tokio::time::timeout inside the bridge so the call is actually cancelled. Relevant to the live google-mcp problem: the MCP plumbing is proven, but a hung server currently holds the mutex and leaks the worker.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "397.1 Replace the global MCP mutex with per-server locks (or clone Peer) so one hung server cannot block all MCP calls. 397.2 Add timeouts to call_tool and list_all_tools, reconnect on transport error, and do not cache an empty defs_cache forever. 397.3 Use tokio::time::timeout inside the bridge so a timed-out call is actually cancelled instead of leaking the worker thread while it keeps holding the mutex.",
@@ -6124,13 +6124,13 @@
         {
           "id": 397.1,
           "title": "Error checking: MCP timeouts cancel the call; a hung server cannot hold the mutex or leak the worker",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 397.2,
           "title": "Cargo test coverage: hung server isolation, timeout cancellation, reconnect on transport error",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             397.1
           ]
@@ -6138,7 +6138,7 @@
         {
           "id": 397.3,
           "title": "Documentation: MCP client locking, timeouts and reconnect behaviour",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             397.2
           ]
@@ -6149,7 +6149,7 @@
       "id": 398,
       "title": "M8: Installer + git robustness",
       "description": "Installer + git robustness. Where: src/chat_mcp_install.rs:104, :327 (a Windows path in a TOML basic string becomes an invalid \\U escape and corrupts the config; the binary-name check ignores .exe); :250, :278 (git clone/pull: no timeout, no retry, can prompt for credentials); src/bin/installer.rs:25-38 (on Windows id fails, so the installer re-runs itself via sudo — recurses with Win11 sudo, or panics without it); :298, :465, :522 (.env/key.pem written as root with the default umask; fixed /tmp/helix_*.pem paths; .env backups pile up). Fix: TOML literal string or toml serialisation, plus EXE_SUFFIX; GIT_TERMINAL_PROMPT=0, http.lowSpeedLimit/Time, retry; #[cfg(unix)] or a clean error on Windows for the id check; mode 0600, private temp dir, prune backups.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "398.1 Write Windows paths with a TOML literal string or toml serialisation (no invalid \\U escape) and honour .exe in the binary-name check. 398.2 Give git clone/pull a timeout, a retry, and GIT_TERMINAL_PROMPT=0 plus http.lowSpeedLimit/Time so it cannot hang prompting for credentials. 398.3 Gate the id check with #[cfg(unix)] or a clean error on Windows instead of re-running via sudo. 398.4 Write .env/key.pem with mode 0600, use a private temp dir instead of fixed /tmp/helix_*.pem paths, and prune .env backups.",
@@ -6158,13 +6158,13 @@
         {
           "id": 398.1,
           "title": "Error checking: installer fails cleanly on Windows id check and git timeouts; secrets written 0600",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 398.2,
           "title": "Cargo test coverage: Windows path round-trip, git timeout/retry, secret file modes",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             398.1
           ]
@@ -6172,7 +6172,7 @@
         {
           "id": 398.3,
           "title": "Documentation: installer config writing, git robustness, and secret file handling",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             398.2
           ]
@@ -6183,7 +6183,7 @@
       "id": 399,
       "title": "M9: Budgets open statuses differ, so duplicates get through",
       "description": "Budgets open statuses differ, so duplicates get through. Where: src/self_improve/budgets.rs:91 vs src/self_improve/worker.rs:173-179 (evaluated and needs-human-review are not counted as open). Fix: one shared OPEN_STATUSES constant.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "399.1 Define one shared OPEN_STATUSES constant used by both budgets.rs and worker.rs so evaluated and needs-human-review count as open in both places and duplicate proposals cannot slip through.",
@@ -6192,13 +6192,13 @@
         {
           "id": 399.1,
           "title": "Error checking: one shared OPEN_STATUSES constant — no status counted open in one place and closed in the other",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 399.2,
           "title": "Cargo test coverage: evaluated and needs-human-review block duplicates in both budgets and worker",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             399.1
           ]
@@ -6206,7 +6206,7 @@
         {
           "id": 399.3,
           "title": "Documentation: budget open-status semantics (shared OPEN_STATUSES)",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             399.2
           ]
@@ -6217,7 +6217,7 @@
       "id": 400,
       "title": "M10: SSH server accounting: session counter leak + auth limiter counts successes",
       "description": "SSH server accounting: session counter leak + auth limiter counts successes. Where: src/ssh/handler.rs:175, :201 (session counter only decremented in channel_close — abrupt disconnects leak slots until all sessions are refused); :140, :63-71 (failed-auth limiter counts successful logins; the IP map never evicts). Fix: decrement in Drop; record only on reject, and prune entries.",
-      "status": "pending",
+      "status": "done",
       "dependencies": [],
       "priority": "medium",
       "details": "400.1 Decrement the session counter in Drop so abrupt disconnects release their slot instead of leaking it until all sessions are refused. 400.2 Record the failed-auth limiter only on reject (not on successful logins) and prune stale IP map entries.",
@@ -6226,13 +6226,13 @@
         {
           "id": 400.1,
           "title": "Error checking: session counter released on Drop; auth limiter records rejects only and prunes stale entries",
-          "status": "pending",
+          "status": "done",
           "dependencies": []
         },
         {
           "id": 400.2,
           "title": "Cargo test coverage: abrupt disconnect frees the slot; successful logins do not count toward the limiter",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             400.1
           ]
@@ -6240,7 +6240,7 @@
         {
           "id": 400.3,
           "title": "Documentation: SSH session accounting and failed-auth limiter rules",
-          "status": "pending",
+          "status": "done",
           "dependencies": [
             400.2
           ]

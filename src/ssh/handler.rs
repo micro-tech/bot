@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use log::{info, warn};
 use russh::keys::ssh_key::{HashAlg, PublicKey, public::KeyData};
@@ -62,14 +62,42 @@ impl SharedState {
     }
 
     /// Record a failed auth attempt; true when the IP is now throttled.
+    /// Call ONLY on reject (task 400 / M10): a successful login must not
+    /// count toward the limiter.
     fn note_failed_auth(&self, ip: IpAddr) -> bool {
         let mut guard = self.auth_attempts.lock().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
-        let window = std::time::Duration::from_secs(60);
+        Self::prune_auth_attempts(&mut guard, now);
         let entry = guard.entry(ip).or_default();
-        entry.retain(|t| now.duration_since(*t) < window);
         entry.push(now);
         entry.len() > self.rate_limit_per_minute as usize
+    }
+
+    /// Sliding window for failed auth attempts (1 minute).
+    const AUTH_WINDOW: Duration = Duration::from_secs(60);
+
+    /// Prune timestamps older than the window in every entry, and drop
+    /// entries left empty (task 400 / M10: the IP map never evicted, so
+    /// it grew forever). Called with the map lock held.
+    fn prune_auth_attempts(guard: &mut HashMap<IpAddr, Vec<Instant>>, now: Instant) {
+        guard.retain(|_, times| {
+            times.retain(|t| now.duration_since(*t) < Self::AUTH_WINDOW);
+            !times.is_empty()
+        });
+    }
+
+    /// True when this IP is currently throttled (more failed attempts in
+    /// the window than the limit). Read-only: does NOT record an attempt,
+    /// so checking the throttle before the key check never counts a
+    /// successful login.
+    fn is_throttled(&self, ip: IpAddr) -> bool {
+        let mut guard = self.auth_attempts.lock().unwrap_or_else(|e| e.into_inner());
+        let now = Instant::now();
+        Self::prune_auth_attempts(&mut guard, now);
+        guard
+            .get(&ip)
+            .map(|times| times.len() > self.rate_limit_per_minute as usize)
+            .unwrap_or(false)
     }
 }
 
@@ -78,6 +106,12 @@ pub struct HelixSshHandler {
     peer_ip: IpAddr,
     shared: Arc<SharedState>,
     authed_user: Option<String>,
+    /// Channel numbers (ChannelId::number()) this handler opened and has
+    /// not seen close for. Released in Drop, so an abrupt disconnect frees
+    /// its slots instead of leaking them (task 400 / M10). Tracked by
+    /// number — russh's ChannelId cannot be constructed outside russh,
+    /// which would make this untestable.
+    open_channels: HashSet<u32>,
 }
 
 impl HelixSshHandler {
@@ -86,11 +120,73 @@ impl HelixSshHandler {
             peer_ip,
             shared,
             authed_user: None,
+            open_channels: HashSet::new(),
+        }
+    }
+
+    /// Saturating decrement of the shared session counter (never underflows
+    /// into a huge number that would refuse all sessions — a self-DoS).
+    fn release_sessions(shared: &SharedState, n: usize) {
+        if n == 0 {
+            return;
+        }
+        let mut cur = shared.open_sessions.load(Ordering::SeqCst);
+        loop {
+            let next = cur.saturating_sub(n);
+            match shared.open_sessions.compare_exchange_weak(
+                cur,
+                next,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => break,
+                Err(v) => cur = v,
+            }
+        }
+    }
+
+    /// Admit one channel: increment the shared counter when under the cap
+    /// and record the channel number. Returns false (and releases the
+    /// increment) when at the cap. Idempotent: re-opening an already-open
+    /// channel number is a no-op that returns true.
+    fn note_channel_open(&mut self, id: u32) -> bool {
+        if self.open_channels.contains(&id) {
+            return true;
+        }
+        let open = self.shared.open_sessions.fetch_add(1, Ordering::SeqCst) + 1;
+        if open > self.shared.max_sessions {
+            Self::release_sessions(&self.shared, 1);
+            return false;
+        }
+        self.open_channels.insert(id);
+        true
+    }
+
+    /// Release one channel: forget the number and decrement the shared
+    /// counter, but only if this handler actually had it open (idempotent —
+    /// a duplicate close is a no-op, never a double decrement).
+    fn note_channel_close(&mut self, id: u32) {
+        if self.open_channels.remove(&id) {
+            Self::release_sessions(&self.shared, 1);
         }
     }
 
     fn fingerprint(key: &PublicKey) -> String {
         key.fingerprint(HashAlg::Sha256).to_string()
+    }
+}
+
+impl Drop for HelixSshHandler {
+    /// Abrupt disconnect: russh drops the handler without calling
+    /// channel_close for still-open channels, so release whatever this
+    /// handler still holds (task 400 / M10). Channels already closed
+    /// were removed from the set, so they are never double-released.
+    fn drop(&mut self) {
+        let n = self.open_channels.len();
+        if n > 0 {
+            Self::release_sessions(&self.shared, n);
+            self.open_channels.clear();
+        }
     }
 }
 
@@ -136,14 +232,16 @@ impl Handler for HelixSshHandler {
     }
 
     /// Real public-key auth: rate-limit, then key check, logging everything
-    /// except key material.
+    /// except key material. The throttle is checked BEFORE the key check
+    /// without recording (task 400 / M10), and a failure is recorded ONLY
+    /// on reject — a successful login never counts toward the limiter.
     async fn auth_publickey(
         &mut self,
         user: &str,
         key: VerifiedPublicKey<'_>,
     ) -> Result<Auth, Self::Error> {
         let fp = Self::fingerprint(key.public_key);
-        if self.shared.note_failed_auth(self.peer_ip) {
+        if self.shared.is_throttled(self.peer_ip) {
             warn!(
                 "[ssh] auth throttled: peer={} user='{}' fp={} (rate limit)",
                 self.peer_ip, user, fp
@@ -165,10 +263,19 @@ impl Handler for HelixSshHandler {
             self.authed_user = Some(user.to_string());
             Ok(Auth::Accept)
         } else {
-            warn!(
-                "[ssh] auth rejected: peer={} user='{}' fp={} (unknown key)",
-                self.peer_ip, user, fp
-            );
+            // Record ONLY on reject (task 400 / M10).
+            let throttled = self.shared.note_failed_auth(self.peer_ip);
+            if throttled {
+                warn!(
+                    "[ssh] auth throttled: peer={} user='{}' fp={} (rate limit)",
+                    self.peer_ip, user, fp
+                );
+            } else {
+                warn!(
+                    "[ssh] auth rejected: peer={} user='{}' fp={} (unknown key)",
+                    self.peer_ip, user, fp
+                );
+            }
             Ok(Auth::Reject {
                 proceed_with_methods: None,
                 partial_success: false,
@@ -178,13 +285,15 @@ impl Handler for HelixSshHandler {
 
     async fn channel_open_session(
         &mut self,
-        _channel: Channel<Msg>,
+        channel: Channel<Msg>,
         reply: ChannelOpenHandle,
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        let open = self.shared.open_sessions.fetch_add(1, Ordering::SeqCst) + 1;
-        if open > self.shared.max_sessions {
-            self.shared.open_sessions.fetch_sub(1, Ordering::SeqCst);
+        // Admit via the per-handler accounting (task 400 / M10): the
+        // channel number is recorded so Drop can release it on an abrupt
+        // disconnect, and the cap check lives in note_channel_open.
+        if !self.note_channel_open(channel.id().number()) {
+            let open = self.shared.open_sessions.load(Ordering::SeqCst);
             warn!(
                 "[ssh] session rejected: peer={} at cap ({}/{})",
                 self.peer_ip, open, self.shared.max_sessions
@@ -192,6 +301,7 @@ impl Handler for HelixSshHandler {
             reply.reject(ChannelOpenFailure::ResourceShortage).await;
             return Ok(());
         }
+        let open = self.shared.open_sessions.load(Ordering::SeqCst);
         info!(
             "[ssh] channel open: peer={} user={:?} ({}/{})",
             self.peer_ip, self.authed_user, open, self.shared.max_sessions
@@ -202,10 +312,13 @@ impl Handler for HelixSshHandler {
 
     async fn channel_close(
         &mut self,
-        _channel: ChannelId,
+        channel: ChannelId,
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        self.shared.open_sessions.fetch_sub(1, Ordering::SeqCst);
+        // Release via the per-handler accounting (idempotent — a duplicate
+        // close is a no-op). Drop releases whatever is left on an abrupt
+        // disconnect, so a channel is never double-released.
+        self.note_channel_close(channel.number());
         Ok(())
     }
 
@@ -343,6 +456,78 @@ mod tests {
         );
         assert_eq!(exit_code_for_report("run_shell is disabled: ..."), 126);
         assert_eq!(exit_code_for_report("weird"), 1);
+    }
+
+    #[test]
+    fn drop_releases_open_sessions() {
+        // Task 400 / M10: an abrupt disconnect drops the handler without
+        // any channel_close, so Drop must release the slots — otherwise
+        // they leak until all sessions are refused.
+        let shared = shared_state();
+        assert_eq!(shared.open_sessions.load(Ordering::SeqCst), 0);
+        {
+            let mut h = HelixSshHandler::new("127.0.0.1".parse().unwrap(), shared.clone());
+            assert!(h.note_channel_open(1));
+            assert!(h.note_channel_open(2));
+            assert_eq!(shared.open_sessions.load(Ordering::SeqCst), 2);
+            // Handler drops here with no channel_close (abrupt disconnect).
+        }
+        assert_eq!(
+            shared.open_sessions.load(Ordering::SeqCst),
+            0,
+            "Drop must release the slots"
+        );
+    }
+
+    #[test]
+    fn close_then_drop_releases_exactly_once() {
+        let shared = shared_state();
+        {
+            let mut h = HelixSshHandler::new("127.0.0.1".parse().unwrap(), shared.clone());
+            assert!(h.note_channel_open(1));
+            assert!(h.note_channel_open(2));
+            h.note_channel_close(1);
+            assert_eq!(shared.open_sessions.load(Ordering::SeqCst), 1);
+            // Duplicate close is a no-op, never a double decrement.
+            h.note_channel_close(1);
+            assert_eq!(shared.open_sessions.load(Ordering::SeqCst), 1);
+            // Drop releases only the still-open channel 2.
+        }
+        assert_eq!(shared.open_sessions.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn cap_rejects_without_leaking_a_slot() {
+        let shared = Arc::new(SharedState::new(HashSet::new(), 1, 10));
+        {
+            let mut h = HelixSshHandler::new("127.0.0.1".parse().unwrap(), shared.clone());
+            assert!(h.note_channel_open(1));
+            assert!(
+                !h.note_channel_open(2),
+                "second channel must be refused at cap"
+            );
+            assert_eq!(shared.open_sessions.load(Ordering::SeqCst), 1);
+        }
+        assert_eq!(shared.open_sessions.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn throttle_check_does_not_record() {
+        // Task 400 / M10: is_throttled is read-only — calling it must not
+        // count toward the limiter, so a run of successful logins (which
+        // only check the throttle before the key check) never throttles
+        // the IP. Failures still count exactly as before.
+        let shared = shared_state();
+        let ip: IpAddr = "127.0.0.1".parse().unwrap();
+        for _ in 0..50 {
+            assert!(!shared.is_throttled(ip));
+        }
+        // Still unthrottled after 50 read-only checks: nothing recorded.
+        for _ in 0..10 {
+            assert!(!shared.note_failed_auth(ip));
+        }
+        assert!(shared.note_failed_auth(ip));
+        assert!(shared.is_throttled(ip));
     }
 
     #[test]
