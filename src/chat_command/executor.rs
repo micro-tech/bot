@@ -50,7 +50,11 @@ pub const READ_COMMANDS: &[&str] = &["cat", "head", "tail", "grep"];
 /// a path (`head -n 5`, `tail -c 100`, `grep -m 3`). The value must be
 /// skipped by the path check, not rejected as an unlisted path.
 /// `grep -f` is deliberately NOT here: its value IS a pattern file and
-/// must stay path-checked — see [`PATH_VALUE_FLAGS`].
+/// must stay path-checked — see [`PATH_VALUE_FLAGS`]. Two of these
+/// flags need extra handling for grep (see the loop): `-e`/`--regexp`
+/// supply the pattern (see [`PATTERN_FLAGS`]), and `-n`/`-c`/`-s` are
+/// BOOLEAN for grep (--line-number/--count/--no-messages) even though
+/// they take a value for head/tail.
 const VALUE_FLAGS: &[&str] = &[
     "-n",
     "--lines",
@@ -72,6 +76,17 @@ const VALUE_FLAGS: &[&str] = &[
     "--sleep-interval",
     "--pid",
 ];
+
+/// Flags whose value IS grep's inline pattern (`grep -e root`,
+/// `grep --regexp root`). Unlike the other [`VALUE_FLAGS`], the value
+/// supplies the pattern, so once one is seen the later positionals
+/// are files to search, not the pattern — otherwise the file is eaten
+/// as the pattern and never path-checked (`grep -e root /etc/shadow`
+/// passed the gate while the child printed the root hash line;
+/// reviewer finding, M5 follow-up, BLOCKING). These stay in
+/// `VALUE_FLAGS` too (the value itself is not a path and is skipped);
+/// the loop sets `saw_pattern` for them on top of the skip.
+const PATTERN_FLAGS: &[&str] = &["-e", "--regexp"];
 
 /// Flags of the read commands whose following argument is a PATH to
 /// read (`grep -f patterns.txt`). Unlike [`VALUE_FLAGS`], the value
@@ -202,6 +217,24 @@ fn attached_path_value(arg: &str) -> Option<&str> {
     None
 }
 
+/// Whether `arg` is an attached `-e` pattern form: `-ePATTERN` (short,
+/// attached) or `--regexp=PATTERN` (long, `=`-separated). The pattern
+/// rides inside the token itself, so (like `-f`) it supplies grep's
+/// pattern — later positionals are files to search, not the pattern.
+/// The exact `-e` / `--regexp` forms (value in the next argument) are
+/// handled by the loop via [`PATTERN_FLAGS`], not here. Without this,
+/// `-eroot` fell through as an inert flag and `/etc/shadow` was eaten
+/// as the inline pattern (reviewer finding, M5 follow-up, BLOCKING).
+/// Checking this BEFORE `cluster_f_value` also fixes the false
+/// positive that fix introduced: in `-efoo` the `f` is part of the
+/// `-e` VALUE `"foo"`, not a flag, and must not be read as `-f`.
+fn is_attached_pattern(arg: &str) -> bool {
+    if arg.starts_with("--regexp=") {
+        return true;
+    }
+    arg.starts_with("-e") && !arg.starts_with("--") && arg.len() > 2
+}
+
 /// The path value carried by a short-flag CLUSTER containing `f`
 /// (`-if FILE`, `-ifFILE`, `-nf /etc/shadow`): the remainder of the
 /// token after `f` when attached, or `None` when `f` is the last char
@@ -215,6 +248,19 @@ fn attached_path_value(arg: &str) -> Option<&str> {
 /// an inert flag, and its value was eaten as grep's inline pattern,
 /// so `grep -if /etc/shadow` passed the gate while the child opened
 /// `/etc/shadow` (reviewer finding, M5 follow-up, BLOCKING).
+///
+/// The walk stops at the first short flag that takes a value FOR GREP
+/// (`m`, `A`, `B`, `C`, `e`): once one is hit, the rest of the token
+/// is its value, not more flags (getopt rule) — so an `f` inside it
+/// is not the `-f` flag. NOTE: `n`, `c`, `s` are deliberately NOT in
+/// that list — for grep they are boolean (--line-number, --count,
+/// --no-messages), so `-nf` really does contain the `-f` flag (the
+/// cluster test requires `-nf /etc/shadow` to be rejected); stopping
+/// at `n` would re-open that bypass. A cluster like `-iefoo` still
+/// misreads (the walk stops at `e`, the token falls through as inert,
+/// and the file is eaten as the pattern) — exotic, noted, not fixed
+/// here: closing it needs the walk to report a pattern-supplying `e`,
+/// which is a bigger change to this helper's return type.
 fn cluster_f_value(arg: &str) -> Option<Option<&str>> {
     if !arg.starts_with('-') || arg.starts_with("--") {
         return None;
@@ -222,11 +268,19 @@ fn cluster_f_value(arg: &str) -> Option<Option<&str>> {
     // Walk the chars after the dash (char_indices, so a multi-byte
     // flag char before `f` can't misalign the slice); skip the first
     // flag char, which the exact/attached forms own.
+    const VALUE_TAKING: &[char] = &['m', 'A', 'B', 'C', 'e'];
     let mut chars = arg[1..].char_indices();
-    if chars.next()?.1 == 'f' {
+    let first = chars.next()?.1;
+    if first == 'f' {
+        return None;
+    }
+    if VALUE_TAKING.contains(&first) {
         return None;
     }
     for (i, c) in chars {
+        if VALUE_TAKING.contains(&c) {
+            return None;
+        }
         if c == 'f' {
             let after = &arg[1 + i + 1..];
             return Some(if after.is_empty() { None } else { Some(after) });
@@ -314,15 +368,22 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
     // not a file; for cat/head/tail every non-flag argument is a file.
     // The value after a flag that takes one (`head -n 5`, `tail -c 100`)
     // is NOT a path and is skipped, as is any bare number (a flag value
-    // after a short-flag cluster, e.g. `head -qn 5`). EXCEPTION: the
+    // after a short-flag cluster, e.g. `head -qn 5`). EXCEPTIONS: the
     // value after a `PATH_VALUE_FLAGS` flag (`grep -f patterns.txt`)
     // IS a path and is checked — and once `-f` is seen the pattern
     // comes from that file, so later positionals are files to search,
     // not the pattern. The same holds for a short-flag cluster
     // containing `f` (`grep -if patterns.txt`, `grep -ifpatterns.txt`)
-    // — see `cluster_f_value`. `check_path_value` is tested before the
-    // flag screen so a value that itself starts with `-` (e.g. `-f -e`)
-    // is still path-checked, not mistaken for a flag.
+    // — see `cluster_f_value` — and for a pattern-supplying flag
+    // (`grep -e root`, `grep --regexp root`, `grep -eroot`,
+    // `grep --regexp=root`): `-e`/`--regexp` supply the inline
+    // pattern, so later positionals are files too — see
+    // `PATTERN_FLAGS` and `is_attached_pattern`. And for grep,
+    // `-n`/`-c`/`-s` are boolean (--line-number/--count/
+    // --no-messages), so they do NOT skip the next argument — the
+    // next argument is the pattern. `check_path_value` is tested
+    // before the flag screen so a value that itself starts with `-`
+    // (e.g. `-f -e`) is still path-checked, not mistaken for a flag.
     if READ_COMMANDS.contains(&first.as_str()) {
         let mut saw_pattern = false;
         let mut skip_value = false;
@@ -343,7 +404,21 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
             }
             if arg.starts_with('-') {
                 if VALUE_FLAGS.contains(&arg.as_str()) {
-                    skip_value = true;
+                    // For grep, `-n`/`-c`/`-s` are BOOLEAN
+                    // (--line-number/--count/--no-messages) — they
+                    // take no value, so the next argument is the
+                    // pattern, not a value to skip. Skipping it would
+                    // eat the pattern and let the file be consumed as
+                    // the "pattern" (`grep -n root /etc/shadow`
+                    // bypass, same class as the `-e` finding). For
+                    // head/tail they DO take a value, so the skip
+                    // only lifts for grep.
+                    if !(first == "grep" && matches!(arg.as_str(), "-n" | "-c" | "-s")) {
+                        skip_value = true;
+                    }
+                    if first == "grep" && PATTERN_FLAGS.contains(&arg.as_str()) {
+                        saw_pattern = true;
+                    }
                 } else if PATH_VALUE_FLAGS.contains(&arg.as_str()) {
                     check_path_value = true;
                     if first == "grep" {
@@ -355,6 +430,15 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
                             "rejected: `{first}` may not read `{value}` (outside the read allowlist)"
                         ));
                     }
+                    if first == "grep" {
+                        saw_pattern = true;
+                    }
+                } else if is_attached_pattern(arg) {
+                    // `-ePATTERN` / `--regexp=PATTERN`: the pattern
+                    // rides inside the token, so later positionals
+                    // are files to search. Checked before
+                    // `cluster_f_value` — otherwise the `f` in
+                    // `-efoo` would be misread as the `-f` flag.
                     if first == "grep" {
                         saw_pattern = true;
                     }
@@ -820,6 +904,69 @@ mod tests {
         );
         // A legitimate cluster without `f` still works.
         assert!(check_local_command(&argv(&["grep", "-in", "root", "/etc/hostname"])).is_ok());
+    }
+
+    #[test]
+    fn grep_pattern_flag_supplies_pattern() {
+        // Reviewer finding (M5 follow-up, BLOCKING): `-e`/`--regexp`
+        // supply grep's inline pattern, just like `-f` supplies it
+        // from a file — but the VALUE_FLAGS branch only skipped the
+        // value and never set `saw_pattern`, so the file was eaten
+        // as the inline pattern and never path-checked. `grep -e root
+        // /etc/shadow` passed the gate while the child printed the
+        // root hash line. The same hole covers the attached forms
+        // (`-eroot`, `--regexp=root`) and the empty pattern (`-e ""`
+        // matches every line — a full file dump).
+        for words in [
+            vec!["grep", "-e", "root", "/etc/shadow"],
+            vec!["grep", "--regexp", "root", "/etc/shadow"],
+            vec!["grep", "-eroot", "/etc/shadow"],
+            vec!["grep", "--regexp=root", "/etc/shadow"],
+            vec!["grep", "-e", "", "/etc/shadow"],
+        ] {
+            assert!(
+                check_local_command(&argv(&words)).is_err(),
+                "{words:?} must be rejected"
+            );
+        }
+        // An allowlisted file passes with `-e`, in every form — and
+        // with the pattern supplied, a positional is a file to search.
+        for words in [
+            vec!["grep", "-e", "root", "/etc/hostname"],
+            vec!["grep", "--regexp", "root", "/etc/hostname"],
+            vec!["grep", "-eroot", "/etc/hostname"],
+            vec!["grep", "--regexp=root", "/etc/hostname"],
+            vec!["grep", "-e", "", "/etc/hostname"],
+        ] {
+            assert!(
+                check_local_command(&argv(&words)).is_ok(),
+                "{words:?} must be allowed"
+            );
+        }
+        // Same class, same branch: `-n`/`-c`/`-s` are BOOLEAN for
+        // grep (--line-number/--count/--no-messages) but the shared
+        // VALUE_FLAGS list treats them as value-taking, so the real
+        // pattern was skipped and the file eaten as the "pattern".
+        for words in [
+            vec!["grep", "-n", "root", "/etc/shadow"],
+            vec!["grep", "-c", "root", "/etc/shadow"],
+            vec!["grep", "-s", "root", "/etc/shadow"],
+        ] {
+            assert!(
+                check_local_command(&argv(&words)).is_err(),
+                "{words:?} must be rejected"
+            );
+        }
+        assert!(check_local_command(&argv(&["grep", "-n", "root", "/etc/hostname"])).is_ok());
+        assert!(check_local_command(&argv(&["grep", "-c", "root", "/etc/hostname"])).is_ok());
+        assert!(check_local_command(&argv(&["grep", "-s", "root", "/etc/hostname"])).is_ok());
+        // False positive from the cluster fix (49af476):
+        // `cluster_f_value` scanned for `f` anywhere after the dash,
+        // so in `-efoo` the `f` of the `-e` VALUE `"foo"` was read as
+        // the `-f` flag and `"oo"` path-checked. `-efoo` is `-e`
+        // with pattern `"foo"`.
+        assert!(check_local_command(&argv(&["grep", "-efoo", "/etc/hostname"])).is_ok());
+        assert!(check_local_command(&argv(&["grep", "-efailed", "/var/log/syslog"])).is_ok());
     }
 
     #[test]
