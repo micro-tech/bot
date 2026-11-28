@@ -1530,6 +1530,19 @@ pub mod llm {
             }
         }
 
+        /// Test-only constructor: same `call_ollama` path, but with a
+        /// caller-supplied client so a test can use a short request
+        /// timeout and prove the timeout fires without waiting out the
+        /// 300 s production budget. Production code always uses `new()`
+        /// (the shared client from `build_client`).
+        #[cfg(test)]
+        pub fn with_client(router: Arc<OllamaRouter>, client: Client) -> Self {
+            Self {
+                client: Arc::new(client),
+                router,
+            }
+        }
+
         /// Low-level call to the Ollama `/api/generate` endpoint.
         async fn call_ollama(&self, prompt: &str) -> anyhow::Result<String> {
             // Task 405 (M15): no backends is an error, never a panic.
@@ -1696,6 +1709,69 @@ pub mod llm {
             assert!(
                 result.is_err(),
                 "unreachable endpoint must error, not hang or succeed"
+            );
+        }
+
+        #[tokio::test]
+        async fn hung_ollama_endpoint_times_out() {
+            // Task 405 (M15), reviewer follow-up: the refused-port test
+            // above proves "unreachable -> error", but a refused
+            // connection fails instantly regardless of timeout settings,
+            // so it cannot prove the request timeout fires. This test
+            // points a short-timeout client at a listener that accepts
+            // and never responds: the only way the call finishes is the
+            // request timeout. The production timeouts (5 s connect /
+            // 300 s request in `build_client`) are unchanged; the short
+            // timeout lives only in this test's client, injected via
+            // `with_client`, and the elapsed-time bounds below prove
+            // the timeout — not an instant failure and not a hang — is
+            // what ended the call.
+            super::super::ensure_crypto_provider();
+            let listener =
+                std::net::TcpListener::bind("127.0.0.1:0").expect("bind hang-test listener");
+            let port = listener.local_addr().expect("listener addr").port();
+            std::thread::spawn(move || {
+                // Hold every accepted socket open forever without
+                // reading or writing, so the server never answers.
+                for stream in listener.incoming().flatten() {
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_secs(3600));
+                        drop(stream);
+                    });
+                }
+            });
+            let client = reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(5))
+                .timeout(std::time::Duration::from_secs(2))
+                .build()
+                .expect("build hang-test client");
+            let mut router = OllamaRouter::new();
+            router.add_backend(format!("http://127.0.0.1:{port}"), "llama3.2".to_string());
+            let llm = OllamaLlm::with_client(Arc::new(router), client);
+            let start = std::time::Instant::now();
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                llm.evolve_code("feedback", "code"),
+            )
+            .await;
+            let elapsed = start.elapsed();
+            let result = result.expect("hung endpoint must resolve within 30 s");
+            result.expect_err("hung endpoint must error, not succeed");
+            // The elapsed-time bounds are the proof the timeout fired:
+            // the reqwest error Display carries no timeout detail
+            // ("error sending request for url (...)"), so the string
+            // cannot name it. A refused/instant failure returns in
+            // milliseconds; a hang would hit the 30 s backstop. Landing
+            // at ~2 s means the request timeout ended the call.
+            assert!(
+                elapsed >= std::time::Duration::from_secs(1),
+                "call returned in {:?}, faster than the 2 s timeout — the timeout did not fire",
+                elapsed
+            );
+            assert!(
+                elapsed < std::time::Duration::from_secs(20),
+                "call took {:?}, far past the 2 s timeout — it hung",
+                elapsed
             );
         }
     }
