@@ -158,7 +158,7 @@ struct WebConfig {
     #[allow(dead_code)]
     #[serde(default = "default_port")]
     port: u16,
-    #[serde(default)]
+    #[serde(default = "default_tls_enabled")]
     tls_enabled: bool,
     #[serde(default = "default_cert_path")]
     cert_path: String,
@@ -209,6 +209,13 @@ fn default_cert_path() -> String {
 }
 fn default_key_path() -> String {
     "key.pem".to_string()
+}
+
+// M2 (task 392) fix: bool's serde default is false, but TLS is on by
+// default (WebConfig::default sets tls_enabled: true). A [web] table
+// that omits tls_enabled must not silently turn TLS off.
+fn default_tls_enabled() -> bool {
+    true
 }
 
 #[derive(Deserialize)]
@@ -2931,6 +2938,17 @@ mod tests {
             toml::from_str("port = 8443\nbind = \"0.0.0.0\"\nauth_token = \"s3cret\"").unwrap();
         assert_eq!(cfg.bind, "0.0.0.0");
         assert_eq!(cfg.auth_token, "s3cret");
+    }
+
+    #[test]
+    fn test_web_config_tls_defaults_on_when_omitted() {
+        // M2 (task 392) fix: a [web] table that omits tls_enabled
+        // (e.g. only sets auth_token) must default to TLS on, matching
+        // WebConfig::default — not silently turn TLS off via bool's
+        // serde default of false.
+        let cfg: WebConfig = toml::from_str("auth_token = \"s3cret\"").unwrap();
+        assert_eq!(cfg.auth_token, "s3cret");
+        assert!(cfg.tls_enabled);
     }
 
     // ── M2 (task 392): config parse must not silently drop auth ──────────

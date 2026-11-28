@@ -46,6 +46,33 @@ pub const SYSTEMCTL_READ_ONLY: &[&str] = &["status", "is-active", "show", "list-
 /// [`is_allowed_read_path`].
 pub const READ_COMMANDS: &[&str] = &["cat", "head", "tail", "grep"];
 
+/// Flags of the read commands whose following argument is a VALUE, not
+/// a path (`head -n 5`, `tail -c 100`, `grep -m 3`). The value must be
+/// skipped by the path check, not rejected as an unlisted path.
+/// `grep -f` is deliberately NOT here: its value IS a pattern file and
+/// must stay path-checked.
+const VALUE_FLAGS: &[&str] = &[
+    "-n",
+    "--lines",
+    "-c",
+    "--bytes",
+    "-m",
+    "--max-count",
+    "-A",
+    "--after-context",
+    "-B",
+    "--before-context",
+    "-C",
+    "--context",
+    "-e",
+    "--regexp",
+    "--include",
+    "--exclude",
+    "-s",
+    "--sleep-interval",
+    "--pid",
+];
+
 /// Directory roots under which file-reading commands may read. System
 /// diagnostics live here (`/etc/hostname`, `/var/log/*`, `/proc/*`).
 /// The Helix working directory itself is NOT an allowed root — its
@@ -222,10 +249,24 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
     // directory allowlist, so they cannot read .env, config.toml, or
     // ~/.ssh. For grep the first non-flag argument is the pattern,
     // not a file; for cat/head/tail every non-flag argument is a file.
+    // The value after a flag that takes one (`head -n 5`, `tail -c 100`)
+    // is NOT a path and is skipped, as is any bare number (a flag value
+    // after a short-flag cluster, e.g. `head -qn 5`).
     if READ_COMMANDS.contains(&first.as_str()) {
         let mut saw_pattern = false;
+        let mut skip_value = false;
         for arg in &argv[1..] {
+            if skip_value {
+                skip_value = false;
+                continue;
+            }
             if arg.starts_with('-') {
+                if VALUE_FLAGS.contains(&arg.as_str()) {
+                    skip_value = true;
+                }
+                continue;
+            }
+            if !arg.is_empty() && arg.bytes().all(|b| b.is_ascii_digit()) {
                 continue;
             }
             if first == "grep" && !saw_pattern {
@@ -567,6 +608,18 @@ mod tests {
         assert!(check_local_command(&argv(&["grep", "root", "/etc/hostname"])).is_ok());
         // But paths outside the allowlist (e.g. /tmp) are not.
         assert!(check_local_command(&argv(&["cat", "/tmp/somefile"])).is_err());
+    }
+
+    #[test]
+    fn read_commands_allow_flag_values() {
+        // M5 (task 395) fix: the value after a flag that takes one is
+        // not a path — the most common diagnostic invocations must pass.
+        assert!(check_local_command(&argv(&["head", "-n", "5", "/etc/hostname"])).is_ok());
+        assert!(check_local_command(&argv(&["tail", "-n", "20", "/var/log/syslog"])).is_ok());
+        assert!(check_local_command(&argv(&["head", "-c", "100", "/etc/hostname"])).is_ok());
+        assert!(check_local_command(&argv(&["grep", "-m", "3", "root", "/etc/hostname"])).is_ok());
+        // A disallowed path after the flag value is still rejected.
+        assert!(check_local_command(&argv(&["head", "-n", "5", "/tmp/somefile"])).is_err());
     }
 
     #[test]
