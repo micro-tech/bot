@@ -191,13 +191,17 @@ pub fn is_allowed_read_path(path: &str) -> bool {
 
 /// Whether `arg` is a `tail -f`-style follow flag (M5, task 395).
 /// Covers `-f`, `--follow`, and short-flag clusters containing `f`
-/// (`-fn`, `-nf`). A follow would hang the tick forever.
+/// (`-fn`, `-nf`) — and uppercase `-F` (`--follow=name --retry`, a
+/// form people actually type) plus the `--follow=*` long forms
+/// (`--follow=name`, `--follow=descriptor`). A follow would hang the
+/// tick forever. `--retry` alone does not follow, so it needs no
+/// handling.
 fn is_follow_flag(arg: &str) -> bool {
-    if arg == "-f" || arg == "--follow" {
+    if arg == "-f" || arg == "--follow" || arg.starts_with("--follow=") {
         return true;
     }
     if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 1 {
-        return arg[1..].contains('f');
+        return arg[1..].contains('f') || arg[1..].contains('F');
     }
     false
 }
@@ -370,7 +374,12 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
     // not a file; for cat/head/tail every non-flag argument is a file.
     // The value after a flag that takes one (`head -n 5`, `tail -c 100`)
     // is NOT a path and is skipped, as is any bare number (a flag value
-    // after a short-flag cluster, e.g. `head -qn 5`). EXCEPTIONS: the
+    // after a short-flag cluster, e.g. `head -qn 5`) — EXCEPT for grep,
+    // where a bare number is the PATTERN, not a flag value: the
+    // grep-pattern check runs before the digit skip, or `grep 123
+    // /etc/shadow` would eat the file as the pattern and never
+    // path-check it (reviewer finding, M5 follow-up, BLOCKING).
+    // EXCEPTIONS: the
     // value after a `PATH_VALUE_FLAGS` flag (`grep -f patterns.txt`)
     // IS a path and is checked — and once `-f` is seen the pattern
     // comes from that file, so later positionals are files to search,
@@ -475,11 +484,18 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
                 }
                 continue;
             }
-            if !arg.is_empty() && arg.bytes().all(|b| b.is_ascii_digit()) {
+            if first == "grep" && !saw_pattern {
+                // The first positional is grep's pattern — even a bare
+                // number (`grep 123 /etc/shadow`). Checked BEFORE the
+                // digit skip below, or the number would be eaten as a
+                // flag value and the file consumed as the "pattern"
+                // and never path-checked (reviewer finding, M5
+                // follow-up, BLOCKING). For head/tail/cat there is no
+                // pattern concept, so the digit skip still applies.
+                saw_pattern = true;
                 continue;
             }
-            if first == "grep" && !saw_pattern {
-                saw_pattern = true;
+            if !arg.is_empty() && arg.bytes().all(|b| b.is_ascii_digit()) {
                 continue;
             }
             if !is_allowed_read_path(arg) {
@@ -770,11 +786,16 @@ mod tests {
 
     #[test]
     fn tail_follow_is_rejected() {
-        // `tail -f` follows forever and hangs the tick.
+        // `tail -f` follows forever and hangs the tick — as do `-F`
+        // (`--follow=name --retry`) and the `--follow=*` long forms.
         for words in [
             vec!["tail", "-f", "/etc/hostname"],
             vec!["tail", "--follow", "/etc/hostname"],
             vec!["tail", "-fn", "5", "/etc/hostname"],
+            vec!["tail", "-F", "/etc/hostname"],
+            vec!["tail", "--follow=name", "/etc/hostname"],
+            vec!["tail", "--follow=descriptor", "/etc/hostname"],
+            vec!["tail", "-nF", "5", "/etc/hostname"],
         ] {
             assert!(
                 check_local_command(&argv(&words)).is_err(),
@@ -1014,6 +1035,34 @@ mod tests {
                 "{words:?} must be allowed"
             );
         }
+    }
+
+    #[test]
+    fn grep_numeric_pattern_is_not_a_flag_value() {
+        // Reviewer finding (M5 follow-up, BLOCKING): the bare-number
+        // skip ran BEFORE the grep-pattern check, so a bare number
+        // was eaten as a "flag value" and the file was consumed as
+        // the pattern and never path-checked. `grep 123 /etc/shadow`
+        // passed the gate while the child read the file (`grep -q
+        // root /etc/shadow` exits 0, `grep -c` counts 1). The skip
+        // was added for `head -qn 5`, but it applies to every
+        // positional — for grep the first positional IS the pattern.
+        for words in [
+            vec!["grep", "123", "/etc/shadow"],
+            vec!["grep", "404", "/etc/shadow"],
+            vec!["grep", "0", "/etc/shadow"],
+            vec!["grep", "-qn", "5", "/etc/shadow"],
+            vec!["grep", "-m", "3", "123", "/etc/shadow"],
+        ] {
+            assert!(
+                check_local_command(&argv(&words)).is_err(),
+                "{words:?} must be rejected"
+            );
+        }
+        // A numeric pattern on an allowlisted file is fine — and the
+        // digit skip still applies to head/tail (no pattern concept).
+        assert!(check_local_command(&argv(&["grep", "123", "/etc/hostname"])).is_ok());
+        assert!(check_local_command(&argv(&["head", "-qn", "5", "/etc/hostname"])).is_ok());
     }
 
     #[test]
