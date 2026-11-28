@@ -50,7 +50,7 @@ pub const READ_COMMANDS: &[&str] = &["cat", "head", "tail", "grep"];
 /// a path (`head -n 5`, `tail -c 100`, `grep -m 3`). The value must be
 /// skipped by the path check, not rejected as an unlisted path.
 /// `grep -f` is deliberately NOT here: its value IS a pattern file and
-/// must stay path-checked.
+/// must stay path-checked — see [`PATH_VALUE_FLAGS`].
 const VALUE_FLAGS: &[&str] = &[
     "-n",
     "--lines",
@@ -73,6 +73,16 @@ const VALUE_FLAGS: &[&str] = &[
     "--pid",
 ];
 
+/// Flags of the read commands whose following argument is a PATH to
+/// read (`grep -f patterns.txt`). Unlike [`VALUE_FLAGS`], the value
+/// must be path-checked like any other file argument, NOT skipped:
+/// the old code ate the `-f` value as grep's inline pattern, so
+/// `grep -f /etc/shadow -e root` passed the gate while the child
+/// opened `/etc/shadow` (reviewer finding, M5 follow-up). The
+/// pattern comes from this file, so once `-f` is seen the later
+/// positionals are files to search, not the pattern.
+const PATH_VALUE_FLAGS: &[&str] = &["-f", "--file"];
+
 /// Directory roots under which file-reading commands may read. System
 /// diagnostics live here (`/etc/hostname`, `/var/log/*`, `/proc/*`).
 /// The Helix working directory itself is NOT an allowed root — its
@@ -92,9 +102,12 @@ fn allowed_read_roots() -> Vec<std::path::PathBuf> {
 }
 
 /// File names that are never readable via the executor, wherever they
-/// live — they hold secrets (auth token, env credentials).
+/// live — they hold secrets (auth token, env credentials, password
+/// hashes). `shadow`/`gshadow` are the system password-hash files:
+/// `/etc` is an allowed root for diagnostics, but the hashes in it
+/// are not diagnostics — `grep -f /etc/shadow` must be rejected.
 fn is_sensitive_file_name(name: &str) -> bool {
-    matches!(name, ".env" | "config.toml")
+    matches!(name, ".env" | "config.toml" | "shadow" | "gshadow")
 }
 
 /// Whether `path` may be read by a file-reading command (M5, task 395).
@@ -170,6 +183,23 @@ fn is_follow_flag(arg: &str) -> bool {
         return arg[1..].contains('f');
     }
     false
+}
+
+/// The path carried INSIDE a [`PATH_VALUE_FLAGS`] flag token itself:
+/// `-fFILE` (short, attached) or `--file=FILE` (long, `=`-separated).
+/// Returns the embedded path, or `None` when `arg` is not such a
+/// form. The exact `-f` / `--file` forms (value in the next argument)
+/// are handled by the loop via `PATH_VALUE_FLAGS`, not here — the
+/// value must be path-checked either way, or `grep -f/etc/shadow`
+/// would slip past the gate the same way `grep -f /etc/shadow` did.
+fn attached_path_value(arg: &str) -> Option<&str> {
+    if let Some(rest) = arg.strip_prefix("--file=") {
+        return Some(rest);
+    }
+    if arg.starts_with("-f") && !arg.starts_with("--") && arg.len() > 2 {
+        return Some(&arg[2..]);
+    }
+    None
 }
 
 /// What a run produced. `stdout`/`stderr` are lossy-UTF-8 decodes of
@@ -251,18 +281,48 @@ pub fn check_local_command(argv: &[String]) -> Result<(), String> {
     // not a file; for cat/head/tail every non-flag argument is a file.
     // The value after a flag that takes one (`head -n 5`, `tail -c 100`)
     // is NOT a path and is skipped, as is any bare number (a flag value
-    // after a short-flag cluster, e.g. `head -qn 5`).
+    // after a short-flag cluster, e.g. `head -qn 5`). EXCEPTION: the
+    // value after a `PATH_VALUE_FLAGS` flag (`grep -f patterns.txt`)
+    // IS a path and is checked — and once `-f` is seen the pattern
+    // comes from that file, so later positionals are files to search,
+    // not the pattern. `check_path_value` is tested before the flag
+    // screen so a value that itself starts with `-` (e.g. `-f -e`)
+    // is still path-checked, not mistaken for a flag.
     if READ_COMMANDS.contains(&first.as_str()) {
         let mut saw_pattern = false;
         let mut skip_value = false;
+        let mut check_path_value = false;
         for arg in &argv[1..] {
             if skip_value {
                 skip_value = false;
                 continue;
             }
+            if check_path_value {
+                check_path_value = false;
+                if !is_allowed_read_path(arg) {
+                    return Err(format!(
+                        "rejected: `{first}` may not read `{arg}` (outside the read allowlist)"
+                    ));
+                }
+                continue;
+            }
             if arg.starts_with('-') {
                 if VALUE_FLAGS.contains(&arg.as_str()) {
                     skip_value = true;
+                } else if PATH_VALUE_FLAGS.contains(&arg.as_str()) {
+                    check_path_value = true;
+                    if first == "grep" {
+                        saw_pattern = true;
+                    }
+                } else if let Some(value) = attached_path_value(arg) {
+                    if !is_allowed_read_path(value) {
+                        return Err(format!(
+                            "rejected: `{first}` may not read `{value}` (outside the read allowlist)"
+                        ));
+                    }
+                    if first == "grep" {
+                        saw_pattern = true;
+                    }
                 }
                 continue;
             }
@@ -620,6 +680,57 @@ mod tests {
         assert!(check_local_command(&argv(&["grep", "-m", "3", "root", "/etc/hostname"])).is_ok());
         // A disallowed path after the flag value is still rejected.
         assert!(check_local_command(&argv(&["head", "-n", "5", "/tmp/somefile"])).is_err());
+    }
+
+    #[test]
+    fn grep_pattern_file_is_path_checked() {
+        // Reviewer finding (M5 follow-up): `grep -f` takes a pattern
+        // FILE, and the old code ate its value as the inline pattern,
+        // so `grep -f /etc/shadow -e root` passed the gate while the
+        // child opened /etc/shadow. The -f value is a path and is
+        // checked like any other file argument.
+        assert!(
+            check_local_command(&argv(&["grep", "-f", "/etc/shadow", "-e", "root"])).is_err(),
+            "the reported bypass must be rejected"
+        );
+        assert!(
+            check_local_command(&argv(&[
+                "grep",
+                "--file",
+                "/etc/shadow",
+                "root",
+                "/etc/hostname"
+            ]))
+            .is_err()
+        );
+        // An allowlisted pattern file passes — and with -f the pattern
+        // comes from the file, so a positional is a file to search,
+        // not a pattern, and is checked too.
+        assert!(
+            check_local_command(&argv(&["grep", "-f", "/etc/hostname", "/etc/hostname"])).is_ok()
+        );
+        assert!(
+            check_local_command(&argv(&[
+                "grep",
+                "-f",
+                "/etc/hostname",
+                "-e",
+                "root",
+                "/etc/hostname"
+            ]))
+            .is_ok()
+        );
+        assert!(
+            check_local_command(&argv(&["grep", "-f", "/etc/hostname", "config.toml"])).is_err(),
+            "a file searched via -f is not a pattern"
+        );
+        assert!(
+            check_local_command(&argv(&["grep", "-f", "/etc/hostname", "/tmp/somefile"])).is_err()
+        );
+        // Attached forms carry the path inside the flag token itself.
+        assert!(check_local_command(&argv(&["grep", "-f/etc/shadow"])).is_err());
+        assert!(check_local_command(&argv(&["grep", "--file=/etc/shadow"])).is_err());
+        assert!(check_local_command(&argv(&["grep", "-f/etc/hostname", "/etc/hostname"])).is_ok());
     }
 
     #[test]
