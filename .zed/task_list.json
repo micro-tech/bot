@@ -5906,6 +5906,926 @@
       ],
       "testStrategy": "New regression test (390.1) passes; cargo test --all-targets passes at the 1707 baseline (0 failed); cargo clippy --all-targets -- -D warnings exits 0; BIN target compiles (task-262 stubs present).",
       "title": "Nightly network report: task text never reaches the sub-agent (Nov 26/27) — regression test + fail-closed spawn guard + prompt hardening"
+    },
+    {
+      "id": 391,
+      "title": "M1: WS connection spawns OS thread + bus subscriber never removed",
+      "description": "Each WS connection spawns an OS thread and a bus subscriber that is never removed. Where: src/io/web_server/mod.rs:1012-1013 + src/bus/mod.rs:88-94. Fix: one subscriber at startup, fan out via broadcast, add Bus::unsubscribe. Subscribers grow with every reconnect (worse on Starlink), and with N tabs every message is duplicated N times.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "391.1 One subscriber at startup that fans out to all WS connections via broadcast, instead of one subscriber per connection. 391.2 Add Bus::unsubscribe and remove the subscriber when a WS connection closes, so reconnects do not accumulate subscribers. 391.3 Verify no message duplication with N tabs and repeated reconnects.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); a test that opens/closes WS connections repeatedly and asserts the subscriber count does not grow and messages are not duplicated.",
+      "subtasks": [
+        {
+          "id": 391.1,
+          "title": "Error checking: subscriber lifecycle — unsubscribe on WS close, no leaked subscriber on abrupt disconnect",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 391.2,
+          "title": "Cargo test coverage: reconnect loop does not grow subscribers; N tabs receive each message once",
+          "status": "pending",
+          "dependencies": [
+            391.1
+          ]
+        },
+        {
+          "id": 391.3,
+          "title": "Documentation: bus subscriber lifecycle (one startup subscriber, broadcast fan-out, unsubscribe on close)",
+          "status": "pending",
+          "dependencies": [
+            391.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 392,
+      "title": "M2: Config parse failure silently drops auth_token and sets tls_enabled: true",
+      "description": "Config parse failure silently drops auth_token (auth off) and sets tls_enabled: true. Where: src/io/web_server/mod.rs:190 (unwrap_or_else fallback, contradicting the serde default). Fix: log the error. Read [web] from a toml::Value or make the tables #[serde(default)].",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "392.1 Log the config parse error instead of silently falling back, so a bad [web] section is visible. 392.2 Read [web] from a toml::Value or make the tables #[serde(default)] so a parse failure cannot silently drop auth_token or flip tls_enabled.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); a test feeding a malformed [web] section asserts the error is logged and auth_token/tls_enabled keep their configured (or default) values.",
+      "subtasks": [
+        {
+          "id": 392.1,
+          "title": "Error checking: log config parse failures; no silent fallback that drops auth_token or flips tls_enabled",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 392.2,
+          "title": "Cargo test coverage: malformed [web] section keeps auth_token and tls_enabled; error is surfaced",
+          "status": "pending",
+          "dependencies": [
+            392.1
+          ]
+        },
+        {
+          "id": 392.3,
+          "title": "Documentation: [web] config parsing and fallback behaviour",
+          "status": "pending",
+          "dependencies": [
+            392.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 393,
+      "title": "M3: Prompt-injection wrapper and shingle handling",
+      "description": "Prompt-injection wrapper and shingle handling. Where: src/security.rs:142 (content containing </untrusted-data> closes the wrapper early); src/security.rs:83, :87 (shingles only cover the first 2000 chars; eviction from a plain HashSet removes shingles still needed by a newer duplicate). Fix: escape or neutralise the delimiters inside content; raise or remove the shingle cap, and reference-count shingles.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "393.1 Escape or neutralise the </untrusted-data> delimiter inside content so it cannot close the wrapper early. 393.2 Raise or remove the shingle cap and reference-count shingles so eviction does not remove shingles still needed by a newer duplicate; cover the full content, not just the first 2000 chars.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); tests feeding content with an embedded </untrusted-data> delimiter and long content with repeated shingles past 2000 chars.",
+      "subtasks": [
+        {
+          "id": 393.1,
+          "title": "Error checking: delimiter escaping is fail-closed — embedded delimiters cannot close the wrapper",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 393.2,
+          "title": "Cargo test coverage: embedded-delimiter content and long-content shingle retention",
+          "status": "pending",
+          "dependencies": [
+            393.1
+          ]
+        },
+        {
+          "id": 393.3,
+          "title": "Documentation: prompt-injection wrapper delimiters and shingle retention rules",
+          "status": "pending",
+          "dependencies": [
+            393.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 394,
+      "title": "M4: Web UI hardening (stored XSS, hardcoded WS port, voice body limit, cert SANs)",
+      "description": "Web UI hardening (four small items, one subsystem). Where: src/io/web_server/static/index.html:1571 (stored XSS — supportEsc does not escape \\, so a crafted inbound-email to breaks out of the inline onclick; d.id is not escaped); :1630 (WS URL hardcodes :8443); src/io/web_server/mod.rs:2172 (10 MB voice limit unreachable — axum's default 2 MB body limit applies first); src/io/web_server/mod.rs:315, :2311 (agent card advertises 127.0.0.1 / 0.0.0.0, but the cert only covers localhost). Fix: use addEventListener + dataset with no inline handlers; use location.host for the WS URL; DefaultBodyLimit::max(10 MiB) on the voice route; add IP SANs and make the public URL configurable.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "394.1 Replace inline onclick handlers with addEventListener + dataset, and escape \\ and d.id in supportEsc so a crafted inbound-email address cannot break out (stored XSS). 394.2 Build the WS URL from location.host instead of hardcoding :8443. 394.3 Set DefaultBodyLimit::max(10 MiB) on the voice route so the 10 MB limit is reachable past axum's default 2 MB body limit. 394.4 Add IP SANs to the cert and make the public URL configurable instead of advertising 127.0.0.1 / 0.0.0.0.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); a test/verification that a crafted email to with a backslash cannot break out of the handler, the WS URL follows location.host, and a 10 MB voice upload is accepted.",
+      "subtasks": [
+        {
+          "id": 394.1,
+          "title": "Error checking: supportEsc escapes backslash and id; no inline handlers for untrusted email content",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 394.2,
+          "title": "Cargo test coverage: crafted email address cannot break out; WS URL and voice body limit behave",
+          "status": "pending",
+          "dependencies": [
+            394.1
+          ]
+        },
+        {
+          "id": 394.3,
+          "title": "Documentation: web UI hardening (event handlers, WS URL, voice limit, cert SANs / public URL)",
+          "status": "pending",
+          "dependencies": [
+            394.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 395,
+      "title": "M5: Shell tool and chat-command executor: Windows + allowlist gaps",
+      "description": "Shell tool and chat-command executor: Windows + allowlist gaps. Where: src/tools/shell_tool.rs:231 (Command::new(\"/bin/sh\") — unusable on Windows 11); src/chat_command/executor.rs:26 (allowlisted hostname can set the hostname as root; cat/grep/tail can read .env, config.toml, ~/.ssh; tail -f hangs the tick). Fix: cfg(windows) branch using cmd /C or powershell -NoProfile -Command + Job Object; arg-less hostname, directory allowlist, reject -f. Note: Task 306 (ASUS allowlist + tests) is done — but that is the ASUS-side allowlist, not these executor arg-validation gaps.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "395.1 Add a cfg(windows) branch for the shell tool using cmd /C or powershell -NoProfile -Command + Job Object, instead of /bin/sh. 395.2 Harden the chat-command executor allowlist: arg-less hostname, a directory allowlist so cat/grep/tail cannot read .env, config.toml or ~/.ssh, and reject -f so tail -f cannot hang the tick.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); tests asserting hostname takes no args, cat/grep/tail are confined to the directory allowlist, and tail -f is rejected.",
+      "subtasks": [
+        {
+          "id": 395.1,
+          "title": "Error checking: executor rejects disallowed args and paths; Windows shell branch fails cleanly, not by spawning /bin/sh",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 395.2,
+          "title": "Cargo test coverage: hostname arg-less, directory allowlist, tail -f rejected, Windows shell branch",
+          "status": "pending",
+          "dependencies": [
+            395.1
+          ]
+        },
+        {
+          "id": 395.3,
+          "title": "Documentation: shell tool and chat-command executor allowlist rules (Windows + Unix)",
+          "status": "pending",
+          "dependencies": [
+            395.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 396,
+      "title": "M6: scan_directory accepts any absolute path with unbounded depth and follows symlinks",
+      "description": "scan_directory accepts any absolute path with unbounded depth and follows symlinks. Where: src/tools/file_tools.rs:224-225. Fix: resolve_inside, clamp depth, use symlink_metadata. It can currently list the whole filesystem.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "396.1 Confine scan_directory with resolve_inside so it cannot escape the allowed root. 396.2 Clamp the traversal depth and use symlink_metadata so symlinks are not followed out of the tree.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); tests asserting an absolute path outside the root is rejected, deep traversal is clamped, and a symlink pointing outside is not followed.",
+      "subtasks": [
+        {
+          "id": 396.1,
+          "title": "Error checking: scan_directory rejects paths outside the root and symlinks escaping it",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 396.2,
+          "title": "Cargo test coverage: outside-root path, depth clamp, symlink escape",
+          "status": "pending",
+          "dependencies": [
+            396.1
+          ]
+        },
+        {
+          "id": 396.3,
+          "title": "Documentation: scan_directory confinement (resolve_inside, depth clamp, symlink handling)",
+          "status": "pending",
+          "dependencies": [
+            396.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 397,
+      "title": "M7: MCP client resilience: global mutex, no timeouts, no reconnect",
+      "description": "MCP client resilience: global mutex, no timeouts, no reconnect. Where: src/mcp_client/mod.rs:246, src/mcp_client/manager.rs:111 (global MCP mutex held across call_tool, up to 120 s; list_all_tools has no timeout; dead servers never reconnected; an empty defs_cache is cached forever); src/chat_command/mcp_handler.rs:117-127 (on timeout, the worker thread leaks and keeps holding the MCP mutex). Fix: per-server locks or clone Peer; timeouts; reconnect on transport error; use tokio::time::timeout inside the bridge so the call is actually cancelled. Relevant to the live google-mcp problem: the MCP plumbing is proven, but a hung server currently holds the mutex and leaks the worker.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "397.1 Replace the global MCP mutex with per-server locks (or clone Peer) so one hung server cannot block all MCP calls. 397.2 Add timeouts to call_tool and list_all_tools, reconnect on transport error, and do not cache an empty defs_cache forever. 397.3 Use tokio::time::timeout inside the bridge so a timed-out call is actually cancelled instead of leaking the worker thread while it keeps holding the mutex.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); tests with a hung mock MCP server asserting other servers still respond, a timeout cancels the call, and a dead server reconnects.",
+      "subtasks": [
+        {
+          "id": 397.1,
+          "title": "Error checking: MCP timeouts cancel the call; a hung server cannot hold the mutex or leak the worker",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 397.2,
+          "title": "Cargo test coverage: hung server isolation, timeout cancellation, reconnect on transport error",
+          "status": "pending",
+          "dependencies": [
+            397.1
+          ]
+        },
+        {
+          "id": 397.3,
+          "title": "Documentation: MCP client locking, timeouts and reconnect behaviour",
+          "status": "pending",
+          "dependencies": [
+            397.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 398,
+      "title": "M8: Installer + git robustness",
+      "description": "Installer + git robustness. Where: src/chat_mcp_install.rs:104, :327 (a Windows path in a TOML basic string becomes an invalid \\U escape and corrupts the config; the binary-name check ignores .exe); :250, :278 (git clone/pull: no timeout, no retry, can prompt for credentials); src/bin/installer.rs:25-38 (on Windows id fails, so the installer re-runs itself via sudo — recurses with Win11 sudo, or panics without it); :298, :465, :522 (.env/key.pem written as root with the default umask; fixed /tmp/helix_*.pem paths; .env backups pile up). Fix: TOML literal string or toml serialisation, plus EXE_SUFFIX; GIT_TERMINAL_PROMPT=0, http.lowSpeedLimit/Time, retry; #[cfg(unix)] or a clean error on Windows for the id check; mode 0600, private temp dir, prune backups.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "398.1 Write Windows paths with a TOML literal string or toml serialisation (no invalid \\U escape) and honour .exe in the binary-name check. 398.2 Give git clone/pull a timeout, a retry, and GIT_TERMINAL_PROMPT=0 plus http.lowSpeedLimit/Time so it cannot hang prompting for credentials. 398.3 Gate the id check with #[cfg(unix)] or a clean error on Windows instead of re-running via sudo. 398.4 Write .env/key.pem with mode 0600, use a private temp dir instead of fixed /tmp/helix_*.pem paths, and prune .env backups.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); tests asserting a Windows path round-trips through the written config, git operations time out instead of hanging, and written secrets have mode 0600.",
+      "subtasks": [
+        {
+          "id": 398.1,
+          "title": "Error checking: installer fails cleanly on Windows id check and git timeouts; secrets written 0600",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 398.2,
+          "title": "Cargo test coverage: Windows path round-trip, git timeout/retry, secret file modes",
+          "status": "pending",
+          "dependencies": [
+            398.1
+          ]
+        },
+        {
+          "id": 398.3,
+          "title": "Documentation: installer config writing, git robustness, and secret file handling",
+          "status": "pending",
+          "dependencies": [
+            398.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 399,
+      "title": "M9: Budgets open statuses differ, so duplicates get through",
+      "description": "Budgets open statuses differ, so duplicates get through. Where: src/self_improve/budgets.rs:91 vs src/self_improve/worker.rs:173-179 (evaluated and needs-human-review are not counted as open). Fix: one shared OPEN_STATUSES constant.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "399.1 Define one shared OPEN_STATUSES constant used by both budgets.rs and worker.rs so evaluated and needs-human-review count as open in both places and duplicate proposals cannot slip through.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); a test that a proposal in evaluated or needs-human-review status is treated as open by both the budget check and the worker, so no duplicate is created.",
+      "subtasks": [
+        {
+          "id": 399.1,
+          "title": "Error checking: one shared OPEN_STATUSES constant — no status counted open in one place and closed in the other",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 399.2,
+          "title": "Cargo test coverage: evaluated and needs-human-review block duplicates in both budgets and worker",
+          "status": "pending",
+          "dependencies": [
+            399.1
+          ]
+        },
+        {
+          "id": 399.3,
+          "title": "Documentation: budget open-status semantics (shared OPEN_STATUSES)",
+          "status": "pending",
+          "dependencies": [
+            399.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 400,
+      "title": "M10: SSH server accounting: session counter leak + auth limiter counts successes",
+      "description": "SSH server accounting: session counter leak + auth limiter counts successes. Where: src/ssh/handler.rs:175, :201 (session counter only decremented in channel_close — abrupt disconnects leak slots until all sessions are refused); :140, :63-71 (failed-auth limiter counts successful logins; the IP map never evicts). Fix: decrement in Drop; record only on reject, and prune entries.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "400.1 Decrement the session counter in Drop so abrupt disconnects release their slot instead of leaking it until all sessions are refused. 400.2 Record the failed-auth limiter only on reject (not on successful logins) and prune stale IP map entries.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); tests asserting an abruptly disconnected session frees its slot and the auth limiter does not count successes.",
+      "subtasks": [
+        {
+          "id": 400.1,
+          "title": "Error checking: session counter released on Drop; auth limiter records rejects only and prunes stale entries",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 400.2,
+          "title": "Cargo test coverage: abrupt disconnect frees the slot; successful logins do not count toward the limiter",
+          "status": "pending",
+          "dependencies": [
+            400.1
+          ]
+        },
+        {
+          "id": 400.3,
+          "title": "Documentation: SSH session accounting and failed-auth limiter rules",
+          "status": "pending",
+          "dependencies": [
+            400.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 401,
+      "title": "M11: Vector memory: no cap or dedupe; each add_fact rewrites the whole pretty JSON and fsyncs",
+      "description": "Vector memory: no cap or dedupe; each add_fact rewrites the whole pretty JSON and fsyncs. Where: src/memory/vector.rs:204-220, :289-301. Fix: cap/evict, append-only records. O(n) per insert (768-float vectors, full rewrite + fsync each time).",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "401.1 Cap the vector store and evict old entries, with dedupe so the same fact is not stored twice. 401.2 Move to append-only records so add_fact does not rewrite the whole pretty JSON and fsync on every insert.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); tests asserting the store stays under the cap, duplicates are deduped, and add_fact does not rewrite the whole file.",
+      "subtasks": [
+        {
+          "id": 401.1,
+          "title": "Error checking: vector store cap and eviction cannot lose the newest facts or corrupt the file",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 401.2,
+          "title": "Cargo test coverage: cap/eviction, dedupe, append-only insert",
+          "status": "pending",
+          "dependencies": [
+            401.1
+          ]
+        },
+        {
+          "id": 401.3,
+          "title": "Documentation: vector memory cap, eviction, dedupe, and append-only record format",
+          "status": "pending",
+          "dependencies": [
+            401.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 402,
+      "title": "M12: Corrupt support_watch/state.json → with auto_send, replies to all 50 fetched mails",
+      "description": "Corrupt support_watch/state.json → with auto_send, replies to all 50 fetched mails. Where: src/support_watch/state.rs:113-118 (corrupt file → empty seen_ids). Fix: quarantine the file, mark the current batch as seen without drafting, log loudly. This is the same shape as the task-312 spam-send event — the watcher now has auto_send = true in the live config, so the blast radius is real. Note: the Nov 24 support bounce loop is stopped (auto_send=false, email reports deactivated); this task fixes the underlying corrupt-state hazard so it cannot recur.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "402.1 On a corrupt state.json, quarantine the file instead of treating it as empty seen_ids. 402.2 Mark the current batch as seen without drafting any replies, and log loudly so the corruption is visible.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); a test feeding a corrupt state.json asserts no drafts are created, the batch is marked seen, and the corruption is logged.",
+      "subtasks": [
+        {
+          "id": 402.1,
+          "title": "Error checking: corrupt state.json is quarantined and the batch marked seen without drafting — never an empty seen_ids",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 402.2,
+          "title": "Cargo test coverage: corrupt state file produces zero drafts and a loud log line",
+          "status": "pending",
+          "dependencies": [
+            402.1
+          ]
+        },
+        {
+          "id": 402.3,
+          "title": "Documentation: support_watch state corruption handling (quarantine, mark-seen, log)",
+          "status": "pending",
+          "dependencies": [
+            402.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 403,
+      "title": "M13: Spend: thoughtsTokenCount ignored; check and record are separate steps (race); day key is UTC",
+      "description": "Spend: thoughtsTokenCount ignored; check and record are separate steps (race); day key is UTC. Where: src/router/spend.rs:69-70, :100-111, :141, :226/:269. Fix: count thinking tokens (they are billed); reserve before the call; use a local-day key. Prices look stale (inference, not verified).",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "403.1 Count thoughtsTokenCount in spend (thinking tokens are billed). 403.2 Reserve the spend before the call instead of checking and recording as separate steps, closing the race. 403.3 Use a local-day key instead of UTC for the daily bucket.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); tests asserting thinking tokens are counted, a concurrent check-and-record cannot overspend, and the day bucket follows local time.",
+      "subtasks": [
+        {
+          "id": 403.1,
+          "title": "Error checking: spend reservation is atomic — check and record cannot race; thinking tokens counted",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 403.2,
+          "title": "Cargo test coverage: thinking-token counting, reservation race, local-day key",
+          "status": "pending",
+          "dependencies": [
+            403.1
+          ]
+        },
+        {
+          "id": 403.3,
+          "title": "Documentation: spend accounting (thinking tokens, reservation, local-day buckets)",
+          "status": "pending",
+          "dependencies": [
+            403.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 404,
+      "title": "M14: Cron robustness: None treated as due, DST gaps, non-atomic rewrite",
+      "description": "Cron robustness: None treated as due, DST gaps, non-atomic rewrite. Where: src/cron/registry.rs:546 (next_run_ms == None, unparseable schedule, treated as due on every tick); :163, :177 (.single() returns None on DST gaps/overlaps, so the seeded 02:00 daily job is skipped on spring-forward day); :535 (non-atomic rewrite every minute — a crash mid-write corrupts the file, and load_or_seed silently reseeds, losing user routines). Fix: treat None as disabled; .earliest() or roll forward to the next valid minute; temp file + rename (as support_watch/state.rs already does).",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "404.1 Treat a None next_run_ms or unparseable schedule as disabled, not due on every tick. 404.2 Use .earliest() or roll forward to the next valid minute so DST gaps/overlaps do not skip the seeded 02:00 daily job on spring-forward day. 404.3 Rewrite the registry atomically via temp file + rename (as support_watch/state.rs already does) so a crash mid-write cannot corrupt it, and do not silently reseed on load.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); tests asserting an unparseable schedule is disabled, the 02:00 job fires across a spring-forward DST gap, and a crash mid-write leaves a valid registry.",
+      "subtasks": [
+        {
+          "id": 404.1,
+          "title": "Error checking: unparseable schedules are disabled, not due every tick; registry rewrite is atomic",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 404.2,
+          "title": "Cargo test coverage: DST spring-forward, unparseable schedule, crash mid-write",
+          "status": "pending",
+          "dependencies": [
+            404.1
+          ]
+        },
+        {
+          "id": 404.3,
+          "title": "Documentation: cron registry scheduling, DST handling, and atomic persistence",
+          "status": "pending",
+          "dependencies": [
+            404.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 405,
+      "title": "M15: Ollama HyEvo/planner client has no timeout and .expect()s",
+      "description": "Ollama HyEvo/planner client has no timeout and .expect()s. Where: src/io/ollama/mod.rs:1222, :1232 (Client::new() with no timeout, plus .expect(\"No Ollama backends configured\")). Fix: shared_client() and return an error.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "405.1 Use shared_client() with a timeout for the HyEvo/planner Ollama client instead of Client::new() with no timeout. 405.2 Return an error instead of .expect(\"No Ollama backends configured\") when no backends are configured.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); a test asserting no backends configured returns an error (not a panic) and a hung Ollama endpoint times out.",
+      "subtasks": [
+        {
+          "id": 405.1,
+          "title": "Error checking: no-backends-configured returns an error, never panics; client has a timeout",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 405.2,
+          "title": "Cargo test coverage: no backends returns error; hung endpoint times out",
+          "status": "pending",
+          "dependencies": [
+            405.1
+          ]
+        },
+        {
+          "id": 405.3,
+          "title": "Documentation: Ollama HyEvo/planner client timeouts and error handling",
+          "status": "pending",
+          "dependencies": [
+            405.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 406,
+      "title": "M16: Persona frontmatter offsets assume \\n; CRLF files parse wrong",
+      "description": "Persona frontmatter offsets assume \\n; CRLF files parse wrong. Where: src/persona.rs:112-126 (agents/loop-worker.md is CRLF in the Windows checkout, so the body starts with a stray -\\r\\n). Fix: split_inclusive('\\n') with real lengths, or normalise line endings.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "406.1 Parse persona frontmatter with split_inclusive('\\n') using real lengths, or normalise line endings first, so CRLF files do not leave a stray -\\r\\n at the start of the body.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); a test feeding a CRLF persona file asserts the body starts cleanly with no stray carriage return.",
+      "subtasks": [
+        {
+          "id": 406.1,
+          "title": "Error checking: CRLF persona files parse to the same body as LF files — no stray \\r",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 406.2,
+          "title": "Cargo test coverage: CRLF frontmatter offsets",
+          "status": "pending",
+          "dependencies": [
+            406.1
+          ]
+        },
+        {
+          "id": 406.3,
+          "title": "Documentation: persona frontmatter line-ending handling",
+          "status": "pending",
+          "dependencies": [
+            406.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 407,
+      "title": "M17: Web UI error view is blind (reads the dead runtime log path)",
+      "description": "Web UI error view is blind (reads the dead runtime log path). Where: src/io/web_server/mod.rs:148 (reads <runtime>/logs/error_log.md); src/utils.rs:15 (writes go to ~/.helix/logs/error_log.md). Fix: point the web UI error view at the HOME log path, or point log_to_file at the runtime logs dir — pick one canonical error-log location and use it everywhere. Note: Task 326 fixed the restart signal by writing the boot marker to the runtime logs dir; the error-log write path is unchanged, so the web UI error view is still blind. The loop's own error signal is not affected — check_error_logs reads both paths.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "407.1 Pick one canonical error-log location and use it everywhere: either point the web UI error view at the HOME log path (~/.helix/logs/error_log.md) or point log_to_file at the runtime logs dir — do not leave the two paths split.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); a test/verification that an error written via log_to_file is visible in the web UI error view.",
+      "subtasks": [
+        {
+          "id": 407.1,
+          "title": "Error checking: one canonical error-log location — writes and the web UI view agree",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 407.2,
+          "title": "Cargo test coverage: written errors appear in the web UI error view",
+          "status": "pending",
+          "dependencies": [
+            407.1
+          ]
+        },
+        {
+          "id": 407.3,
+          "title": "Documentation: canonical error-log location",
+          "status": "pending",
+          "dependencies": [
+            407.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 408,
+      "title": "M18: 255 println! in production code",
+      "description": "255 println! in production code. Where: across src/ (excluding tests); the WS chat arm alone prints the prompt preview, bus routing, and publish confirmations; src/main.rs:529 fires once per streamed token. Fix: production logging should go through log:: so it is filterable and does not pollute the journal. This is also the same stdout the restart marker was lost in (now fixed by 326 for the marker, but the noise remains).",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "408.1 Replace println! in production code with log:: macros at appropriate levels so output is filterable and does not pollute the journal (starting with the WS chat arm and the per-token print in src/main.rs:529).",
+      "testStrategy": "cargo test green at the current baseline (0 failed); a count check that no println! remains in src/ outside tests, and log output is filterable by level.",
+      "subtasks": [
+        {
+          "id": 408.1,
+          "title": "Error checking: production output goes through log:: — no println! outside tests",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 408.2,
+          "title": "Cargo test coverage: no println! in src/ outside tests; log levels filterable",
+          "status": "pending",
+          "dependencies": [
+            408.1
+          ]
+        },
+        {
+          "id": 408.3,
+          "title": "Documentation: logging policy (log:: in production, println! only in tests)",
+          "status": "pending",
+          "dependencies": [
+            408.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 409,
+      "title": "M19: require_okf_write_token is a copy-paste duplicate of require_web_token",
+      "description": "require_okf_write_token is a copy-paste duplicate of require_web_token. Where: src/io/web_server/auth.rs (identical bodies; comment says \"can be separate token in future\"). Fix: extract a shared helper or delete one before they drift. Note: PR #44 deduped mod.rs vs auth.rs (126 lines removed from mod.rs) — that is a different duplication from this within-auth.rs copy-paste.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "409.1 Extract a shared helper for the token check used by both require_okf_write_token and require_web_token, or delete one of them, so the two cannot drift apart.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); existing auth tests still pass with the shared helper, and both token paths behave identically.",
+      "subtasks": [
+        {
+          "id": 409.1,
+          "title": "Error checking: shared token helper — both paths reject/accept identically, no drift",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 409.2,
+          "title": "Cargo test coverage: both token paths behave identically after dedupe",
+          "status": "pending",
+          "dependencies": [
+            409.1
+          ]
+        },
+        {
+          "id": 409.3,
+          "title": "Documentation: auth token helpers (shared implementation)",
+          "status": "pending",
+          "dependencies": [
+            409.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 410,
+      "title": "M20: agent-client-protocol 5.0.0; crates.io latest is 5.1.0",
+      "description": "agent-client-protocol 5.0.0; crates.io latest is 5.1.0. Where: Cargo.toml:35. Fix: bump to 5.1.0 (not 5.0.0 — that is what Helix is already on). One minor behind, days after the 37-dep update (task 317) landed. Fold it into the next dep pass rather than doing it alone.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "410.1 Bump agent-client-protocol from 5.0.0 to 5.1.0 in Cargo.toml, folded into the next dependency pass; verify the build and tests still pass and note any API changes.",
+      "testStrategy": "cargo test green at the current baseline (0 failed) after the bump; cargo clippy clean.",
+      "subtasks": [
+        {
+          "id": 410.1,
+          "title": "Error checking: bump compiles cleanly; any API changes handled, not papered over",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 410.2,
+          "title": "Cargo test coverage: full suite green on agent-client-protocol 5.1.0",
+          "status": "pending",
+          "dependencies": [
+            410.1
+          ]
+        },
+        {
+          "id": 410.3,
+          "title": "Documentation: CHANGELOG entry for the dependency bump",
+          "status": "pending",
+          "dependencies": [
+            410.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 411,
+      "title": "M23: Test env races: two mutexes for HELIX_SPEND_FILE, plus unlocked unsafe remove_var",
+      "description": "Test env races: two mutexes for HELIX_SPEND_FILE, plus unlocked unsafe remove_var. Where: src/router/spend.rs:352 (its own TEST_LOCK) vs src/tools/subagent_tool.rs:762-805 and src/io/llm_gemini/mod.rs:700-767 (use subagent_tool::test_env_lock()); src/io/llm_gemini/mod.rs:590, :601 (SAFETY comment claims \"single-threaded test,\" but cargo runs tests on parallel threads; unsound under edition 2024 alongside any other env reader). Fix: one lock for all env-mutating tests (or add the serial_test crate with a named key); take test_env_lock() in the Gemini tests.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "411.1 Use one lock for all env-mutating tests — either consolidate on subagent_tool::test_env_lock() (removing the separate TEST_LOCK in spend.rs) or add the serial_test crate with a named key. 411.2 Take test_env_lock() in the Gemini tests (src/io/llm_gemini/mod.rs) so the unsafe remove_var is actually guarded.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); run the env-mutating test files repeatedly with parallel threads and assert no flake or cross-test env leakage.",
+      "subtasks": [
+        {
+          "id": 411.1,
+          "title": "Error checking: one lock guards all env mutation — no unlocked remove_var under parallel test threads",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 411.2,
+          "title": "Cargo test coverage: env-mutating tests stable under repeated parallel runs",
+          "status": "pending",
+          "dependencies": [
+            411.1
+          ]
+        },
+        {
+          "id": 411.3,
+          "title": "Documentation: test env-mutation locking rule (one lock / serial_test key)",
+          "status": "pending",
+          "dependencies": [
+            411.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 412,
+      "title": "M24: Network resilience is not tested",
+      "description": "Network resilience is not tested. Where: no test simulates a connect timeout, a mid-stream disconnect, 429/503 with Retry-After, or retry exhaustion. Fix: mockito (already a dev-dependency) with delayed responses, plus a TCP listener that accepts and then drops the connection. Assert the backoff schedule, the total deadline, and the no-replay-of-tools property (H4). Given the production gaps (H3–H5), this is the most valuable test area to add.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "412.1 Add network-resilience tests with mockito (already a dev-dependency): delayed responses for connect timeouts, a TCP listener that accepts then drops the connection for mid-stream disconnects, and 429/503 with Retry-After. 412.2 Assert the backoff schedule, the total deadline, and the no-replay-of-tools property (H4), plus retry exhaustion.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); the new resilience tests pass and fail when the retry/backoff behaviour is broken (verified red before the fix if behaviour changes).",
+      "subtasks": [
+        {
+          "id": 412.1,
+          "title": "Error checking: timeouts, disconnects, and 429/503 are handled without hanging or replaying tools",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 412.2,
+          "title": "Cargo test coverage: connect timeout, mid-stream disconnect, 429/503 Retry-After, retry exhaustion, backoff schedule, total deadline",
+          "status": "pending",
+          "dependencies": [
+            412.1
+          ]
+        },
+        {
+          "id": 412.3,
+          "title": "Documentation: network resilience behaviour (backoff, deadline, no-replay-of-tools)",
+          "status": "pending",
+          "dependencies": [
+            412.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 413,
+      "title": "M25: Test portability and hygiene (Unix assumptions, hardcoded /tmp, sleep sync, undocumented #[ignore], ssh_integration)",
+      "description": "Test portability and hygiene (Unix assumptions, hardcoded /tmp, sleep sync, undocumented #[ignore], ssh_integration). Where: src/tools/shell_tool.rs:379, :423-494 (live tests spawn /bin/sh; /etc is not absolute on Windows); src/tools/file_tools.rs:514 (expects an \"escapes\" error for /etc/passwd, but Windows returns \"Error reading\"); src/chat_mcp_install.rs:327 (binary name without .exe); src/router/spend.rs:362, src/persona.rs:734, :747, src/io/unix_cli/resume_transfer.rs:43 (hard-coded /tmp — on Windows resolves to I:\\tmp\\...); tests/scenarios/bus_tests.rs:26, :48, tests/integration_harness.rs:94 (sleep 30–50 ms then assert); src/io/ollama/mod.rs:1032-1081 (assumes port 19999 is closed); src/io/ollama/llm_impl.rs:169, :179 (undocumented #[ignore], need a live Ollama); tests/ssh_integration.rs:32, :45, :172 (.expect panics if ssh-keygen is missing; ports 2229/2230 hard-coded). Fix: cfg(unix) gates / Windows-specific expectations; std::env::temp_dir() or tempfile as a dev-dependency; wait on channels with recv_timeout, and use a port the test binds and then drops; #[ignore = \"needs Ollama at localhost:11434\"]; bind port 0 and skip gracefully when OpenSSH is not on PATH, or #[ignore = \"needs OpenSSH client\"].",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "413.1 Gate Unix-only tests with cfg(unix) and give Windows-specific expectations where the behaviour differs (/etc/passwd error text, binary name .exe). 413.2 Replace hard-coded /tmp with std::env::temp_dir() or tempfile, replace sleep-then-assert with recv_timeout on channels, and bind a port then drop it instead of assuming 19999 is closed. 413.3 Document the #[ignore]s (needs Ollama at localhost:11434) and make ssh_integration bind port 0 and skip gracefully when OpenSSH is not on PATH (or #[ignore = \"needs OpenSSH client\"]).",
+      "testStrategy": "cargo test green at the current baseline (0 failed); the ported tests pass on Linux and are correctly gated/skipped where the platform differs.",
+      "subtasks": [
+        {
+          "id": 413.1,
+          "title": "Error checking: platform-specific tests are gated or skip gracefully — no hard failure on Windows for Unix-only assumptions",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 413.2,
+          "title": "Cargo test coverage: temp_dir, recv_timeout waits, port-0 binding, documented #[ignore]s, ssh_integration skip",
+          "status": "pending",
+          "dependencies": [
+            413.1
+          ]
+        },
+        {
+          "id": 413.3,
+          "title": "Documentation: test portability rules (cfg gates, temp_dir, documented ignores)",
+          "status": "pending",
+          "dependencies": [
+            413.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 414,
+      "title": "M26: CRLF shell scripts and no .gitattributes",
+      "description": "CRLF shell scripts and no .gitattributes. Where: push.sh, scripts/backup-state.sh (CRLF on disk); no .gitattributes. Fix: add a .gitattributes containing *.sh text eol=lf (the one justified exception to the CRLF rule in AGENTS.md). If either script is copied (not cloned) to the Linux host, set -euo pipefail\\r fails and the nightly backup dies.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "414.1 Add a .gitattributes containing *.sh text eol=lf. 414.2 Normalise push.sh and scripts/backup-state.sh to LF on disk so a copy (not clone) to the Linux host does not fail on set -euo pipefail\\r.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); verify the scripts have LF endings and .gitattributes forces LF for *.sh.",
+      "subtasks": [
+        {
+          "id": 414.1,
+          "title": "Error checking: shell scripts have LF endings enforced by .gitattributes — a copy to Linux cannot fail on \\r",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 414.2,
+          "title": "Cargo test coverage: line-ending check for *.sh (or a CI check)",
+          "status": "pending",
+          "dependencies": [
+            414.1
+          ]
+        },
+        {
+          "id": 414.3,
+          "title": "Documentation: .gitattributes policy for shell scripts",
+          "status": "pending",
+          "dependencies": [
+            414.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 415,
+      "title": "M28: No task-list validator",
+      "description": "No task-list validator. Where: nothing validates .zed/task_list.json (invalid/circular dependencies, missing fields, consistent status). Fix: a small xtask, scripts/validate_tasks.ps1, or a #[test] that parses the file and checks valid JSON, unique IDs, every dependency exists with no cycles, status values in the allowed set, every task has the 3 mandatory subtasks, and every done task has no open subtasks. Note: The 320 repair fixed the conflict, but there is still no validator. The dangling dependency 154 → 153 is still present at 8f440e0, and 21 open subtasks sit under done tasks — both are things a validator would have caught.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "415.1 Build a task-list validator (small xtask, scripts/validate_tasks.ps1, or a #[test]) that parses .zed/task_list.json and checks: valid JSON, unique IDs, every dependency exists with no cycles, status values in the allowed set, every task has the 3 mandatory subtasks, and every done task has no open subtasks. 415.2 Wire it into CI or a pre-commit check so the list cannot silently rot again.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); the validator passes on the current list (after M29 backfills) and fails on a deliberately broken list (bad JSON, dangling dependency, done task with open subtasks).",
+      "subtasks": [
+        {
+          "id": 415.1,
+          "title": "Error checking: validator rejects invalid JSON, dangling/circular dependencies, bad statuses, and done tasks with open subtasks",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 415.2,
+          "title": "Cargo test coverage: validator passes on the clean list and fails on deliberately broken lists",
+          "status": "pending",
+          "dependencies": [
+            415.1
+          ]
+        },
+        {
+          "id": 415.3,
+          "title": "Documentation: task-list validation rules and how to run the validator",
+          "status": "pending",
+          "dependencies": [
+            415.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 416,
+      "title": "M29: Tasks marked done with open subtasks; mandatory-subtask compliance is 0",
+      "description": "Tasks marked done with open subtasks; mandatory-subtask compliance is 0. Where: Claude found 7 tasks done with open subtasks at review time (IDs 164, 165, 238, 255, 261, 308, 312); 21 open subtasks under done tasks at 8f440e0 (verified); 0/134 tasks had all 3 mandatory AGENTS.md subtasks at review time; 66/143 tasks have ≥3 subtasks now (a rough proxy, not the mandatory-3 rule). Fix: backfill the mandatory subtasks (error checking, cargo test coverage, documentation) per the Task Builder Guide, and close or re-open the subtasks under done tasks. The validator from M28 is what makes this stick.",
+      "status": "pending",
+      "dependencies": [
+        415
+      ],
+      "priority": "medium",
+      "details": "416.1 Backfill the 3 mandatory subtasks (error checking, cargo test coverage, documentation) per the Task Builder Guide on every task that lacks them. 416.2 Close or re-open the open subtasks sitting under done tasks (21 at 8f440e0, including under 164, 165, 238, 255, 261, 308, 312) so no done task has open subtasks. 416.3 Run the M28 validator to confirm the list is clean.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); the M28 validator passes on the list with zero done tasks carrying open subtasks and every task holding the 3 mandatory subtasks.",
+      "subtasks": [
+        {
+          "id": 416.1,
+          "title": "Error checking: no done task carries open subtasks; backfilled subtasks are correctly closed or re-opened",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 416.2,
+          "title": "Cargo test coverage: M28 validator passes on the cleaned list",
+          "status": "pending",
+          "dependencies": [
+            416.1
+          ]
+        },
+        {
+          "id": 416.3,
+          "title": "Documentation: mandatory-subtask rule and task-list hygiene (Task Builder Guide)",
+          "status": "pending",
+          "dependencies": [
+            416.2
+          ]
+        }
+      ]
+    },
+    {
+      "id": 417,
+      "title": "M30: Error-log signal-to-noise: 54k lines/day, worker brief built from worst file by raw count",
+      "description": "Error-log signal-to-noise: 54k lines/day, worker brief built from worst file by raw count. Where: src/cpu/mod.rs:538 (cycle input); src/self_improve/worker.rs:111 (brief construction). Fix: consider building the worker brief from a filtered view (genuine recent errors only) rather than the worst file by raw error count. The task-312 prefix exclusions helped the count; the brief is still raw-count driven. The 54k-line/day log is mostly routine chatter, so the worker can get a noisy brief.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "medium",
+      "details": "417.1 Build the self-improve worker brief from a filtered view (genuine recent errors only) instead of the worst file by raw error count, so routine chatter does not dominate the brief.",
+      "testStrategy": "cargo test green at the current baseline (0 failed); a test asserting the brief is built from filtered genuine errors and excludes routine chatter.",
+      "subtasks": [
+        {
+          "id": 417.1,
+          "title": "Error checking: filtered brief cannot hide genuine recent errors behind routine chatter",
+          "status": "pending",
+          "dependencies": []
+        },
+        {
+          "id": 417.2,
+          "title": "Cargo test coverage: brief built from genuine recent errors, not raw-count worst file",
+          "status": "pending",
+          "dependencies": [
+            417.1
+          ]
+        },
+        {
+          "id": 417.3,
+          "title": "Documentation: worker brief construction (filtered view)",
+          "status": "pending",
+          "dependencies": [
+            417.2
+          ]
+        }
+      ]
     }
   ]
 }
