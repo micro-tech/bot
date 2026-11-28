@@ -217,12 +217,17 @@ pub fn compose_subagent_prompt(task_id: &str, task: &str, role_hint: &str) -> Su
     // Task 235: instruction-boundary reminder in every sub-agent prompt —
     // sub-agents process untrusted content (search results, emails) too.
     let reminder = crate::security::INSTRUCTION_REMINDER;
+    // Task 390: the task is repeated verbatim at the end of the user
+    // message so it is the last thing the model reads there — the Nov
+    // 26/27 nightly reports failed with the sub-agent claiming no task
+    // was provided, and a small model must not be able to lose the
+    // task behind the job/reminder text or the tool list.
     match load_persona(Some(role_hint)) {
         Some(p) => SubagentPrompt {
             system: Some(format!("{}\n\n---\n\n{}\n\n{}", p.body, job, reminder)),
             user: format!(
-                "You are a sub-agent ({}). Your commander's orders:\n\n{}",
-                task_id, task
+                "You are a sub-agent ({}). Your commander's orders:\n\n{}\n\nYour task, repeated so it cannot be missed:\n\n{}",
+                task_id, task, task
             ),
         },
         None => {
@@ -232,8 +237,8 @@ pub fn compose_subagent_prompt(task_id: &str, task: &str, role_hint: &str) -> Su
             SubagentPrompt {
                 system: None,
                 user: format!(
-                    "You are a sub-agent ({}). Your commander's orders:\n\n{}\n\n{}\n\n{}\n\n{}",
-                    task_id, prefix, task, job, reminder
+                    "You are a sub-agent ({}). Your commander's orders:\n\n{}\n\n{}\n\n{}\n\n{}\n\nYour task, repeated so it cannot be missed:\n\n{}",
+                    task_id, prefix, task, job, reminder, task
                 ),
             }
         }
@@ -711,6 +716,63 @@ mod tests {
         // by the instruction-boundary requirement):
         assert!(text.starts_with(crate::tools::subagent_tool::COMMANDER_SYSTEM_PROMPT));
         assert!(text.contains(crate::security::INSTRUCTION_REMINDER));
+    }
+
+    #[test]
+    fn nightly_task_reaches_composed_subagent_prompt() {
+        // Task 390: the exact nightly network-report task the Nov
+        // 26/27 sub-agents claimed never arrived. With the real
+        // production chat-task-read role file in place (built by the
+        // same role_file_content + allowlist the handler uses), the
+        // composed user message must contain the full task verbatim.
+        // Same for the legacy branch (no persona file): the task is
+        // the payload and must never be dropped by composition.
+        let _l = dir_lock();
+        let _d = use_temp_dir("nightly390");
+        let task = "Compile the nightly network report from the continuous monitoring data collected over the last 24 hours (50-packet captures every 60 seconds on interface ens18). Summarize interface status and uptime, any packet errors, retransmissions, or dropped packets, latency or instability patterns, and an overall verdict on network health. Report the completed report back in this room.";
+        // GIVEN the production chat-task-read role file:
+        let mut allowlist: Vec<String> = Vec::new();
+        allowlist.extend(
+            crate::chat_command::task_handler::STATIC_READ_TOOLS
+                .iter()
+                .map(|s| s.to_string()),
+        );
+        allowlist.extend(
+            crate::chat_command::task_handler::GMAIL_READ_TOOLS
+                .iter()
+                .map(|s| s.to_string()),
+        );
+        allowlist.extend(
+            crate::chat_command::task_handler::WIRE_READ_TOOLS
+                .iter()
+                .map(|s| s.to_string()),
+        );
+        let content =
+            crate::chat_command::task_handler::role_file_content("chat-task-read", &allowlist);
+        write_persona(Some("chat-task-read"), &content);
+        // WHEN we compose the sub-agent prompt,
+        let composed = compose_subagent_prompt("subagent-test-nightly", task, "chat-task-read");
+        // THEN the task is in the user message verbatim:
+        assert!(
+            composed.user.contains(task),
+            "composed user message lost the task: {}",
+            composed.user
+        );
+        assert!(
+            composed.system.is_some(),
+            "persona-file branch must yield a system message"
+        );
+        // AND the legacy branch (no persona file) carries it too:
+        let legacy = compose_subagent_prompt(
+            "subagent-test-nightly",
+            task,
+            "definitely-not-a-real-role-xyz",
+        );
+        assert!(
+            legacy.user.contains(task),
+            "legacy user message lost the task: {}",
+            legacy.user
+        );
     }
 
     #[test]

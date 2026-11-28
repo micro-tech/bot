@@ -5870,6 +5870,42 @@
       ],
       "testStrategy": "cargo clippy --all-targets -- -D warnings exits 0 with all 32 task-388 #[allow] attributes removed (grep for allow(clippy::await_holding_lock) and allow(clippy::too_many_arguments) returns only pre-existing sites); cargo test --all-targets passes at the 1707 baseline (0 failed).",
       "title": "Follow-up to task 388: remove the 32 deferred #[allow] attributes (await_holding_lock test-infra refactor + too_many_arguments params structs)"
+    },
+    {
+      "dependencies": [],
+      "description": "Nightly network report failed Nov 26 AND Nov 27: Helix accepted the LLM task envelope (task #416, desktop, 600s budget) but the sub-agent's result was 'I have reviewed the available tools and am ready to proceed. Please provide the task you would like me to complete.' (Nov 26: 'I executed list_tools ... as no specific task was provided.'). The task text never reached the sub-agent. Nov 24/25 were partial for a different data-gap reason (capture files not found) but the task WAS received then. Same R630 binary (a98ea3f) all four nights, same envelope. Ruled out by code reading (53e0270): envelope::parse correctly extracts the task; process_message/dispatch_structured pass it through; submit_llm_task builds QueuedTask with the full task; run_llm_task builds SpawnSpec with task.task.clone(); dispatch_spawn/run_subagent call persona::compose_subagent_prompt which puts the task in the user message ('You are a sub-agent (id). Your commander's orders:\n\n{task}') for both the persona-file and legacy branches; chat_with_tools sends [system?, user] + 17 read tools to Ollama. No step drops the task. The H6 block_in_place change (PR #79) touched ollama/mod.rs tool loop only, not llm_impl.rs::chat_with_tools, and R630 predates H6 anyway. Root cause is therefore NOT a simple drop in this chain — it is a runtime/model-side loss on the R630 (desktop gemma4:e4b) or a latent condition first hit Nov 26. Fix: lock the chain with a regression test on the exact nightly envelope, add a fail-closed spawn-time guard (refuse loudly if the composed prompt lacks the task text, instead of spawning a confused sub-agent) plus diagnostic logging of the composed prompt shape, and harden the sub-agent prompt so the task is unmissable.",
+      "details": "390.1 Regression test: exact nightly envelope JSON through envelope::parse (assert task equals the full nightly task text) and through persona::compose_subagent_prompt with role chat-task-read (assert the composed user message contains the full task text, in both the persona-file and legacy branches). 390.2 Fail-closed guard in run_llm_task/dispatch_spawn: before spawning, assert the composed user message contains the task text; if not, log an error with the task length + composed lengths and return a task-failed report ('sub-agent spawn refused: composed prompt missing task text') instead of spawning. 390.3 Diagnostic logging: at spawn time log the composed prompt shape (task_chars, user_chars, system_chars, tool_count, backend) at info level so the next R630-side failure is diagnosable from the Helix log without guessing. 390.4 Harden the sub-agent prompt: repeat the task verbatim at the end of the user message (after the job/reminder) so a small model cannot lose it behind the tool list. Keep the change surgical; no behavior change when the task is already present.",
+      "id": 390,
+      "priority": "high",
+      "status": "done",
+      "subtasks": [
+        {
+          "dependencies": [],
+          "id": 390.1,
+          "status": "done",
+          "title": "Regression test: exact nightly envelope through parse + compose_subagent_prompt; assert full task text reaches the composed user message"
+        },
+        {
+          "dependencies": [],
+          "id": 390.2,
+          "status": "done",
+          "title": "Fail-closed spawn guard: refuse loudly (task-failed report + error log) if the composed prompt lacks the task text"
+        },
+        {
+          "dependencies": [],
+          "id": 390.3,
+          "status": "done",
+          "title": "Diagnostic logging at spawn: task/user/system lengths, tool count, backend"
+        },
+        {
+          "dependencies": [],
+          "id": 390.4,
+          "status": "done",
+          "title": "Harden sub-agent prompt: repeat the task verbatim at the end of the user message"
+        }
+      ],
+      "testStrategy": "New regression test (390.1) passes; cargo test --all-targets passes at the 1707 baseline (0 failed); cargo clippy --all-targets -- -D warnings exits 0; BIN target compiles (task-262 stubs present).",
+      "title": "Nightly network report: task text never reaches the sub-agent (Nov 26/27) — regression test + fail-closed spawn guard + prompt hardening"
     }
   ]
 }

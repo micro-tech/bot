@@ -556,6 +556,25 @@ mod tests {
     }
 
     #[test]
+    fn nightly_report_envelope_parses_with_full_task() {
+        // Task 390: the exact nightly network-report envelope Helix
+        // accepted on Nov 26/27 but whose task text never reached the
+        // sub-agent. The parse must carry the full task verbatim —
+        // this locks the first link of the chain.
+        let nightly = r#"{"how": "llm", "to": "helix", "which": "desktop", "time": 600, "scope": "read", "task": "Compile the nightly network report from the continuous monitoring data collected over the last 24 hours (50-packet captures every 60 seconds on interface ens18). Summarize interface status and uptime, any packet errors, retransmissions, or dropped packets, latency or instability patterns, and an overall verdict on network health. Report the completed report back in this room."}"#;
+        assert_eq!(
+            cmd(nightly),
+            Parsed::Structured(Structured::Llm {
+                backend: LlmBackend::Desktop,
+                time_secs: Some(600),
+                scope: Scope::Read,
+                task: "Compile the nightly network report from the continuous monitoring data collected over the last 24 hours (50-packet captures every 60 seconds on interface ens18). Summarize interface status and uptime, any packet errors, retransmissions, or dropped packets, latency or instability patterns, and an overall verdict on network health. Report the completed report back in this room.".to_string(),
+                to: Some("helix".to_string()),
+            })
+        );
+    }
+
+    #[test]
     fn scope_forms_both_orders_accepted_for_known_domains() {
         // Table form and domain-first form normalize to the same
         // enforcement class; extra fields and the irrelevant
