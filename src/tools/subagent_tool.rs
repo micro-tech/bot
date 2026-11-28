@@ -1001,12 +1001,13 @@ mod tests {
     /// M23 (task 411): no env mutation in test code without the shared lock.
     ///
     /// Scans every `src/**/*.rs` file for `set_var(`/`remove_var(` inside
-    /// test code (`mod tests` blocks, or a whole file named `tests.rs`),
-    /// and asserts the enclosing test fn holds `test_env_lock` — directly,
-    /// via a locked helper (`with_clean_history`, `with_test_file`,
-    /// `with_env`), or by receiving the guard as a `&MutexGuard`
-    /// parameter. A new env-mutating test that forgets the lock fails here
-    /// instead of flaking under parallel test threads.
+    /// test code (`mod tests` blocks, a whole file named `tests.rs`, or a
+    /// top-level `#[test]` / `#[tokio::test]` fn), and asserts the enclosing
+    /// test fn holds `test_env_lock` — directly, via a locked helper
+    /// (`with_clean_history`, `with_test_file`, `with_env`), or by receiving
+    /// the guard as a `&MutexGuard` parameter. A new env-mutating test that
+    /// forgets the lock fails here instead of flaking under parallel test
+    /// threads.
     #[test]
     fn no_unlocked_env_mutation_in_tests() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -1023,6 +1024,80 @@ mod tests {
             violations.is_empty(),
             "env-mutating tests without test_env_lock (M23):\n{}",
             violations.join("\n")
+        );
+    }
+
+    /// M23 follow-up (Reviewer should-fix): the scanner was blind to
+    /// top-level `#[test]` fns — it only looked inside `mod tests` blocks
+    /// and `tests.rs` files, so the (now deleted)
+    /// `src/router/config_tests.rs` top-level tests with unlocked
+    /// `set_var`/`remove_var` went unflagged. Prove a top-level `#[test]`
+    /// fn with an unlocked mutation is flagged, while locked test code
+    /// and production code still pass.
+    #[test]
+    fn scan_flags_top_level_test_fn_env_mutation() {
+        let file = std::path::Path::new("src/fake_scan_target.rs");
+
+        // Unlocked set_var / remove_var in a top-level #[test] fn: flagged.
+        let unlocked = "use std::env;\n\n#[test]\nfn top_level_test_mutates_env() {\n    env::set_var(\"FOO\", \"1\");\n    env::remove_var(\"FOO\");\n}\n";
+        let mut v = Vec::new();
+        scan_file_for_unlocked_env(file, unlocked, &mut v);
+        assert_eq!(
+            v.len(),
+            2,
+            "expected both top-level env mutations flagged, got: {:?}",
+            v
+        );
+        assert!(v[0].contains("top_level_test_mutates_env"));
+
+        // Same shape with #[tokio::test]: flagged too.
+        let unlocked_tokio = "#[tokio::test]\nasync fn top_level_tokio_test_mutates_env() {\n    std::env::set_var(\"FOO\", \"1\");\n}\n";
+        let mut v = Vec::new();
+        scan_file_for_unlocked_env(file, unlocked_tokio, &mut v);
+        assert_eq!(
+            v.len(),
+            1,
+            "expected top-level tokio set_var flagged, got: {:?}",
+            v
+        );
+
+        // Locked top-level #[test] fn (direct lock): clean.
+        let locked = "#[test]\nfn top_level_test_locked() {\n    let _g = test_env_lock();\n    std::env::set_var(\"FOO\", \"1\");\n}\n";
+        let mut v = Vec::new();
+        scan_file_for_unlocked_env(file, locked, &mut v);
+        assert!(
+            v.is_empty(),
+            "locked top-level test must pass, got: {:?}",
+            v
+        );
+
+        // Locked via the with_env helper: clean.
+        let locked_helper = "#[test]\nfn top_level_test_with_env() {\n    with_env(\"FOO\", \"1\", || {\n        std::env::set_var(\"FOO\", \"1\");\n    });\n}\n";
+        let mut v = Vec::new();
+        scan_file_for_unlocked_env(file, locked_helper, &mut v);
+        assert!(
+            v.is_empty(),
+            "with_env top-level test must pass, got: {:?}",
+            v
+        );
+
+        // Production fn (no #[test]) with set_var: clean — the scanner
+        // only polices test code.
+        let prod = "use std::env;\n\npub fn configure() {\n    env::set_var(\"FOO\", \"1\");\n}\n";
+        let mut v = Vec::new();
+        scan_file_for_unlocked_env(file, prod, &mut v);
+        assert!(v.is_empty(), "production set_var must pass, got: {:?}", v);
+
+        // A #[test] fn inside `mod tests` without the lock is still
+        // flagged (existing behaviour, regression guard).
+        let mod_tests = "#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn in_mod_tests_unlocked() {\n        std::env::set_var(\"FOO\", \"1\");\n    }\n}\n";
+        let mut v = Vec::new();
+        scan_file_for_unlocked_env(file, mod_tests, &mut v);
+        assert_eq!(
+            v.len(),
+            1,
+            "expected in-mod-tests set_var still flagged, got: {:?}",
+            v
         );
     }
 
@@ -1222,6 +1297,58 @@ mod tests {
         out
     }
 
+    /// Top-level test fns: (start line, end line, inclusive) for fns
+    /// annotated `#[test]` / `#[tokio::test]` at the top level of a file
+    /// (brace depth 0). These are test code even though they sit outside
+    /// any `mod tests` block — the deleted `src/router/config_tests.rs`
+    /// had top-level `#[test]` fns with unlocked env mutations that this
+    /// scanner was blind to. Other attributes between the test attribute
+    /// and the fn (e.g. `#[ignore]`) do not clear the marker.
+    fn top_level_test_fn_spans(lines: &[&str], depth_before: &[i32]) -> Vec<(usize, usize)> {
+        let mut spans = Vec::new();
+        let mut pending_test_attr = false;
+        for (idx, line) in lines.iter().enumerate() {
+            let t = line.trim();
+            if t.starts_with("#[test]") || t.starts_with("#[tokio::test]") {
+                pending_test_attr = true;
+                continue;
+            }
+            if t.starts_with("#[") || t.is_empty() {
+                continue;
+            }
+            if pending_test_attr && depth_before[idx] == 0 && fn_name_on_line(line).is_some() {
+                // Find the end of the fn body: the first line after the
+                // opening brace that brings the depth back to the fn's
+                // start depth. A `;` before any `{` is a body-less
+                // declaration — no span.
+                let start_depth = depth_before[idx];
+                let mut j = idx;
+                let mut opened = false;
+                let mut end = None;
+                while j < lines.len() {
+                    let opens = lines[j].matches('{').count() as i32;
+                    let closes = lines[j].matches('}').count() as i32;
+                    if !opened && opens == 0 && lines[j].contains(';') {
+                        break;
+                    }
+                    if opens > 0 {
+                        opened = true;
+                    }
+                    if opened && depth_before[j] + opens - closes <= start_depth {
+                        end = Some(j);
+                        break;
+                    }
+                    j += 1;
+                }
+                if let Some(end) = end {
+                    spans.push((idx, end));
+                }
+            }
+            pending_test_attr = false;
+        }
+        spans
+    }
+
     fn scan_file_for_unlocked_env(
         file: &std::path::Path,
         text: &str,
@@ -1238,6 +1365,8 @@ mod tests {
             depth += line.matches('{').count() as i32;
             depth -= line.matches('}').count() as i32;
         }
+        // Top-level `#[test]` / `#[tokio::test]` fns (outside any mod tests).
+        let top_level_tests = top_level_test_fn_spans(&lines, &depth_before);
         // Active `mod tests {` scope: (entry depth, start line).
         let mut tests_scope: Option<(i32, usize)> = None;
         for (idx, line) in lines.iter().enumerate() {
@@ -1250,7 +1379,9 @@ mod tests {
             if line.contains("mod tests") && line.contains('{') {
                 tests_scope = Some((depth_before[idx], idx));
             }
-            let in_tests = whole_file_is_tests || tests_scope.is_some();
+            let in_tests = whole_file_is_tests
+                || tests_scope.is_some()
+                || top_level_tests.iter().any(|(s, e)| idx >= *s && idx <= *e);
             if !in_tests {
                 continue;
             }
